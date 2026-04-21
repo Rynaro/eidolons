@@ -97,7 +97,7 @@ eidolons:
       summary: "Brownfield feature implementation. Test-anchored, pattern-first, bounded failure recovery."
     source:
       type: github
-      repo: Rynaro/apivr
+      repo: Rynaro/APIVR-Delta
       default_ref: main
     versions:
       latest: "3.0.0"
