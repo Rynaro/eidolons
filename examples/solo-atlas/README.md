@@ -46,7 +46,7 @@ hosts:
 members:
   - name: atlas
     version: "^1.0.0"
-    source: github:Rynaro/atlas
+    source: github:Rynaro/ATLAS
 ```
 
 ## Use

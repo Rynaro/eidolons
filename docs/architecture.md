@@ -24,8 +24,8 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │ Layer 2 — EIDOLONS (5 × individual repos)                           │
 │                                                                      │
-│   Rynaro/atlas    Rynaro/spectra    Rynaro/apivr                    │
-│   Rynaro/idg      Rynaro/forge      ...                             │
+│   Rynaro/ATLAS    Rynaro/SPECTRA   Rynaro/APIVR-Delta               │
+│   Rynaro/IDG      Rynaro/FORGE     ...                              │
 │                                                                      │
 │   Each is:                                                          │
 │   - EIIS-conformant                                                 │
