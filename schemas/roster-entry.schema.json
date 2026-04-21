@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/blob/main/schemas/roster-entry.schema.json",
+  "title": "Roster Entry",
+  "description": "A single Eidolon's registry entry inside roster/index.yaml.",
+  "type": "object",
+  "required": ["name", "display_name", "capability_class", "status", "methodology", "source", "versions", "install", "handoffs"],
+  "properties": {
+    "name":             { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "display_name":     { "type": "string" },
+    "capability_class": { "enum": ["scout", "planner", "coder", "scriber", "reasoner"] },
+    "status":           { "enum": ["shipped", "in_construction", "deprecated"] },
+    "methodology": {
+      "type": "object",
+      "required": ["name", "version", "cycle", "summary"],
+      "properties": {
+        "name":    { "type": "string" },
+        "version": { "type": "string" },
+        "cycle":   { "type": "string" },
+        "summary": { "type": "string" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["type", "repo"],
+      "properties": {
+        "type":        { "enum": ["github", "git", "local"] },
+        "repo":        { "type": "string" },
+        "default_ref": { "type": "string" }
+      }
+    },
+    "versions": {
+      "type": "object",
+      "required": ["latest"],
+      "properties": {
+        "latest": { "type": "string" },
+        "pins": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "null"] }
+        }
+      }
+    },
+    "install": {
+      "type": "object",
+      "required": ["target_default", "standalone"],
+      "properties": {
+        "target_default": { "type": "string" },
+        "standalone":     { "type": "boolean" }
+      }
+    },
+    "handoffs": {
+      "type": "object",
+      "required": ["upstream", "downstream"],
+      "properties": {
+        "upstream":   { "type": "array", "items": { "type": "string" } },
+        "downstream": { "type": "array", "items": { "type": "string" } },
+        "lateral":    { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "working_set_tokens": {
+      "type": "object",
+      "properties": {
+        "entry":  { "type": "integer" },
+        "target": { "type": "integer" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "properties": {
+        "reads_repo":    { "type": "boolean" },
+        "reads_network": { "type": "boolean" },
+        "writes_repo":   { "type": "boolean" },
+        "persists":      { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "references": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "aliases": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+    }
+  }
+}

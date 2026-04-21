@@ -1,0 +1,56 @@
+# ─── OS / editor cruft ────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.cursor/
+*.sublime-project
+*.sublime-workspace
+
+# ─── Local testing / scratch ──────────────────────────
+/tmp/
+/scratch/
+/.local/
+*.log
+
+# ─── Shellcheck / linting caches ──────────────────────
+.shellcheck_cache/
+
+# ─── Python (for research paper summarization scripts) ─
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# ─── Node (for any future docs site) ──────────────────
+node_modules/
+.pnpm-store/
+yarn-error.log*
+
+# ─── Build artifacts ──────────────────────────────────
+dist/
+build/
+out/
+*.tgz
+*.zip
+
+# ─── Environment / secrets ────────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# ─── Local EIDOLONS_HOME if someone clones into it ────
+.eidolons/
+
+# ─── Per-user Claude Code state ───────────────────────
+.claude/settings.local.json
+
+# ─── Nexus bootstrap audit trail (one-shot working state) ──
+.nexus-bootstrap/

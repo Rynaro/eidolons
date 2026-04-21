@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# eidolons — personal team of AI agents, for any project
+# ═══════════════════════════════════════════════════════════════════════════
+
+set -euo pipefail
+
+EIDOLONS_VERSION="1.0.0"
+EIDOLONS_HOME="${EIDOLONS_HOME:-$HOME/.eidolons}"
+NEXUS="$EIDOLONS_HOME/nexus"
+CLI_SRC="$NEXUS/cli/src"
+CLI_LIB="$NEXUS/cli/src/lib.sh"
+
+# Resolve symlinks so we find the real nexus even if the CLI is invoked
+# via a symlink in PATH.
+if [[ ! -d "$NEXUS" ]]; then
+  SELF="$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || realpath "${BASH_SOURCE[0]}")"
+  NEXUS="$(dirname "$(dirname "$SELF")")"
+  CLI_SRC="$NEXUS/cli/src"
+  CLI_LIB="$NEXUS/cli/src/lib.sh"
+fi
+
+usage() {
+  cat <<EOF
+eidolons v${EIDOLONS_VERSION} — personal team of AI agents for any project
+
+Usage: eidolons <command> [options]
+
+Commands:
+  init           Initialize a project with Eidolons (greenfield or brownfield)
+  add            Add one or more Eidolons to this project
+  remove         Remove an Eidolon from this project
+  sync           Install/update to match eidolons.yaml (idempotent)
+  list           List available (from roster) or installed Eidolons
+  roster         Show detailed roster information
+  doctor         Health-check installed Eidolons and host wiring
+  upgrade        Upgrade pinned Eidolon versions
+  version        Print CLI version
+  help           Show this help
+
+Options common to all commands:
+  -h, --help           Show command-specific help
+  --nexus DIR          Override nexus path (default: \$EIDOLONS_HOME/nexus)
+  --non-interactive    Fail on prompts (for CI / scripted use)
+  -v, --verbose        Verbose output
+
+Environment:
+  EIDOLONS_HOME        Nexus cache location (default: ~/.eidolons)
+
+Docs:       $NEXUS/docs/
+Nexus repo: https://github.com/Rynaro/eidolons
+
+Run 'eidolons <command> --help' for command-specific help.
+EOF
+}
+
+cmd="${1:-help}"
+[[ $# -gt 0 ]] && shift
+
+case "$cmd" in
+  init)        exec bash "$CLI_SRC/init.sh"    "$@" ;;
+  add)         exec bash "$CLI_SRC/add.sh"     "$@" ;;
+  remove|rm)   exec bash "$CLI_SRC/remove.sh"  "$@" ;;
+  sync)        exec bash "$CLI_SRC/sync.sh"    "$@" ;;
+  list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
+  roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
+  doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
+  upgrade)     exec bash "$CLI_SRC/upgrade.sh" "$@" ;;
+  version|--version|-v) echo "eidolons $EIDOLONS_VERSION" ;;
+  help|--help|-h|"")    usage ;;
+  *) echo "Unknown command: $cmd" >&2; echo "" >&2; usage >&2; exit 2 ;;
+esac

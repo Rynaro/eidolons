@@ -1,0 +1,122 @@
+% Eidolons — Research BibTeX
+% ═══════════════════════════════════════════════════════════════════════════
+% Citations used across the Eidolons team. Each entry is referenced by
+% individual Eidolon DESIGN-RATIONALE.md files and by the nexus
+% research library index.
+%
+% Convention: key = FirstAuthorYearShortTitle (e.g. Shinn2023Reflexion)
+% ═══════════════════════════════════════════════════════════════════════════
+
+% ─── Self-correction, verification, bounded loops ──────────────────────────
+
+@inproceedings{Shinn2023Reflexion,
+  title     = {Reflexion: Language Agents with Verbal Reinforcement Learning},
+  author    = {Shinn, Noah and Cassano, Federico and Berman, Edward and
+               Gopinath, Ashwin and Narasimhan, Karthik and Yao, Shunyu},
+  booktitle = {NeurIPS},
+  year      = {2023},
+  note      = {Foundational work for reflective agents. Eidolons adopt the
+               pattern but enforce a bounded revision budget — CorrectBench 2025
+               showed unbounded variants degrade output on open-ended tasks.}
+}
+
+@misc{CorrectBench2025,
+  title   = {CorrectBench: Evaluating Self-Correction in Language Model Agents},
+  author  = {{CorrectBench Authors}},
+  year    = {2025},
+  note    = {Empirical evidence for bounding reflection loops. Drives
+             APIVR-$\Delta$'s 3-attempt cap and IDG's 1-pass gate.}
+}
+
+% ─── Documentation & synthesis ─────────────────────────────────────────────
+
+@article{DocAgent2024,
+  title   = {DocAgent: Multi-Role Documentation Generation for Codebases},
+  author  = {{Meta FAIR}},
+  journal = {arXiv},
+  eprint  = {2504.08725},
+  year    = {2024},
+  note    = {CHT (Completeness/Helpfulness/Truthfulness) verification
+             framework adopted by IDG's Gate phase. Also source of
+             topological-ordering evidence for drafting sequence.}
+}
+
+% ─── Software engineering agents ───────────────────────────────────────────
+
+@inproceedings{Yang2024SWEAgent,
+  title     = {SWE-Agent: Agent-Computer Interfaces Enable Automated Software Engineering},
+  author    = {Yang, John and Jimenez, Carlos and Wettig, Alexander and
+               Lieret, Kilian and Yao, Shunyu and Narasimhan, Karthik and Press, Ofir},
+  booktitle = {NeurIPS},
+  year      = {2024},
+  note      = {Origin of the bounded ACI pattern adopted by ATLAS.
+               Tool-design principles: narrow surface, mechanical bounds,
+               evidence-anchored outputs.}
+}
+
+% ─── Context engineering ──────────────────────────────────────────────────
+
+@misc{AnthropicContextEng2025,
+  title  = {Context Engineering for LLM Agents},
+  author = {{Anthropic}},
+  year   = {2025},
+  month  = {September},
+  note   = {Phase-irrelevant instructions degrade performance.
+             Basis for layered-loading architecture across all Eidolons.}
+}
+
+% ─── Plan-mode and reasoning ──────────────────────────────────────────────
+
+@misc{Wei2022CoT,
+  title  = {Chain-of-Thought Prompting Elicits Reasoning in Large Language Models},
+  author = {Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and others},
+  year   = {2022},
+  note   = {Baseline for FORGE's reasoning methodology (in construction).}
+}
+
+@misc{Yao2023ToT,
+  title  = {Tree of Thoughts: Deliberate Problem Solving with Large Language Models},
+  author = {Yao, Shunyu and Yu, Dian and Zhao, Jeffrey and others},
+  year   = {2023},
+  note   = {Candidate reasoning structure for FORGE.}
+}
+
+% ─── Context compaction & memory ──────────────────────────────────────────
+
+@misc{AgentFold2024,
+  title  = {AgentFold: Context Compaction at Agent Phase Boundaries},
+  author = {{AgentFold Authors}},
+  year   = {2024},
+  note   = {ATLAS applies AgentFold at phase boundaries; working memory
+             holds IDs + anchors, raw content goes to Memex.}
+}
+
+% ─── Production patterns (non-paper references) ───────────────────────────
+
+@online{ClaudeCodeDocs,
+  title  = {Claude Code Documentation},
+  author = {{Anthropic}},
+  url    = {https://docs.claude.com/en/docs/claude-code},
+  year   = {2025},
+  note   = {Plan Mode, skills, subagents — patterns adopted by ATLAS and
+             SPECTRA.}
+}
+
+@online{CursorDocs,
+  title  = {Cursor Rules Documentation},
+  author = {{Cursor}},
+  url    = {https://docs.cursor.com},
+  year   = {2025},
+  note   = {MDC rule files and AGENTS.md — part of EIIS host-wiring targets.}
+}
+
+@online{AiderBlog,
+  title  = {Aider: AI Pair Programming in Your Terminal},
+  author = {Gauthier, Paul},
+  url    = {https://aider.chat},
+  year   = {2024},
+  note   = {File-aware editing and test-driven repair loops — influences
+             APIVR-$\Delta$'s Implement/Verify/Reflect structure.}
+}
+
+% ─── Ongoing — expand as citations are consolidated from per-Eidolon rationale ─

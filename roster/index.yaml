@@ -1,0 +1,220 @@
+# Eidolons Roster Registry
+# ─────────────────────────
+# Canonical list of all Eidolons. The `eidolons` CLI consumes this to resolve
+# `eidolons add <name>` to a concrete git repo + version constraint.
+#
+# Schema: ../schemas/roster-entry.schema.json
+# Versioning: bump `registry_version` on any breaking change to this file's shape.
+
+registry_version: "1.0"
+updated_at: "2026-04-21"
+eiis_required: "1.0"
+
+# ─── Roster ────────────────────────────────────────────────────────────────────
+
+eidolons:
+
+  - name: atlas
+    display_name: ATLAS
+    capability_class: scout
+    status: shipped
+    methodology:
+      name: ATLAS
+      version: "1.0"
+      cycle: "A→T→L→A→S"
+      summary: "Read-only codebase intelligence. Structural mapping, bounded probes, evidence-anchored findings."
+    source:
+      type: github
+      repo: Rynaro/atlas
+      default_ref: main
+    versions:
+      latest: "1.0.0"
+      pins:
+        stable: "1.0.0"
+    install:
+      target_default: "./agents/atlas"
+      standalone: true
+    handoffs:
+      upstream: []
+      downstream: [spectra, apivr]
+      lateral: [forge]
+    working_set_tokens:
+      entry: 900
+      target: 3500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: false
+      persists: [".atlas/memex/"]
+    references:
+      - "research/papers/agent-fold.md"
+      - "research/papers/scatter-gather.md"
+      - "research/production-patterns.md#bounded-aci"
+
+  - name: spectra
+    display_name: SPECTRA
+    capability_class: planner
+    status: shipped
+    methodology:
+      name: SPECTRA
+      version: "4.2"
+      cycle: "S→P→E→C→T→R→A"
+      summary: "Decision-ready specifications. Scoring rubrics, validation gates, GIVEN/WHEN/THEN stories."
+    source:
+      type: github
+      repo: Rynaro/SPECTRA
+      default_ref: main
+    versions:
+      latest: "4.2.0"
+      pins:
+        stable: "4.2.0"
+    install:
+      target_default: "./agents/spectra"
+      standalone: true
+    handoffs:
+      upstream: [atlas]
+      downstream: [apivr]
+      lateral: [forge]
+    working_set_tokens:
+      entry: 900
+      target: 3500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: false
+      persists: []
+    references:
+      - "research/production-patterns.md#plan-mode"
+
+  - name: apivr
+    display_name: "APIVR-Δ"
+    capability_class: coder
+    status: shipped
+    methodology:
+      name: "APIVR-Δ"
+      version: "3.0"
+      cycle: "A→P→I→V→Δ/R"
+      summary: "Brownfield feature implementation. Test-anchored, pattern-first, bounded failure recovery."
+    source:
+      type: github
+      repo: Rynaro/apivr
+      default_ref: main
+    versions:
+      latest: "3.0.0"
+      pins:
+        stable: "3.0.0"
+    install:
+      target_default: "./agents/apivr"
+      standalone: true
+    handoffs:
+      upstream: [atlas, spectra]
+      downstream: [idg]
+      lateral: [forge]
+    working_set_tokens:
+      entry: 2000
+      target: 4500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: true
+      persists: ["agents/apivr/memories/"]
+    references:
+      - "research/papers/correctbench.md"
+      - "research/papers/reflexion.md"
+      - "research/production-patterns.md#failure-recovery"
+
+  - name: idg
+    display_name: IDG
+    capability_class: scriber
+    status: shipped
+    methodology:
+      name: IDG
+      version: "1.1"
+      cycle: "I→D→G"
+      summary: "Documentation synthesis. Structured markers, CHT verification, provenance-first."
+    source:
+      type: github
+      repo: Rynaro/idg
+      default_ref: main
+    versions:
+      latest: "1.1.0"
+      pins:
+        stable: "1.1.0"
+    install:
+      target_default: "./agents/idg"
+      standalone: true
+    handoffs:
+      upstream: [apivr, spectra, atlas]
+      downstream: []
+      lateral: [forge]
+    working_set_tokens:
+      entry: 900
+      target: 2200
+    security:
+      reads_repo: false
+      reads_network: false
+      writes_repo: false
+      persists: ["docs/"]
+    references:
+      - "research/papers/docagent.md"
+      - "research/papers/correctbench.md"
+    aliases: [scribe]  # transitional — accept old name, warn user
+
+  - name: forge
+    display_name: FORGE
+    capability_class: reasoner
+    status: in_construction
+    methodology:
+      name: FORGE
+      version: "0.1"
+      cycle: "TBD"
+      summary: "Deep reasoning for ambiguity, trade-offs, counterfactuals, novel problems."
+    source:
+      type: github
+      repo: Rynaro/forge
+      default_ref: main
+    versions:
+      latest: "0.1.0-dev"
+      pins:
+        stable: null
+    install:
+      target_default: "./agents/forge"
+      standalone: true
+    handoffs:
+      upstream: []       # lateral consultant — called by any member
+      downstream: []
+      lateral: [atlas, spectra, apivr, idg]
+    working_set_tokens:
+      entry: 900
+      target: 3500
+    security:
+      reads_repo: false
+      reads_network: false
+      writes_repo: false
+      persists: []
+    references: []
+
+# ─── Presets ───────────────────────────────────────────────────────────────────
+# Named bundles for `eidolons init --preset <name>`
+
+presets:
+
+  minimal:
+    description: "Solo scout. For read-only exploration of unfamiliar codebases."
+    members: [atlas]
+
+  pipeline:
+    description: "Full pipeline. Scout → Plan → Build → Chronicle."
+    members: [atlas, spectra, apivr, idg]
+
+  plan-and-build:
+    description: "Skip scouting and documentation. Plan and implement only."
+    members: [spectra, apivr]
+
+  full:
+    description: "Every shipped Eidolon. FORGE added once stable."
+    members: [atlas, spectra, apivr, idg]
+
+  research:
+    description: "Scout + chronicle. For understanding and documenting, not changing."
+    members: [atlas, idg]

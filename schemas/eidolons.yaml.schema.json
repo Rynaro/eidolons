@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/blob/main/schemas/eidolons.yaml.schema.json",
+  "title": "eidolons.yaml",
+  "description": "Per-project Eidolons manifest. Commit to VCS.",
+  "type": "object",
+  "required": ["version", "members"],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "enum": [1],
+      "description": "Manifest schema version."
+    },
+    "hosts": {
+      "type": "object",
+      "properties": {
+        "wire": {
+          "type": "array",
+          "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] },
+          "description": "Hosts to wire during install/sync. Auto-detected during init if omitted."
+        }
+      }
+    },
+    "members": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "version"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$",
+            "description": "Lowercase Eidolon slug (must exist in nexus roster)."
+          },
+          "version": {
+            "type": "string",
+            "description": "SemVer constraint (e.g. ^1.0.0, ~2.3, =3.0.0)."
+          },
+          "source": {
+            "type": "string",
+            "description": "Optional override: github:owner/repo or git URL. Defaults to roster entry."
+          },
+          "target": {
+            "type": "string",
+            "description": "Optional install target override. Defaults to ./agents/<n>/."
+          }
+        }
+      }
+    },
+    "composition": {
+      "type": "object",
+      "description": "Documentation of intended pipeline. Not enforced by the CLI.",
+      "properties": {
+        "pipeline": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}
