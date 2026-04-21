@@ -68,7 +68,7 @@ fi
 # ─── Resolve members ──────────────────────────────────────────────────────
 resolve_members() {
   if [[ -n "$PRESET" ]]; then
-    roster_preset_members "$PRESET" | paste -sd,
+    roster_preset_members "$PRESET" | paste -sd, -
     return
   fi
   if [[ -n "$MEMBERS" ]]; then
@@ -88,7 +88,7 @@ resolve_members() {
   echo ""
   read -rp "Enter preset name, or comma-separated members: " choice
   if roster_presets | grep -Fxq "$choice"; then
-    roster_preset_members "$choice" | paste -sd,
+    roster_preset_members "$choice" | paste -sd, -
   else
     echo "$choice"
   fi
@@ -112,7 +112,7 @@ if [[ "$HOSTS" == "auto" ]]; then
     HOSTS="claude-code,copilot,cursor,opencode"
     info "Greenfield project — wiring all major hosts"
   else
-    detected="$(detect_hosts | paste -sd,)"
+    detected="$(detect_hosts | paste -sd, -)"
     if [[ -z "$detected" ]]; then
       warn "No hosts detected. Defaulting to claude-code + copilot."
       HOSTS="claude-code,copilot"
@@ -154,4 +154,4 @@ ok "$PROJECT_MANIFEST written"
 
 # ─── Delegate actual install to `eidolons sync` ──────────────────────────
 say "Running sync to install members"
-exec bash "$CLI_SRC/sync.sh" ${NON_INTERACTIVE:+--non-interactive}
+exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive}

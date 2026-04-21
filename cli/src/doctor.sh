@@ -112,7 +112,7 @@ else
   warn "$ERRORS issue(s) found."
   if [[ "$FIX" == "true" ]]; then
     say "Attempting repairs via 'eidolons sync'..."
-    exec bash "$CLI_SRC/sync.sh"
+    exec bash "$SELF_DIR/sync.sh"
   else
     echo ""
     echo "Run 'eidolons doctor --fix' to attempt repairs, or 'eidolons sync' manually."

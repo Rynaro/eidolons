@@ -71,4 +71,4 @@ done
 
 # ─── Delegate install to sync ────────────────────────────────────────────
 say "Running sync"
-exec bash "$CLI_SRC/sync.sh" ${NON_INTERACTIVE:+--non-interactive}
+exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive}
