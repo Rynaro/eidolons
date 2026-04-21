@@ -20,7 +20,12 @@ setup() {
   export EIDOLONS_HOME="$HOME_TMP/.eidolons"
   export EIDOLONS_BIN_DIR="$HOME_TMP/.local/bin"
   export EIDOLONS_REPO="file://$EIDOLONS_ROOT"
-  export EIDOLONS_REF="main"
+  # Use the checkout's current HEAD SHA rather than a branch name.
+  # GitHub Actions' actions/checkout produces a detached HEAD with no
+  # `main` branch locally, and install.sh now accepts SHAs in
+  # EIDOLONS_REF — so this works uniformly on dev boxes and in CI.
+  EIDOLONS_REF="$(git -C "$EIDOLONS_ROOT" rev-parse HEAD)"
+  export EIDOLONS_REF
   mkdir -p "$HOME_TMP" "$EIDOLONS_BIN_DIR"
 
   # Shadow a fake yq into PATH so we never hit github during tests.

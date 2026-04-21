@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 ERRORS=0
-err() { ((ERRORS++)); printf "  %s✗%s %s\n" "$RED" "$RESET" "$*"; }
+err() { ERRORS=$((ERRORS + 1)); printf "  %s✗%s %s\n" "$RED" "$RESET" "$*"; }
 pass() { printf "  %s✓%s %s\n" "$GREEN" "$RESET" "$*"; }
 
 say "eidolons doctor — checking $(pwd)"
