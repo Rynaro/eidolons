@@ -102,17 +102,29 @@ fi
 # ─── Install the nexus ─────────────────────────────────────────────────────
 mkdir -p "$EIDOLONS_HOME" "$EIDOLONS_BIN_DIR"
 
-if [[ -d "$EIDOLONS_HOME/nexus/.git" ]]; then
-  say "Updating existing nexus at $EIDOLONS_HOME/nexus"
-  git -C "$EIDOLONS_HOME/nexus" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null
-  git -C "$EIDOLONS_HOME/nexus" checkout -q "$EIDOLONS_REF"
-  git -C "$EIDOLONS_HOME/nexus" reset --hard "origin/$EIDOLONS_REF" >/dev/null
+# Fetch-based flow (init + fetch + checkout FETCH_HEAD) so EIDOLONS_REF
+# accepts branch names, tags, AND commit SHAs uniformly. `git clone
+# --branch` rejects SHAs — users pinning to a specific commit (or CI
+# passing ${{ github.sha }}) would fail otherwise.
+NEXUS_DIR="$EIDOLONS_HOME/nexus"
+if [[ -d "$NEXUS_DIR/.git" ]]; then
+  say "Updating existing nexus at $NEXUS_DIR ($EIDOLONS_REF)"
+  git -C "$NEXUS_DIR" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null 2>&1 \
+    || die "Failed to fetch $EIDOLONS_REF from $EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" reset --hard FETCH_HEAD >/dev/null
   ok "Nexus updated to $EIDOLONS_REF"
 else
   say "Cloning nexus from $EIDOLONS_REPO ($EIDOLONS_REF)"
-  git clone --depth 1 --branch "$EIDOLONS_REF" "$EIDOLONS_REPO" "$EIDOLONS_HOME/nexus" >/dev/null 2>&1 \
-    || die "Failed to clone $EIDOLONS_REPO"
-  ok "Nexus cloned to $EIDOLONS_HOME/nexus"
+  mkdir -p "$NEXUS_DIR"
+  git -C "$NEXUS_DIR" init -q >/dev/null 2>&1 \
+    || die "Failed to init git repo at $NEXUS_DIR"
+  git -C "$NEXUS_DIR" remote add origin "$EIDOLONS_REPO" 2>/dev/null \
+    || git -C "$NEXUS_DIR" remote set-url origin "$EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null 2>&1 \
+    || die "Failed to fetch $EIDOLONS_REF from $EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" checkout -q FETCH_HEAD \
+    || die "Failed to checkout FETCH_HEAD in $NEXUS_DIR"
+  ok "Nexus cloned to $NEXUS_DIR"
 fi
 
 # ─── Install the CLI ──────────────────────────────────────────────────────

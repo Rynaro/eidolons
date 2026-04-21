@@ -66,5 +66,14 @@ EOF
 @test "install.sh: fails cleanly if EIDOLONS_REPO is unreachable" {
   EIDOLONS_REPO="file:///nonexistent/path/that/doesnt/exist" run bash "$EIDOLONS_ROOT/cli/install.sh"
   [ "$status" -ne 0 ]
-  [[ "$output" =~ Failed\ to\ clone ]]
+  [[ "$output" =~ Failed\ to\ fetch ]]
+}
+
+@test "install.sh: accepts a commit SHA in EIDOLONS_REF" {
+  # Run git in the checkout to get a valid SHA we can pin to.
+  local sha
+  sha="$(git -C "$EIDOLONS_ROOT" rev-parse HEAD)"
+  EIDOLONS_REF="$sha" run bash "$EIDOLONS_ROOT/cli/install.sh"
+  [ "$status" -eq 0 ]
+  [ -L "$EIDOLONS_BIN_DIR/eidolons" ]
 }
