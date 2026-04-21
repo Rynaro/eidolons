@@ -36,7 +36,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 ERRORS=0
-err() { ((ERRORS++)); printf "  %s✗%s %s\n" "$RED" "$RESET" "$*"; }
+err() { ERRORS=$((ERRORS + 1)); printf "  %s✗%s %s\n" "$RED" "$RESET" "$*"; }
 pass() { printf "  %s✓%s %s\n" "$GREEN" "$RESET" "$*"; }
 
 say "eidolons doctor — checking $(pwd)"
@@ -112,7 +112,7 @@ else
   warn "$ERRORS issue(s) found."
   if [[ "$FIX" == "true" ]]; then
     say "Attempting repairs via 'eidolons sync'..."
-    exec bash "$CLI_SRC/sync.sh"
+    exec bash "$SELF_DIR/sync.sh"
   else
     echo ""
     echo "Run 'eidolons doctor --fix' to attempt repairs, or 'eidolons sync' manually."

@@ -1,0 +1,165 @@
+name: CI
+
+# Validates the eidolons CLI on every push and PR:
+#   - lint: shellcheck + schema validation
+#   - install-e2e: curl-pipe install against the checkout on Ubuntu + macOS,
+#                  with and without a pre-existing yq, to guarantee the
+#                  bootstrap works on a bare box (the ModuleNotFoundError
+#                  for PyYAML must never reach a user again)
+#   - cli-tests: bats suite covering every command end-to-end
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck + yq + jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: shellcheck all shell scripts (error severity)
+        run: |
+          set -e
+          # -S error = block merges only on real errors, not style/info.
+          # Warnings are surfaced but non-blocking; promote to -S warning
+          # once the existing warnings are cleaned up.
+          find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
+          shellcheck -x -S error cli/eidolons
+
+      - name: Validate JSON schemas parse
+        run: |
+          for schema in schemas/*.json; do
+            jq empty "$schema"
+          done
+
+      - name: Validate roster/index.yaml required fields
+        run: |
+          set -euo pipefail
+          yq eval '.' roster/index.yaml > /tmp/roster.json
+          for name in $(jq -r '.eidolons[].name' /tmp/roster.json); do
+            jq -e --arg n "$name" '.eidolons[] | select(.name == $n) |
+              .methodology.name and .methodology.version and .methodology.cycle and
+              .source.repo and
+              .versions.latest and
+              .handoffs.upstream and .handoffs.downstream' \
+              /tmp/roster.json > /dev/null || { echo "::error::$name missing required fields"; exit 1; }
+          done
+
+  install-e2e:
+    name: Install — ${{ matrix.os }} / yq=${{ matrix.yq }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        yq: [preinstalled, absent]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y jq
+          else
+            brew install jq
+          fi
+
+      - name: Remove any pre-existing yq (matrix.yq=absent)
+        if: matrix.yq == 'absent'
+        run: |
+          for p in /usr/local/bin/yq /usr/bin/yq /opt/homebrew/bin/yq "$HOME/.local/bin/yq"; do
+            [[ -e "$p" ]] && sudo rm -f "$p" || true
+          done
+          # Ubuntu runners may have yq via snap too.
+          command -v yq && sudo rm -f "$(command -v yq)" || true
+          if command -v yq >/dev/null 2>&1; then
+            echo "::error::yq still on PATH after cleanup: $(command -v yq)"
+            exit 1
+          fi
+
+      - name: Ensure yq is present (matrix.yq=preinstalled)
+        if: matrix.yq == 'preinstalled'
+        run: |
+          if ! command -v yq >/dev/null 2>&1; then
+            if [[ "$RUNNER_OS" == "Linux" ]]; then
+              sudo wget -qO /usr/local/bin/yq \
+                https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+              sudo chmod +x /usr/local/bin/yq
+            else
+              brew install yq
+            fi
+          fi
+
+      - name: Run install.sh against the checkout
+        env:
+          EIDOLONS_REPO: file://${{ github.workspace }}
+          EIDOLONS_REF: ${{ github.sha }}
+          EIDOLONS_HOME: ${{ github.workspace }}/.e2e-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.e2e-bin
+        run: |
+          set -euo pipefail
+          bash cli/install.sh
+          "$EIDOLONS_BIN_DIR/eidolons" version
+          # yq must exist after install regardless of matrix.yq.
+          command -v yq >/dev/null 2>&1 || [[ -x "$EIDOLONS_BIN_DIR/yq" ]]
+
+      - name: Reproduce the original user bug (list --available must work)
+        env:
+          EIDOLONS_HOME: ${{ github.workspace }}/.e2e-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.e2e-bin
+        run: |
+          export PATH="$EIDOLONS_BIN_DIR:$PATH"
+          # This is the exact invocation that was failing with
+          # ModuleNotFoundError: No module named 'yaml'.
+          eidolons list --available
+
+      - name: Second install run is idempotent
+        env:
+          EIDOLONS_REPO: file://${{ github.workspace }}
+          EIDOLONS_REF: ${{ github.sha }}
+          EIDOLONS_HOME: ${{ github.workspace }}/.e2e-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.e2e-bin
+        run: |
+          bash cli/install.sh
+          "$EIDOLONS_BIN_DIR/eidolons" version
+
+  cli-tests:
+    name: CLI tests (bats) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    needs: lint
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install prerequisites (jq, yq, bats)
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y jq bats
+            sudo wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          else
+            brew install jq yq bats-core
+          fi
+
+      - name: Make CLI executable
+        run: chmod +x cli/eidolons cli/src/*.sh cli/install.sh
+
+      - name: Run bats suite
+        run: bats cli/tests/

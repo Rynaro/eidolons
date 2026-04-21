@@ -40,10 +40,14 @@ yaml_to_json() {
     else
       yq . "$file"
     fi
-  elif command -v python3 >/dev/null 2>&1; then
+  elif command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
     python3 -c "import sys, json, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))" "$file"
   else
-    die "Need yq or python3 to parse YAML. Install yq: https://github.com/mikefarah/yq"
+    die "Cannot parse YAML: neither yq nor python3+PyYAML is available.
+  Fix (recommended): rerun the bootstrap installer to auto-install yq:
+      curl -sSL https://raw.githubusercontent.com/Rynaro/eidolons/main/cli/install.sh | bash
+  Or install yq manually: https://github.com/mikefarah/yq/releases
+  Or install PyYAML:      pip install --user pyyaml"
   fi
 }
 
@@ -84,7 +88,10 @@ detect_hosts() {
   [[ -d ".github"         || -f "AGENTS.md"            ]] && hosts+=("copilot")
   [[ -d ".cursor"         || -f ".cursorrules"         ]] && hosts+=("cursor")
   [[ -d ".opencode"                                    ]] && hosts+=("opencode")
-  printf "%s\n" "${hosts[@]}"
+  if (( ${#hosts[@]} > 0 )); then
+    printf "%s\n" "${hosts[@]}"
+  fi
+  return 0
 }
 
 # ─── Eidolon repo fetching ────────────────────────────────────────────────

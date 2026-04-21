@@ -25,6 +25,7 @@ EIDOLONS_REPO="${EIDOLONS_REPO:-https://github.com/Rynaro/eidolons}"
 EIDOLONS_REF="${EIDOLONS_REF:-main}"
 EIDOLONS_HOME="${EIDOLONS_HOME:-$HOME/.eidolons}"
 EIDOLONS_BIN_DIR="${EIDOLONS_BIN_DIR:-$HOME/.local/bin}"
+EIDOLONS_YQ_VERSION="${EIDOLONS_YQ_VERSION:-v4.44.3}"
 
 # ─── Pretty output ─────────────────────────────────────────────────────────
 if [[ -t 1 ]]; then
@@ -54,26 +55,76 @@ need git  "required to clone the nexus and fetch Eidolon repos"
 need bash "required — the CLI is bash"
 need jq   "required for JSON parsing in CLI commands"
 
-if ! command -v yq >/dev/null 2>&1; then
-  warn "yq not found — falling back to internal YAML parser (slower, less strict)"
-fi
-
 ok "Prerequisites OK"
+
+# ─── yq (YAML parser) ──────────────────────────────────────────────────────
+# yq is a hard dependency — every CLI command reads YAML. Auto-install the
+# mikefarah/yq static binary when missing so users never hit
+# "ModuleNotFoundError: No module named 'yaml'" from a Python fallback.
+install_yq() {
+  local os arch asset url dest
+  case "$(uname -s)" in
+    Linux)  os="linux" ;;
+    Darwin) os="darwin" ;;
+    *)      die "Unsupported OS for automatic yq install: $(uname -s). Install yq manually: https://github.com/mikefarah/yq/releases" ;;
+  esac
+  case "$(uname -m)" in
+    x86_64|amd64)  arch="amd64" ;;
+    arm64|aarch64) arch="arm64" ;;
+    *)             die "Unsupported arch for automatic yq install: $(uname -m). Install yq manually: https://github.com/mikefarah/yq/releases" ;;
+  esac
+  asset="yq_${os}_${arch}"
+  url="https://github.com/mikefarah/yq/releases/download/${EIDOLONS_YQ_VERSION}/${asset}"
+  dest="$EIDOLONS_BIN_DIR/yq"
+
+  mkdir -p "$EIDOLONS_BIN_DIR"
+  say "Downloading yq ${EIDOLONS_YQ_VERSION} (${os}/${arch}) → $dest"
+
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$url" -o "$dest" || die "Failed to download yq from $url"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$dest" "$url" || die "Failed to download yq from $url"
+  else
+    die "Need curl or wget to auto-install yq. Install yq manually: https://github.com/mikefarah/yq/releases"
+  fi
+
+  chmod +x "$dest"
+  "$dest" --version >/dev/null 2>&1 || die "yq binary at $dest failed to execute. Remove it and install yq manually."
+  ok "yq installed to $dest"
+}
+
+if command -v yq >/dev/null 2>&1; then
+  ok "yq already present ($(command -v yq))"
+else
+  install_yq
+fi
 
 # ─── Install the nexus ─────────────────────────────────────────────────────
 mkdir -p "$EIDOLONS_HOME" "$EIDOLONS_BIN_DIR"
 
-if [[ -d "$EIDOLONS_HOME/nexus/.git" ]]; then
-  say "Updating existing nexus at $EIDOLONS_HOME/nexus"
-  git -C "$EIDOLONS_HOME/nexus" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null
-  git -C "$EIDOLONS_HOME/nexus" checkout -q "$EIDOLONS_REF"
-  git -C "$EIDOLONS_HOME/nexus" reset --hard "origin/$EIDOLONS_REF" >/dev/null
+# Fetch-based flow (init + fetch + checkout FETCH_HEAD) so EIDOLONS_REF
+# accepts branch names, tags, AND commit SHAs uniformly. `git clone
+# --branch` rejects SHAs — users pinning to a specific commit (or CI
+# passing ${{ github.sha }}) would fail otherwise.
+NEXUS_DIR="$EIDOLONS_HOME/nexus"
+if [[ -d "$NEXUS_DIR/.git" ]]; then
+  say "Updating existing nexus at $NEXUS_DIR ($EIDOLONS_REF)"
+  git -C "$NEXUS_DIR" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null 2>&1 \
+    || die "Failed to fetch $EIDOLONS_REF from $EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" reset --hard FETCH_HEAD >/dev/null
   ok "Nexus updated to $EIDOLONS_REF"
 else
   say "Cloning nexus from $EIDOLONS_REPO ($EIDOLONS_REF)"
-  git clone --depth 1 --branch "$EIDOLONS_REF" "$EIDOLONS_REPO" "$EIDOLONS_HOME/nexus" >/dev/null 2>&1 \
-    || die "Failed to clone $EIDOLONS_REPO"
-  ok "Nexus cloned to $EIDOLONS_HOME/nexus"
+  mkdir -p "$NEXUS_DIR"
+  git -C "$NEXUS_DIR" init -q >/dev/null 2>&1 \
+    || die "Failed to init git repo at $NEXUS_DIR"
+  git -C "$NEXUS_DIR" remote add origin "$EIDOLONS_REPO" 2>/dev/null \
+    || git -C "$NEXUS_DIR" remote set-url origin "$EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" fetch --depth 1 origin "$EIDOLONS_REF" >/dev/null 2>&1 \
+    || die "Failed to fetch $EIDOLONS_REF from $EIDOLONS_REPO"
+  git -C "$NEXUS_DIR" checkout -q FETCH_HEAD \
+    || die "Failed to checkout FETCH_HEAD in $NEXUS_DIR"
+  ok "Nexus cloned to $NEXUS_DIR"
 fi
 
 # ─── Install the CLI ──────────────────────────────────────────────────────
