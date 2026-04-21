@@ -46,7 +46,7 @@ hosts:
 members:
   - name: atlas
     version: "^1.0.0"
-    source: github:Rynaro/atlas
+    source: github:Rynaro/ATLAS
 EOF
 }
 
@@ -59,7 +59,7 @@ nexus_commit: "test"
 members:
   - name: atlas
     version: "1.0.0"
-    resolved: "github:Rynaro/atlas@test"
+    resolved: "github:Rynaro/ATLAS@test"
     target: "./agents/atlas"
     hosts_wired: ["claude-code"]
 EOF

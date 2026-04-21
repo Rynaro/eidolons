@@ -25,7 +25,7 @@ eidolons:
       summary: "Read-only codebase intelligence. Structural mapping, bounded probes, evidence-anchored findings."
     source:
       type: github
-      repo: Rynaro/atlas
+      repo: Rynaro/ATLAS
       default_ref: main
     versions:
       latest: "1.0.0"
@@ -134,7 +134,7 @@ eidolons:
       summary: "Documentation synthesis. Structured markers, CHT verification, provenance-first."
     source:
       type: github
-      repo: Rynaro/idg
+      repo: Rynaro/IDG
       default_ref: main
     versions:
       latest: "1.1.0"
@@ -171,7 +171,7 @@ eidolons:
       summary: "Deep reasoning for ambiguity, trade-offs, counterfactuals, novel problems."
     source:
       type: github
-      repo: Rynaro/forge
+      repo: Rynaro/FORGE
       default_ref: main
     versions:
       latest: "0.1.0-dev"

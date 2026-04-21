@@ -78,15 +78,21 @@ resolve_members() {
   if [[ "$NON_INTERACTIVE" == "true" ]]; then
     die "No members specified. Use --preset or --members when --non-interactive."
   fi
-  # Interactive picker
-  echo ""
-  echo "${BOLD}Available presets:${RESET}"
-  yaml_to_json "$ROSTER_FILE" | jq -r '.presets | to_entries[] | "  \(.key) — \(.value.description)"'
-  echo ""
-  echo "${BOLD}Available Eidolons:${RESET}"
-  yaml_to_json "$ROSTER_FILE" | jq -r '.eidolons[] | "  \(.name) — \(.methodology.summary)"'
-  echo ""
-  read -rp "Enter preset name, or comma-separated members: " choice
+  # Interactive picker — all listing output goes to stderr so it does not
+  # pollute this function's stdout (captured by the caller).
+  {
+    echo ""
+    echo "${BOLD}Available presets:${RESET}"
+    yaml_to_json "$ROSTER_FILE" | jq -r '.presets | to_entries[] | "  \(.key) — \(.value.description)"'
+    echo ""
+    echo "${BOLD}Available Eidolons:${RESET}"
+    yaml_to_json "$ROSTER_FILE" | jq -r '.eidolons[] | "  \(.name) — \(.methodology.summary)"'
+    echo ""
+  } >&2
+  local choice=""
+  read -rp "Enter preset name, or comma-separated members: " choice || true
+  choice="$(echo "$choice" | xargs)"
+  [[ -z "$choice" ]] && die "No selection made."
   if roster_presets | grep -Fxq "$choice"; then
     roster_preset_members "$choice" | paste -sd, -
   else
@@ -94,9 +100,10 @@ resolve_members() {
   fi
 }
 
-MEMBERS_CSV="$(resolve_members)"
+MEMBERS_CSV="$(resolve_members | tr -d '\n' | xargs)"
 [[ -z "$MEMBERS_CSV" ]] && die "No members resolved. Aborting."
 IFS=',' read -ra MEMBERS_ARR <<< "$MEMBERS_CSV"
+(( ${#MEMBERS_ARR[@]} > 0 )) || die "No members resolved. Aborting."
 say "Members: ${MEMBERS_ARR[*]}"
 
 # Validate every member exists in the roster

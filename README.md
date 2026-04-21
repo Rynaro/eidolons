@@ -24,11 +24,11 @@ This is the **nexus** — the canonical place where the team is defined, invento
 
 | Eidolon | Role | Methodology | Repo | Status |
 |---------|------|-------------|------|--------|
-| **ATLAS** | Explorer / Scout | `A→T→L→A→S` | [Rynaro/atlas](https://github.com/Rynaro/atlas) | shipped |
+| **ATLAS** | Explorer / Scout | `A→T→L→A→S` | [Rynaro/ATLAS](https://github.com/Rynaro/ATLAS) | shipped |
 | **SPECTRA** | Planner | `S→P→E→C→T→R→A` | [Rynaro/SPECTRA](https://github.com/Rynaro/SPECTRA) | shipped |
-| **APIVR-Δ** | Coder | `A→P→I→V→Δ/R` | [Rynaro/apivr](https://github.com/Rynaro/apivr) | shipped |
-| **IDG** | Scriber / Chronicler | `I→D→G` | [Rynaro/idg](https://github.com/Rynaro/idg) | shipped |
-| **FORGE** | Reasoner | `TBD` | [Rynaro/forge](https://github.com/Rynaro/forge) | in construction |
+| **APIVR-Δ** | Coder | `A→P→I→V→Δ/R` | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | shipped |
+| **IDG** | Scriber / Chronicler | `I→D→G` | [Rynaro/IDG](https://github.com/Rynaro/IDG) | shipped |
+| **FORGE** | Reasoner | `TBD` | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | in construction |
 
 See [`methodology/composition.md`](methodology/composition.md) for the canonical pipeline and handoff contracts.
 

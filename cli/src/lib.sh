@@ -23,9 +23,12 @@ else
 fi
 
 # ─── Logging ───────────────────────────────────────────────────────────────
-say()   { printf "%s▸%s %s\n"  "$BOLD"   "$RESET" "$*"; }
-ok()    { printf "%s✓%s %s\n"  "$GREEN"  "$RESET" "$*"; }
-info()  { printf "%s·%s %s\n"  "$BLUE"   "$RESET" "$*"; }
+# All log output goes to stderr so functions whose stdout is captured by
+# the caller (e.g. fetch_eidolon, roster_preset_members) can emit progress
+# without corrupting their return value.
+say()   { printf "%s▸%s %s\n"  "$BOLD"   "$RESET" "$*" >&2; }
+ok()    { printf "%s✓%s %s\n"  "$GREEN"  "$RESET" "$*" >&2; }
+info()  { printf "%s·%s %s\n"  "$BLUE"   "$RESET" "$*" >&2; }
 warn()  { printf "%s⚠%s %s\n"  "$YELLOW" "$RESET" "$*" >&2; }
 die()   { printf "%s✗%s %s\n"  "$RED"    "$RESET" "$*" >&2; exit 1; }
 

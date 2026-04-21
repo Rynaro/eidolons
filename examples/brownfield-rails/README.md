@@ -68,16 +68,16 @@ hosts:
 members:
   - name: atlas
     version: "^1.0.0"
-    source: github:Rynaro/atlas
+    source: github:Rynaro/ATLAS
   - name: spectra
     version: "^4.2.0"
     source: github:Rynaro/SPECTRA
   - name: apivr
     version: "^3.0.0"
-    source: github:Rynaro/apivr
+    source: github:Rynaro/APIVR-Delta
   - name: idg
     version: "^1.1.0"
-    source: github:Rynaro/idg
+    source: github:Rynaro/IDG
 
 composition:
   pipeline: [atlas, spectra, apivr, idg]
