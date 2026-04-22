@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-22"
+updated_at: "2026-04-22T20:00Z"
 eiis_required: "1.0"
 
 # ─── Roster ────────────────────────────────────────────────────────────────────
@@ -28,9 +28,9 @@ eidolons:
       repo: Rynaro/ATLAS
       default_ref: main
     versions:
-      latest: "1.0.1"
+      latest: "1.0.2"
       pins:
-        stable: "1.0.1"
+        stable: "1.0.2"
     install:
       target_default: "./.eidolons/atlas"
       standalone: true
@@ -65,9 +65,9 @@ eidolons:
       repo: Rynaro/SPECTRA
       default_ref: main
     versions:
-      latest: "4.2.1"
+      latest: "4.2.2"
       pins:
-        stable: "4.2.1"
+        stable: "4.2.2"
     install:
       target_default: "./.eidolons/spectra"
       standalone: true
@@ -100,9 +100,9 @@ eidolons:
       repo: Rynaro/APIVR-Delta
       default_ref: main
     versions:
-      latest: "3.0.1"
+      latest: "3.0.2"
       pins:
-        stable: "3.0.1"
+        stable: "3.0.2"
     install:
       target_default: "./.eidolons/apivr"
       standalone: true
@@ -137,9 +137,9 @@ eidolons:
       repo: Rynaro/IDG
       default_ref: main
     versions:
-      latest: "1.1.1"
+      latest: "1.1.2"
       pins:
-        stable: "1.1.1"
+        stable: "1.1.2"
     install:
       target_default: "./.eidolons/idg"
       standalone: true
