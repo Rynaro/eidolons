@@ -82,6 +82,9 @@ manifest_members | while read -r name; do
   fi
 done
 
+# Read shared_dispatch preference — defaults to false when the key is absent.
+SHARED_DISPATCH="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.shared_dispatch // false')"
+
 # ─── Check 3: host wiring ───────────────────────────────────────────────
 echo ""
 echo "${BOLD}Host wiring${RESET}"
@@ -89,21 +92,41 @@ hosts="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.wire[]')"
 for host in $hosts; do
   case "$host" in
     claude-code)
-      [[ -f "CLAUDE.md" ]] && pass "CLAUDE.md present (claude-code)" || err "CLAUDE.md missing for claude-code"
+      # Per-vendor self-sufficient files live under .claude/agents/ and .claude/skills/.
+      # Root CLAUDE.md is only required when shared_dispatch is opted in.
+      if [[ -d ".claude/agents" ]] && ls .claude/agents/*.md >/dev/null 2>&1; then
+        pass "claude-code wired (.claude/agents/*.md present)"
+      elif [[ "$SHARED_DISPATCH" == "true" && -f "CLAUDE.md" ]]; then
+        pass "claude-code wired (CLAUDE.md shared dispatch)"
+      else
+        err "claude-code declared but no .claude/agents/*.md found"
+      fi
       ;;
     copilot)
-      if [[ -f ".github/copilot-instructions.md" || -f "AGENTS.md" ]]; then
-        pass "Copilot dispatch present"
+      # Per-vendor files: .github/instructions/<eidolon>-<skill>.instructions.md
+      if [[ -d ".github/instructions" ]] && ls .github/instructions/*.instructions.md >/dev/null 2>&1; then
+        pass "copilot wired (.github/instructions/*.instructions.md present)"
+      elif [[ "$SHARED_DISPATCH" == "true" ]] && [[ -f ".github/copilot-instructions.md" || -f "AGENTS.md" ]]; then
+        pass "copilot wired (shared dispatch)"
       else
-        err "No AGENTS.md or .github/copilot-instructions.md for copilot"
+        err "copilot declared but no .github/instructions/ content found"
       fi
       ;;
     cursor)
-      [[ -d ".cursor" || -f ".cursorrules" ]] && pass ".cursor/ or .cursorrules present" \
-        || err "No .cursor/ or .cursorrules for cursor"
+      if [[ -d ".cursor/rules" ]] && ls .cursor/rules/*.mdc >/dev/null 2>&1; then
+        pass "cursor wired (.cursor/rules/*.mdc present)"
+      elif [[ -f ".cursorrules" ]]; then
+        pass "cursor wired (legacy .cursorrules)"
+      else
+        err "cursor declared but no .cursor/rules/*.mdc found"
+      fi
       ;;
     opencode)
-      [[ -d ".opencode" ]] && pass ".opencode/ present" || err "No .opencode/ for opencode"
+      if [[ -d ".opencode/agents" ]] && ls .opencode/agents/*.md >/dev/null 2>&1; then
+        pass "opencode wired (.opencode/agents/*.md present)"
+      else
+        err "opencode declared but no .opencode/agents/*.md found"
+      fi
       ;;
   esac
 done

@@ -9,7 +9,9 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PRESET=""
 MEMBERS=""
-HOSTS="auto"
+HOSTS=""
+HOSTS_EXPLICIT=false
+SHARED_DISPATCH=""
 NON_INTERACTIVE=false
 FORCE=false
 
@@ -20,35 +22,45 @@ eidolons init — initialize a project with Eidolons
 Usage: eidolons init [OPTIONS]
 
 Options:
-  --preset NAME         Use a named preset from the roster (minimal, pipeline, full, ...)
-                        Run 'eidolons list --presets' to see all.
-  --members LIST        Comma-separated list of Eidolon names.
-                        Mutually exclusive with --preset.
-  --hosts LIST          Comma-separated: claude-code,copilot,cursor,opencode,all
-                        Default: auto (detect from project)
-  --force               Overwrite existing eidolons.yaml without prompting
-  --non-interactive     Fail on any prompt. Requires --preset or --members.
-  -h, --help            Show this help
+  --preset NAME            Use a named preset from the roster (minimal, pipeline, full, ...)
+                           Run 'eidolons list --presets' to see all.
+  --members LIST           Comma-separated list of Eidolon names.
+                           Mutually exclusive with --preset.
+  --hosts LIST             Comma-separated: claude-code,copilot,cursor,opencode,all
+                           Required in --non-interactive mode when no hosts are auto-detected.
+                           Interactive mode will prompt if omitted and detection finds nothing.
+  --shared-dispatch        Compose root AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
+                           with marker-bounded per-Eidolon sections (opt-in).
+  --no-shared-dispatch     Skip root dispatch files (default). Per-vendor agent/skill files
+                           under .claude/, .github/, .cursor/, .opencode/ remain self-sufficient.
+  --force                  Overwrite existing eidolons.yaml without prompting.
+  --non-interactive        Fail on any prompt. Requires --preset or --members and explicit
+                           --hosts (no broadcast when detection finds nothing).
+  -h, --help               Show this help
 
 Behavior:
-  - Detects whether the project is empty (greenfield) or populated (brownfield).
-  - If interactive: prompts for members and confirms host wiring.
-  - Writes eidolons.yaml + eidolons.lock to the project root.
-  - Installs each chosen Eidolon by calling its own install.sh.
-  - Works safely in brownfield projects: appends to existing AGENTS.md / CLAUDE.md.
+  - Detects which host environments are present in the current project.
+  - Interactive: prompts for missing host selection, and whether to compose
+    root dispatch files (default: no).
+  - Non-interactive: fails if no hosts detected and --hosts not supplied.
+  - Writes eidolons.yaml + eidolons.lock, then delegates to 'eidolons sync'.
+  - Per-Eidolon installers receive --shared-dispatch / --no-shared-dispatch
+    based on the user's choice.
 
 EOF
 }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --preset)           PRESET="$2"; shift 2 ;;
-    --members)          MEMBERS="$2"; shift 2 ;;
-    --hosts)            HOSTS="$2"; shift 2 ;;
-    --force)            FORCE=true; shift ;;
-    --non-interactive)  NON_INTERACTIVE=true; shift ;;
-    -h|--help)          usage; exit 0 ;;
-    *)                  echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
+    --preset)               PRESET="$2"; shift 2 ;;
+    --members)              MEMBERS="$2"; shift 2 ;;
+    --hosts)                HOSTS="$2"; HOSTS_EXPLICIT=true; shift 2 ;;
+    --shared-dispatch)      SHARED_DISPATCH="true"; shift ;;
+    --no-shared-dispatch)   SHARED_DISPATCH="false"; shift ;;
+    --force)                FORCE=true; shift ;;
+    --non-interactive)      NON_INTERACTIVE=true; shift ;;
+    -h|--help)              usage; exit 0 ;;
+    *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
 
@@ -113,22 +125,64 @@ for m in "${MEMBERS_ARR[@]}"; do
 done
 
 # ─── Resolve hosts ────────────────────────────────────────────────────────
-if [[ "$HOSTS" == "auto" ]]; then
-  if [[ "$PROJECT_STATE" == "greenfield" ]]; then
-    # Greenfield: wire every major host so the project is host-agnostic from day one.
-    HOSTS="claude-code,copilot,cursor,opencode"
-    info "Greenfield project — wiring all major hosts"
+# Policy: never broadcast when no host is detected. Require explicit
+# --hosts in non-interactive; prompt interactively otherwise.
+if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
+  detected="$(detect_hosts | paste -sd, -)"
+  if [[ -n "$detected" ]]; then
+    HOSTS="$detected"
+    info "Detected hosts: $HOSTS"
   else
-    detected="$(detect_hosts | paste -sd, -)"
-    if [[ -z "$detected" ]]; then
-      warn "No hosts detected. Defaulting to claude-code + copilot."
-      HOSTS="claude-code,copilot"
+    if [[ "$NON_INTERACTIVE" == "true" ]]; then
+      die "No hosts auto-detected in this project. Pass --hosts LIST explicitly (valid: claude-code, copilot, cursor, opencode, all)."
+    fi
+    {
+      echo ""
+      echo "${BOLD}No AI host environments detected in this project.${RESET}"
+      echo "Pick which host(s) to wire (comma-separated):"
+      echo "  - claude-code"
+      echo "  - copilot"
+      echo "  - cursor"
+      echo "  - opencode"
+      echo "  - all (every host above)"
+      echo "  - (leave blank to abort)"
+      echo ""
+    } >&2
+    read -rp "Hosts: " HOSTS || true
+    HOSTS="$(echo "${HOSTS:-}" | xargs)"
+    [[ -z "$HOSTS" ]] && die "No hosts selected. Aborting — specify --hosts explicitly or re-run."
+  fi
+fi
+[[ "$HOSTS" == "all" ]] && HOSTS="claude-code,copilot,cursor,opencode"
+
+# ─── Resolve shared-dispatch preference ───────────────────────────────────
+# Opt-in by design. Per-vendor files (.claude/agents/<n>.md, .cursor/rules/<n>.mdc,
+# .opencode/agents/<n>.md, .github/instructions/) are self-sufficient for their
+# hosts to discover the Eidolon. Root AGENTS.md / CLAUDE.md / copilot-
+# instructions.md are a separate composition concern — default off so they don't
+# clutter brownfield projects without permission.
+if [[ -z "$SHARED_DISPATCH" ]]; then
+  if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    SHARED_DISPATCH="false"
+  else
+    {
+      echo ""
+      echo "${BOLD}Compose root dispatch files?${RESET}"
+      echo "If yes, each Eidolon will own a marker-bounded section in root"
+      echo "  AGENTS.md, CLAUDE.md, and .github/copilot-instructions.md."
+      echo "If no, only per-vendor files (.claude/agents/, .cursor/rules/, etc.)"
+      echo "  are created — agents remain self-sufficient via host discovery."
+      echo ""
+    } >&2
+    read -rp "Generate shared dispatch files? [y/N] " _reply || true
+    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+      SHARED_DISPATCH="true"
     else
-      HOSTS="$detected"
-      info "Detected hosts: $HOSTS"
+      SHARED_DISPATCH="false"
     fi
   fi
 fi
+info "Shared dispatch: $SHARED_DISPATCH"
 
 # ─── Write eidolons.yaml ─────────────────────────────────────────────────
 say "Writing $PROJECT_MANIFEST"
@@ -140,6 +194,7 @@ say "Writing $PROJECT_MANIFEST"
   echo "version: 1"
   echo "hosts:"
   echo "  wire: [$(echo "$HOSTS" | sed 's/,/, /g')]"
+  echo "  shared_dispatch: ${SHARED_DISPATCH}"
   echo ""
   echo "members:"
   for m in "${MEMBERS_ARR[@]}"; do
