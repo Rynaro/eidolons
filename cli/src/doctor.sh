@@ -108,6 +108,31 @@ for host in $hosts; do
   esac
 done
 
+# ─── Check 4: dispatch freshness ────────────────────────────────────────
+# Catches leftover pre-v1.1 wiring that survived reinstalls: legacy
+# `agents/<name>/` pointers, symlinked shared files, and legacy IDG name
+# references (scribe). Warns, doesn't block — the files may still work,
+# but are stale and confusing.
+echo ""
+echo "${BOLD}Dispatch freshness${RESET}"
+FRESHNESS_FILES=("AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" ".cursorrules")
+for f in "${FRESHNESS_FILES[@]}"; do
+  [[ -e "$f" ]] || continue
+  if [[ -L "$f" ]]; then
+    err "$f is a symlink — shared dispatch files must be real composable files. Re-run 'eidolons sync --force'."
+    continue
+  fi
+  if grep -Eq '@?\.?/?agents/(atlas|apivr|spectra|idg|scribe|forge)/' "$f" 2>/dev/null; then
+    err "$f contains legacy agents/<name>/ pointers (pre-v1.1 paths). Delete the Eidolon block(s) and re-run 'eidolons sync --force'."
+    continue
+  fi
+  if grep -q '@?\.?/?agents/scribe\|scribe/agent\.md' "$f" 2>/dev/null; then
+    err "$f references legacy 'scribe' identifier (renamed to 'idg' in v1.1.1)."
+    continue
+  fi
+  pass "$f clean (no stale pointers)"
+done
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then
