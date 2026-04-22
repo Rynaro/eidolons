@@ -46,7 +46,7 @@ This creates:
 my-new-thing/
 ├── eidolons.yaml            # your team manifest
 ├── eidolons.lock            # resolved versions (commit this too)
-├── agents/
+├── .eidolons/               # installed members (hidden to avoid collisions)
 │   ├── atlas/
 │   ├── spectra/
 │   ├── apivr/
@@ -95,7 +95,7 @@ Fails fast on any prompt. Use `--preset` or `--members` to provide all required 
 |------|---------------|---------|
 | `eidolons.yaml` | You (via CLI or by hand) | ✅ yes |
 | `eidolons.lock` | `eidolons sync` | ✅ yes |
-| `agents/<n>/` | Each Eidolon's `install.sh` | ✅ yes |
+| `.eidolons/<n>/` | Each Eidolon's `install.sh` | ✅ yes |
 | `AGENTS.md` | Each Eidolon appends its section | ✅ yes |
 | `CLAUDE.md` | Each Eidolon appends a pointer line | ✅ yes |
 | `.cursor/rules/<n>.mdc` | Per-Eidolon | ✅ yes |

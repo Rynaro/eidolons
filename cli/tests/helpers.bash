@@ -60,7 +60,7 @@ members:
   - name: atlas
     version: "1.0.0"
     resolved: "github:Rynaro/ATLAS@test"
-    target: "./agents/atlas"
+    target: "./.eidolons/atlas"
     hosts_wired: ["claude-code"]
 EOF
 }
@@ -68,8 +68,8 @@ EOF
 # Seed a per-Eidolon install manifest so doctor's per-member check passes.
 seed_agent_install_manifest() {
   local name="$1"
-  mkdir -p "agents/$name"
-  cat > "agents/$name/install.manifest.json" <<EOF
+  mkdir -p ".eidolons/$name"
+  cat > ".eidolons/$name/install.manifest.json" <<EOF
 {
   "name": "$name",
   "version": "1.0.0",

@@ -15,7 +15,7 @@ load helpers
   [[ "$output" =~ eidolons\.lock\ missing ]]
 }
 
-@test "doctor: reports missing per-member install when agents dir absent" {
+@test "doctor: reports missing per-member install when .eidolons dir absent" {
   seed_manifest
   seed_lock
   run eidolons doctor
