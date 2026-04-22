@@ -27,7 +27,7 @@ eidolons <command> [options]
 | `~/.eidolons/cache/` | user | Cloned Eidolon repos (per name + version) |
 | `./eidolons.yaml` | project | Your team manifest |
 | `./eidolons.lock` | project | Resolved versions |
-| `./agents/<n>/` | project | Installed Eidolon files |
+| `./.eidolons/<n>/` | project | Installed Eidolon files |
 
 ---
 
@@ -65,7 +65,7 @@ Calls `sync` after writing to `eidolons.yaml`.
 
 ## `eidolons remove` (v1.1, stubbed in v1.0)
 
-Remove a member cleanly: manifest entry, `agents/<n>/`, bounded sections in dispatch files, and lock entry.
+Remove a member cleanly: manifest entry, `.eidolons/<n>/`, bounded sections in dispatch files, and lock entry.
 
 ---
 

@@ -48,10 +48,10 @@ For each member, the install:
 
    ```markdown
    ## Eidolons
-   - @agents/atlas/agent.md
-   - @agents/spectra/agent.md
-   - @agents/apivr/agent.md
-   - @agents/idg/agent.md
+   - @.eidolons/atlas/agent.md
+   - @.eidolons/spectra/agent.md
+   - @.eidolons/apivr/agent.md
+   - @.eidolons/idg/agent.md
    ```
 
 3. Writes per-host dispatch only where the host is detected.
@@ -135,7 +135,7 @@ eidolons remove atlas
 
 # Or nuclear option — just revert
 git checkout -- .
-rm -rf agents/
+rm -rf .eidolons/
 ```
 
 Because everything's in git, rollback is cheap.

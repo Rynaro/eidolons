@@ -32,7 +32,7 @@ eidolons:
       pins:
         stable: "1.0.0"
     install:
-      target_default: "./agents/atlas"
+      target_default: "./.eidolons/atlas"
       standalone: true
     handoffs:
       upstream: []
@@ -69,7 +69,7 @@ eidolons:
       pins:
         stable: "4.2.0"
     install:
-      target_default: "./agents/spectra"
+      target_default: "./.eidolons/spectra"
       standalone: true
     handoffs:
       upstream: [atlas]
@@ -104,7 +104,7 @@ eidolons:
       pins:
         stable: "3.0.0"
     install:
-      target_default: "./agents/apivr"
+      target_default: "./.eidolons/apivr"
       standalone: true
     handoffs:
       upstream: [atlas, spectra]
@@ -117,7 +117,7 @@ eidolons:
       reads_repo: true
       reads_network: false
       writes_repo: true
-      persists: ["agents/apivr/memories/"]
+      persists: [".eidolons/apivr/memories/"]
     references:
       - "research/papers/correctbench.md"
       - "research/papers/reflexion.md"
@@ -141,7 +141,7 @@ eidolons:
       pins:
         stable: "1.1.0"
     install:
-      target_default: "./agents/idg"
+      target_default: "./.eidolons/idg"
       standalone: true
     handoffs:
       upstream: [apivr, spectra, atlas]
@@ -178,7 +178,7 @@ eidolons:
       pins:
         stable: null
     install:
-      target_default: "./agents/forge"
+      target_default: "./.eidolons/forge"
       standalone: true
     handoffs:
       upstream: []       # lateral consultant — called by any member

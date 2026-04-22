@@ -10,7 +10,7 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # TODO: full implementation in v1.1
 # Planned behavior:
 #   - Remove member entry from eidolons.yaml
-#   - Remove agents/<n>/ directory
+#   - Remove .eidolons/<n>/ directory
 #   - Remove host dispatch sections scoped to this Eidolon (bounded by markers)
 #   - Regenerate eidolons.lock via `eidolons sync`
 
@@ -18,7 +18,7 @@ die "eidolons remove — not yet implemented (planned: v1.1).
 
 Workaround:
   1. Edit eidolons.yaml and delete the member entry.
-  2. rm -rf agents/<n>/
+  2. rm -rf .eidolons/<n>/
   3. Manually clean host dispatch files (AGENTS.md, CLAUDE.md sections).
   4. Run 'eidolons sync' to regenerate eidolons.lock.
 

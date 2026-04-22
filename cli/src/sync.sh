@@ -67,7 +67,7 @@ while read -r member; do
   version="${version#=}"
 
   entry="$(roster_get "$name")"
-  target="./agents/$name"
+  target="./.eidolons/$name"
 
   say "Installing $name@$version → $target"
 
@@ -95,6 +95,25 @@ while read -r member; do
       ${NON_INTERACTIVE:+--non-interactive} \
       --force
   ) || { warn "$name install failed — continuing"; continue; }
+
+  # ─── claude-code safety net ────────────────────────────────────────────
+  # If the host wiring asked for claude-code but the per-Eidolon installer
+  # didn't produce .claude/agents/<name>.md, write a minimal dispatch stub so
+  # the agent is at least callable. Never overwrite an existing file.
+  if [[ ",$HOSTS_CSV," == *",claude-code,"* ]] && [[ ! -f ".claude/agents/$name.md" ]]; then
+    mkdir -p .claude/agents
+    display="$(echo "$entry" | jq -r '.display_name // .name')"
+    summary="$(echo "$entry" | jq -r '.methodology.summary // ""')"
+    cat > ".claude/agents/$name.md" <<STUB
+---
+name: $name
+description: $display — $summary
+---
+
+See ./.eidolons/$name/agent.md for the full methodology.
+STUB
+    info "  wrote .claude/agents/$name.md (nexus safety net)"
+  fi
 
   # Pull the manifest emitted by the per-Eidolon install.sh
   if [[ -f "$target/install.manifest.json" ]]; then

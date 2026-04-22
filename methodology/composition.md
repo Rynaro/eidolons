@@ -90,7 +90,7 @@ These map to presets in [`../roster/index.yaml`](../roster/index.yaml) — `eido
 
 A team may span hosts — e.g., the user runs ATLAS in Claude Code for exploration, then switches to Cursor to run APIVR-Δ for implementation. Supported:
 
-- Each Eidolon's files live in `agents/<n>/` — host-independent
+- Each Eidolon's files live in `.eidolons/<n>/` — host-independent
 - Host dispatch (`CLAUDE.md`, `.cursor/rules/`, etc.) is auto-wired per the consumer's tooling
 - Handoff artifacts live in the repo (`scout-reports/`, `specs/`, `sessions/`) — travel with the code, not with the host
 

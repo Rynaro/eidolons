@@ -43,7 +43,7 @@
           },
           "target": {
             "type": "string",
-            "description": "Optional install target override. Defaults to ./agents/<n>/."
+            "description": "Optional install target override. Defaults to ./.eidolons/<n>/."
           }
         }
       }

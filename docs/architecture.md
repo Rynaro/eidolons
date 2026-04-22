@@ -55,7 +55,7 @@
 │                                                                      │
 │   eidolons.yaml              — which members you want               │
 │   eidolons.lock              — exact resolved versions              │
-│   agents/<member>/           — installed per Eidolon                │
+│   .eidolons/<member>/        — installed per Eidolon                │
 │   AGENTS.md / CLAUDE.md / .cursor/ / .opencode/                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -93,16 +93,16 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
       (depth-1 git clone, pinned to latest matching tag)
    b. EIIS sanity check (agent.md, install.sh, AGENTS.md exist)
    c. Run: bash <cache>/install.sh \
-             --target ./agents/<n> \
+             --target ./.eidolons/<n> \
              --hosts claude-code,copilot,cursor \
              --non-interactive \
              --force
    d. Each install.sh:
-      - Copies methodology files into ./agents/<n>/
+      - Copies methodology files into ./.eidolons/<n>/
       - Appends to root AGENTS.md (bounded by markers)
       - Appends to CLAUDE.md (pointer line)
       - Creates .cursor/rules/<n>.mdc if cursor is wired
-      - Emits ./agents/<n>/install.manifest.json
+      - Emits ./.eidolons/<n>/install.manifest.json
    e. Nexus reads the manifest, records resolved version + commit SHA
 
 5. Write eidolons.lock with resolved state
