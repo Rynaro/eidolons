@@ -35,6 +35,10 @@ Commands:
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
   upgrade        Upgrade pinned Eidolon versions
+  <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
+                 Each Eidolon exposes its own subcommands via
+                 .eidolons/<eidolon>/commands/*.sh after install.
+                 Run 'eidolons <eidolon> --help' to list available ones.
   version        Print CLI version
   help           Show this help
 
@@ -68,5 +72,15 @@ case "$cmd" in
   upgrade)     exec bash "$CLI_SRC/upgrade.sh" "$@" ;;
   version|--version|-v) echo "eidolons $EIDOLONS_VERSION" ;;
   help|--help|-h|"")    usage ;;
-  *) echo "Unknown command: $cmd" >&2; echo "" >&2; usage >&2; exit 2 ;;
+  *)
+    # Catch-all: if $cmd matches a roster Eidolon name, delegate to the
+    # per-Eidolon subcommand dispatcher. Otherwise, unknown command.
+    if bash -c ". '$CLI_LIB' && roster_list_names" 2>/dev/null | grep -Fxq "$cmd"; then
+      exec bash "$CLI_SRC/dispatch_eidolon.sh" "$cmd" "$@"
+    fi
+    echo "Unknown command: $cmd" >&2
+    echo "" >&2
+    usage >&2
+    exit 2
+    ;;
 esac
