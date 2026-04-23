@@ -28,7 +28,7 @@ This is the **nexus** — the canonical place where the team is defined, invento
 | **SPECTRA** | Planner | `S→P→E→C→T→R→A` | [Rynaro/SPECTRA](https://github.com/Rynaro/SPECTRA) | shipped |
 | **APIVR-Δ** | Coder | `A→P→I→V→Δ/R` | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | shipped |
 | **IDG** | Scriber / Chronicler | `I→D→G` | [Rynaro/IDG](https://github.com/Rynaro/IDG) | shipped |
-| **FORGE** | Reasoner | `TBD` | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | in construction |
+| **FORGE** | Reasoner | `F→O→R→G→E` | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | shipped |
 
 See [`methodology/composition.md`](methodology/composition.md) for the canonical pipeline and handoff contracts.
 
