@@ -29,6 +29,7 @@ This is the **nexus** — the canonical place where the team is defined, invento
 | **APIVR-Δ** | Coder | `A→P→I→V→Δ/R` | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | shipped |
 | **IDG** | Scriber / Chronicler | `I→D→G` | [Rynaro/IDG](https://github.com/Rynaro/IDG) | shipped |
 | **FORGE** | Reasoner | `F→O→R→G→E` | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | shipped |
+| **VIGIL** | Forensic Debugger | `V→I→G→I→L` | [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL) | shipped |
 
 See [`methodology/composition.md`](methodology/composition.md) for the canonical pipeline and handoff contracts.
 

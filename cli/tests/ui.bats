@@ -93,7 +93,7 @@ load helpers
 }
 
 @test "ui: every roster eidolon has a sigil file" {
-  for n in atlas spectra apivr idg forge; do
+  for n in atlas spectra apivr idg forge vigil; do
     [ -f "$EIDOLONS_ROOT/art/eidolons/$n.txt" ] || {
       echo "missing sigil: $n" >&2
       false
