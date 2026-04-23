@@ -42,10 +42,13 @@ manifest_exists || die "No eidolons.yaml found. Run 'eidolons init' first."
 
 MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
+# Default shared_dispatch to false when the key is absent (pre-v1.2 manifests).
+SHARED_DISPATCH="$(echo "$MANIFEST_JSON" | jq -r '.hosts.shared_dispatch // false')"
 MEMBERS_JSON="$(echo "$MANIFEST_JSON" | jq -c '.members[]')"
 
 say "Syncing project to $PROJECT_MANIFEST"
 info "Hosts: $HOSTS_CSV"
+info "Shared dispatch: $SHARED_DISPATCH"
 
 # ─── Lock file assembly ──────────────────────────────────────────────────
 LOCK_TMP="$(mktemp)"
@@ -87,11 +90,17 @@ while read -r member; do
     continue
   fi
 
+  # Shared-dispatch flag — tells the per-Eidolon installer whether to compose
+  # root AGENTS.md / CLAUDE.md / copilot-instructions.md or skip them.
+  shared_flag="--no-shared-dispatch"
+  [[ "$SHARED_DISPATCH" == "true" ]] && shared_flag="--shared-dispatch"
+
   (
     cd "$(pwd)"  # ensure we stay in the consumer project
     bash "$clone_dir/install.sh" \
       --target "$target" \
       --hosts "$HOSTS_CSV" \
+      "$shared_flag" \
       ${NON_INTERACTIVE:+--non-interactive} \
       --force
   ) || { warn "$name install failed — continuing"; continue; }
