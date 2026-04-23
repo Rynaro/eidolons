@@ -20,7 +20,20 @@ if [[ ! -d "$NEXUS" ]]; then
   CLI_LIB="$NEXUS/cli/src/lib.sh"
 fi
 
+if [[ -f "$CLI_SRC/ui/panel.sh" ]]; then
+  # shellcheck disable=SC1091
+  . "$CLI_SRC/ui/theme.sh"
+  # shellcheck disable=SC1091
+  . "$CLI_SRC/ui/panel.sh"
+fi
+
 usage() {
+  # Banner prints to stderr and is silent in plain mode — keeps `eidolons
+  # help | grep ...` and the bats suite (non-TTY) seeing exactly what
+  # they always saw. Stdout below is the actual help text.
+  if command -v ui_banner >/dev/null 2>&1; then
+    ui_banner "$EIDOLONS_VERSION"
+  fi
   cat <<EOF
 eidolons v${EIDOLONS_VERSION} — personal team of AI agents for any project
 

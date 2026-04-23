@@ -66,12 +66,12 @@ SUB="${1:-}"
 if [[ -z "$SUB" || "$SUB" == "-h" || "$SUB" == "--help" ]]; then
   usage "$EIDOLON"
   if [[ -n "$COMMANDS_DIR" ]]; then
-    echo ""
-    echo "${BOLD}Available subcommands for ${EIDOLON}${RESET} (from ${COMMANDS_DIR}):"
+    ui_section_out "Available subcommands for ${EIDOLON}"
+    printf "  %ssource:%s %s\n" "${UI_MUTED}" "${RESET}" "${COMMANDS_DIR}"
     _found=false
     for _s in "$COMMANDS_DIR"/*.sh; do
       [[ -f "$_s" ]] || continue
-      printf "  %s\n" "$(basename "${_s%.sh}")"
+      printf "  %s%s%s %s\n" "${UI_ACCENT}" "${GLYPH_BULLET}" "${RESET}" "$(basename "${_s%.sh}")"
       _found=true
     done
     if [[ "$_found" != "true" ]]; then

@@ -43,7 +43,7 @@ say "eidolons doctor — checking $(pwd)"
 echo ""
 
 # ─── Check 1: manifest + lock ────────────────────────────────────────────
-echo "${BOLD}Manifest + lock${RESET}"
+ui_section_out "Manifest + lock"
 if [[ -f "$PROJECT_MANIFEST" ]]; then
   pass "eidolons.yaml present"
 else
@@ -58,8 +58,7 @@ else
 fi
 
 # ─── Check 2: per-member installs ───────────────────────────────────────
-echo ""
-echo "${BOLD}Installed members${RESET}"
+ui_section_out "Installed members"
 CLAUDE_WIRED=false
 if yaml_to_json "$PROJECT_MANIFEST" | jq -e '.hosts.wire | index("claude-code")' >/dev/null 2>&1; then
   CLAUDE_WIRED=true
@@ -86,8 +85,7 @@ done
 SHARED_DISPATCH="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.shared_dispatch // false')"
 
 # ─── Check 3: host wiring ───────────────────────────────────────────────
-echo ""
-echo "${BOLD}Host wiring${RESET}"
+ui_section_out "Host wiring"
 hosts="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.wire[]')"
 for host in $hosts; do
   case "$host" in
@@ -136,8 +134,7 @@ done
 # `agents/<name>/` pointers, symlinked shared files, and legacy IDG name
 # references (scribe). Warns, doesn't block — the files may still work,
 # but are stale and confusing.
-echo ""
-echo "${BOLD}Dispatch freshness${RESET}"
+ui_section_out "Dispatch freshness"
 FRESHNESS_FILES=("AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" ".cursorrules")
 for f in "${FRESHNESS_FILES[@]}"; do
   [[ -e "$f" ]] || continue

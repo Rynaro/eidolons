@@ -28,11 +28,23 @@ EIDOLONS_BIN_DIR="${EIDOLONS_BIN_DIR:-$HOME/.local/bin}"
 EIDOLONS_YQ_VERSION="${EIDOLONS_YQ_VERSION:-v4.44.3}"
 
 # ─── Pretty output ─────────────────────────────────────────────────────────
-if [[ -t 1 ]]; then
-  BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'
-  YELLOW=$'\033[33m'; RED=$'\033[31m'; RESET=$'\033[0m'
+# install.sh runs *before* the nexus exists on disk, so it can't source the
+# UI layer at cli/src/ui/. The palette + ui_banner are inlined here and
+# kept in sync with cli/src/ui/themes/default.sh by hand.
+_install_fancy() {
+  [[ -n "${NO_COLOR:-}" ]] && return 1
+  [[ "${FORCE_COLOR:-0}" == "1" ]] && return 0
+  [[ -n "${CI:-}" ]] && return 1
+  [[ -t 1 ]]
+}
+
+if _install_fancy; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; RESET=$'\033[0m'
+  GREEN=$'\033[32m'; YELLOW=$'\033[33m'; RED=$'\033[31m'
+  AMBER=$'\033[38;5;214m'; MUTED=$'\033[38;5;243m'
 else
   BOLD=""; DIM=""; GREEN=""; YELLOW=""; RED=""; RESET=""
+  AMBER=""; MUTED=""
 fi
 
 say()  { printf "%s▸%s %s\n"  "$BOLD"  "$RESET" "$*"; }
@@ -41,11 +53,20 @@ warn() { printf "%s⚠%s %s\n"  "$YELLOW" "$RESET" "$*" >&2; }
 die()  { printf "%s✗%s %s\n"  "$RED"   "$RESET" "$*" >&2; exit 1; }
 
 # ─── Banner ────────────────────────────────────────────────────────────────
-cat <<EOF
-${BOLD}╔═══════════════════════════════════════════╗
-║   Eidolons — Bootstrap Installer          ║
-╚═══════════════════════════════════════════╝${RESET}
-EOF
+# Cozy CRT wordmark. In plain mode (CI / non-TTY / NO_COLOR) we drop the
+# block art and print a single-line marker so install logs stay grep-able.
+if _install_fancy; then
+  printf '\n'
+  printf '%s███████╗██╗██████╗  ██████╗ ██╗      ██████╗ ███╗   ██╗███████╗%s\n' "$AMBER" "$RESET"
+  printf '%s██╔════╝██║██╔══██╗██╔═══██╗██║     ██╔═══██╗████╗  ██║██╔════╝%s\n' "$AMBER" "$RESET"
+  printf '%s█████╗  ██║██║  ██║██║   ██║██║     ██║   ██║██╔██╗ ██║███████╗%s\n' "$AMBER" "$RESET"
+  printf '%s██╔══╝  ██║██║  ██║██║   ██║██║     ██║   ██║██║╚██╗██║╚════██║%s\n' "$AMBER" "$RESET"
+  printf '%s███████╗██║██████╔╝╚██████╔╝███████╗╚██████╔╝██║ ╚██╗██║███████║%s\n' "$AMBER" "$RESET"
+  printf '%s╚══════╝╚═╝╚═════╝  ╚═════╝ ╚══════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝%s\n'   "$AMBER" "$RESET"
+  printf '  %s· bootstrap installer ·%s\n\n' "$MUTED" "$RESET"
+else
+  printf 'Eidolons — Bootstrap Installer\n\n'
+fi
 
 # ─── Prerequisites ─────────────────────────────────────────────────────────
 say "Checking prerequisites"

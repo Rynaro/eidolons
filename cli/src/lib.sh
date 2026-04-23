@@ -14,23 +14,31 @@ ROSTER_FILE="$NEXUS/roster/index.yaml"
 
 mkdir -p "$CACHE_DIR"
 
-# ─── Colors ────────────────────────────────────────────────────────────────
-if [[ -t 1 ]]; then
-  BOLD=$'\033[1m'; DIM=$'\033[2m'; GREEN=$'\033[32m'
-  YELLOW=$'\033[33m'; RED=$'\033[31m'; BLUE=$'\033[34m'; RESET=$'\033[0m'
-else
-  BOLD=""; DIM=""; GREEN=""; YELLOW=""; RED=""; BLUE=""; RESET=""
-fi
+# ─── UI layer (theme + panels) ─────────────────────────────────────────────
+# theme.sh detects fancy vs plain mode and exports color vars (BOLD, DIM,
+# GREEN, YELLOW, RED, BLUE, CYAN, AMBER, MUTED, RESET) plus role aliases
+# (UI_PRIMARY, UI_SUCCESS, UI_INFO, UI_WARN, UI_ERROR, UI_ACCENT,
+# UI_MUTED). Plain mode → all empty strings, identical to the historical
+# behaviour every test asserts on. panel.sh adds ui_banner / ui_section /
+# ui_divider / ui_kv on top.
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/ui/theme.sh"
+# shellcheck disable=SC1091
+. "$(dirname "${BASH_SOURCE[0]}")/ui/panel.sh"
 
 # ─── Logging ───────────────────────────────────────────────────────────────
 # All log output goes to stderr so functions whose stdout is captured by
 # the caller (e.g. fetch_eidolon, roster_preset_members) can emit progress
 # without corrupting their return value.
-say()   { printf "%s▸%s %s\n"  "$BOLD"   "$RESET" "$*" >&2; }
-ok()    { printf "%s✓%s %s\n"  "$GREEN"  "$RESET" "$*" >&2; }
-info()  { printf "%s·%s %s\n"  "$BLUE"   "$RESET" "$*" >&2; }
-warn()  { printf "%s⚠%s %s\n"  "$YELLOW" "$RESET" "$*" >&2; }
-die()   { printf "%s✗%s %s\n"  "$RED"    "$RESET" "$*" >&2; exit 1; }
+#
+# Icon glyphs (▸✓·⚠✗) are pinned by tests — keep them as-is. Colors are
+# now sourced from theme.sh role aliases instead of raw ANSI vars, so a
+# theme swap automatically restyles all logs.
+say()   { printf "%s%s%s %s\n" "${BOLD}"        "${GLYPH_PROGRESS}" "${RESET}" "$*" >&2; }
+ok()    { printf "%s%s%s %s\n" "${UI_SUCCESS}"  "${GLYPH_OK}"       "${RESET}" "$*" >&2; }
+info()  { printf "%s%s%s %s\n" "${UI_INFO}"     "${GLYPH_INFO}"     "${RESET}" "$*" >&2; }
+warn()  { printf "%s%s%s %s\n" "${UI_WARN}"     "${GLYPH_WARN}"     "${RESET}" "$*" >&2; }
+die()   { printf "%s%s%s %s\n" "${UI_ERROR}"    "${GLYPH_ERROR}"    "${RESET}" "$*" >&2; exit 1; }
 
 # ─── YAML → JSON ──────────────────────────────────────────────────────────
 # Preferred: yq (mikefarah/yq or kislyuk/yq). Fallback: python3. Last resort: die.
