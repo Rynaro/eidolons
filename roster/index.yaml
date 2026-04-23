@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-23T00:00Z"
+updated_at: "2026-04-23T21:00Z"
 eiis_required: "1.0"
 
 # ─── Roster ────────────────────────────────────────────────────────────────────
@@ -37,7 +37,7 @@ eidolons:
     handoffs:
       upstream: []
       downstream: [spectra, apivr]
-      lateral: [forge]
+      lateral: [forge, vigil]
     working_set_tokens:
       entry: 900
       target: 3500
@@ -74,7 +74,7 @@ eidolons:
     handoffs:
       upstream: [atlas]
       downstream: [apivr]
-      lateral: [forge]
+      lateral: [forge, vigil]
     working_set_tokens:
       entry: 900
       target: 3500
@@ -109,7 +109,7 @@ eidolons:
     handoffs:
       upstream: [atlas, spectra]
       downstream: [idg]
-      lateral: [forge]
+      lateral: [forge, vigil]
     working_set_tokens:
       entry: 2000
       target: 4500
@@ -146,7 +146,7 @@ eidolons:
     handoffs:
       upstream: [apivr, spectra, atlas]
       downstream: []
-      lateral: [forge]
+      lateral: [forge, vigil]
     working_set_tokens:
       entry: 900
       target: 2200
@@ -183,7 +183,7 @@ eidolons:
     handoffs:
       upstream: []       # lateral consultant — called by any member
       downstream: []
-      lateral: [atlas, spectra, apivr, idg]
+      lateral: [atlas, spectra, apivr, idg, vigil]
     working_set_tokens:
       entry: 1150
       target: 2550
@@ -193,6 +193,43 @@ eidolons:
       writes_repo: false
       persists: []
     references: []
+
+  - name: vigil
+    display_name: VIGIL
+    capability_class: debugger
+    status: shipped
+    methodology:
+      name: VIGIL
+      version: "1.0"
+      cycle: "V→I→G→I→L"
+      summary: "Forensic root-cause attribution. Reproduction-gated, counterfactual-verified, dependency-graph-ranked."
+    source:
+      type: github
+      repo: Rynaro/VIGIL
+      default_ref: main
+    versions:
+      latest: "1.0.1"
+      pins:
+        stable: "1.0.1"
+    install:
+      target_default: "./.eidolons/vigil"
+      standalone: true
+    handoffs:
+      upstream: []       # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
+      downstream: []
+      lateral: [atlas, spectra, apivr, idg, forge]
+    working_set_tokens:
+      entry: 920
+      target: 3500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: false   # default read-only; sandbox never touches tree; write emits verified-patch.diff (never auto-applies)
+      persists: [".vigil/config.yml", "memories/vigil-failures.yaml"]
+    references:
+      - "research/papers/graphtracer.md"
+      - "research/papers/agentracer.md"
+      - "research/papers/lifecycle-of-failures.md"
 
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
@@ -212,9 +249,13 @@ presets:
     members: [spectra, apivr]
 
   full:
-    description: "Every shipped Eidolon, including the lateral reasoner."
-    members: [atlas, spectra, apivr, idg, forge]
+    description: "Every shipped Eidolon — pipeline plus lateral specialists (FORGE, VIGIL)."
+    members: [atlas, spectra, apivr, idg, forge, vigil]
 
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]
+
+  diagnostics:
+    description: "Debug-focused bundle. Implementation + forensic attribution."
+    members: [apivr, vigil, forge]

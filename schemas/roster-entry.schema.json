@@ -8,7 +8,7 @@
   "properties": {
     "name":             { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
     "display_name":     { "type": "string" },
-    "capability_class": { "enum": ["scout", "planner", "coder", "scriber", "reasoner"] },
+    "capability_class": { "enum": ["scout", "planner", "coder", "scriber", "reasoner", "debugger"] },
     "status":           { "enum": ["shipped", "in_construction", "deprecated"] },
     "methodology": {
       "type": "object",

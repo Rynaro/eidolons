@@ -11,9 +11,11 @@ The power of Eidolons is not in any single member — it is in their **compositi
 ```
 ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
   scout      plan         build        chronicle
-             ▲              │
-             │              ▼
+             ▲              │ ▲
+             │              │ │
            FORGE ◀─── (ambiguity, trade-offs, novel problems)
+                            │ │
+                          VIGIL ◀─── (failure resisted repair; forensic attribution)
 ```
 
 **Reading left to right:**
@@ -23,6 +25,7 @@ ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
 3. **APIVR-Δ** consumes the spec, implements the feature, emits a completion artifact (session log, delta history, completion report).
 4. **IDG** consumes the session artifacts, produces documentation (chronicle, ADR, runbook, change-narrative) with structural markers.
 5. **FORGE** is called at any point where ambiguity, trade-offs, or novel reasoning is needed — a consultable specialist, not always in-line.
+6. **VIGIL** is called when a failure resists normal repair — APIVR-Δ's Reflect loop exhausted, a heisenbug surfaces, or a compound failure needs root-cause attribution. A consultable forensic specialist, not always in-line.
 
 **This pipeline is the default shape, not the only shape.** Partial configurations are first-class (see §3).
 
@@ -40,6 +43,12 @@ Every Eidolon-to-Eidolon handoff is a **structured artifact**, not a free-form m
 | APIVR-Δ | IDG | Session log + delta history + completion report | What was built, what changed, what failed and why |
 | Any | FORGE | Reasoning request | Question, context, constraints, candidate answers (if any) |
 | FORGE | Any | Reasoning report | Answer, assumptions, confidence tier, alternatives considered |
+| APIVR-Δ (escalation) | VIGIL | `repair-failed-report.md` + trace | Failing tests, Reflect attempts, last known state, sandbox authority |
+| Any (consultant) | VIGIL | Failure description + context | Symptom, reproduction steps (if known), suspect scope |
+| VIGIL | APIVR-Δ | `root-cause-report.md` + `verified-patch.diff` (if authority ≥ sandbox) | Counterfactual-verified attribution, patch against base commit |
+| VIGIL | SPECTRA | `root-cause-report.md` + structural-fix notes | Systemic issue requires replanning (SPEC_DEFECT routing) |
+| VIGIL | IDG | `root-cause-report.md` + session log | Incident needs chronicling |
+| VIGIL | FORGE | `escalation-brief.md` + evidence bundle | Hypotheses ambiguous after 5-intervention budget exhausted |
 
 ### Handoff invariants
 
@@ -48,9 +57,9 @@ Every Eidolon-to-Eidolon handoff is a **structured artifact**, not a free-form m
 3. **Provenance travels.** Every claim in a downstream artifact traces back to a specific line in the upstream artifact.
 4. **Handoffs are labeled explicitly.** `→ SPECTRA (needs spec)`, `→ APIVR-Δ (ready to implement)`, `→ FORGE (trade-off deliberation)`, `→ human (out of scope)` — no implicit transitions.
 
-### The consultation pattern (FORGE)
+### The consultation pattern (FORGE, VIGIL)
 
-FORGE is not in the linear pipeline. Any other Eidolon can consult FORGE at any point:
+FORGE and VIGIL are not in the linear pipeline. Any other Eidolon — or the user — can consult them at any point:
 
 ```
 APIVR-Δ during Plan phase
@@ -60,7 +69,16 @@ APIVR-Δ during Plan phase
   → APIVR-Δ resumes Plan phase
 ```
 
-FORGE does not implement, retrieve, or synthesize. It reasons. Its output is a structured deliberation, not a spec or code.
+```
+APIVR-Δ during Reflect phase
+  → 3 repair attempts exhausted; flaky test still failing
+  → emits repair-failed-report.md to VIGIL (sandbox authority)
+  → VIGIL runs V→I→G→I→L: reproduction, IDG, ≤5 counterfactuals
+  → VIGIL emits root-cause-report.md + verified-patch.diff
+  → APIVR-Δ applies patch, verifies, resumes
+```
+
+FORGE reasons; it does not implement, retrieve, or synthesize. VIGIL attributes; it does not build, plan, or document. Both emit structured deliberation artifacts, not specs or code.
 
 ---
 
@@ -83,6 +101,8 @@ FORGE does not implement, retrieve, or synthesize. It reasons. Its output is a s
 | **Plan + build** | `spectra, apivr` | Feature work where the team already knows the codebase |
 | **Full pipeline** | `atlas, spectra, apivr, idg` | New feature in unfamiliar code |
 | **With reasoner** | add `forge` to any | Ambiguous trade-offs expected |
+| **With debugger** | add `vigil` to any | Flaky tests, regressions, or post-mortems likely |
+| **Diagnostics** | `apivr, vigil, forge` | Brownfield debugging; APIVR-Δ builds/fixes, VIGIL attributes, FORGE deliberates on ambiguous cases |
 
 These map to presets in [`../roster/index.yaml`](../roster/index.yaml) — `eidolons init --preset solo-scout`, etc.
 
@@ -104,7 +124,8 @@ A team may span hosts — e.g., the user runs ATLAS in Claude Code for explorati
 - APIVR-Δ — episodic (`task-log`, `pattern-registry`, `failure-catalog`, `delta-history`)
 - SPECTRA — spec state JSON per session
 - IDG — stateless (synthesis from provided context)
-- FORGE — TBD
+- FORGE — stateless (each invocation receives fresh context)
+- VIGIL — failure-signature ledger (`memories/vigil-failures.yaml`; soft-capped at 50 entries with recency-weighted consolidation)
 
 Harmonizing these into a coherent cross-agent memory story is an active design thread. The four candidate memory classes are:
 

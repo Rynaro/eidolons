@@ -30,7 +30,7 @@ No "because it feels right." Every design decision in every Eidolon maps to a re
 
 ### 4. Composition is first-class
 
-The team is more than the sum of its members. The canonical pipeline — ATLAS → SPECTRA → APIVR-Δ → IDG, with FORGE as a lateral consultant — is a real compositional asset. Handoff contracts are structured artifacts, not free-form messages. Partial-team deployment is supported by design: bring just ATLAS to an audit-heavy project, bring the whole pipeline to a greenfield, bring ATLAS + IDG when you want to understand and document without changing anything.
+The team is more than the sum of its members. The canonical pipeline — ATLAS → SPECTRA → APIVR-Δ → IDG, with FORGE (reasoning) and VIGIL (forensic debugging) as lateral specialists — is a real compositional asset. Handoff contracts are structured artifacts, not free-form messages. Partial-team deployment is supported by design: bring just ATLAS to an audit-heavy project, bring the whole pipeline to a greenfield, bring ATLAS + IDG when you want to understand and document without changing anything.
 
 ---
 
@@ -67,6 +67,7 @@ The Eidolons are opinionated. They are also humble about where the evidence is t
 | **APIVR-Δ** | Coder — brownfield feature implementation | shipped |
 | **IDG** | Scriber — documentation synthesis | shipped |
 | **FORGE** | Reasoner — deep reasoning, trade-offs, counterfactuals | shipped |
+| **VIGIL** | Debugger — forensic root-cause attribution | shipped |
 
 See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry and [`methodology/composition.md`](methodology/composition.md) for how they work together.
 
