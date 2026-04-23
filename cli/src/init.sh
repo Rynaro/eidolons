@@ -6,6 +6,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/ui/prompt.sh"
 
 PRESET=""
 MEMBERS=""
@@ -91,16 +93,13 @@ resolve_members() {
     die "No members specified. Use --preset or --members when --non-interactive."
   fi
   # Interactive picker — all listing output goes to stderr so it does not
-  # pollute this function's stdout (captured by the caller).
-  {
-    echo ""
-    echo "${BOLD}Available presets:${RESET}"
-    yaml_to_json "$ROSTER_FILE" | jq -r '.presets | to_entries[] | "  \(.key) — \(.value.description)"'
-    echo ""
-    echo "${BOLD}Available Eidolons:${RESET}"
-    yaml_to_json "$ROSTER_FILE" | jq -r '.eidolons[] | "  \(.name) — \(.methodology.summary)"'
-    echo ""
-  } >&2
+  # pollute this function's stdout (captured by the caller). ui_section
+  # already writes to stderr.
+  ui_section "Available presets"
+  yaml_to_json "$ROSTER_FILE" | jq -r '.presets | to_entries[] | "  \(.key) — \(.value.description)"' >&2
+  ui_section "Available Eidolons"
+  yaml_to_json "$ROSTER_FILE" | jq -r '.eidolons[] | "  \(.name) — \(.methodology.summary)"' >&2
+  echo "" >&2
   local choice=""
   read -rp "Enter preset name, or comma-separated members: " choice || true
   choice="$(echo "$choice" | xargs)"
@@ -176,8 +175,7 @@ if [[ -z "$SHARED_DISPATCH" ]]; then
       echo "  are created — agents remain self-sufficient via host discovery."
       echo ""
     } >&2
-    read -rp "Generate shared dispatch files? [y/N] " _reply || true
-    if [[ "$_reply" =~ ^[Yy]$ ]]; then
+    if ui_confirm "Generate shared dispatch files?" default-n; then
       SHARED_DISPATCH="true"
     else
       SHARED_DISPATCH="false"

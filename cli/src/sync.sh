@@ -6,6 +6,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/ui/prompt.sh"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -89,14 +91,12 @@ if [[ "$SKIP_PREVIEW" != "true" && "$DRY_RUN" != "true" ]]; then
       [[ -f "$_f" ]] || preview_paths+=("$_f  (new file)")
     done
   fi
-  echo ""
-  echo "${BOLD}About to create / modify:${RESET}"
+  ui_section_out "About to create / modify"
   for _p in "${preview_paths[@]}"; do
     echo "  - $_p"
   done
   echo ""
-  read -rp "Proceed? [Y/n] " _confirm || true
-  if [[ "$_confirm" =~ ^[Nn] ]]; then
+  if ! ui_confirm "Proceed?" default-y; then
     die "Sync aborted by user."
   fi
 fi
