@@ -191,6 +191,26 @@ STUB
     info "  wrote .claude/agents/$name.md (nexus safety net)"
   fi
 
+  # Override install.manifest.json's version field with the actual git tag
+  # shipped. Per-Eidolon installers hardcode EIDOLON_VERSION and don't bump
+  # on patch releases (ships as "1.0.0" even when the tag is v1.0.3),
+  # which makes manifests lie about which patch landed on disk. Derived
+  # version wins because the git tag is the release truth.
+  if [[ -f "$target/install.manifest.json" ]]; then
+    actual_tag="$(git -C "$clone_dir" describe --tags --exact-match HEAD 2>/dev/null \
+                  || git -C "$clone_dir" describe --tags 2>/dev/null \
+                  || echo "")"
+    if [[ -n "$actual_tag" ]]; then
+      actual_ver="${actual_tag#v}"
+      tmp_m="$(mktemp)"
+      if jq --arg v "$actual_ver" '.version = $v' "$target/install.manifest.json" > "$tmp_m"; then
+        mv "$tmp_m" "$target/install.manifest.json"
+      else
+        rm -f "$tmp_m"
+      fi
+    fi
+  fi
+
   # Pull the manifest emitted by the per-Eidolon install.sh
   if [[ -f "$target/install.manifest.json" ]]; then
     ver="$(jq -r '.version' "$target/install.manifest.json" 2>/dev/null || echo "$version")"
