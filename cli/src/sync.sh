@@ -9,6 +9,7 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
+SKIP_PREVIEW=false
 
 usage() {
   cat <<EOF
@@ -17,12 +18,15 @@ eidolons sync — install/update Eidolons to match eidolons.yaml
 Usage: eidolons sync [OPTIONS]
 
 Options:
-  --non-interactive   Fail on prompts
-  --dry-run           Show what would be done
+  --non-interactive   Fail on prompts (also skips the pre-install preview)
+  --dry-run           Show what would be done without touching disk
+  --yes, -y           Skip the pre-install preview confirmation (auto-approve)
   -h, --help          Show this help
 
 Behavior:
   - Reads eidolons.yaml
+  - In interactive mode, shows a pre-install preview of every path the run
+    will create, then asks for confirmation. --yes skips the prompt.
   - For each member: fetches Eidolon repo, runs its install.sh with appropriate --hosts
   - Aggregates install.manifest.json from each member into eidolons.lock
   - Idempotent: safe to run repeatedly
@@ -31,8 +35,9 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --non-interactive) NON_INTERACTIVE=true; shift ;;
+    --non-interactive) NON_INTERACTIVE=true; SKIP_PREVIEW=true; shift ;;
     --dry-run)         DRY_RUN=true; shift ;;
+    --yes|-y)          SKIP_PREVIEW=true; shift ;;
     -h|--help)         usage; exit 0 ;;
     *)                 echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -49,6 +54,52 @@ MEMBERS_JSON="$(echo "$MANIFEST_JSON" | jq -c '.members[]')"
 say "Syncing project to $PROJECT_MANIFEST"
 info "Hosts: $HOSTS_CSV"
 info "Shared dispatch: $SHARED_DISPATCH"
+
+# ─── Pre-install preview ─────────────────────────────────────────────────
+# Shows every directory the run is about to create (per-Eidolon install
+# target + per-host vendor folders the user picked). Respects --yes /
+# --non-interactive. Bypassed on --dry-run since the real dry-run below
+# already shows equivalent output.
+if [[ "$SKIP_PREVIEW" != "true" && "$DRY_RUN" != "true" ]]; then
+  preview_paths=()
+  while read -r _member; do
+    _name="$(echo "$_member" | jq -r '.name')"
+    preview_paths+=("./.eidolons/${_name}/")
+  done <<< "$MEMBERS_JSON"
+  IFS=',' read -ra _host_arr <<< "$HOSTS_CSV"
+  for _h in "${_host_arr[@]}"; do
+    case "$_h" in
+      claude-code)
+        [[ -d ".claude/agents"       ]] || preview_paths+=(".claude/agents/")
+        [[ -d ".claude/skills"       ]] || preview_paths+=(".claude/skills/")
+        ;;
+      copilot)
+        [[ -d ".github/instructions" ]] || preview_paths+=(".github/instructions/")
+        ;;
+      cursor)
+        [[ -d ".cursor/rules"        ]] || preview_paths+=(".cursor/rules/")
+        ;;
+      opencode)
+        [[ -d ".opencode/agents"     ]] || preview_paths+=(".opencode/agents/")
+        ;;
+    esac
+  done
+  if [[ "$SHARED_DISPATCH" == "true" ]]; then
+    for _f in AGENTS.md CLAUDE.md .github/copilot-instructions.md; do
+      [[ -f "$_f" ]] || preview_paths+=("$_f  (new file)")
+    done
+  fi
+  echo ""
+  echo "${BOLD}About to create / modify:${RESET}"
+  for _p in "${preview_paths[@]}"; do
+    echo "  - $_p"
+  done
+  echo ""
+  read -rp "Proceed? [Y/n] " _confirm || true
+  if [[ "$_confirm" =~ ^[Nn] ]]; then
+    die "Sync aborted by user."
+  fi
+fi
 
 # ─── Lock file assembly ──────────────────────────────────────────────────
 LOCK_TMP="$(mktemp)"
@@ -92,15 +143,31 @@ while read -r member; do
 
   # Shared-dispatch flag — tells the per-Eidolon installer whether to compose
   # root AGENTS.md / CLAUDE.md / copilot-instructions.md or skip them.
-  shared_flag="--no-shared-dispatch"
-  [[ "$SHARED_DISPATCH" == "true" ]] && shared_flag="--shared-dispatch"
+  # Flag-compat shim: only pass the flag if the installer declares support.
+  # Older per-Eidolon installers (pre-v1.x.3) don't recognise it and exit 2
+  # on any unknown arg — we refuse to proceed in that case when the user's
+  # intent (shared_dispatch=false) would silently conflict with the old
+  # default (compose everything unconditionally).
+  shared_flag_args=()
+  if grep -q -- '--no-shared-dispatch' "$clone_dir/install.sh" 2>/dev/null; then
+    if [[ "$SHARED_DISPATCH" == "true" ]]; then
+      shared_flag_args=(--shared-dispatch)
+    else
+      shared_flag_args=(--no-shared-dispatch)
+    fi
+  else
+    warn "$name installer predates --shared-dispatch (legacy). It will compose AGENTS.md/CLAUDE.md regardless of your preference."
+    if [[ "$SHARED_DISPATCH" != "true" ]]; then
+      warn "  To honor shared_dispatch: false, upgrade $name to the version carrying the flag."
+    fi
+  fi
 
   (
     cd "$(pwd)"  # ensure we stay in the consumer project
     bash "$clone_dir/install.sh" \
       --target "$target" \
       --hosts "$HOSTS_CSV" \
-      "$shared_flag" \
+      "${shared_flag_args[@]}" \
       ${NON_INTERACTIVE:+--non-interactive} \
       --force
   ) || { warn "$name install failed — continuing"; continue; }

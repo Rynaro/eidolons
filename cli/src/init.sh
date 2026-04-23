@@ -139,12 +139,14 @@ if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
     {
       echo ""
       echo "${BOLD}No AI host environments detected in this project.${RESET}"
-      echo "Pick which host(s) to wire (comma-separated):"
-      echo "  - claude-code"
-      echo "  - copilot"
-      echo "  - cursor"
-      echo "  - opencode"
-      echo "  - all (every host above)"
+      echo "Pick which host(s) to wire (comma-separated). Each choice will"
+      echo "create the folders it needs in this project if they don't exist:"
+      echo ""
+      echo "  - claude-code  → creates .claude/agents/  and .claude/skills/"
+      echo "  - copilot      → creates .github/instructions/"
+      echo "  - cursor       → creates .cursor/rules/"
+      echo "  - opencode     → creates .opencode/agents/"
+      echo "  - all          (every host above)"
       echo "  - (leave blank to abort)"
       echo ""
     } >&2
@@ -215,5 +217,8 @@ say "Writing $PROJECT_MANIFEST"
 ok "$PROJECT_MANIFEST written"
 
 # ─── Delegate actual install to `eidolons sync` ──────────────────────────
+# init already confirmed the host + dispatch choices interactively — skip
+# sync's pre-install preview to avoid double-prompting. Non-interactive
+# mode inherits the same behaviour.
 say "Running sync to install members"
-exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive}
+exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive} --yes
