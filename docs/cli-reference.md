@@ -129,6 +129,40 @@ Bump pinned versions within constraints, or to specific versions.
 
 ---
 
+## Per-Eidolon subcommands
+
+```
+eidolons <eidolon> <subcommand> [args...]
+eidolons <eidolon> --help
+```
+
+Runs a subcommand shipped by an installed Eidolon. The nexus CLI resolves:
+
+1. `.eidolons/<eidolon>/commands/<subcommand>.sh` in the current project (preferred)
+2. `~/.eidolons/cache/<eidolon>@<version>/commands/<subcommand>.sh` (fallback)
+
+The dispatcher passes all remaining args to the script and executes it with `cwd` set to the project root — same convention as `sync` and `doctor`.
+
+### Contract for Eidolon authors
+
+To expose `eidolons <eidolon> <sub>`, ship a bash script at `commands/<sub>.sh` in the Eidolon's source repo and have the per-Eidolon `install.sh` copy `commands/*.sh` into `<TARGET>/commands/`. The script should:
+
+- Read `cwd` as the consumer project root (don't `cd` elsewhere unless deliberate).
+- Source its own helpers / execute its own logic; the nexus doesn't inject anything.
+- Exit non-zero on failure; output clear error messages to stderr.
+
+The nexus dispatcher adds no contract beyond "be a bash script that does what you promise".
+
+### Example
+
+```bash
+eidolons spectra --help              # list SPECTRA's subcommands
+eidolons spectra fit                 # run SPECTRA's project-fit tool
+eidolons spectra fit /path/to/other  # pass args through
+```
+
+---
+
 ## Exit codes
 
 | Code | Meaning |
