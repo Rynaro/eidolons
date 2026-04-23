@@ -65,9 +65,9 @@ eidolons:
       repo: Rynaro/SPECTRA
       default_ref: main
     versions:
-      latest: "4.2.4"
+      latest: "4.2.5"
       pins:
-        stable: "4.2.4"
+        stable: "4.2.5"
     install:
       target_default: "./.eidolons/spectra"
       standalone: true
