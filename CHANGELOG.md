@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - Research library with starter BibTeX + production-patterns doc.
 - Examples: greenfield, brownfield-rails, solo-atlas.
 - GitHub Actions nightly roster health check.
+- FORGE promoted to `shipped` in the roster (v1.1.1). Adds the lateral Reasoner to the `full` preset; first stable release with EIIS-1.0 conformant `install.sh`.
 
 ### Depends on
 - `Rynaro/eidolons-eiis` (separate repo, EIIS v1.0 standard).

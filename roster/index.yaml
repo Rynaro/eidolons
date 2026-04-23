@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-22T20:00Z"
+updated_at: "2026-04-23T00:00Z"
 eiis_required: "1.0"
 
 # ─── Roster ────────────────────────────────────────────────────────────────────
@@ -163,20 +163,20 @@ eidolons:
   - name: forge
     display_name: FORGE
     capability_class: reasoner
-    status: in_construction
+    status: shipped
     methodology:
       name: FORGE
-      version: "0.1"
-      cycle: "TBD"
+      version: "1.1"
+      cycle: "F→O→R→G→E"
       summary: "Deep reasoning for ambiguity, trade-offs, counterfactuals, novel problems."
     source:
       type: github
       repo: Rynaro/FORGE
       default_ref: main
     versions:
-      latest: "0.1.0-dev"
+      latest: "1.1.1"
       pins:
-        stable: null
+        stable: "1.1.1"
     install:
       target_default: "./.eidolons/forge"
       standalone: true
@@ -185,8 +185,8 @@ eidolons:
       downstream: []
       lateral: [atlas, spectra, apivr, idg]
     working_set_tokens:
-      entry: 900
-      target: 3500
+      entry: 1150
+      target: 2550
     security:
       reads_repo: false
       reads_network: false
@@ -212,8 +212,8 @@ presets:
     members: [spectra, apivr]
 
   full:
-    description: "Every shipped Eidolon. FORGE added once stable."
-    members: [atlas, spectra, apivr, idg]
+    description: "Every shipped Eidolon, including the lateral reasoner."
+    members: [atlas, spectra, apivr, idg, forge]
 
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."

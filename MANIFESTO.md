@@ -66,7 +66,7 @@ The Eidolons are opinionated. They are also humble about where the evidence is t
 | **SPECTRA** | Planner — decision-ready specifications | shipped |
 | **APIVR-Δ** | Coder — brownfield feature implementation | shipped |
 | **IDG** | Scriber — documentation synthesis | shipped |
-| **FORGE** | Reasoner — deep reasoning, trade-offs, counterfactuals | under construction |
+| **FORGE** | Reasoner — deep reasoning, trade-offs, counterfactuals | shipped |
 
 See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry and [`methodology/composition.md`](methodology/composition.md) for how they work together.
 
@@ -77,7 +77,7 @@ See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry a
 - **Plan-before-build.** ATLAS maps the unfamiliar codebase, SPECTRA turns the scout report into a decision-ready spec, APIVR-Δ implements against that spec, IDG chronicles what happened.
 - **Audit without touching.** ATLAS + IDG. Explore a codebase, produce a read-only findings report and a change-narrative — no code modified.
 - **Ship a feature fast.** SPECTRA + APIVR-Δ. Skip the scout if you know the terrain; plan, then build.
-- **Bring rigor to ambiguous decisions.** FORGE (when shipped). Deliberate on trade-offs, name counterfactuals, produce a verdict with confidence tier.
+- **Bring rigor to ambiguous decisions.** FORGE. Deliberate on trade-offs, name counterfactuals, produce a verdict with confidence tier.
 
 ---
 
