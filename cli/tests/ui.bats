@@ -71,8 +71,8 @@ load helpers
   [[ "$output" == *"╔"* ]]
   [[ "$output" == *"╠"* ]]
   [[ "$output" == *"╚"* ]]
-  # The sigil at art/eidolons/atlas.txt contains a stylized "▲".
-  [[ "$output" == *"▲"* ]]
+  # The sigil at art/eidolons/atlas.txt contains paired focal eyes "◉".
+  [[ "$output" == *"◉"* ]]
   # Card title still surfaces the eidolon's display name.
   [[ "$output" =~ ATLAS ]]
 }
