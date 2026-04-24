@@ -22,7 +22,7 @@ The Eidolons are not interchangeable cogs. Each has a name, a capability class, 
 
 ### 2. The team is portable
 
-The Eidolons belong to the person, not the project. They install into any codebase — Rails, Python, Rust, frontend monorepo, greenfield, brownfield, monorepo, microservices. They wire themselves into whichever host is in use: Claude Code, Copilot, Cursor, OpenCode, raw API. A person can arrive at a new project and bring their team with them.
+The Eidolons belong to the person, not the project. They install into any codebase — Rails, Python, Rust, frontend monorepo, greenfield, brownfield, monorepo, microservices. They wire themselves into whichever host is in use: Claude Code, Copilot, Cursor, OpenCode, OpenAI Codex, raw API. A person can arrive at a new project and bring their team with them.
 
 ### 3. Every decision is traceable
 

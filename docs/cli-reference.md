@@ -43,7 +43,7 @@ eidolons init [--preset NAME | --members LIST] [--hosts LIST] [--force] [--non-i
 |------|---------|
 | `--preset NAME` | Use a preset (minimal, pipeline, full, ...). See `eidolons list --presets`. |
 | `--members LIST` | Comma-separated Eidolon names. Mutually exclusive with `--preset`. |
-| `--hosts LIST` | `claude-code,copilot,cursor,opencode,all`. Default: `auto`. |
+| `--hosts LIST` | `claude-code,copilot,cursor,opencode,codex,all`. Default: `auto`. |
 | `--force` | Overwrite existing `eidolons.yaml`. |
 | `--non-interactive` | Fail on any prompt. Requires `--preset` or `--members`. |
 

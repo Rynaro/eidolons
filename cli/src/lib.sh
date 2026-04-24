@@ -92,13 +92,45 @@ roster_presets() {
 
 # ─── Host detection ───────────────────────────────────────────────────────
 # Detect which hosts are in use in the current project (cwd).
-# Emits: one host per line from {claude-code, copilot, cursor, opencode}
+# Emits: one host per line from {claude-code, copilot, cursor, opencode, codex}
+#
+# AGENTS.md / codex co-ownership truth table (T.3 of openai-codex-host-support):
+#   .codex/  present                              → codex (definitive Codex-only signal)
+#   AGENTS.md only (no .github/, no .codex/)      → codex (NOT copilot)
+#   .github/ only (no AGENTS.md, no .codex/)      → copilot
+#   AGENTS.md AND .github/ (no .codex/)           → BOTH copilot and codex
+#   .codex/ AND .github/                          → BOTH codex and copilot
+# Sources:
+#   https://developers.openai.com/codex/guides/agents-md
+#   https://developers.openai.com/codex/subagents
 detect_hosts() {
   local hosts=()
-  [[ -f "CLAUDE.md"      || -d ".claude"              ]] && hosts+=("claude-code")
-  [[ -d ".github"         || -f "AGENTS.md"            ]] && hosts+=("copilot")
-  [[ -d ".cursor"         || -f ".cursorrules"         ]] && hosts+=("cursor")
-  [[ -d ".opencode"                                    ]] && hosts+=("opencode")
+  local has_agents_md=0 has_github=0 has_codex_dir=0
+
+  [[ -f "AGENTS.md" ]] && has_agents_md=1
+  [[ -d ".github"  ]] && has_github=1
+  [[ -d ".codex"   ]] && has_codex_dir=1
+
+  [[ -f "CLAUDE.md" || -d ".claude"      ]] && hosts+=("claude-code")
+
+  # Codex / Copilot disambiguation. Order matters because tests check for
+  # presence/absence of specific tokens; we keep emission order stable.
+  if (( has_codex_dir == 1 )); then
+    hosts+=("codex")
+    if (( has_github == 1 )); then
+      hosts+=("copilot")
+    fi
+  elif (( has_agents_md == 1 && has_github == 1 )); then
+    hosts+=("copilot")
+    hosts+=("codex")
+  elif (( has_agents_md == 1 )); then
+    hosts+=("codex")
+  elif (( has_github == 1 )); then
+    hosts+=("copilot")
+  fi
+
+  [[ -d ".cursor" || -f ".cursorrules"   ]] && hosts+=("cursor")
+  [[ -d ".opencode"                      ]] && hosts+=("opencode")
   if (( ${#hosts[@]} > 0 )); then
     printf "%s\n" "${hosts[@]}"
   fi
