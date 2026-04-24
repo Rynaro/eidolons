@@ -19,6 +19,15 @@ remove, exit codes 0/2/3/4/5/6/1).
 | Path | Destination in `Rynaro/ATLAS` |
 |---|---|
 | `commands/aci.sh` | `commands/aci.sh` (repo root) |
+| `tests/helpers.bash` | `tests/helpers.bash` |
+| `tests/idempotency.bats` | `tests/idempotency.bats` |
+| `tests/peer_preservation.bats` | `tests/peer_preservation.bats` |
+| `tests/host_filter.bats` | `tests/host_filter.bats` |
+| `tests/copilot.bats` | `tests/copilot.bats` |
+| `tests/gitignore.bats` | `tests/gitignore.bats` |
+| `tests/prereqs.bats` | `tests/prereqs.bats` |
+| `tests/index.bats` | `tests/index.bats` |
+| `tests/operational.bats` | `tests/operational.bats` |
 
 ---
 
@@ -45,27 +54,53 @@ remove, exit codes 0/2/3/4/5/6/1).
    `commands/fit.sh` install step). The `install.manifest.json`
    must include the new file under `files`.
 
-4. **Add ATLAS-side bats tests** per §5.2 of the spec (T6–T32).
-   Sketch of what they need to cover:
-   - **T6**: install twice → byte-identical `.mcp.json`, `.cursor/mcp.json`, `.gitignore`.
-   - **T7**: install → remove → install round-trips to single-install state.
-   - **T8**: remove with nothing installed → exit 0, no files created.
-   - **T9a / T9b / T9c**: install preserves peer `mcpServers.<other>` / `name: <other>` list entries.
-   - **T10a / T10b / T10c**: remove preserves peers.
-   - **T11 / T12 / T13**: `--host` restricts to exactly one host.
-   - **T14**: copilot host without any `.agent.md` files → info log, exit 0.
-   - **T15**: copilot YAML-frontmatter edits preserve Markdown body byte-for-byte.
-   - **T16 / T17 / T18**: `.gitignore` idempotency, whitespace-tolerance, creation-if-absent.
-   - **T19 / T20 / T21 / T22**: prereq failures (uv / rg / python3<3.11 / atlas-aci binary) → exit 5.
-   - **T23**: `atlas-aci index` failure → exit 6 with no MCP config writes.
-   - **T24**: skip re-index if `.atlas/manifest.yaml` exists.
-   - **T25**: `--dry-run` touches no mtime; lists every path with `CREATE|MODIFY|REMOVE|INDEX`.
-   - **T26**: no host detected + no `--host` → exit 4.
-   - **T27**: bash 3.2 (runs under `/bin/bash` on macos-latest).
-   - **T28**: stdout empty on `--install` success; stderr has log.
-   - **T29**: filesystem trace shows no writes outside cwd.
-   - **T30 / T31**: `jq empty` / `yq` parse all post-install files.
-   - **T32**: `shellcheck -x -S error` on `commands/aci.sh`.
+4. **Copy the bats suite** (covers T6–T29 from §5.2):
+   ```bash
+   cp -R docs/specs/atlas-aci-artifacts/tests /path/to/ATLAS/tests
+   ```
+   The suite is organised by concern:
+
+   | File | Spec anchors | Test count |
+   |---|---|---|
+   | `tests/helpers.bash` | — (fixtures / stubs) | n/a |
+   | `tests/idempotency.bats` | T6, T7, T8 | 5 |
+   | `tests/peer_preservation.bats` | T9a/b/c, T10a/b/c | 6 |
+   | `tests/host_filter.bats` | T11, T12, T13 | 3 |
+   | `tests/copilot.bats` | T14, T15 | 3 |
+   | `tests/gitignore.bats` | T16, T17, T18 | 4 |
+   | `tests/prereqs.bats` | T19, T20, T21, T22 | 5 |
+   | `tests/index.bats` | T23, T24 | 2 |
+   | `tests/operational.bats` | T25, T26, T27, T28, T29 | 5 |
+
+   **Running locally** (from the ATLAS repo root, once `commands/aci.sh`
+   is landed):
+   ```bash
+   bats tests/
+   ```
+
+   The suite stubs `uv`, `rg`, `python3`, and `atlas-aci` on `PATH` so
+   no real prereqs are required in CI. `jq` and `yq` (mikefarah) are
+   genuine dependencies; the ATLAS CI runner must install them.
+
+   ### CI additions (T27, T30, T31, T32 — lint / platform gates)
+
+   These are not expressible as bats tests; add them to
+   `.github/workflows/test.yml` (or equivalent) in `Rynaro/ATLAS`:
+
+   - **T27** (bash 3.2): run `bats tests/` on a `macos-latest` job so
+     the default `/bin/bash` is 3.2. Linux jobs catch bash 4+
+     incompatibilities only if bats runs under `/bin/bash` explicitly.
+   - **T30** (JSON parses): after a representative bats run, assert
+     `jq empty .mcp.json` and `jq empty .cursor/mcp.json` on the
+     generated fixtures. The idempotency tests already implicitly cover
+     this (they call `jq -S`), but an explicit post-install `jq empty`
+     job is cheap belt-and-suspenders.
+   - **T31** (YAML frontmatter parses): similarly, pipe each modified
+     `.agent.md`'s frontmatter through `yq eval .` and assert exit 0.
+   - **T32** (shellcheck): run
+     `shellcheck -x -S error commands/aci.sh` on every push. The
+     staged script is already clean under this gate (verified in the
+     nexus before copy-out).
 
 5. **Update ATLAS's `CHANGELOG.md`** and cut a new patch release
    (e.g. `v1.0.4`). Once tagged, bump `roster/index.yaml` in the
