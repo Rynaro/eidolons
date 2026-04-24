@@ -1,0 +1,398 @@
+# SPEC — ASCII Art Redesign (machine-readable counterpart)
+# See ascii-art-redesign.md for prose, rationale, and design briefs.
+# ═══════════════════════════════════════════════════════════════════════════
+
+spec:
+  id: spec-ascii-art-redesign-001
+  status: draft
+  owner: nexus-maintainer
+  producer: spectra
+  methodology:
+    name: SPECTRA
+    cycle: "S→P→E→C→T→R→A"
+  downstream_executor: apivr
+  consults: [forge]
+  repo: Rynaro/eidolons
+  surfaces:
+    - art/banner.txt
+    - art/eidolons/atlas.txt
+    - art/eidolons/spectra.txt
+    - art/eidolons/apivr.txt
+    - art/eidolons/forge.txt
+    - art/eidolons/idg.txt
+    - art/eidolons/vigil.txt
+    - cli/src/ui/art_loader.sh       # constants change
+    - cli/src/ui/card.sh              # possible UI_CARD_WIDTH change
+    - cli/tests/art-lint.sh           # new
+    - cli/tests/art-lint.bats         # new
+
+# ─── Evidence (grounded reads) ────────────────────────────────────────────────
+evidence:
+  current_state:
+    banner:
+      path: art/banner.txt
+      style: block-letter typography
+      rows: 6
+      approx_cols: 61
+      issue: "user wants emblem, not lettering"
+    sigils:
+      authored_width: 10..12  # drifts across files
+      authored_height: 8
+      loader_padded_width: 14
+      loader_padded_height: 8
+      inner_frame_present: true    # duplicates the card frame
+      role_label_row: true         # row 8 contains sentinel/planner/coder/...
+    loader:
+      path: cli/src/ui/art_loader.sh
+      constants: { UI_SIGIL_WIDTH: 14, UI_SIGIL_HEIGHT: 8 }
+      padding_method: byte-count (${#line})
+      authoring_rule: "narrow-display chars only (box-drawing, block, dingbats)"
+    card:
+      path: cli/src/ui/card.sh
+      width: 66
+      layout_math: "stats_w = UI_CARD_WIDTH - sigil_w - 7"
+    plain_mode:
+      trigger: [EIDOLONS_PLAIN=1, NO_COLOR set, CI set, stderr non-TTY]
+      behavior_banner: "early return, no output"
+      behavior_card: "_ui_card_plain — text dump, no sigil"
+
+# ─── Scoring rubric ───────────────────────────────────────────────────────────
+rubric:
+  ship_threshold_per_asset: 80    # out of 100
+  dimensions:
+    - id: R1
+      name: iconic_read
+      weight: 25
+      question: "Does it register as a creature/emblem at a glance (<2s)?"
+    - id: R2
+      name: motif_fidelity
+      weight: 20
+      question: "Does the design match the Eidolon's role?"
+    - id: R3
+      name: alignment_invariants
+      weight: 20
+      question: "Passes art-lint.sh with zero warnings."
+    - id: R4
+      name: size_budget
+      weight: 10
+      question: "Within envelope (12×6 sigil, 60×9 banner)."
+    - id: R5
+      name: character_palette
+      weight: 10
+      question: "Only palette chars; no wide-display; no combining marks."
+    - id: R6
+      name: visual_weight
+      weight: 10
+      question: "No duplicate/clashing frame with the card's double-line outer."
+    - id: R7
+      name: plain_compat
+      weight: 5
+      question: "Plain mode skips cleanly or degrades meaningfully."
+
+# ─── Validation gates ─────────────────────────────────────────────────────────
+gates:
+  mechanical:
+    - id: G1
+      name: width_uniformity
+      rule: "every row in a file has the same display-column width"
+      enforce_by: art-lint.sh
+      width_helper: python3 (unicodedata.east_asian_width)
+    - id: G2
+      name: no_trailing_whitespace
+      rule: "no line ends with spaces or tabs"
+    - id: G3
+      name: no_tabs
+      rule: "no tab characters anywhere"
+    - id: G4
+      name: max_rows
+      rule: "sigils ≤ 6, banner ≤ 9"
+    - id: G5
+      name: max_cols
+      rule: "sigils ≤ 12, banner ≤ 60"
+    - id: G6
+      name: character_whitelist
+      rule: "every codepoint in palette (see character_palette)"
+    - id: G7
+      name: file_terminator
+      rule: "ends with exactly one \\n; no trailing empty line"
+    - id: G8
+      name: utf8_valid
+      rule: "iconv -f UTF-8 -t UTF-8 round-trips"
+    - id: G9
+      name: loader_contract
+      rule: "ui_load_sigil emits exactly UI_SIGIL_HEIGHT rows × UI_SIGIL_WIDTH display cols"
+      enforce_by: cli/tests/art-lint.bats
+  editorial:
+    - id: G10
+      name: recognizability
+      rule: "3 reviewers; ≥2 identify the Eidolon from sigil alone in <2s"
+    - id: G11
+      name: banner_emblem_feel
+      rule: "reads as emblem, not word"
+    - id: G12
+      name: visual_family_coherence
+      rule: "all 6 sigils feel like one visual family"
+    - id: G13
+      name: preview_alignment
+      rule: "cli/tests/ui-preview.sh roster on 80-col TTY: no drift"
+
+# ─── Size budget ──────────────────────────────────────────────────────────────
+size_budget:
+  banner:
+    max_cols: 60
+    max_rows: 9
+    target_cols: 48
+    target_rows: 7
+    symmetry: vertical-mirror-required
+  sigil:
+    max_cols: 12
+    max_rows: 6
+    target_cols: 12
+    target_rows: 6
+    inner_frame: forbidden
+    role_label_row: forbidden
+  thumbnail_future:
+    max_cols: 6
+    max_rows: 3
+    status: out-of-scope
+
+loader_changes:
+  art_loader_sh:
+    UI_SIGIL_WIDTH: { from: 14, to: 12 }
+    UI_SIGIL_HEIGHT: { from: 8, to: 6 }
+  card_sh:
+    UI_CARD_WIDTH:
+      decision: keep_66
+      rationale: "lets stats column breathe; see OQ-2"
+
+# ─── Character palette ────────────────────────────────────────────────────────
+character_palette:
+  tier_strategy: single-tier (plain mode skips art entirely)
+  allowed:
+    - range: ASCII_printable
+      codepoints: U+0020..U+007E
+    - range: box_drawing
+      codepoints: U+2500..U+257F
+      caveat: "double-line (═║╔╗╚╝ etc.) BANNED in sigils (clashes with card frame)"
+    - range: block_elements
+      codepoints: U+2580..U+259F
+      examples: ["▀", "▄", "█", "▌", "▐", "░", "▒", "▓"]
+    - range: geometric_shapes
+      codepoints: U+25A0..U+25FF
+      examples: ["■", "□", "▲", "△", "▼", "▽", "◆", "◇", "◉", "○", "●", "⊙", "★", "☆"]
+    - range: misc_symbols_safe
+      codepoints_subset: ["☼", "✦", "✧", "✴", "✵"]
+    - range: arrows_sparing
+      codepoints: U+2190..U+21FF
+  forbidden:
+    - east_asian_width: [W, F]
+    - emoji: U+1F000..
+    - combining_marks: U+0300..U+036F
+    - variation_selectors: U+FE00..U+FE0F
+    - tabs
+    - non_breaking_space: U+00A0
+
+# ─── Per-Eidolon design briefs ────────────────────────────────────────────────
+eidolons:
+  atlas:
+    role: cartographer / scout (read-only)
+    motif_primary: winged-watcher-over-map OR compass-rose-creature
+    reading_intent: "a watcher charting territory"
+    density: light
+    key_features:
+      - cardinal-marker-or-compass-star-center
+      - horizontal-expanse
+      - hint-of-wings-or-sweep
+    ff_references: [Valefor, Carbuncle, Pandemona]
+    forbidden: [weapons, builder-iconography, destroyer-iconography]
+
+  spectra:
+    role: planner / spec-scribe / seer
+    motif_primary: seated-oracle-with-third-eye OR faceted-prism-projecting-lattice
+    reading_intent: "a seer translating vision into structure"
+    density: medium
+    key_features:
+      - vertical-axis-symmetry
+      - focal-point-eye-or-crystal
+      - ordered-radiating-lines
+    ff_references: [Alexander, Bahamut, Diabolos]
+    forbidden: [chaotic-lines, weapon-iconography, collision-with-atlas-symmetry]
+
+  apivr:
+    role: coder / brownfield implementer / forge-of-change
+    motif_primary: horned-anvil-creature OR hammer-bearing-silhouette
+    reading_intent: "an artisan striking metal"
+    density: heavy
+    key_features:
+      - broad-base-stance
+      - vertical-strike-line
+      - delta-integrated-as-body-feature
+    ff_references: [Ifrit, Titan, FFXV-Hammerhead]
+    forbidden: [floating-triangle-without-body, collision-with-forge]
+
+  forge:
+    role: reasoner / lateral consultant / creative spark
+    motif_primary: flame-wreathed-head OR multi-spark-constellation-becoming-face
+    reading_intent: "scattered sparks becoming a thought"
+    density: light-to-medium
+    key_features:
+      - multiple-small-sparks
+      - central-anchor
+      - implied-face-or-lit-brain
+    ff_references: [Phoenix, Ifrit-mane, Tonberry-lantern-inverted]
+    forbidden: [anvil-imagery, metal-forge-iconography, collision-with-apivr]
+
+  idg:
+    role: scriber / documentation synthesizer
+    motif_primary: scribe-silhouette-with-quill OR scroll-tome-with-seal
+    reading_intent: "a writer preserving what the team did"
+    density: medium
+    key_features:
+      - rectangular-body
+      - horizontal-line-texture-implying-text
+      - small-seal-or-mark
+    ff_references: [Ramuh-staff, FFXIV-Scholar, Tonberry]
+    forbidden: [office-supply-feel, clipboard-imagery]
+
+  vigil:
+    role: debugger / forensic guardian
+    motif_primary: watchful-hooded-figure-with-lens OR sentinel-eye-with-aura
+    reading_intent: "something watching very carefully"
+    density: medium
+    key_features:
+      - dominant-single-eye-or-lens
+      - asymmetric-hood-or-mantle
+      - faint-particulate-aura
+    ff_references: [Anima, Yojimbo, Odin-pre-strike]
+    forbidden: [sad-mascot-feel, trailing-cartoon-line]
+
+# ─── GIVEN/WHEN/THEN stories ──────────────────────────────────────────────────
+stories:
+  - id: S1
+    title: top-of-cli-banner-renders
+    given:
+      - "interactive TTY, UTF-8, 24-bit color"
+      - "EIDOLONS_FANCY=1"
+      - "EIDOLONS_NEXUS points at nexus checkout"
+    when: "user runs `eidolons --help`"
+    then:
+      - "stderr shows emblem followed by `  v<version>  · personal team of AI agents`"
+      - "every banner row ≤ 60 display cols"
+      - "emblem ≤ 9 rows"
+      - "banner colored UI_ACCENT (amber)"
+      - "single blank line above and below banner block"
+
+  - id: S2
+    title: roster-listing-renders-card-stack
+    given: ["EIDOLONS_FANCY=1"]
+    when: "user runs `eidolons roster`"
+    then:
+      - "each shipped Eidolon renders a 66-col card"
+      - "left cell contains 12×6 sigil with no inner frame"
+      - "sigil does not touch/duplicate card's double-line frame"
+      - "no trailing whitespace or stray ANSI"
+      - "capability_class appears only in card title, not in sigil"
+
+  - id: S3
+    title: single-card-renders
+    given: ["EIDOLONS_FANCY=1"]
+    when: "user runs `eidolons roster atlas`"
+    then:
+      - "one card renders with ATLAS cartographer-eikon sigil"
+      - "editorial G10 passes: reviewer IDs ATLAS from sigil alone"
+
+  - id: S4
+    title: plain-mode-skips-art-cleanly
+    given:
+      - "EIDOLONS_PLAIN=1 OR NO_COLOR set OR stderr non-TTY"
+    when: "user runs `eidolons --help` or `eidolons roster atlas`"
+    then:
+      - "no banner printed (ui_banner early return)"
+      - "no ANSI, no partial banner, no replacement-char boxes"
+      - "single-card plain mode prints legacy key/value dump"
+      - "bats assertions on Methodology:/Cycle:/Handoffs: still pass"
+
+  - id: S5
+    title: narrow-terminal-80-cols
+    given: ["EIDOLONS_FANCY=1", "COLUMNS=80"]
+    when: "`eidolons roster` runs"
+    then:
+      - "card (≤66 cols) fits with ≥14 cols right margin"
+      - "banner (≤60 cols) fits with margin"
+      - "ui_divider renders at min(COLUMNS,78) without overflow"
+
+  - id: S6
+    title: art-lint-blocks-malformed-contributions
+    given: ["a PR adds/edits a file under art/"]
+    when: "CI runs `bash cli/tests/art-lint.sh`"
+    then:
+      - "exit 0 only if all G1..G9 pass"
+      - "non-zero exit prints file, line, rule id"
+      - "bats test `cli/tests/art-lint.bats` mirrors the check"
+
+  - id: S7
+    title: dimension-change-is-atomic
+    given: ["implementer changes UI_SIGIL_WIDTH 14→12"]
+    when: "they commit"
+    then:
+      - "same commit updates all 6 sigil files to new width"
+      - "same commit updates card.sh if UI_CARD_WIDTH changes"
+      - "bats cli/tests/ passes"
+      - "ui-preview.sh produces aligned cards"
+
+# ─── Open questions / decisions ───────────────────────────────────────────────
+open_questions:
+  - id: OQ-1
+    question: "Banner plain-text fallback?"
+    recommendation: no
+    rationale: "current behavior (early return) keeps output machine-parseable"
+  - id: OQ-2
+    question: "Keep UI_CARD_WIDTH=66 or shrink?"
+    recommendation: keep_66
+    rationale: "stats column was cramped"
+  - id: OQ-3
+    question: "Remove role-word row from sigil files?"
+    recommendation: remove
+    rationale: "redundant with capability_class; frequent alignment-drift source"
+  - id: OQ-4
+    question: "Parallel ASCII-only sigil tier?"
+    recommendation: no
+    rationale: "plain mode skips sigils; parallel tier doubles maintenance"
+  - id: OQ-5
+    question: "Per-Eidolon banner when dispatching?"
+    recommendation: defer
+    rationale: "out of scope; file as follow-up"
+  - id: OQ-6
+    question: "Who authors the ASCII?"
+    recommendation: apivr-with-forge-consult
+    rationale: "FORGE reasons motifs; APIVR commits each as a Δ-slice"
+  - id: OQ-7
+    question: "When does art-lint run in CI?"
+    recommendation: path-filtered-on-art-and-loader
+    rationale: "cheaper; assets are mostly static; augment with nightly"
+
+# ─── Handoff ──────────────────────────────────────────────────────────────────
+handoff:
+  to_apivr:
+    slice_order:
+      - 1-lint-script-and-bats-test
+      - 2-loader-and-card-constants
+      - 3-sigils-one-by-one (atlas, spectra, apivr, forge, idg, vigil)
+      - 4-banner
+    acceptance_surface: [per_eidolon_briefs, size_budget, character_palette, gates.mechanical]
+  to_forge:
+    consult_trigger: "motif collision between two sigils (e.g. apivr vs forge, atlas vs spectra)"
+  to_vigil:
+    trigger: "post-ship rendering regression report"
+  to_idg:
+    followup: "document authoring contract under docs/ui/art-authoring.md after ship"
+
+# ─── Acceptance ───────────────────────────────────────────────────────────────
+acceptance:
+  ship_when:
+    - "all 7 assets score ≥80/100 on rubric"
+    - "all 9 mechanical gates pass"
+    - "all 4 editorial gates pass on 3-reviewer panel"
+    - "all 7 stories pass manual verification via cli/tests/ui-preview.sh"
+    - "bats cli/tests/ is green (no regression)"
+    - "OQ-1 through OQ-4 resolved (OQ-5..7 can defer)"

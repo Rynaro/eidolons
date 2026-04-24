@@ -1,0 +1,52 @@
+name: Art Lint
+
+# Validates ASCII art assets (banner + per-Eidolon sigils) against the
+# mechanical gates defined in specs/ascii-art-redesign.md:
+#
+#   G1 width uniformity   every row in a file has the same display-column width
+#   G2 no trailing tab    spaces are allowed as envelope padding; tabs aren't
+#   G3 no tabs            anywhere in the file
+#   G4 max rows           sigils ≤ 6, banner ≤ 9
+#   G5 max cols           sigils ≤ 12, banner ≤ 60
+#   G6 char whitelist     every codepoint in palette; no double-line in sigils
+#   G7 file terminator    exactly one trailing \n; no empty last line
+#   G8 utf8 valid         iconv round-trip
+#   G9 loader contract    ui_load_sigil emits 6 rows × 12 display cols
+#
+# Path-filtered (OQ-7): assets are mostly static, so we don't spend CI on
+# every PR. The bats suite in ci.yml still runs cli/tests/art-lint.bats,
+# which mirrors this script — so even a non-art PR can't silently
+# regress the loader contract.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'art/**'
+      - 'cli/src/ui/art_loader.sh'
+      - 'cli/tests/art-lint.sh'
+      - 'cli/tests/art-lint.bats'
+      - '.github/workflows/art-lint.yml'
+  pull_request:
+    paths:
+      - 'art/**'
+      - 'cli/src/ui/art_loader.sh'
+      - 'cli/tests/art-lint.sh'
+      - 'cli/tests/art-lint.bats'
+      - '.github/workflows/art-lint.yml'
+  workflow_dispatch:
+
+jobs:
+  art-lint:
+    name: Validate art assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Run art-lint.sh
+        run: bash cli/tests/art-lint.sh
