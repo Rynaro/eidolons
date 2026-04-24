@@ -29,8 +29,12 @@ set -euo pipefail
 # ─── Pinned atlas-aci upstream (v1: commit SHA per G3 / D4) ───────────────
 # When atlas-aci cuts its first tagged release, bump to a version string
 # and revisit D4 (see §9 follow-up F1 in the spec).
+#
+# Pin captured 2026-04-15 from `gh api repos/Rynaro/atlas-aci/commits/main`.
+# Revisit when F1 triggers (atlas-aci cuts its first tagged release) or on
+# every ATLAS release per §6 R4 — whichever comes first.
 ATLAS_ACI_REPO="https://github.com/Rynaro/atlas-aci"
-ATLAS_ACI_PIN="main"  # v1: no tags upstream; track main until F1 triggers.
+ATLAS_ACI_PIN="ccc40bbd464ecea2eb069c7cdbb0bb1b383e413c"
 
 # ─── Logging (mirrors cli/src/lib.sh — P6: everything to stderr) ──────────
 # Kept local so this script is self-sufficient when the dispatcher exec's
