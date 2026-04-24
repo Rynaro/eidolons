@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # cli/src/ui/art_loader.sh — locate and read static ASCII art assets.
 #
-# Sigils live at $NEXUS/art/eidolons/<name>.txt — ~14 cols × 8 rows of
-# hand-authored ASCII per Eidolon. The loader normalises each line to a
-# fixed column width so cards render cleanly regardless of the sigil's
-# raw character counts.
+# Sigils live at $NEXUS/art/eidolons/<name>.txt — 12 cols × 6 rows of
+# hand-authored ASCII per Eidolon (frameless — the card supplies its
+# own outer frame). The loader normalises each line to a fixed column
+# width so cards render cleanly regardless of the sigil's raw character
+# counts.
 #
 # Public API:
 #   ui_load_sigil <name>       echoes sigil text (one row per line)
@@ -17,8 +18,12 @@
 EIDOLONS_UI_ART_LOADER_LOADED=1
 
 # Fixed dimensions — keeps card.sh's two-column layout deterministic.
-UI_SIGIL_WIDTH=14
-UI_SIGIL_HEIGHT=8
+# Reduced from 14×8 to 12×6 when sigils dropped their inner frame and
+# role-label row (see specs/ascii-art-redesign.md). Any change here
+# requires simultaneous edits to every art/eidolons/*.txt file and a
+# re-run of cli/tests/art-lint.sh.
+UI_SIGIL_WIDTH=12
+UI_SIGIL_HEIGHT=6
 
 ui_sigil_width()  { echo "$UI_SIGIL_WIDTH"; }
 ui_sigil_height() { echo "$UI_SIGIL_HEIGHT"; }

@@ -101,7 +101,7 @@ load helpers
   done
 }
 
-@test "ui: ui_load_sigil emits exactly UI_SIGIL_HEIGHT (8) rows" {
+@test "ui: ui_load_sigil emits exactly UI_SIGIL_HEIGHT (6) rows" {
   # Width is byte-vs-char-sensitive across awk/bash/perl, so we don't
   # assert raw column counts here. The card-render test above
   # ("ui: ui_card renders a JRPG card frame ...") covers visible
@@ -115,5 +115,5 @@ load helpers
   [ "$status" -eq 0 ]
   # `wc -l` strips leading whitespace differently per platform — trim it.
   trimmed="$(echo "$output" | tr -d ' ')"
-  [ "$trimmed" = "8" ]
+  [ "$trimmed" = "6" ]
 }

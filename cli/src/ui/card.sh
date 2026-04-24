@@ -235,6 +235,19 @@ ui_card() {
   fi
 
   local stat_rows=( "$s_methodology" "$s_cycle" "$s_tokens" "$s_blank" "$s_handoffs" "$s_up" "$s_down" "$s_lateral" )
+  local stat_count=${#stat_rows[@]}
+
+  # The card renders max(UI_SIGIL_HEIGHT, stat_count) body rows so the
+  # stats never get clipped when the sigil envelope shrinks. Any sigil
+  # row index beyond the sigil's height is filled with blank padding.
+  local body_rows="$UI_SIGIL_HEIGHT"
+  if [[ "$stat_count" -gt "$body_rows" ]]; then
+    body_rows="$stat_count"
+  fi
+
+  # Pre-compute a blank sigil row so overflow rows keep the left cell
+  # visually aligned with the outer frame.
+  local blank_sigil; blank_sigil="$(_ui_repeat_card " " "$UI_SIGIL_WIDTH")"
 
   # ─── Render ─────────────────────────────────────────────────────────
   _ui_card_frame_solid "$GLYPH_D_TL" "$GLYPH_D_H" "$GLYPH_D_TR"
@@ -242,8 +255,13 @@ ui_card() {
   _ui_card_frame       "$GLYPH_D_L" "$GLYPH_D_H" "$GLYPH_D_T" "$GLYPH_D_R"
 
   local i=0
-  while [[ "$i" -lt "$UI_SIGIL_HEIGHT" ]]; do
-    local sig="${sigil_rows[$i]:-}"
+  while [[ "$i" -lt "$body_rows" ]]; do
+    local sig
+    if [[ "$i" -lt "$UI_SIGIL_HEIGHT" ]]; then
+      sig="${sigil_rows[$i]:-$blank_sigil}"
+    else
+      sig="$blank_sigil"
+    fi
     local stat="${stat_rows[$i]:-}"
     # Pad sigil to fixed width if shorter (defensive — art_loader already does this).
     local sig_visible; sig_visible="$(_ui_strip_ansi "$sig")"
