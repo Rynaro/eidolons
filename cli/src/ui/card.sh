@@ -59,19 +59,121 @@ _ui_strip_ansi() {
   echo "$1" | sed $'s/\033\\[[0-9;]*m//g'
 }
 
+# Return the display column width of a string (after ANSI strip). ASCII
+# printable + BMP narrow chars = 1 col each; East-Asian Wide/Fullwidth = 2;
+# combining marks (U+0300..U+036F), variation selectors (U+FE00..U+FE0F),
+# zero-width joiner/non-joiner (U+200C/U+200D) = 0. Uses python3 because
+# bash 3.2's ${#var} counts BYTES, not display columns — UTF-8 arrows
+# (↑↓→) are 3 bytes each but 1 column, which breaks padding math.
+# Output goes to stdout only; no log chatter (keeps command-substitution safe).
+_ui_display_width() {
+  # Fast-path for pure ASCII strings — avoids spawning python3 per row.
+  case "$1" in
+    *[!\ -~]*) : ;;
+    *) printf '%d' "${#1}"; return 0 ;;
+  esac
+  python3 - "$1" <<'PY'
+import sys, re, unicodedata
+s = sys.argv[1]
+s = re.sub(r'\x1b\[[0-9;]*m', '', s)
+w = 0
+for c in s:
+    cp = ord(c)
+    if 0x0300 <= cp <= 0x036F:      w += 0   # combining marks
+    elif 0xFE00 <= cp <= 0xFE0F:    w += 0   # variation selectors
+    elif cp in (0x200C, 0x200D):    w += 0   # ZWJ / ZWNJ
+    elif unicodedata.east_asian_width(c) in ("W", "F"): w += 2
+    else:                           w += 1
+sys.stdout.write(str(w))
+PY
+}
+
+# Truncate a string to at most <max_cols> display columns, adding a
+# trailing ellipsis (U+2026, 1 col) when truncation occurs. Preserves
+# any ANSI SGR sequences present in the input and always appends RESET
+# if the input carried any escape so we never emit a dangling color.
+# Edge cases:
+#   - If the string already fits, returns it unchanged.
+#   - If max_cols < 2, truncates without ellipsis.
+# Output is via stdout only.
+_ui_truncate() {
+  local str="$1" max_cols="$2"
+  # Fast-path: ASCII-only AND short enough → no work.
+  case "$str" in
+    *[!\ -~]*) : ;;
+    *)
+      if [[ "${#str}" -le "$max_cols" ]]; then
+        printf '%s' "$str"
+        return 0
+      fi
+      ;;
+  esac
+  python3 - "$str" "$max_cols" <<'PY'
+import sys, re, unicodedata
+raw = sys.argv[1]
+max_cols = int(sys.argv[2])
+ansi_re = re.compile(r'\x1b\[[0-9;]*m')
+
+def cwidth(c):
+    cp = ord(c)
+    if 0x0300 <= cp <= 0x036F:       return 0
+    if 0xFE00 <= cp <= 0xFE0F:       return 0
+    if cp in (0x200C, 0x200D):       return 0
+    if unicodedata.east_asian_width(c) in ("W", "F"): return 2
+    return 1
+
+# Compute total display width (ANSI-stripped).
+total = sum(cwidth(c) for c in ansi_re.sub('', raw))
+if total <= max_cols:
+    sys.stdout.write(raw)
+    sys.exit(0)
+
+had_ansi = bool(ansi_re.search(raw))
+ellipsis = '…'
+use_ellipsis = max_cols >= 2
+budget = max_cols - (1 if use_ellipsis else 0)
+
+out = []
+col = 0
+i = 0
+while i < len(raw):
+    # Pass ANSI escape sequences through without counting them.
+    m = ansi_re.match(raw, i)
+    if m:
+        out.append(m.group(0))
+        i = m.end()
+        continue
+    c = raw[i]
+    w = cwidth(c)
+    if col + w > budget:
+        break
+    out.append(c)
+    col += w
+    i += 1
+
+if use_ellipsis:
+    out.append(ellipsis)
+if had_ansi:
+    out.append('\x1b[0m')
+sys.stdout.write(''.join(out))
+PY
+}
+
 # Print a content row with left + center + right vertical bars. Pads
 # text columns so the right border lines up. Args: <sigil_line>
 # <stat_line>.
 _ui_card_row() {
   local sigil_line="$1" stat_line="$2"
   local sigil_w="$UI_SIGIL_WIDTH"
-  # Layout (chars): L(1) + sp(1) + sigil(14) + sp(1) + M(1) + sp(1)
-  #                 + stats(?) + sp(1) + R(1)  =  21 + stats_w
-  # → stats_w = UI_CARD_WIDTH - 21
+  # Layout (chars): L(1) + sp(1) + sigil(UI_SIGIL_WIDTH) + sp(1) + M(1)
+  #                 + sp(1) + stats(?) + sp(1) + R(1)
+  # → stats_w = UI_CARD_WIDTH - UI_SIGIL_WIDTH - 7
   local stats_w=$((UI_CARD_WIDTH - sigil_w - 7))
-  # Strip ANSI from the stat line for padding math; we'll re-emit raw.
-  local stat_visible; stat_visible="$(_ui_strip_ansi "$stat_line")"
-  local stat_pad=$((stats_w - ${#stat_visible}))
+  # Truncate overflow and measure via display columns (not bytes) so
+  # UTF-8 arrows and the like pad correctly.
+  stat_line="$(_ui_truncate "$stat_line" "$stats_w")"
+  local stat_w; stat_w="$(_ui_display_width "$(_ui_strip_ansi "$stat_line")")"
+  local stat_pad=$((stats_w - stat_w))
   [[ "$stat_pad" -lt 0 ]] && stat_pad=0
   local pad_str; pad_str="$(_ui_repeat_card " " "$stat_pad")"
 
@@ -90,8 +192,9 @@ _ui_card_row() {
 _ui_card_header_row() {
   local title="$1"
   local inner_w=$((UI_CARD_WIDTH - 4))
-  local title_visible; title_visible="$(_ui_strip_ansi "$title")"
-  local pad=$((inner_w - ${#title_visible}))
+  title="$(_ui_truncate "$title" "$inner_w")"
+  local title_w; title_w="$(_ui_display_width "$(_ui_strip_ansi "$title")")"
+  local pad=$((inner_w - title_w))
   [[ "$pad" -lt 0 ]] && pad=0
   local pad_str; pad_str="$(_ui_repeat_card " " "$pad")"
 
