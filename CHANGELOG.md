@@ -9,6 +9,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- **OpenAI Codex** as a first-class supported host (PR #21). `detect_hosts` recognises `.codex/` (precedence) and `AGENTS.md` co-ownership; `eidolons sync` wires both root `AGENTS.md` and per-Eidolon `.codex/agents/<name>.md` subagent files; `--no-shared-dispatch` is overridden-with-warn when `codex` is in the host list.
+
+### Changed
+- **`eiis_required` bumped from `1.0` to `1.1`** — the roster now requires EIIS v1.1 (Codex addendum). All six shipped Eidolons publish EIIS-1.1-conformant releases.
+- **`cli/src/lib.sh` `eiis_check`** delegates to the external checker at [`Rynaro/eidolons-eiis`](https://github.com/Rynaro/eidolons-eiis) when reachable; falls back to the inline file-existence check when offline. The standalone checker (cached at `~/.eidolons/cache/eiis@<version>/`) provides the full §1–§4 contract enforcement; the inline path remains for air-gapped installs.
+- **`.github/workflows/roster-health.yml`** clones `Rynaro/eidolons-eiis` and runs the external `conformance/check.sh` against each shipped Eidolon, replacing the previous five-file existence smoke.
+- **Roster pin bumps** (all six shipped Eidolons publish EIIS-1.1 + Codex support):
+  - ATLAS: `1.0.3` → `1.0.4`
+  - SPECTRA: `4.2.8` → `4.2.9`
+  - APIVR-Δ: `3.0.3` → `3.0.4`
+  - IDG: `1.1.3` → `1.1.4`
+  - VIGIL: `1.0.1` → `1.0.2`
+  - FORGE: `1.1.1` → `1.2.0` (also closes drift items D-1, D-3, D-4 from the EIIS bootstrap audit)
+
+### Added (initial nexus, retained)
 - Initial nexus scaffold: roster registry, CLI, methodology aggregation, research library, examples.
 - `eidolons` CLI with `init`, `add`, `sync`, `list`, `doctor`, `roster` commands.
 - Stubs for `remove`, `upgrade` (full implementation in v1.1).
@@ -23,8 +38,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - `.claude/skills/add-eidolon/SKILL.md` — codifies the pattern for promoting a new Eidolon to the roster or bumping a version. Captures exploration checklist, roster entry template, CI matrix + documentation touchpoints, and verification steps.
 
 ### Depends on
-- `Rynaro/eidolons-eiis` (separate repo, EIIS v1.0 standard).
-- Individual Eidolon repos: atlas, spectra, apivr, idg, forge.
+- `Rynaro/eidolons-eiis` (separate repo, EIIS v1.1 standard — bumped from v1.0 in this release).
+- Individual Eidolon repos: atlas, spectra, apivr, idg, forge, vigil.
 
 ---
 
