@@ -96,3 +96,81 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" =~ Usage:\ eidolons\ init ]]
 }
+
+# ─── codex host support (openai-codex-host-support spec, R.3) ──────────────
+
+@test "init: --hosts codex non-interactive writes manifest with codex host" {
+  setup_fake_git
+  run eidolons init --preset minimal --hosts codex --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[codex\]' eidolons.yaml
+}
+
+@test "init: detects codex when AGENTS.md exists alone" {
+  setup_fake_git
+  : > AGENTS.md
+  run eidolons init --preset minimal --non-interactive
+  [ -f eidolons.yaml ]
+  # Manifest wire list must contain codex AND must not contain copilot.
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  ! grep -q 'copilot' eidolons.yaml
+}
+
+@test "init: detects codex when .codex/ exists alone" {
+  setup_fake_git
+  mkdir -p .codex/agents
+  run eidolons init --preset minimal --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  ! grep -q 'copilot' eidolons.yaml
+}
+
+@test "init: detects both copilot and codex when AGENTS.md and .github both exist" {
+  setup_fake_git
+  : > AGENTS.md
+  mkdir -p .github
+  run eidolons init --preset minimal --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*copilot.*\]' eidolons.yaml
+}
+
+@test "init: detects both codex and copilot when .codex/ and .github/ both exist" {
+  setup_fake_git
+  mkdir -p .codex/agents .github
+  run eidolons init --preset minimal --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*copilot.*\]' eidolons.yaml
+}
+
+@test "init: --hosts all expands to include codex" {
+  setup_fake_git
+  run eidolons init --preset minimal --hosts all --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*claude-code.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*copilot.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*cursor.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*opencode.*\]' eidolons.yaml
+}
+
+@test "init: --no-shared-dispatch with codex emits warning and persists shared_dispatch:false" {
+  setup_fake_git
+  run eidolons init --preset minimal --hosts codex --no-shared-dispatch --non-interactive
+  # eidolons.yaml records the user's intent faithfully (T.12).
+  [ -f eidolons.yaml ]
+  grep -q 'shared_dispatch: false' eidolons.yaml
+  # The execution-time override emits the warning to stderr, which bats
+  # merges into $output. Sync runs after init writes the manifest.
+  [[ "$output" =~ "--no-shared-dispatch ignored for hosts.wire containing codex" ]]
+}
+
+@test "init: --hosts list including codex still rejects bogus host gracefully" {
+  # Sanity: codex is a valid token; init should accept it without erroring
+  # on a "bogus" host. (Smoke for the help-text update only.)
+  setup_fake_git
+  run eidolons init --preset minimal --hosts claude-code,codex --non-interactive
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[claude-code, codex\]' eidolons.yaml
+}

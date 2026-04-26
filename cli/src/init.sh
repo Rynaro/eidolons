@@ -28,7 +28,7 @@ Options:
                            Run 'eidolons list --presets' to see all.
   --members LIST           Comma-separated list of Eidolon names.
                            Mutually exclusive with --preset.
-  --hosts LIST             Comma-separated: claude-code,copilot,cursor,opencode,all
+  --hosts LIST             Comma-separated: claude-code,copilot,cursor,opencode,codex,all
                            Required in --non-interactive mode when no hosts are auto-detected.
                            Interactive mode will prompt if omitted and detection finds nothing.
   --shared-dispatch        Compose root AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
@@ -133,7 +133,7 @@ if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
     info "Detected hosts: $HOSTS"
   else
     if [[ "$NON_INTERACTIVE" == "true" ]]; then
-      die "No hosts auto-detected in this project. Pass --hosts LIST explicitly (valid: claude-code, copilot, cursor, opencode, all)."
+      die "No hosts auto-detected in this project. Pass --hosts LIST explicitly (valid: claude-code, copilot, cursor, opencode, codex, all)."
     fi
     {
       echo ""
@@ -145,6 +145,7 @@ if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
       echo "  - copilot      → creates .github/instructions/"
       echo "  - cursor       → creates .cursor/rules/"
       echo "  - opencode     → creates .opencode/agents/"
+      echo "  - codex        → creates AGENTS.md (root) and .codex/agents/"
       echo "  - all          (every host above)"
       echo "  - (leave blank to abort)"
       echo ""
@@ -154,7 +155,7 @@ if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
     [[ -z "$HOSTS" ]] && die "No hosts selected. Aborting — specify --hosts explicitly or re-run."
   fi
 fi
-[[ "$HOSTS" == "all" ]] && HOSTS="claude-code,copilot,cursor,opencode"
+[[ "$HOSTS" == "all" ]] && HOSTS="claude-code,copilot,cursor,opencode,codex"
 
 # ─── Resolve shared-dispatch preference ───────────────────────────────────
 # Opt-in by design. Per-vendor files (.claude/agents/<n>.md, .cursor/rules/<n>.mdc,
