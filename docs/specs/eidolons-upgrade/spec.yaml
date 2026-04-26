@@ -1,0 +1,398 @@
+# Machine-readable companion to spec.md.
+# Consumed by APIVR for downstream implementation routing.
+# Schema: ad-hoc but stable; mirror keys here when changing spec.md sections.
+#
+# REVISION 2026-04-26: §11 of spec.md supersedes flag spelling on the upgrade
+# command. The `flags`, `decisions.scope`, `decisions.selectivity`, and `tests`
+# sections below have been updated in place to reflect the §11 outcome.
+# `revision` block at the bottom records what changed and why.
+
+spec_id: eidolons-upgrade
+spec_version: "1.1"
+status: draft
+target_release: "eidolons-cli-v1.1"
+authored_by: SPECTRA
+authored_at: "2026-04-26"
+revised_at: "2026-04-26"
+human_decisions_required: false
+
+# ─── Surface ────────────────────────────────────────────────────────────────
+
+command: eidolons upgrade
+
+# Authoritative flag matrix per spec.md §11.4.
+# `--nexus` is intentionally absent: the as-shipped (uncommitted) flag was
+# renamed to `--system` before release. There is no alias; unknown flag.
+
+flags:
+  - name: --check
+    type: boolean
+    description: >
+      Read-only mode. Without --system or --project, inspects both scopes.
+      Combine with --system or --project to narrow the report.
+    combinable_with: [--system, --project, --json, positional_member]
+    conflicts_with_semantically: [--yes, --dry-run]   # silently no-op, not error
+  - name: --system
+    type: boolean
+    description: >
+      Operate on the global nexus (~/.eidolons/nexus) — the registry binary
+      itself. Replaces the pre-revision --nexus flag (never released).
+    mutex_with: [positional_member]
+  - name: --project
+    type: boolean
+    description: >
+      Operate on cwd members. Equivalent to bare `eidolons upgrade` when given
+      alone. Useful for explicit symmetry with --system and for narrowing
+      --check to the project surface only.
+    mutex_with: []
+  - name: --all
+    type: boolean
+    description: >
+      Upgrade nexus first (must succeed), then members. Equivalent to
+      --system --project for mutating runs.
+    mutex_with: [positional_member]
+    equivalent_to: "--system --project"
+  - name: --json
+    type: boolean
+    description: JSON output on stdout (banner/log lines remain on stderr).
+    combinable_with: [--check]
+  - name: --yes
+    aliases: [-y]
+    type: boolean
+    description: Skip the confirmation prompt before mutating.
+  - name: --non-interactive
+    type: boolean
+    description: Fail on any interactive prompt. Requires --yes for mutating runs.
+  - name: --dry-run
+    type: boolean
+    description: Show the plan without invoking any fetch or per-Eidolon install.sh.
+  - name: -h
+    aliases: [--help]
+    type: boolean
+
+positional:
+  - name: member
+    type: string_or_csv
+    description: >
+      Single member name or comma-separated list. Implies project scope. Must
+      match a roster name or alias. Mutex with --system and --all.
+
+# ─── Default behavior (spec.md §11.1) ───────────────────────────────────────
+
+default_scope: project
+# Bare `eidolons upgrade` upgrades members in cwd. Same as `--project`.
+# Justification: members upgrade ~10x more often than the nexus does
+# (per CLAUDE.md "Roster changes" — most frequent commit type).
+# Coheres with sync/add/remove/doctor (all default to cwd scope).
+
+# ─── Mutex / equivalence rules (spec.md §11.5) ─────────────────────────────
+
+mutex_rules:
+  - rule: "--system + positional_member → exit 2"
+    message: "--system operates on the nexus only; member arguments belong to project scope. Drop one or use --all."
+  - rule: "--all + positional_member → exit 2"
+    message: "--all upgrades every member; drop the positional argument or use <member> without --all."
+  - rule: "--system + --project → set ALL=true (NOT an error)"
+    message: "Treated as --all; no diagnostic."
+  - rule: "--project + positional_member → no error"
+    message: "Positional is more specific and stays authoritative; --project is documentation."
+  - rule: "--check + (--yes | --non-interactive | --dry-run) → silently no-op"
+    message: "No prompts to skip, no mutations to dry-run; redundant flags accepted, not errored on."
+
+# ─── Decisions (cross-references spec.md §4 and §11) ───────────────────────
+
+decisions:
+  - id: scope
+    spec_section: "4.1 (superseded by 11)"
+    resolution: "bare = project (members in cwd); --system = nexus only; --project = explicit equivalent of bare; --all = both"
+  - id: version_discovery
+    spec_section: "4.2"
+    resolution: "git ls-remote for nexus; local roster for members"
+  - id: selectivity
+    spec_section: "4.3 (superseded by 11.4)"
+    resolution: "positional member arg, comma-separated list, --system, --project, --all"
+  - id: pin_policy
+    spec_section: "4.4"
+    resolution: "respect ^/~/= constraints; surface but never auto-jump"
+  - id: network_failure
+    spec_section: "4.5"
+    resolution: "10s timeout; --check degrades gracefully; mutating fails per-member"
+  - id: output_format
+    spec_section: "4.6"
+    resolution: "human-readable default; --json adds structured stdout; action hint references --system"
+  - id: rollback
+    spec_section: "4.7"
+    resolution: "fail-fast at member boundary; no automatic rollback"
+  - id: bash_3_2
+    spec_section: "4.8"
+    resolution: "no associative arrays, no readarray, no wait -n, no &>>"
+  - id: idempotency
+    spec_section: "4.9"
+    resolution: "second run is no-op; lockfile mtime stable when nothing changes"
+  - id: sync_boundary
+    spec_section: "4.10"
+    resolution: "extract install_member helper into lib.sh; sync + upgrade both call it"
+  - id: scope_flag_naming
+    spec_section: "11"
+    resolution: "Proposal A (--system / --project) over Proposal B (split commands). Default stays project-scoped, NOT system-scoped as the user's original Proposal A sketch suggested."
+  - id: nexus_flag_compat
+    spec_section: "11.6"
+    resolution: "Drop --nexus entirely. Never released; no alias, no deprecation. --all kept unchanged."
+
+# ─── Validation gates ───────────────────────────────────────────────────────
+
+validation_gates:
+  lint:
+    - "shellcheck -x -S error on cli/**/*.sh and cli/eidolons"
+    - "no new shellcheck warnings vs main"
+  schema:
+    - "jq empty schemas/*.json"
+    - "yq eval '.' roster/index.yaml"
+  bats:
+    new_suite: cli/tests/upgrade.bats
+    must_not_regress: [cli/tests/init.bats, cli/tests/sync.bats, cli/tests/doctor.bats]
+  ci_idempotency:
+    location: ".github/workflows/ci.yml job=cli-tests"
+    assertion: "second `eidolons upgrade` invocation prints 'up-to-date' and lockfile mtime unchanged"
+  bash_3_2:
+    runner: macos-latest
+    job: cli-tests
+  documentation:
+    - docs/cli-reference.md
+    - cli/eidolons usage()
+    - CHANGELOG.md (v1.1 entry; lists --system / --project / --all as the public surface; --nexus is NOT documented as having existed)
+
+# ─── Test plan summary (cross-ref spec.md §6 and §11.7) ────────────────────
+
+test_plan:
+  read_only:
+    count: 12
+    ids: [T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12]
+    location: cli/tests/upgrade.bats
+    notes: "T1–T12 unchanged by §11."
+  mutating_members:
+    count: 13
+    ids: [T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25]
+    location: cli/tests/upgrade.bats
+    notes: "T13–T25 unchanged by §11."
+  nexus:
+    count: 6
+    ids: [T26, T27, T28, T29, T30, T31]
+    location: cli/tests/upgrade.bats
+    renames:
+      - id: T26
+        old_name: "upgrade --nexus: stale nexus is fetched + reset"
+        new_name: "upgrade --system: stale nexus is fetched + reset"
+        invocation_change: "--nexus → --system"
+      - id: T27
+        old_name: "upgrade --nexus: current nexus is no-op"
+        new_name: "upgrade --system: current nexus is no-op"
+        invocation_change: "--nexus → --system"
+      - id: T28
+        old_name: "upgrade --nexus: fetch failure exits 1"
+        new_name: "upgrade --system: fetch failure exits 1"
+        invocation_change: "--nexus → --system"
+      - id: T29
+        old_name: "upgrade --nexus: with positional member name fails with mutex error"
+        new_name: "upgrade --system: with positional member name fails with mutex error"
+        invocation_change: "--nexus → --system"
+  added_by_revision:
+    count: 5
+    ids: [T32, T33, T34, T35, T36]
+    location: cli/tests/upgrade.bats
+    tests:
+      - id: T32
+        name: "upgrade --project: explicit project scope behaves like bare upgrade"
+      - id: T33
+        name: "upgrade --system --project: equivalent to --all"
+      - id: T34
+        name: "upgrade --check --system: narrows report to nexus row only"
+      - id: T35
+        name: "upgrade --check --project: narrows report to members only"
+      - id: T36
+        name: "upgrade --nexus: rejected as unknown flag (post-rename)"
+  help_text_test_update:
+    test_id_pattern: "upgrade -h: help prints usage"
+    update: "Assertions must check for presence of --system and --project, and ABSENCE of --nexus, in the printed usage text."
+  dropped: []
+
+# Legacy alias: keep the original key name `tests` populated for any tooling
+# that hasn't migrated to the richer `test_plan`. Same content, flat IDs.
+tests:
+  read_only:
+    count: 12
+    ids: [T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12]
+    location: cli/tests/upgrade.bats
+  mutating_members:
+    count: 13
+    ids: [T13, T14, T15, T16, T17, T18, T19, T20, T21, T22, T23, T24, T25]
+    location: cli/tests/upgrade.bats
+  nexus:
+    count: 6
+    ids: [T26, T27, T28, T29, T30, T31]
+    location: cli/tests/upgrade.bats
+  scope_refinement:
+    count: 5
+    ids: [T32, T33, T34, T35, T36]
+    location: cli/tests/upgrade.bats
+
+# ─── Output schemas ─────────────────────────────────────────────────────────
+
+output_schemas:
+  check_json:
+    "$schema": "http://json-schema.org/draft-07/schema#"
+    type: object
+    required: [nexus, members, summary]
+    properties:
+      nexus:
+        type: object
+        required: [current, latest, status]
+        properties:
+          current:
+            type: object
+            required: [tag, commit]
+            properties:
+              tag: { type: [string, "null"] }   # null when not on a tag (detached SHA)
+              commit: { type: string }
+          latest:
+            type: object
+            required: [tag]
+            properties:
+              tag: { type: [string, "null"] }   # null when probe failed (offline)
+          status:
+            type: string
+            enum: [up-to-date, "upgrade available", "unknown (offline)"]
+          action:
+            type: [string, "null"]              # one-line CLI hint, null when no action
+      members:
+        type: array
+        items:
+          type: object
+          required: [name, installed, latest, constraint, status]
+          properties:
+            name: { type: string }
+            installed: { type: [string, "null"] }     # null if not-installed
+            latest: { type: string }                   # roster.versions.latest
+            constraint: { type: string }               # raw eidolons.yaml string
+            status:
+              type: string
+              enum: [up-to-date, "upgrade available", pinned-out, not-installed]
+            resolved_commit: { type: [string, "null"] } # from lockfile, null if not-installed
+      summary:
+        type: object
+        required: [nexus_upgrade_available, member_upgrades_available, member_upgrades_pinned_out, members_not_installed]
+        properties:
+          nexus_upgrade_available: { type: boolean }
+          member_upgrades_available: { type: integer, minimum: 0 }
+          member_upgrades_pinned_out: { type: integer, minimum: 0 }
+          members_not_installed: { type: integer, minimum: 0 }
+
+# ─── Files touched ──────────────────────────────────────────────────────────
+
+files:
+  add:
+    - cli/src/upgrade.sh         # replaces v1.0 stub
+    - cli/tests/upgrade.bats
+    - docs/specs/eidolons-upgrade/spec.md
+    - docs/specs/eidolons-upgrade/spec.yaml
+  edit:
+    - cli/src/lib.sh             # add: with_timeout, nexus_current_tag, nexus_latest_tag, nexus_self_update, semver_satisfies, semver_lt, lock_member_version, install_member
+    - cli/tests/helpers.bash     # add: seed_lock_with_versions, mock_remote_tags
+    - docs/cli-reference.md
+    - CHANGELOG.md
+    - .github/workflows/ci.yml   # idempotency smoke step in cli-tests job
+  do_not_change:
+    - schemas/*.json
+    - roster/index.yaml
+    - cli/eidolons               # dispatcher already routes 'upgrade'
+    - docs/architecture.md       # four-layer model unchanged
+
+# Revision-only delta on top of the as-shipped (uncommitted) implementation,
+# per spec.md §11.8–§11.9. APIVR can apply these mechanically.
+revision_delta:
+  upgrade_sh:
+    rename_variable: "NEXUS_ONLY → SYSTEM_ONLY (3 declarations + ~6 uses)"
+    add_variable: "PROJECT_ONLY=false"
+    argparse:
+      replace: "--nexus) NEXUS_ONLY=true → --system) SYSTEM_ONLY=true"
+      add: "--project) PROJECT_ONLY=true; shift ;;"
+    mutex_block:
+      rename_messages: "--nexus → --system in all error strings"
+      add_rule: "--system + --project sets ALL=true (degenerate equivalence)"
+    dispatch:
+      rename: "if NEXUS_ONLY → if SYSTEM_ONLY"
+    check_rendering:
+      add: "If SYSTEM_ONLY && CHECK → render NEXUS only. If PROJECT_ONLY && CHECK → render MEMBERS only."
+    usage_text:
+      replace: "--nexus line → --system; insert --project line; update example invocations"
+    human_action_hint:
+      replace: "'eidolons upgrade --nexus' → 'eidolons upgrade --system'"
+  upgrade_bats:
+    rename_tests: [T26, T27, T28, T29]   # see test_plan.nexus.renames above
+    add_tests: [T32, T33, T34, T35, T36] # see test_plan.added_by_revision above
+    help_test_update: "Assertions check presence of --system, --project; absence of --nexus."
+  cli_reference_md:
+    update_synopsis: "Replace --nexus with --system; add --project line; keep --all"
+    update_flag_table: "Replace --nexus row with --system; insert --project row above --all"
+    update_network_failure_note: "--nexus reference → --system"
+  changelog_md:
+    note: "v1.1 entry should list --system / --project / --all as the public surface. Do NOT document --nexus as ever having existed."
+
+# ─── Risk surface (for APIVR) ──────────────────────────────────────────────
+
+risk:
+  highest: "Extract install_member from sync.sh to lib.sh. Must not break existing sync tests. Land as separate PR before upgrade.sh implementation."
+  medium: "Bash 3.2 portability of with_timeout helper (no `wait -n`). Test on macos-latest runner."
+  low: "JSON output schema enforcement; deterministic ordering of members section."
+  revision_specific: "Mechanical rename only; low risk. The new --check narrowing path (T34/T35) is the one new code path and is small."
+
+implementation_order:
+  - Extract install_member helper
+  - Add semver helpers + tests
+  - Add nexus probe helpers + tests
+  - Implement upgrade --check
+  - Implement upgrade --system  # was --nexus pre-revision
+  - Implement mutating upgrade (members + --project alias)
+  - Implement --all
+  - Wire CI idempotency gate, docs, CHANGELOG
+
+# ─── Out of scope ───────────────────────────────────────────────────────────
+
+out_of_scope:
+  - "Package-manager publishing (npm/pip/brew) — forbidden by CLAUDE.md"
+  - "Auto-editing eidolons.yaml constraint operators"
+  - "Downgrading"
+  - "Cross-project upgrades (operating outside cwd)"
+  - "Auto-chaining nexus self-upgrade with member upgrades in single shell (use --all instead)"
+  - "EIIS install-contract version upgrades (handled at sync time via fetch_eiis)"
+  - "--prerelease flag for stable-vs-latest divergence (future work; stable == latest in current roster)"
+  - "Backwards-compat alias for --nexus (never released; dropped per §11.6)"
+
+# ─── Revision metadata (spec.md §11) ───────────────────────────────────────
+
+revision:
+  id: scope-flag-ux-refinement
+  date: "2026-04-26"
+  authoritative_section: "spec.md §11"
+  supersedes_sections: ["§4.1", "§4.3"]
+  proposal_chosen: A   # --system / --project flags on the existing upgrade command
+  default_scope: project
+  rationale_summary: >
+    Single-command, single-help-page surface keeps --check cross-scope (its main strength)
+    and matches the cwd-default convention of init/sync/add/remove/doctor. Splitting into
+    upgrade-system + upgrade-project (Proposal B) was rejected because it would either
+    duplicate --check or asymmetrize the help surface. Default stays project-scoped because
+    members upgrade ~10x more often than the nexus.
+  flag_changes:
+    renamed: ["--nexus → --system"]
+    added: ["--project"]
+    kept: ["--all", "--check", "--json", "--yes", "--non-interactive", "--dry-run", "-h", "--help"]
+    dropped: []
+  backwards_compat: "None required. --nexus was added in the uncommitted implementation but never released. Dropped outright; no alias, no deprecation warning."
+
+# ─── Auto-handoff signal for APIVR ─────────────────────────────────────────
+
+handoff:
+  next_eidolon: apivr
+  ready: true
+  reason: "Revision is mechanical: variable + flag rename, two new test cases for narrowing, five new bats tests, doc string updates. All decisions resolved with rationale in spec.md §11."
