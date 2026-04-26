@@ -95,20 +95,29 @@ jobs:
         run: |
           git clone --depth 1 "https://github.com/${{ steps.resolve.outputs.repo }}" /tmp/eidolon
 
-      - name: EIIS conformance check
+      - name: Resolve EIIS version
+        if: steps.resolve.outputs.status == 'shipped'
+        id: eiis
+        run: |
+          EIIS_VER=$(yq -r '.eiis_required' roster/index.yaml)
+          echo "version=$EIIS_VER" >> "$GITHUB_OUTPUT"
+
+      - name: Clone Rynaro/eidolons-eiis@v${{ steps.eiis.outputs.version }}
+        if: steps.resolve.outputs.status == 'shipped'
+        run: |
+          git clone --depth 1 --branch "v${{ steps.eiis.outputs.version }}" \
+            "https://github.com/Rynaro/eidolons-eiis" /tmp/eiis
+
+      - name: EIIS conformance check (external checker)
         if: steps.resolve.outputs.status == 'shipped'
         run: |
           set -euo pipefail
-          required=(AGENTS.md CLAUDE.md install.sh agent.md README.md)
-          missing=()
-          for f in "${required[@]}"; do
-            [[ -f "/tmp/eidolon/$f" ]] || missing+=("$f")
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::${{ matrix.eidolon }} missing EIIS-required files: ${missing[*]}"
+          if bash /tmp/eiis/conformance/check.sh /tmp/eidolon; then
+            echo "::notice::${{ matrix.eidolon }} passes EIIS-${{ steps.eiis.outputs.version }} conformance"
+          else
+            echo "::error::${{ matrix.eidolon }} fails EIIS-${{ steps.eiis.outputs.version }} conformance"
             exit 1
           fi
-          echo "::notice::${{ matrix.eidolon }} passes basic EIIS-1.0 checks"
 
       - name: Verify install.sh exits cleanly with --help
         if: steps.resolve.outputs.status == 'shipped'

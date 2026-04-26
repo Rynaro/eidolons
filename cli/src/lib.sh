@@ -130,10 +130,44 @@ fetch_eidolon() {
 }
 
 # ─── EIIS conformance check ───────────────────────────────────────────────
-# Minimal inline check — the full standalone checker lives in Rynaro/eidolons-eiis
+# Delegates to the standalone checker at Rynaro/eidolons-eiis when reachable,
+# falls back to the inline file-existence check when offline.
+
+# eiis_required_version → reads `eiis_required` from roster/index.yaml
+eiis_required_version() {
+  local roster="$NEXUS/roster/index.yaml"
+  [[ -f "$roster" ]] || { echo "1.1"; return; }
+  yaml_to_json "$roster" 2>/dev/null | jq -r '.eiis_required // "1.1"'
+}
+
+# fetch_eiis [VERSION] → echoes path to cached clone, or returns non-zero on failure
+fetch_eiis() {
+  local version="${1:-$(eiis_required_version)}"
+  local clone_dir="$CACHE_DIR/eiis@${version}"
+  if [[ ! -d "$clone_dir/.git" ]]; then
+    mkdir -p "$CACHE_DIR"
+    git clone --depth 1 --branch "v$version" \
+      "https://github.com/Rynaro/eidolons-eiis" "$clone_dir" >/dev/null 2>&1 \
+      || return 1
+  fi
+  echo "$clone_dir"
+}
+
 eiis_check() {
   local dir="$1"
   local name="$2"
+  local checker_dir
+  if checker_dir="$(fetch_eiis 2>/dev/null)" \
+     && [[ -n "$checker_dir" && -x "$checker_dir/conformance/check.sh" ]]; then
+    if bash "$checker_dir/conformance/check.sh" "$dir" >/dev/null 2>&1; then
+      return 0
+    fi
+    warn "$name fails EIIS conformance"
+    warn "  Re-run for details: bash $checker_dir/conformance/check.sh \"$dir\""
+    return 1
+  fi
+
+  # Offline fallback — keep behaviour byte-compatible with v1.0 inline check.
   local required=( "AGENTS.md" "CLAUDE.md" "install.sh" "agent.md" "README.md" )
   local missing=()
   for f in "${required[@]}"; do
