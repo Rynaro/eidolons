@@ -173,6 +173,13 @@ Every layer has a narrow privilege:
 
 A consumer project pins nothing implicitly. Versions are pinned in `eidolons.yaml` (constraints) and `eidolons.lock` (resolved exact).
 
+Release integrity metadata lives beside each roster version under
+`versions.releases.<version>`. When present, the CLI verifies the exact
+`vX.Y.Z` tag, commit, Git tree, and SHA-256 target metadata before running an
+Eidolon's installer. Missing metadata is warning-only while
+`integrity.enforcement: warn`; the next enforcement bump can make it strict.
+See [`release-integrity.md`](release-integrity.md).
+
 ---
 
 ## Related

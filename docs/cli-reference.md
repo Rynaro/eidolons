@@ -18,6 +18,7 @@ eidolons <command> [options]
 | `EIDOLONS_REPO` | `https://github.com/Rynaro/eidolons` | Nexus repo (for bootstrap) |
 | `EIDOLONS_REF` | `main` | Nexus ref (for bootstrap) |
 | `EIDOLONS_BIN_DIR` | `~/.local/bin` | Where the CLI is symlinked |
+| `EIDOLONS_INTEGRITY_ENFORCEMENT` | roster setting | Override release integrity mode (`warn` or `strict`) |
 
 ### Files
 
@@ -120,6 +121,21 @@ Health check: manifest/lock consistency, per-member installs, host dispatch wiri
 eidolons doctor            # report
 eidolons doctor --fix      # report + attempt auto-repair via sync
 ```
+
+---
+
+## `eidolons verify`
+
+Read-only release integrity verification for installed members.
+
+```
+eidolons verify
+eidolons verify atlas spectra
+```
+
+For releases with roster metadata, mismatched commits, Git trees, archive
+checksums, or installed manifest checksums fail the command. Members without
+release metadata warn in compatibility mode.
 
 ---
 

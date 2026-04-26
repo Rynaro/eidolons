@@ -90,6 +90,135 @@ roster_presets() {
   yaml_to_json "$ROSTER_FILE" | jq -r '.presets | keys[]'
 }
 
+# ─── Release integrity ───────────────────────────────────────────────────
+# The roster may include TUF-style target metadata under
+# .versions.releases[VERSION]. Existing entries without metadata stay
+# installable in compatibility mode, but entries that opt in must verify.
+
+sha256_file() {
+  local file="$1"
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$file" | awk '{print $1}'
+  elif command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$file" | awk '{print $1}'
+  else
+    die "Need shasum or sha256sum for release integrity verification"
+  fi
+}
+
+integrity_enforcement_mode() {
+  if [[ -n "${EIDOLONS_INTEGRITY_ENFORCEMENT:-}" ]]; then
+    echo "$EIDOLONS_INTEGRITY_ENFORCEMENT"
+    return
+  fi
+  yaml_to_json "$ROSTER_FILE" 2>/dev/null \
+    | jq -r '.integrity.enforcement // "warn"' 2>/dev/null \
+    || echo "warn"
+}
+
+semver_tag_for() {
+  local version="$1"
+  if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+    echo "v$version"
+    return 0
+  fi
+  return 1
+}
+
+release_metadata_for() {
+  local name="$1" version="$2"
+  roster_get "$name" \
+    | jq --arg v "$version" '.versions.releases[$v] // empty'
+}
+
+release_integrity_status() {
+  local name="$1" version="$2" meta
+  meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
+  if [[ -n "$meta" && "$meta" != "null" ]]; then
+    echo "verified"
+    return
+  fi
+  if [[ "$(integrity_enforcement_mode)" == "strict" ]]; then
+    echo "missing"
+  else
+    echo "legacy-warning"
+  fi
+}
+
+git_archive_sha256() {
+  local dir="$1" tmp sum
+  tmp="$(mktemp)"
+  if git -C "$dir" archive --format=tar HEAD > "$tmp" 2>/dev/null; then
+    sum="$(sha256_file "$tmp")"
+    rm -f "$tmp"
+    echo "$sum"
+    return 0
+  fi
+  rm -f "$tmp"
+  return 1
+}
+
+verify_release_integrity() {
+  local name="$1" version="$2" clone_dir="$3"
+  local meta mode expected_tag expected_commit expected_tree expected_archive
+  local actual_tag actual_commit actual_tree actual_archive
+
+  meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
+  if [[ -z "$meta" || "$meta" == "null" ]]; then
+    mode="$(integrity_enforcement_mode)"
+    if [[ "$mode" == "strict" ]]; then
+      die "$name@$version has no roster release integrity metadata"
+    fi
+    warn "$name@$version has no roster release integrity metadata; compatibility install is warning-only"
+    return 0
+  fi
+
+  expected_tag="$(echo "$meta" | jq -r --arg v "$version" '.tag // ("v" + $v)')"
+  expected_commit="$(echo "$meta" | jq -r '.commit // empty')"
+  expected_tree="$(echo "$meta" | jq -r '.tree // empty')"
+  expected_archive="$(echo "$meta" | jq -r '.archive_sha256 // empty')"
+
+  if ! semver_tag_for "$version" >/dev/null; then
+    die "$name@$version is not a SemVer release (expected X.Y.Z)"
+  fi
+  if [[ "$expected_tag" != "v$version" ]]; then
+    die "$name@$version roster metadata points at tag $expected_tag, expected v$version"
+  fi
+
+  actual_tag="$(git -C "$clone_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
+  if [[ -n "$actual_tag" && "$actual_tag" != "$expected_tag" ]]; then
+    die "$name@$version tag drift: clone is $actual_tag but roster expects $expected_tag"
+  fi
+
+  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
+  [[ -n "$actual_commit" ]] || die "$name@$version cannot resolve cloned commit"
+  if [[ -n "$expected_commit" && "$actual_commit" != "$expected_commit" ]]; then
+    die "$name@$version commit mismatch: got $actual_commit, expected $expected_commit"
+  fi
+
+  actual_tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+  if [[ -n "$expected_tree" && "$actual_tree" != "$expected_tree" ]]; then
+    die "$name@$version tree mismatch: got ${actual_tree:-unknown}, expected $expected_tree"
+  fi
+
+  if [[ -n "$expected_archive" ]]; then
+    actual_archive="$(git_archive_sha256 "$clone_dir" || echo "")"
+    [[ -n "$actual_archive" ]] || die "$name@$version cannot compute release archive checksum"
+    if [[ "$actual_archive" != "$expected_archive" ]]; then
+      die "$name@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
+    fi
+  fi
+
+  ok "$name@$version release integrity verified"
+  return 0
+}
+
+lock_manifest_sha256() {
+  local manifest="$1"
+  [[ -f "$manifest" ]] || return 1
+  sha256_file "$manifest"
+}
+
 # ─── Host detection ───────────────────────────────────────────────────────
 # Detect which hosts are in use in the current project (cwd).
 # Emits: one host per line from {claude-code, copilot, cursor, opencode, codex}
@@ -143,9 +272,13 @@ fetch_eidolon() {
   local name="$1" version="${2:-latest}"
   local entry; entry="$(roster_get "$name")"
   local repo; repo="$(echo "$entry" | jq -r '.source.repo')"
-  local ref
+  local ref meta_tag
   if [[ "$version" == "latest" ]]; then
-    ref="$(echo "$entry" | jq -r '.source.default_ref')"
+    version="$(echo "$entry" | jq -r '.versions.latest')"
+  fi
+  meta_tag="$(echo "$entry" | jq -r --arg v "$version" '.versions.releases[$v].tag // empty')"
+  if [[ -n "$meta_tag" ]]; then
+    ref="$meta_tag"
   else
     ref="v$version"
   fi
@@ -158,6 +291,7 @@ fetch_eidolon() {
   else
     info "Using cached $name@$version"
   fi
+  verify_release_integrity "$name" "$version" "$clone_dir"
   echo "$clone_dir"
 }
 
