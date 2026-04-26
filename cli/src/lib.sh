@@ -140,13 +140,31 @@ eiis_required_version() {
   yaml_to_json "$roster" 2>/dev/null | jq -r '.eiis_required // "1.1"'
 }
 
+# resolve_eiis_tag REQ → echoes the tag to clone (e.g. "1.1" → "1.1.4")
+# `eiis_required` in the roster is a major.minor compat declaration; the
+# actual EIIS repo tags are full SemVer (v1.0.0, v1.1.0, …). When REQ is
+# already a full SemVer it round-trips unchanged.
+resolve_eiis_tag() {
+  local req="$1"
+  if [[ "$req" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    local resolved
+    resolved=$(git ls-remote --tags --refs https://github.com/Rynaro/eidolons-eiis 2>/dev/null \
+      | awk -v p="refs/tags/v${req}." '$2 ~ "^"p { sub("refs/tags/v", "", $2); print $2 }' \
+      | sort -V \
+      | tail -1)
+    [[ -n "$resolved" ]] && { echo "$resolved"; return; }
+  fi
+  echo "$req"
+}
+
 # fetch_eiis [VERSION] → echoes path to cached clone, or returns non-zero on failure
 fetch_eiis() {
   local version="${1:-$(eiis_required_version)}"
-  local clone_dir="$CACHE_DIR/eiis@${version}"
+  local resolved; resolved="$(resolve_eiis_tag "$version")"
+  local clone_dir="$CACHE_DIR/eiis@${resolved}"
   if [[ ! -d "$clone_dir/.git" ]]; then
     mkdir -p "$CACHE_DIR"
-    git clone --depth 1 --branch "v$version" \
+    git clone --depth 1 --branch "v$resolved" \
       "https://github.com/Rynaro/eidolons-eiis" "$clone_dir" >/dev/null 2>&1 \
       || return 1
   fi

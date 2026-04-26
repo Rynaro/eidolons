@@ -95,17 +95,27 @@ jobs:
         run: |
           git clone --depth 1 "https://github.com/${{ steps.resolve.outputs.repo }}" /tmp/eidolon
 
-      - name: Resolve EIIS version
+      - name: Resolve EIIS tag
         if: steps.resolve.outputs.status == 'shipped'
         id: eiis
         run: |
-          EIIS_VER=$(yq -r '.eiis_required' roster/index.yaml)
-          echo "version=$EIIS_VER" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          EIIS_REQ=$(yq -r '.eiis_required' roster/index.yaml)
+          # Roster pins `eiis_required` as a major.minor compat declaration;
+          # actual tags are full SemVer. Resolve to the highest matching patch.
+          if [[ "$EIIS_REQ" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            EIIS_TAG=$(git ls-remote --tags --refs https://github.com/Rynaro/eidolons-eiis | \
+              awk -v p="refs/tags/v${EIIS_REQ}." '$2 ~ "^"p { sub("refs/tags/v", "", $2); print $2 }' | \
+              sort -V | tail -1)
+          fi
+          [[ -z "${EIIS_TAG:-}" ]] && EIIS_TAG="$EIIS_REQ"
+          echo "tag=v$EIIS_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved eiis_required=$EIIS_REQ → tag v$EIIS_TAG"
 
-      - name: Clone Rynaro/eidolons-eiis@v${{ steps.eiis.outputs.version }}
+      - name: Clone Rynaro/eidolons-eiis@${{ steps.eiis.outputs.tag }}
         if: steps.resolve.outputs.status == 'shipped'
         run: |
-          git clone --depth 1 --branch "v${{ steps.eiis.outputs.version }}" \
+          git clone --depth 1 --branch "${{ steps.eiis.outputs.tag }}" \
             "https://github.com/Rynaro/eidolons-eiis" /tmp/eiis
 
       - name: EIIS conformance check (external checker)
@@ -113,9 +123,9 @@ jobs:
         run: |
           set -euo pipefail
           if bash /tmp/eiis/conformance/check.sh /tmp/eidolon; then
-            echo "::notice::${{ matrix.eidolon }} passes EIIS-${{ steps.eiis.outputs.version }} conformance"
+            echo "::notice::${{ matrix.eidolon }} passes EIIS ${{ steps.eiis.outputs.tag }} conformance"
           else
-            echo "::error::${{ matrix.eidolon }} fails EIIS-${{ steps.eiis.outputs.version }} conformance"
+            echo "::error::${{ matrix.eidolon }} fails EIIS ${{ steps.eiis.outputs.tag }} conformance"
             exit 1
           fi
 
