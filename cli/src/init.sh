@@ -28,9 +28,12 @@ Options:
                            Run 'eidolons list --presets' to see all.
   --members LIST           Comma-separated list of Eidolon names.
                            Mutually exclusive with --preset.
-  --hosts LIST             Comma-separated: claude-code,copilot,cursor,opencode,all
+  --hosts LIST             Comma-separated: claude-code,copilot,cursor,opencode,codex,all
                            Required in --non-interactive mode when no hosts are auto-detected.
-                           Interactive mode will prompt if omitted and detection finds nothing.
+                           Interactive mode always prompts to confirm — auto-detected hosts
+                           become the default applied on Enter. Letter shortcuts accepted:
+                           c=claude-code, x=codex, o=copilot, u=cursor, p=opencode, a=all.
+                           Combine letters (e.g. 'co' = claude-code+copilot).
   --shared-dispatch        Compose root AGENTS.md / CLAUDE.md / .github/copilot-instructions.md
                            with marker-bounded per-Eidolon sections (opt-in).
   --no-shared-dispatch     Skip root dispatch files (default). Per-vendor agent/skill files
@@ -42,9 +45,11 @@ Options:
 
 Behavior:
   - Detects which host environments are present in the current project.
-  - Interactive: prompts for missing host selection, and whether to compose
-    root dispatch files (default: no).
-  - Non-interactive: fails if no hosts detected and --hosts not supplied.
+  - Interactive: always confirms host selection (Enter accepts the detected
+    default, letters override), and asks whether to compose root dispatch
+    files (default: no).
+  - Non-interactive: auto-applies detection when found, otherwise fails
+    unless --hosts was supplied.
   - Writes eidolons.yaml + eidolons.lock, then delegates to 'eidolons sync'.
   - Per-Eidolon installers receive --shared-dispatch / --no-shared-dispatch
     based on the user's choice.
@@ -124,37 +129,44 @@ for m in "${MEMBERS_ARR[@]}"; do
 done
 
 # ─── Resolve hosts ────────────────────────────────────────────────────────
-# Policy: never broadcast when no host is detected. Require explicit
-# --hosts in non-interactive; prompt interactively otherwise.
+# Policy: never silently apply auto-detection in interactive mode — the
+# user gets the last word via ui_pick_hosts (Enter accepts the detected
+# default). Non-interactive mode preserves auto-application so CI flows
+# that rely on detection (see init.bats codex tests) keep working.
 if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
   detected="$(detect_hosts | paste -sd, -)"
-  if [[ -n "$detected" ]]; then
-    HOSTS="$detected"
-    info "Detected hosts: $HOSTS"
-  else
-    if [[ "$NON_INTERACTIVE" == "true" ]]; then
-      die "No hosts auto-detected in this project. Pass --hosts LIST explicitly (valid: claude-code, copilot, cursor, opencode, all)."
+  if [[ "$NON_INTERACTIVE" == "true" ]]; then
+    if [[ -n "$detected" ]]; then
+      HOSTS="$detected"
+      info "Detected hosts: $HOSTS"
+    else
+      die "No hosts auto-detected in this project. Pass --hosts LIST explicitly (valid: claude-code, copilot, cursor, opencode, codex, all)."
     fi
-    {
-      echo ""
-      echo "${BOLD}No AI host environments detected in this project.${RESET}"
-      echo "Pick which host(s) to wire (comma-separated). Each choice will"
-      echo "create the folders it needs in this project if they don't exist:"
-      echo ""
-      echo "  - claude-code  → creates .claude/agents/  and .claude/skills/"
-      echo "  - copilot      → creates .github/instructions/"
-      echo "  - cursor       → creates .cursor/rules/"
-      echo "  - opencode     → creates .opencode/agents/"
-      echo "  - all          (every host above)"
-      echo "  - (leave blank to abort)"
-      echo ""
-    } >&2
-    read -rp "Hosts: " HOSTS || true
+  else
+    if [[ -n "$detected" ]]; then
+      info "Detected hosts: $detected (press Enter to accept, or override below)"
+    else
+      {
+        echo ""
+        echo "${BOLD}No AI host environments detected in this project.${RESET}"
+        echo "Pick which host(s) to wire. Each choice will create the folders"
+        echo "it needs in this project if they don't exist:"
+        echo ""
+        echo "  - claude-code  → creates .claude/agents/  and .claude/skills/"
+        echo "  - copilot      → creates .github/instructions/"
+        echo "  - cursor       → creates .cursor/rules/"
+        echo "  - opencode     → creates .opencode/agents/"
+        echo "  - codex        → creates AGENTS.md (root) and .codex/agents/"
+        echo "  - all          (every host above)"
+        echo "  - (leave blank to abort)"
+      } >&2
+    fi
+    HOSTS="$(ui_pick_hosts "$detected")"
     HOSTS="$(echo "${HOSTS:-}" | xargs)"
     [[ -z "$HOSTS" ]] && die "No hosts selected. Aborting — specify --hosts explicitly or re-run."
   fi
 fi
-[[ "$HOSTS" == "all" ]] && HOSTS="claude-code,copilot,cursor,opencode"
+[[ "$HOSTS" == "all" ]] && HOSTS="claude-code,copilot,cursor,opencode,codex"
 
 # ─── Resolve shared-dispatch preference ───────────────────────────────────
 # Opt-in by design. Per-vendor files (.claude/agents/<n>.md, .cursor/rules/<n>.mdc,

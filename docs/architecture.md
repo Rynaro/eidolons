@@ -56,7 +56,7 @@
 │   eidolons.yaml              — which members you want               │
 │   eidolons.lock              — exact resolved versions              │
 │   .eidolons/<member>/        — installed per Eidolon                │
-│   AGENTS.md / CLAUDE.md / .cursor/ / .opencode/                     │
+│   AGENTS.md / CLAUDE.md / .cursor/ / .opencode/ / .codex/           │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -80,12 +80,14 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
    └─ Resolve "pipeline" preset → [atlas, spectra, apivr, idg]
 
 2. Detect hosts in cwd
-   └─ Finds: .github/, CLAUDE.md, .cursor/
-   └─ Hosts to wire: claude-code, copilot, cursor
+   └─ Finds: .github/, CLAUDE.md, .cursor/, AGENTS.md, .codex/
+   └─ Hosts to wire: claude-code, copilot, codex, cursor
+   └─ Note: AGENTS.md is co-owned by copilot AND codex; .codex/ is a
+            definitive Codex-only signal that takes precedence.
 
 3. Write eidolons.yaml with:
    - version: 1
-   - hosts.wire: [claude-code, copilot, cursor]
+   - hosts.wire: [claude-code, copilot, codex, cursor]
    - members: [atlas@^1.0.0, spectra@^4.2.0, apivr@^3.0.0, idg@^1.1.0]
 
 4. For each member:
@@ -94,14 +96,16 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
    b. EIIS sanity check (agent.md, install.sh, AGENTS.md exist)
    c. Run: bash <cache>/install.sh \
              --target ./.eidolons/<n> \
-             --hosts claude-code,copilot,cursor \
+             --hosts claude-code,copilot,codex,cursor \
              --non-interactive \
              --force
    d. Each install.sh:
       - Copies methodology files into ./.eidolons/<n>/
-      - Appends to root AGENTS.md (bounded by markers)
+      - Appends to root AGENTS.md (bounded by markers; co-owned by copilot/codex)
       - Appends to CLAUDE.md (pointer line)
       - Creates .cursor/rules/<n>.mdc if cursor is wired
+      - Creates .codex/agents/<n>.md if codex is wired
+        (YAML frontmatter: name, description; subagent dispatch file)
       - Emits ./.eidolons/<n>/install.manifest.json
    e. Nexus reads the manifest, records resolved version + commit SHA
 

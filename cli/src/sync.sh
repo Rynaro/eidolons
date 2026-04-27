@@ -57,6 +57,18 @@ say "Syncing project to $PROJECT_MANIFEST"
 info "Hosts: $HOSTS_CSV"
 info "Shared dispatch: $SHARED_DISPATCH"
 
+# ─── codex + --no-shared-dispatch override (T.12) ────────────────────────
+# AGENTS.md is Codex's primary instruction surface — see
+# https://developers.openai.com/codex/guides/agents-md. When the manifest
+# wires codex but persists shared_dispatch: false, override at execution
+# time and warn. eidolons.yaml continues to record the user's intent
+# faithfully so the flag still applies if codex is later removed from wire.
+EFFECTIVE_SHARED_DISPATCH="$SHARED_DISPATCH"
+if [[ ",$HOSTS_CSV," == *",codex,"* ]] && [[ "$SHARED_DISPATCH" != "true" ]]; then
+  warn "--no-shared-dispatch ignored for hosts.wire containing codex; AGENTS.md is Codex's primary instruction surface."
+  EFFECTIVE_SHARED_DISPATCH="true"
+fi
+
 # ─── Pre-install preview ─────────────────────────────────────────────────
 # Shows every directory the run is about to create (per-Eidolon install
 # target + per-host vendor folders the user picked). Respects --yes /
@@ -84,12 +96,33 @@ if [[ "$SKIP_PREVIEW" != "true" && "$DRY_RUN" != "true" ]]; then
       opencode)
         [[ -d ".opencode/agents"     ]] || preview_paths+=(".opencode/agents/")
         ;;
+      codex)
+        # Codex wires both a root AGENTS.md (shared dispatch) AND a per-
+        # Eidolon subagent file under .codex/agents/<name>.md. AGENTS.md
+        # is shown unconditionally because EFFECTIVE_SHARED_DISPATCH is
+        # always true when codex is wired (T.12 override).
+        if [[ -f "AGENTS.md" ]]; then
+          preview_paths+=("AGENTS.md  (updated in place)")
+        else
+          preview_paths+=("AGENTS.md  (new file)")
+        fi
+        [[ -d ".codex/agents" ]] || preview_paths+=(".codex/agents/")
+        while read -r _m; do
+          _mn="$(echo "$_m" | jq -r '.name')"
+          preview_paths+=(".codex/agents/${_mn}.md")
+        done <<< "$MEMBERS_JSON"
+        ;;
     esac
   done
-  if [[ "$SHARED_DISPATCH" == "true" ]]; then
-    for _f in AGENTS.md CLAUDE.md .github/copilot-instructions.md; do
+  if [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+    for _f in CLAUDE.md .github/copilot-instructions.md; do
       [[ -f "$_f" ]] || preview_paths+=("$_f  (new file)")
     done
+    # AGENTS.md is previewed by the codex branch above when codex is wired;
+    # otherwise add it here for copilot-only shared-dispatch projects.
+    if [[ ",$HOSTS_CSV," != *",codex,"* ]]; then
+      [[ -f "AGENTS.md" ]] || preview_paths+=("AGENTS.md  (new file)")
+    fi
   fi
   ui_section_out "About to create / modify"
   for _p in "${preview_paths[@]}"; do
@@ -150,14 +183,17 @@ while read -r member; do
   # default (compose everything unconditionally).
   shared_flag_args=()
   if grep -q -- '--no-shared-dispatch' "$clone_dir/install.sh" 2>/dev/null; then
-    if [[ "$SHARED_DISPATCH" == "true" ]]; then
+    # EFFECTIVE_SHARED_DISPATCH may differ from the manifest's recorded
+    # value when codex is in hosts.wire (T.12: AGENTS.md is Codex's primary
+    # surface, so --no-shared-dispatch is overridden at execution time).
+    if [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
       shared_flag_args=(--shared-dispatch)
     else
       shared_flag_args=(--no-shared-dispatch)
     fi
   else
     warn "$name installer predates --shared-dispatch (legacy). It will compose AGENTS.md/CLAUDE.md regardless of your preference."
-    if [[ "$SHARED_DISPATCH" != "true" ]]; then
+    if [[ "$EFFECTIVE_SHARED_DISPATCH" != "true" ]]; then
       warn "  To honor shared_dispatch: false, upgrade $name to the version carrying the flag."
     fi
   fi
@@ -176,6 +212,12 @@ while read -r member; do
   # If the host wiring asked for claude-code but the per-Eidolon installer
   # didn't produce .claude/agents/<name>.md, write a minimal dispatch stub so
   # the agent is at least callable. Never overwrite an existing file.
+  #
+  # Codex has its own analogous file (.codex/agents/<name>.md) but a parallel
+  # safety net is intentionally NOT mirrored here (T.6 of openai-codex-host-
+  # support spec): the per-Eidolon install.sh owns Codex subagent emission,
+  # and adding a nexus-side fallback would mask non-conformant Eidolons.
+  # Add it only if observed empirically to be needed.
   if [[ ",$HOSTS_CSV," == *",claude-code,"* ]] && [[ ! -f ".claude/agents/$name.md" ]]; then
     mkdir -p .claude/agents
     display="$(echo "$entry" | jq -r '.display_name // .name')"

@@ -95,20 +95,54 @@ jobs:
         run: |
           git clone --depth 1 "https://github.com/${{ steps.resolve.outputs.repo }}" /tmp/eidolon
 
-      - name: EIIS conformance check
+      - name: Resolve EIIS tag
         if: steps.resolve.outputs.status == 'shipped'
+        id: eiis
         run: |
           set -euo pipefail
-          required=(AGENTS.md CLAUDE.md install.sh agent.md README.md)
-          missing=()
-          for f in "${required[@]}"; do
-            [[ -f "/tmp/eidolon/$f" ]] || missing+=("$f")
-          done
-          if (( ${#missing[@]} > 0 )); then
-            echo "::error::${{ matrix.eidolon }} missing EIIS-required files: ${missing[*]}"
-            exit 1
+          EIIS_REQ=$(yq -r '.eiis_required' roster/index.yaml)
+          # Roster pins `eiis_required` as a major.minor compat declaration;
+          # actual tags are full SemVer. Resolve to the highest matching patch.
+          if [[ "$EIIS_REQ" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            EIIS_TAG=$(git ls-remote --tags --refs https://github.com/Rynaro/eidolons-eiis | \
+              awk -v p="refs/tags/v${EIIS_REQ}." '$2 ~ "^"p { sub("refs/tags/v", "", $2); print $2 }' | \
+              sort -V | tail -1)
           fi
-          echo "::notice::${{ matrix.eidolon }} passes basic EIIS-1.0 checks"
+          [[ -z "${EIIS_TAG:-}" ]] && EIIS_TAG="$EIIS_REQ"
+          echo "tag=v$EIIS_TAG" >> "$GITHUB_OUTPUT"
+          echo "Resolved eiis_required=$EIIS_REQ → tag v$EIIS_TAG"
+
+      - name: Clone Rynaro/eidolons-eiis@${{ steps.eiis.outputs.tag }}
+        if: steps.resolve.outputs.status == 'shipped'
+        run: |
+          git clone --depth 1 --branch "${{ steps.eiis.outputs.tag }}" \
+            "https://github.com/Rynaro/eidolons-eiis" /tmp/eiis
+
+      - name: EIIS conformance check (external checker)
+        if: steps.resolve.outputs.status == 'shipped'
+        run: |
+          set +e
+          bash /tmp/eiis/conformance/check.sh /tmp/eidolon
+          rc=$?
+          # Exit-code semantics from Rynaro/eidolons-eiis conformance/check.sh:
+          #   0 — all green (MUSTs + SHOULDs)
+          #   2 — MUST violation (hard fail)
+          #   3 — SHOULD violation (advisory; fail CI to surface drift)
+          #   4 — warn-only / grandfathered (e.g. missing manifest fixture).
+          #       Per the EIIS-1.1 "warn-only first wave" stance, this is
+          #       not a CI blocker — surface as a warning instead.
+          case "$rc" in
+            0)
+              echo "::notice::${{ matrix.eidolon }} passes EIIS ${{ steps.eiis.outputs.tag }} conformance"
+              ;;
+            4)
+              echo "::warning::${{ matrix.eidolon }} passes MUSTs but has grandfathered SHOULD warnings (exit 4)"
+              ;;
+            *)
+              echo "::error::${{ matrix.eidolon }} fails EIIS ${{ steps.eiis.outputs.tag }} conformance (exit $rc)"
+              exit 1
+              ;;
+          esac
 
       - name: Verify install.sh exits cleanly with --help
         if: steps.resolve.outputs.status == 'shipped'

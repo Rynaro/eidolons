@@ -56,7 +56,8 @@ my-new-thing/
 ├── .github/
 │   └── copilot-instructions.md
 ├── .cursor/rules/           # one MDC per Eidolon
-└── .opencode/agents/        # one agent file per Eidolon
+├── .opencode/agents/        # one agent file per Eidolon
+└── .codex/agents/           # one subagent file per Eidolon (OpenAI Codex)
 ```
 
 Commit everything — including `eidolons.lock` — so teammates get the same versions.
@@ -68,7 +69,7 @@ cd ~/projects/existing-rails-app
 eidolons init --preset standard
 ```
 
-The CLI detects existing hosts (`.github/`, `CLAUDE.md`, `.cursor/`, `.opencode/`) and only wires the ones that are in use. It **appends** to existing `AGENTS.md` / `CLAUDE.md` rather than overwriting them — your existing rules stay intact.
+The CLI detects existing hosts (`.github/`, `CLAUDE.md`, `.cursor/`, `.opencode/`, `AGENTS.md`, `.codex/`) and only wires the ones that are in use. It **appends** to existing `AGENTS.md` / `CLAUDE.md` rather than overwriting them — your existing rules stay intact. `AGENTS.md` is co-owned by Copilot and Codex; `.codex/` is the definitive Codex-only signal.
 
 ### C. Individual member — one Eidolon, targeted
 
@@ -100,6 +101,7 @@ Fails fast on any prompt. Use `--preset` or `--members` to provide all required 
 | `CLAUDE.md` | Each Eidolon appends a pointer line | ✅ yes |
 | `.cursor/rules/<n>.mdc` | Per-Eidolon | ✅ yes |
 | `.opencode/agents/<n>.md` | Per-Eidolon | ✅ yes |
+| `.codex/agents/<n>.md` | Per-Eidolon (Codex subagent) | ✅ yes |
 
 Rule of thumb: if the CLI wrote it, commit it.
 

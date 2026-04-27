@@ -43,7 +43,7 @@ eidolons init [--preset NAME | --members LIST] [--hosts LIST] [--force] [--non-i
 |------|---------|
 | `--preset NAME` | Use a preset (minimal, pipeline, full, ...). See `eidolons list --presets`. |
 | `--members LIST` | Comma-separated Eidolon names. Mutually exclusive with `--preset`. |
-| `--hosts LIST` | `claude-code,copilot,cursor,opencode,all`. Default: `auto`. |
+| `--hosts LIST` | `claude-code,copilot,cursor,opencode,codex,all`. Default: `auto`. |
 | `--force` | Overwrite existing `eidolons.yaml`. |
 | `--non-interactive` | Fail on any prompt. Requires `--preset` or `--members`. |
 
@@ -123,9 +123,37 @@ eidolons doctor --fix      # report + attempt auto-repair via sync
 
 ---
 
-## `eidolons upgrade` (v1.1, stubbed)
+## `eidolons upgrade`
 
-Bump pinned versions within constraints, or to specific versions.
+Surface and apply upgrades for the nexus and/or installed members.
+
+```
+eidolons upgrade [TARGET] [OPTIONS]                 # default: project scope (members)
+eidolons upgrade --check [SCOPE] [TARGET] [--json]  # read-only diff
+eidolons upgrade --system  [OPTIONS]                # nexus only
+eidolons upgrade --project [TARGET] [OPTIONS]       # explicit project scope
+eidolons upgrade --all     [OPTIONS]                # nexus then members
+```
+
+| Flag / arg | Purpose |
+|------------|---------|
+| `TARGET` | Member name or comma-separated list (mutually exclusive with `--system` / `--all`). |
+| `--check` | Read-only diff: prints nexus and member upgrade availability, no disk writes. Pair with `--system` or `--project` to narrow the report. |
+| `--system` | Upgrade only the nexus at `~/.eidolons/nexus` (`git fetch + reset --hard`). |
+| `--project` | Operate on cwd members. Equivalent to bare `eidolons upgrade` when given alone; useful for explicit symmetry with `--system` and for narrowing `--check`. |
+| `--all` | Upgrade nexus first (must succeed), then members. Equivalent to `--system --project`. |
+| `--json` | Combine with `--check` for machine-readable output (banner stays on stderr). |
+| `--yes`, `-y` | Skip the confirmation prompt before mutating. |
+| `--non-interactive` | Fail on prompts. Mutating runs require `--yes`. |
+| `--dry-run` | Print plan without fetching or invoking any per-Eidolon `install.sh`. |
+
+**Pin policy:** member constraints in `eidolons.yaml` are respected. A roster `versions.latest` that exceeds the constraint is reported as `pinned-out` and skipped — `upgrade` never auto-edits constraints.
+
+**Idempotency:** a second run with no roster change reports "all members up-to-date" and leaves `eidolons.lock` mtime untouched.
+
+**Network failure:** `--check` degrades gracefully (10s timeout on the nexus probe; member rows are purely local). Mutating runs fail per-member; the final exit code is 1 if any member upgrade failed. `eidolons upgrade --system` exits 1 if the nexus fetch fails (state is left untouched).
+
+**Statuses (`--check`):** `up-to-date`, `upgrade available`, `pinned-out`, `not-installed`.
 
 ---
 
