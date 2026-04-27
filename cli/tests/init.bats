@@ -174,3 +174,82 @@ EOF
   [ -f eidolons.yaml ]
   grep -q '^  wire: \[claude-code, codex\]' eidolons.yaml
 }
+
+# ─── interactive vendor-confirmation prompt (ui_pick_hosts) ────────────────
+# In interactive mode (no --non-interactive), init.sh always prompts for
+# host confirmation via ui_pick_hosts. Detected hosts become the default
+# applied on Enter; letter shortcuts override. Two prompts run in order:
+# (1) hosts, (2) shared-dispatch y/n.
+
+@test "init: interactive — Enter accepts auto-detected default" {
+  setup_fake_git
+  : > CLAUDE.md
+  run eidolons init --preset minimal --force <<EOF
+
+n
+EOF
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[claude-code\]' eidolons.yaml
+  grep -q 'shared_dispatch: false' eidolons.yaml
+}
+
+@test "init: interactive — letter overrides detected default" {
+  setup_fake_git
+  : > CLAUDE.md
+  run eidolons init --preset minimal --force <<EOF
+o
+n
+EOF
+  [ -f eidolons.yaml ]
+  # Override picked copilot only, despite CLAUDE.md being present.
+  grep -q '^  wire: \[copilot\]' eidolons.yaml
+  ! grep -q 'claude-code' eidolons.yaml
+}
+
+@test "init: interactive — letter combo picks multiple hosts" {
+  setup_fake_git
+  : > CLAUDE.md
+  run eidolons init --preset minimal --force <<EOF
+co
+n
+EOF
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[claude-code, copilot\]' eidolons.yaml
+}
+
+@test "init: interactive — 'a' expands to all five hosts" {
+  setup_fake_git
+  : > CLAUDE.md
+  run eidolons init --preset minimal --force <<EOF
+a
+n
+EOF
+  [ -f eidolons.yaml ]
+  grep -q '^  wire: \[.*claude-code.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*codex.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*copilot.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*cursor.*\]' eidolons.yaml
+  grep -q '^  wire: \[.*opencode.*\]' eidolons.yaml
+}
+
+@test "init: interactive — invalid letter aborts with hint" {
+  setup_fake_git
+  : > CLAUDE.md
+  run eidolons init --preset minimal --force <<EOF
+z
+EOF
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ Unknown\ host\ letter ]]
+  [ ! -f eidolons.yaml ] || ! grep -q 'wire: \[' eidolons.yaml
+}
+
+@test "init: interactive — empty input with no detection still aborts" {
+  # Pristine cwd → no detection. Pressing Enter must not silently wire
+  # nothing; preserves the existing 'No hosts selected' guardrail.
+  run eidolons init --preset minimal --force <<EOF
+
+
+EOF
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ No\ hosts\ selected ]]
+}
