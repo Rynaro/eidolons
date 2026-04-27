@@ -144,6 +144,37 @@ EOF
   fi
 }
 
+# ─── T6 ───────────────────────────────────────────────────────────────────
+@test "atlas aci: dispatch passes --host codex through (T6 / T1 extension for codex)" {
+  # Mirror T1: the nexus dispatcher must route `eidolons atlas aci --host codex`
+  # to the ATLAS-shipped aci.sh and pass all args through untouched.
+  install_atlas_stub_with_aci
+  run eidolons atlas aci --host codex --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ATLAS_ACI_STUB_MARKER ]]
+  # Both extra args must appear in the pass-through output.
+  [[ "$output" =~ --host ]]
+  [[ "$output" =~ codex ]]
+  [[ "$output" =~ --dry-run ]]
+}
+
+# ─── T7 ───────────────────────────────────────────────────────────────────
+@test "atlas aci: eidolons init --hosts codex does not invoke atlas-aci (T7 / T3 extension for codex)" {
+  # Mirror T3: init with --hosts codex must produce zero atlas-aci side effects.
+  # Block real clones so init's post-manifest sync fails fast without doing
+  # per-Eidolon install work. The assertion is that no atlas-aci config files
+  # or directories were written, regardless of how far sync gets.
+  setup_fake_git
+  run eidolons init --preset pipeline --hosts codex --non-interactive
+
+  [ ! -f ".codex/config.toml" ]
+  [ ! -f ".mcp.json" ]
+  [ ! -f ".cursor/mcp.json" ]
+  [ ! -d ".atlas" ]
+  # The string "atlas-aci" must not appear in eidolons.yaml.
+  ! grep -q "atlas-aci" eidolons.yaml
+}
+
 # ─── T5 ───────────────────────────────────────────────────────────────────
 @test "atlas aci: no roster preset references atlas-aci (T5 / A9 / D4)" {
   # Belt-and-suspenders: locked by D4, enforced here.

@@ -126,6 +126,18 @@ for host in $hosts; do
         err "opencode declared but no .opencode/agents/*.md found"
       fi
       ;;
+    codex)
+      # Per-vendor files live under .codex/agents/<name>.md. AGENTS.md is
+      # the shared dispatch surface (always wired when codex is declared,
+      # per the T.12 override in sync.sh). Accept either as sufficient.
+      if [[ -d ".codex/agents" ]] && ls .codex/agents/*.md >/dev/null 2>&1; then
+        pass "codex wired (.codex/agents/*.md present)"
+      elif [[ "$SHARED_DISPATCH" == "true" ]] && [[ -f "AGENTS.md" ]]; then
+        pass "codex wired (AGENTS.md shared dispatch)"
+      else
+        err "codex declared but no .codex/agents/*.md or AGENTS.md found"
+      fi
+      ;;
   esac
 done
 
