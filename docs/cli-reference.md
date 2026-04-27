@@ -195,6 +195,10 @@ See [`atlas-aci.md`](atlas-aci.md) for the `atlas-aci` MCP integration
 command: prereqs, host coverage, exit codes, and the idempotency
 contract. The command is opt-in and never invoked by `init` / `sync`.
 
+The `--host` flag restricts wiring to a single host. Allowed values:
+`claude-code`, `cursor`, `copilot`, `codex`. Omit `--host` to target
+all MCP-capable hosts detected in the project.
+
 ---
 
 ## Exit codes

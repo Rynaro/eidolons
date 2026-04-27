@@ -2,8 +2,8 @@
 
 > **Status:** opt-in, project-local only. Not part of any preset, never
 > invoked by `eidolons init` or `eidolons sync`. See
-> [`specs/atlas-aci-integration.md`](specs/atlas-aci-integration.md) for
-> the full spec.
+> [`specs/atlas-aci-artifacts/`](specs/atlas-aci-artifacts/) for
+> the staged implementation artifacts.
 
 [atlas-aci](https://github.com/Rynaro/atlas-aci) is a stdio MCP server
 that exposes structural codebase intelligence (graph + symbol index)
@@ -148,6 +148,6 @@ single `--install`.
 
 ## Related
 
-- [`specs/atlas-aci-integration.md`](specs/atlas-aci-integration.md) — the full decision-ready spec (D1–D5 locked, A1–A13 acceptance gates).
+- [`specs/atlas-aci-artifacts/`](specs/atlas-aci-artifacts/) — staged implementation artifacts (commands/aci.sh scaffold, test fixtures).
 - [`architecture.md`](architecture.md) §Security model — the Layer-2 write boundary this command respects.
 - [`cli-reference.md`](cli-reference.md) §Per-Eidolon subcommands — generic dispatch contract.
