@@ -65,6 +65,8 @@ eidolons atlas aci --help                   # full help
    - **GitHub Copilot custom agents** → YAML frontmatter inside
      `./.github/agents/*.agent.md` (skipped with an info log if no
      agent file exists — the command does not invent one).
+   - **OpenAI Codex CLI** → `./.codex/config.toml` under the
+     `[mcp_servers.atlas-aci]` table.
 
 All writes go through atomic tmpfile + `mv`. Progress logs go to
 stderr; stdout stays empty on success (dry-run is the exception:
@@ -72,10 +74,12 @@ stdout gets a `CREATE|MODIFY|REMOVE|INDEX`-prefixed path list).
 
 ### What `--remove` does
 
-Deletes `mcpServers."atlas-aci"` from each JSON host file and the
+Deletes `mcpServers."atlas-aci"` from each JSON host file, the
 list entry `name: atlas-aci` under `tools.mcp_servers` from each
-Copilot agent file. Peer `mcpServers.<other>` entries and peer
-`name: <other>` list entries are preserved byte-for-byte. `.gitignore`
+Copilot agent file, and the `[mcp_servers.atlas-aci]` table from
+`./.codex/config.toml`. Peer entries (`mcpServers.<other>`,
+`name: <other>`, peer TOML tables including `[[mcp_servers]]`
+arrays-of-tables) are preserved byte-for-byte. `.gitignore`
 is left untouched; `.atlas/` is left on disk (user data).
 
 ---
@@ -86,6 +90,7 @@ All of these are locked by the spec and are intentional:
 
 - **No user-level Claude Desktop config.** `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) / `~/.config/claude/claude_desktop_config.json` (Linux) is Layer-3 territory (D3). A future nexus built-in will handle it.
 - **No user-level Cursor config.** `~/.cursor/mcp.json` is out of scope; only the project-scoped `.cursor/mcp.json` is touched.
+- **No user-level Codex config.** `~/.codex/config.toml` is out of scope — same Layer-3 deferral as Claude Desktop and user-Cursor (D3). Only the project-scoped `./.codex/config.toml` is touched.
 - **No writes outside the consumer project's cwd.** Per Layer-2 (P4): the script can only write under `$PWD`. No `$HOME`, no `$EIDOLONS_HOME`.
 - **No roster entry.** atlas-aci is not in `roster/index.yaml` and no preset bundles it (D4). This is enforced by the nexus test suite (T5).
 - **No auto-install of atlas-aci.** Prereq-check only (D5).
@@ -137,6 +142,7 @@ ships.
 | `.mcp.json` | object key `mcpServers."atlas-aci"` | `jq` merge | `jq` del |
 | `.cursor/mcp.json` | object key `mcpServers."atlas-aci"` | `jq` merge | `jq` del |
 | `.github/agents/*.agent.md` | list entry `name: atlas-aci` under `tools.mcp_servers` | `yq` merge | `yq` del |
+| `.codex/config.toml` | TOML table heading `[mcp_servers.atlas-aci]` | `awk` slice/rewrite | `awk` slice/delete |
 | `.gitignore` | line match on `.atlas/` | append-if-absent | no-op (removal leaves it) |
 | `.atlas/` index | presence of `.atlas/manifest.yaml` | skip re-index if present | no-op (user data) |
 
