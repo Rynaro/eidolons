@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-28T22:00Z"
+updated_at: "2026-04-28T23:30Z"
 eiis_required: "1.1"
 
 # ─── Roster ────────────────────────────────────────────────────────────────────
@@ -28,9 +28,9 @@ eidolons:
       repo: Rynaro/ATLAS
       default_ref: main
     versions:
-      latest: "1.1.1"
+      latest: "1.2.0"
       pins:
-        stable: "1.1.1"
+        stable: "1.2.0"
     install:
       target_default: "./.eidolons/atlas"
       standalone: true
