@@ -1,0 +1,102 @@
+{
+  "spec_id": "atlas-aci-container",
+  "spectra_version": "4.2.10",
+  "generated_at": "2026-04-28",
+  "decisions_resolved_at": "2026-04-28",
+  "status": "ready-for-apivr",
+  "phase": "decisions resolved; APIVR-Δ dispatched in parallel (sonnet 4.6)",
+  "next_action": "apivr_implementation",
+  "blocking_decisions": [],
+  "downstream_handoff": {
+    "agent": "apivr-delta",
+    "preconditions_met": [
+      "D1-D6 resolved",
+      "D2 = build-locally → atlas-aci has zero code changes (F1 deferred)",
+      "Sequencing: ATLAS 1.1.0 must tag before eidolons roster bump merges"
+    ],
+    "implementation_streams": [
+      {
+        "stream": "ATLAS",
+        "path": "../ATLAS",
+        "scope": "commands/aci.sh + install.sh + tests; new flags --container --runtime; build-locally codepath; ATLAS_ACI_REF pin; second canonical body per host; exit codes 7/8/9.",
+        "version_bump": "1.0.6 -> 1.1.0",
+        "depends_on": []
+      },
+      {
+        "stream": "eidolons-nexus",
+        "path": ".",
+        "scope": "roster/index.yaml bump (latest+stable to 1.1.0) on fix/roster-atlas-1-1-0; CHANGELOG.md entry; optional cli/src/doctor.sh container-runtime probe.",
+        "depends_on": ["ATLAS 1.1.0 tag must exist before merge"]
+      }
+    ],
+    "skipped_streams": [
+      {
+        "stream": "atlas-aci",
+        "reason": "D2 = build-locally; net_code_changes = 0; net_workflow_changes = 0; INTEGRATION.md/README.md mentions are optional and deferred."
+      }
+    ]
+  },
+  "artifacts": {
+    "spec_md": ".spectra/atlas-aci-container.md",
+    "spec_yaml": ".spectra/atlas-aci-container.yaml",
+    "state_json": ".spectra/atlas-aci-container.state.json"
+  },
+  "decisions": {
+    "D1": {"resolved": true,  "topic": "container-runtime-support",    "user_choice": "always-prompt",              "clarification": "Interactive prompt; --non-interactive requires explicit --runtime."},
+    "D2": {"resolved": true,  "topic": "image-distribution",           "user_choice": "build-locally",              "clarification": "Build from git URL; no --build flag needed; F1 (GHCR pull) deferred."},
+    "D3": {"resolved": true,  "topic": "image-version-pinning",        "user_choice": "digest-sha256",              "clarification": "Local image ID captured post-build; substituted into canonical body."},
+    "D4": {"resolved": true,  "topic": "mcp-transport-over-container", "user_choice": "run-rm-per-session"},
+    "D5": {"resolved": true,  "topic": "volume-layout",                "user_choice": "writable-index-readonly-serve"},
+    "D6": {"resolved": true,  "topic": "memex-persistence",            "user_choice": "bind-mount-repo"}
+  },
+  "risks_summary": {
+    "headline": "R1 — stdio MCP over container boundary",
+    "high_likelihood": ["R2", "R4", "R7", "R9"],
+    "high_impact": ["R1"],
+    "resolved": ["R5 (resolved by D2 = build-locally)"],
+    "added_by_decisions": ["R9 (build cold-start)", "R10 (network egress for build)"]
+  },
+  "gates_summary": {
+    "automated_required": ["G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G17", "G18", "G19"],
+    "automated_deferred": ["G12", "G13", "G14"],
+    "manual_required": ["G15", "G16"]
+  },
+  "scope_boundaries": {
+    "in_scope": [
+      "ATLAS commands/aci.sh new flags (--container, --runtime)",
+      "ATLAS install.sh version bump",
+      "ATLAS bats tests for new behaviors",
+      "eidolons roster bump",
+      "eidolons CHANGELOG entry"
+    ],
+    "out_of_scope": [
+      "uv-mode replacement",
+      "GHCR publish workflow (deferred to F1)",
+      "--build flag (D2 = build-locally; build is implicit)",
+      "package-manager publishing",
+      "user-level Claude Desktop config",
+      "docker compose / k8s / sidecar",
+      "image lifecycle on --remove",
+      "cross-repo MCP routing",
+      "non-docker/podman runtimes",
+      "methodology content in the nexus"
+    ]
+  },
+  "invariants_honored": [
+    "P-IDEM (idempotency)",
+    "P-MARKERS (marker-bounded sections — N/A here, kept for completeness)",
+    "P-NOEVAL (no eval of consumer config)",
+    "P-CWDONLY (per-Eidolon writes only to cwd)",
+    "P-DOTEIDOLONS (./.eidolons/<member>/ install target)",
+    "P-BASH32 (bash 3.2 compatibility)",
+    "P-STDERR (logs to stderr)",
+    "P-WRITE-BOUNDARY (no writes outside $PWD)",
+    "P-IDEM-PER-FILE (per-file idempotency primitives unchanged)",
+    "P-DRYRUN (stdout discipline; new BUILD/PROMPT verbs)",
+    "P-FAIL-CLOSED (extended to accept multiple canonicals)",
+    "P-RDONLY-MOUNT (OS-level read-only on serve)",
+    "P-INDEX-WRITABLE (separate writable mount for one-time index)",
+    "P-UID-10001 (preserved; R3 documents host-side caveats)",
+    "P-STOPSIGNAL (SIGINT — preserved)"
+  ]
+}

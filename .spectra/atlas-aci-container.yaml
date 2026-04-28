@@ -1,0 +1,499 @@
+# SPECTRA machine-readable sidecar — atlas-aci-container
+# Generated 2026-04-28 by SPECTRA. Status: DECISION-PENDING.
+# Companion to atlas-aci-container.md.
+
+spectra_version: "4.2.10"
+spec_id: atlas-aci-container
+generated_at: "2026-04-28"
+status: ready-for-apivr
+decisions_resolved_at: "2026-04-28"
+target_repos:
+  # Paths assume sibling checkouts under a common parent.
+  - name: eidolons
+    role: nexus
+    path: .
+  - name: ATLAS
+    role: eidolon
+    path: ../ATLAS
+    current_version: "1.0.6"
+    proposed_version: "1.1.0"
+  - name: atlas-aci
+    role: upstream-mcp-server
+    path: ../atlas-aci
+
+# ─── Decisions the user must confirm before implementation ────────────────
+decisions:
+  - id: D1
+    topic: container-runtime-support
+    candidates: [docker-only, podman-only, auto-detect, both-with-flag, always-prompt]
+    recommendation: auto-detect
+    notes: "Prefer docker, fall back to podman; honour --runtime override."
+    user_choice: always-prompt
+    user_choice_clarification: |
+      Always prompt user to pick the runtime (docker | podman) interactively.
+      In --non-interactive mode, require explicit --runtime flag; otherwise exit non-zero.
+      An explicit --runtime flag bypasses the prompt in any mode.
+
+  - id: D2
+    topic: image-distribution
+    candidates: [build-locally, pull-from-ghcr, both-pull-default]
+    recommendation: both-pull-default
+    notes: "Contingent on F1 (GHCR publish workflow)."
+    user_choice: build-locally
+    user_choice_clarification: |
+      Default and only mode for v1: build the image locally from atlas-aci sources.
+      Build context: prefer `<runtime> build <git-url>#<ref>:mcp-server` so users do not
+      need a local atlas-aci checkout. Tag locally as `atlas-aci:<ATLAS_VERSION>`.
+      No --build flag is needed (build is implicit). No GHCR workflow ships in this release.
+      Pull-mode is deferred to F1.
+
+  - id: D3
+    topic: image-version-pinning
+    candidates: [commit-sha, image-tag, digest-sha256]
+    recommendation: digest-sha256
+    notes: "Mirrors existing ATLAS_ACI_PIN discipline; refresh per ATLAS release."
+    user_choice: digest-sha256
+    user_choice_clarification: |
+      Pin via local image ID (sha256) captured from `<runtime> images --no-trunc --format '{{.ID}}' atlas-aci:<ATLAS_VERSION>`
+      after build. Canonical body references `atlas-aci@sha256:<local-id>` so re-running
+      `--container` against an unchanged image is a no-op (idempotency). On atlas-aci upstream
+      bump, ATLAS bumps ATLAS_ACI_REF (git ref) which forces a rebuild and a new digest.
+
+  - id: D4
+    topic: mcp-transport-over-container-boundary
+    candidates: [run-rm-per-session, exec-into-sidecar, compose-run]
+    recommendation: run-rm-per-session
+    notes: "Matches atlas-aci/mcp-server/Dockerfile design (STOPSIGNAL SIGINT, ENTRYPOINT atlas-aci, -i interactive)."
+    user_choice: run-rm-per-session
+
+  - id: D5
+    topic: volume-layout-for-state
+    candidates: [writable-index-readonly-serve, writable-always, named-volume-only]
+    recommendation: writable-index-readonly-serve
+    notes: "Matches upstream Dockerfile contract; preserves existing .gitignore wiring."
+    user_choice: writable-index-readonly-serve
+
+  - id: D6
+    topic: memex-persistence
+    candidates: [bind-mount-repo, named-volume, per-project-named-volume]
+    recommendation: bind-mount-repo
+    notes: "Parity with non-container path; .atlas/memex stays next to .atlas/ index."
+    user_choice: bind-mount-repo
+
+# ─── Per-repo change inventory ────────────────────────────────────────────
+changes:
+  atlas-aci:
+    files:
+      - path: .github/workflows/release.yml
+        action: skip
+        required: false
+        condition: D2 == build-locally   # SKIPPED in this release
+        purpose: "Deferred to F1 (pull-from-ghcr follow-up)."
+      - path: mcp-server/Dockerfile
+        action: none
+        required: false
+        purpose: "No change in v1."
+      - path: INTEGRATION.md
+        action: modify
+        required: false
+        purpose: "Optional: mention `eidolons atlas aci --container` as recommended path."
+      - path: README.md
+        action: modify
+        required: false
+        purpose: "Same as INTEGRATION.md."
+    net_code_changes: 0
+    net_workflow_changes: 0   # D2 = build-locally, F1 deferred
+
+  ATLAS:
+    files:
+      - path: commands/aci.sh
+        action: modify
+        required: true
+        purpose: "Add --container, --runtime, --build flags; container-aware prereqs; container-aware run_index; second canonical body for each host config; new exit codes 7 and 8."
+      - path: install.sh
+        action: modify
+        required: true
+        purpose: "EIDOLON_VERSION 1.0.6 → 1.1.0."
+      - path: agent.md
+        action: modify
+        required: false
+        purpose: "Mention --container in smoke-test snippet."
+      - path: ATLAS.md
+        action: modify
+        required: false
+        purpose: "Same as agent.md."
+      - path: tests/aci.bats   # if tests live here; verify on implementation
+        action: create-or-extend
+        required: true
+        purpose: "Cover new flags, idempotency, mode-switch, exit codes."
+    version_bump:
+      from: "1.0.6"
+      to: "1.1.0"
+      rationale: "New prereq class (container runtime) — minor bump per existing pattern."
+
+  eidolons:
+    files:
+      - path: roster/index.yaml
+        action: modify
+        required: true
+        purpose: "Bump atlas versions.latest and versions.pins.stable from 1.0.6 to 1.1.0."
+        branch_convention: "fix/roster-atlas-1-1-0"
+      - path: CHANGELOG.md
+        action: modify
+        required: true
+        purpose: "Document container mode under [Unreleased] → Added."
+      - path: docs/specs/atlas-aci-container/   # optional; mirrors eidolons-upgrade/ precedent
+        action: create
+        required: false
+        purpose: "Long-form architectural doc referencing this SPECTRA spec."
+      - path: cli/src/doctor.sh
+        action: modify
+        required: false
+        purpose: "(Nice-to-have.) If atlas-aci entry uses command: docker, verify docker info succeeds."
+      - path: cli/src/dispatch_eidolon.sh
+        action: none
+        required: false
+        purpose: "No change — dispatcher passes args through verbatim."
+      - path: .github/workflows/roster-health.yml
+        action: none
+        required: false
+        purpose: "ATLAS row already exists; matrix unchanged."
+    cli_changes: 0   # mandatory; doctor change is opt-in
+
+# ─── Flag surface contract ────────────────────────────────────────────────
+flag_surface:
+  command: "eidolons atlas aci"
+  existing_flags:
+    - --install
+    - --remove
+    - --host
+    - --dry-run
+    - --non-interactive
+    - --help
+  new_flags:
+    - name: --container
+      kind: switch
+      purpose: "Install the container-runtime variant."
+      mutually_exclusive_with: []
+      depends_on_runtime: true
+    - name: --runtime
+      kind: enum
+      values: [docker, podman]
+      default: prompt-interactively   # D1 = always-prompt
+      purpose: "Force container runtime; bypasses interactive prompt."
+      depends_on: --container
+      non_interactive_required: true   # in --non-interactive mode, --runtime is mandatory
+  removed_proposed_flags:
+    - name: --build
+      reason: "D2 = build-locally; build is implicit, no flag needed in v1."
+  new_exit_codes:
+    7: "container runtime not on PATH (--container only)"
+    8: "image build failed (--container only)"
+    9: "--non-interactive without --runtime (--container only)"
+
+# ─── Dry-run action verbs ─────────────────────────────────────────────────
+dry_run_actions:
+  existing: [CREATE, MODIFY, REMOVE, INDEX]
+  added:
+    - BUILD   # before <runtime> build (D2 = build-locally; always emitted under --container if image absent)
+    - PROMPT  # before interactive runtime selection (D1 = always-prompt)
+
+# ─── Canonical body shapes (assumes recommended decisions) ────────────────
+canonical_bodies:
+  # Note: <RUNTIME> is the chosen runtime literal (docker | podman) — substituted at install time.
+  # <LOCAL_DIGEST> is the sha256 image ID captured after build (D3).
+  json_serve:
+    target_files: [./.mcp.json, ./.cursor/mcp.json]
+    payload:
+      command: "<RUNTIME>"
+      args:
+        - run
+        - --rm
+        - -i
+        - --read-only
+        - -v
+        - "${workspaceFolder}:/repo:ro"
+        - -v
+        - "${workspaceFolder}/.atlas/memex:/memex"
+        - "atlas-aci@sha256:<LOCAL_DIGEST>"
+        - serve
+        - --repo
+        - /repo
+        - --memex-root
+        - /memex
+
+  toml_serve:
+    target_file: ./.codex/config.toml
+    section: "[mcp_servers.atlas-aci]"
+    payload_command: "<RUNTIME>"
+    payload_args_match: same-as-json_serve
+
+  copilot_serve:
+    target_file_pattern: ./.github/agents/*.agent.md
+    list_path: tools.mcp_servers
+    match_key: "name == atlas-aci"
+    payload:
+      name: atlas-aci
+      transport: stdio
+      command_array_match: same-as-json_serve
+
+  index_invocation:
+    runs_when: install AND (./.atlas/manifest.yaml absent)
+    runs_before: [host-config-writes, .gitignore-append]
+    argv:
+      - "<RUNTIME>"
+      - run
+      - --rm
+      - -v
+      - "${PWD}:/repo"
+      - "atlas-aci@sha256:<LOCAL_DIGEST>"
+      - index
+      - --repo
+      - /repo
+      - --langs
+      - "ruby,python,javascript,typescript"
+
+  build_invocation:
+    runs_when: install AND (image atlas-aci:<ATLAS_VERSION> absent)
+    runs_before: [index_invocation]
+    argv:
+      - "<RUNTIME>"
+      - build
+      - -t
+      - "atlas-aci:<ATLAS_VERSION>"
+      - "https://github.com/Rynaro/atlas-aci.git#<ATLAS_ACI_REF>:mcp-server"
+    notes: |
+      ATLAS_ACI_REF is a fixed git ref pinned in commands/aci.sh (mirrors ATLAS_ACI_PIN
+      pattern). On build success, capture local image sha256 via
+      `<RUNTIME> images --no-trunc --format '{{.ID}}' atlas-aci:<ATLAS_VERSION>`
+      and substitute into <LOCAL_DIGEST> placeholders before writing host configs.
+
+# ─── Prereq matrix ────────────────────────────────────────────────────────
+prereqs:
+  uv_mode:    [awk, jq, yq-mikefarah, uv, rg, "python3>=3.11", atlas-aci-bin]
+  container_mode: [awk, jq, yq-mikefarah, "docker OR podman", git]   # D2=build-locally requires git for build context fetch by runtime
+
+# ─── Validation gates ─────────────────────────────────────────────────────
+gates:
+  nexus:
+    - id: G0
+      command: "bats cli/tests/"
+      required: true
+    - id: G1
+      command: "find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error && shellcheck -x -S error cli/eidolons"
+      required: true
+    - id: G2
+      command: "jq empty schemas/*.json && yq eval '.' roster/index.yaml >/dev/null"
+      required: true
+    - id: G3
+      check: "bash 3.2 compat: no declare -A, no ${var,,}/${var^^}, no readarray/mapfile, no &>>"
+      required: true
+      ci_job: "cli-tests on macos-latest"
+    - id: G4
+      check: "second-run idempotency"
+      required: true
+      ci_job: "Second install run is idempotent"
+  atlas:
+    - id: G5
+      check: "--container --dry-run emits canonical body byte-for-byte"
+      required: true
+    - id: G6
+      check: "two consecutive --container installs produce byte-identical .mcp.json"
+      required: true
+    - id: G7
+      check: "uv → container mode-switch overwrites once, then idempotent"
+      required: true
+    - id: G8
+      check: "--container --remove removes only mcpServers.atlas-aci, peers preserved"
+      required: true
+    - id: G9
+      check: "missing docker AND podman → exit 7"
+      required: true
+    - id: G10
+      check: "hand-edited TOML body (matches neither canonical) triggers fail-closed"
+      required: true
+    - id: G11
+      check: "uv canonical body, --container invoked → overwritten cleanly"
+      required: true
+  atlas-aci:
+    - id: G12
+      check: "tag push → ghcr.io/rynaro/atlas-aci:<tag> + :latest published"
+      required: false
+      condition: D2 == both-pull-default
+      status: deferred-to-F1
+    - id: G13
+      check: "release notes carry digest matching ATLAS commands/aci.sh pin"
+      required: false
+      condition: D2 == both-pull-default
+      status: deferred-to-F1
+    - id: G14
+      check: "docker run --rm <image> --help smoke in publish workflow"
+      required: false
+      condition: D2 == both-pull-default
+      status: deferred-to-F1
+  atlas_added:
+    - id: G17
+      check: "--container --non-interactive without --runtime → exit 9"
+      required: true
+      reason: "D1 = always-prompt requires explicit --runtime in non-interactive flow."
+    - id: G18
+      check: "--container against unchanged image is a no-op (no rebuild, no host writes)"
+      required: true
+      reason: "D2 = build-locally idempotency."
+    - id: G19
+      check: "ATLAS_ACI_REF bump triggers rebuild → new local digest → host configs MODIFY (not noop)"
+      required: true
+      reason: "D3 = local digest pin must propagate."
+  manual:
+    - id: G15
+      check: "macOS + Docker Desktop, no uv/python: --container install end-to-end works"
+      required: true
+    - id: G16
+      check: "Linux + rootless podman: --container install works, .atlas/ ownership clean"
+      required: true
+
+# ─── Risks (loudest first) ────────────────────────────────────────────────
+risks:
+  - id: R1
+    title: "Stdio MCP over container boundary may break"
+    likelihood: M
+    impact: H
+    mitigation: "Manual gates G15+G16; document cold-start; escalate to D4(b) only if evidence forces."
+    headline: true
+  - id: R2
+    title: "Two canonical bodies confuse fail-closed comparator"
+    likelihood: H
+    impact: M
+    mitigation: "Comparator accepts list of canonicals; refuses only when neither matches."
+  - id: R3
+    title: "Bind-mount UID collision on Linux rootless"
+    likelihood: M
+    impact: M
+    mitigation: "Test --user passthrough; document cleanup via sudo or named volume; defer aggressive fix to F3."
+  - id: R4
+    title: "First-run image pull blocks on slow networks"
+    likelihood: H
+    impact: L
+    mitigation: "Explicit docker pull before host writes; emit PULL action verb in dry-run."
+  - id: R5
+    title: "GHCR image not yet published when ATLAS feature ships"
+    likelihood: H
+    impact: H
+    mitigation: "RESOLVED by D2 = build-locally; pull path deferred to F1. No GHCR dependency in this release."
+    status: resolved-by-d2
+  - id: R6
+    title: "Bash 3.2 regression in new code"
+    likelihood: L
+    impact: M
+    mitigation: "G3 enforces; pattern-match on existing aci.sh idioms."
+  - id: R7
+    title: "Image-digest churn on every atlas-aci release"
+    likelihood: H
+    impact: L
+    mitigation: "Refresh ATLAS_ACI_REF on every ATLAS release per existing §6 R4 discipline; local digest derived at build."
+
+  - id: R9
+    title: "First container build is slow (multi-minute) — surprises users"
+    likelihood: H
+    impact: M
+    mitigation: "Emit BUILD action verb up-front; print build context URL; suggest pre-building. F1 (GHCR pull) eliminates this."
+
+  - id: R10
+    title: "<runtime> build from git URL requires public network egress"
+    likelihood: M
+    impact: M
+    mitigation: "Document in --container --help; fall back to error with clear message if build fails (exit 8)."
+  - id: R8
+    title: ".atlas/memex auto-created by docker daemon with wrong owner"
+    likelihood: L
+    impact: L
+    mitigation: "mkdir -p .atlas/memex before first docker run."
+
+# ─── Acceptance stories (summary; full GIVEN/WHEN/THEN in .md) ────────────
+acceptance_stories:
+  - id: A1
+    title: "macOS + Docker Desktop happy path"
+    gate_refs: [G6, G15]
+  - id: A2
+    title: "uv → container mode switch"
+    gate_refs: [G7, G11]
+  - id: A3
+    title: "Dry-run with no side effects"
+    gate_refs: [G5]
+  - id: A4
+    title: "Missing runtime exits 7 cleanly"
+    gate_refs: [G9]
+  - id: A5
+    title: "Codex TOML fail-closed on hand-edit"
+    gate_refs: [G10]
+  - id: A6
+    title: "--remove is idempotent and host-bounded"
+    gate_refs: [G8]
+  - id: A7
+    title: "Local build is the default and only path in v1"
+    gate_refs: [G18, G19]   # D2 = build-locally
+  - id: A8
+    title: "Always-prompt runtime selection respects --runtime override"
+    gate_refs: [G17]   # D1 = always-prompt
+
+# ─── Non-goals ────────────────────────────────────────────────────────────
+non_goals:
+  - "Replacing the uv mode (both ship side-by-side)."
+  - "Package-manager publishing of eidolons (curl|bash is intentional)."
+  - "User-level Claude Desktop config (deferred per existing aci.sh L103-104)."
+  - "docker compose orchestration."
+  - "Kubernetes / sidecar / long-lived daemon mode (D4 v1 = run-rm-per-session)."
+  - "Auto-managing image lifecycle on --remove."
+  - "Cross-repo MCP routing (atlas-aci is one-process-per-repo by design)."
+  - "TLS / network MCP transport."
+  - "Non-Docker/non-Podman runtimes (containerd, nerdctl, runC)."
+  - "Methodology content changes in the nexus."
+
+# ─── Open questions (do not block) ────────────────────────────────────────
+open_questions:
+  - id: Q1
+    text: "Does Claude Code's mcpServers honour ${workspaceFolder} substitution when command is opaque (docker)?"
+    resolution: "Test in G15."
+  - id: Q2
+    text: "Does Cursor's ~/.cursor/mcp.json accept the same substitution?"
+    resolution: "G15 (separately)."
+  - id: Q3
+    text: "Does Codex's TOML loader support ${workspaceFolder} or expect TOML-native interpolation?"
+    resolution: "Inspect Codex docs / atlas-aci hosts/."
+  - id: Q4
+    text: "Does Copilot's tools.mcp_servers[].command tolerate 16+ entry args list?"
+    resolution: "Verify in G15."
+  - id: Q5
+    text: "Should the digest pin be exposed via env var for self-hosted GHCR mirrors?"
+    resolution: "Defer to F4 follow-up."
+  - id: Q6
+    text: "Does eiis_check need a container-runtime probe?"
+    resolution: "No — runtime is aci.sh's concern, not EIIS."
+
+# ─── Follow-ups (out of scope for this spec) ──────────────────────────────
+follow_ups:
+  - id: F1
+    title: "Publish atlas-aci to GHCR"
+    blocks: [D2-c]
+  - id: F2
+    title: "User-level Claude Desktop config wiring"
+    blocked_by: "scope-boundary already documented in commands/aci.sh:103-104"
+  - id: F3
+    title: "--user-passthrough flag for rootless UID injection"
+    blocked_by: "wait for R3 evidence"
+  - id: F4
+    title: "EIDOLONS_ATLAS_ACI_IMAGE env override for self-hosted GHCR mirrors"
+    blocked_by: "user demand"
+
+# ─── Provenance ───────────────────────────────────────────────────────────
+provenance:
+  # Format: <repo>:<repo-relative-path>
+  existing_aci_command: "ATLAS:commands/aci.sh"
+  atlas_installer:      "ATLAS:install.sh"
+  upstream_dockerfile:  "atlas-aci:mcp-server/Dockerfile"
+  upstream_devfile:     "atlas-aci:mcp-server/Dockerfile.dev"
+  upstream_integration: "atlas-aci:INTEGRATION.md"
+  nexus_dispatcher:     "eidolons:cli/src/dispatch_eidolon.sh"
+  roster_entry:         "eidolons:roster/index.yaml"
+  spectra_conventions:  "eidolons:.spectra/setup/spectra-conventions.md"
+  prior_prs: ["#20 (codex MCP host, 259388d)", "#26 (ATLAS v1.0.6, cd35e7e)"]
