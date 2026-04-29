@@ -10,8 +10,9 @@
 #   - graceful fallback when `read` is interrupted (Ctrl-C / EOF)
 #
 # Public API:
-#   ui_confirm <question> [default-y|default-n]   → returns 0 (yes) / 1 (no)
-#   ui_input   <prompt>   [default-value]          → echoes reply on stdout
+#   ui_confirm    <question> [default-y|default-n]   → returns 0 (yes) / 1 (no)
+#   ui_input      <prompt>   [default-value]          → echoes reply on stdout
+#   ui_pick_hosts <default-csv>                       → echoes chosen host CSV
 #
 # Optional uplift: when `gum` is available on PATH, ui_confirm/ui_input
 # defer to gum for richer interaction. The default path stays
@@ -70,6 +71,142 @@ ui_confirm() {
     "")    [[ "$default" == "default-y" ]] && return 0 || return 1 ;;
     *)     [[ "$default" == "default-y" ]] && return 0 || return 1 ;;
   esac
+}
+
+# ─── Letter-shortcut host picker ────────────────────────────────────────
+# ui_pick_hosts <default-csv> → echoes chosen CSV on stdout, menu on stderr.
+#
+# Mirrors ui_confirm's [Y/n] style for vendor selection. Each host has a
+# unique mnemonic letter; pressing Enter accepts the (auto-detected)
+# default. Multi-letter input picks multiple hosts at once.
+#
+#   c → claude-code   x → codex      o → copilot
+#   u → cursor        p → opencode   a → all
+#
+# Input parsing:
+#   empty                     → default-csv (caller decides whether empty
+#                               is fatal — matches today's "abort on blank")
+#   contains ',' or '-'       → comma-separated full names
+#   otherwise                 → letter sequence, deduped in order
+#
+# Unknown letter or unknown name → die with a one-line hint. Single-shot
+# (no reprompt loop) — keeps the function pure and matches the rest of
+# the CLI's "fail fast and re-run" style.
+ui_pick_hosts() {
+  local default_csv="${1:-}"
+  local default_letters=""
+  local hint reply
+
+  default_letters="$(_ui_hosts_csv_to_letters "$default_csv")"
+  if [[ -n "$default_letters" ]]; then
+    hint="[$(printf '%s' "$default_letters" | tr '[:lower:]' '[:upper:]')]"
+  else
+    hint=""
+  fi
+
+  {
+    printf '\n'
+    printf '  %s   %s   %s   %s   %s   %s\n' \
+      "$(_ui_host_label c claude-code "$default_csv")" \
+      "$(_ui_host_label x codex       "$default_csv")" \
+      "$(_ui_host_label o copilot     "$default_csv")" \
+      "$(_ui_host_label u cursor      "$default_csv")" \
+      "$(_ui_host_label p opencode    "$default_csv")" \
+      "$(_ui_host_label a all         "")"
+    printf '\n'
+  } >&2
+
+  local prefix; prefix="$(_ui_prompt_prefix)"
+  if [[ -n "$hint" ]]; then
+    printf '%sHosts %s: ' "$prefix" "$hint" >&2
+  else
+    printf '%sHosts: ' "$prefix" >&2
+  fi
+  read -r reply || reply=""
+  reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+
+  if [[ -z "$reply" ]]; then
+    printf '%s\n' "$default_csv"
+    return 0
+  fi
+
+  case "$reply" in
+    *,*|*-*)
+      local token out=""
+      local IFS=','
+      # shellcheck disable=SC2086
+      set -- $reply
+      for token in "$@"; do
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        [[ -z "$token" ]] && continue
+        case "$token" in
+          claude-code|codex|copilot|cursor|opencode|all) ;;
+          *) die "Unknown host '$token'. Valid: claude-code, codex, copilot, cursor, opencode, all (or letters c x o u p a)." ;;
+        esac
+        if [[ -z "$out" ]]; then out="$token"; else out="$out,$token"; fi
+      done
+      printf '%s\n' "$out"
+      return 0
+      ;;
+  esac
+
+  local i ch host out=""
+  for (( i=0; i<${#reply}; i++ )); do
+    ch="${reply:$i:1}"
+    case "$ch" in
+      c) host="claude-code" ;;
+      x) host="codex" ;;
+      o) host="copilot" ;;
+      u) host="cursor" ;;
+      p) host="opencode" ;;
+      a)
+        printf '%s\n' "all"
+        return 0
+        ;;
+      *) die "Unknown host letter '$ch'. Valid letters: c (claude-code), x (codex), o (copilot), u (cursor), p (opencode), a (all)." ;;
+    esac
+    case ",$out," in
+      *",$host,"*) : ;;  # already picked
+      *) if [[ -z "$out" ]]; then out="$host"; else out="$out,$host"; fi ;;
+    esac
+  done
+  printf '%s\n' "$out"
+}
+
+# Render one host menu entry, e.g. "(C)laude Code". When the host is in
+# the default set, the letter is uppercased; otherwise lowercased. Bash
+# 3.2 safe (no ${var^^}).
+_ui_host_label() {
+  local letter="$1" host="$2" default_csv="${3:-}"
+  local upper lower L
+  upper="$(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]')"
+  lower="$(printf '%s' "$letter" | tr '[:upper:]' '[:lower:]')"
+  L="$lower"
+  case ",$default_csv," in
+    *",$host,"*) L="$upper" ;;
+  esac
+  case "$host" in
+    claude-code) printf '(%s)laude Code' "$L" ;;
+    codex)       printf 'Code(%s)'       "$L" ;;
+    copilot)     printf 'c(%s)pilot'     "$L" ;;
+    cursor)      printf 'c(%s)rsor'      "$L" ;;
+    opencode)    printf 'o(%s)encode'    "$L" ;;
+    all)         printf '(%s)ll'         "$upper" ;;
+  esac
+}
+
+# Map a CSV of host names to a string of letters, in a stable order
+# (c x o u p). Unknown tokens are skipped silently — caller validates.
+_ui_hosts_csv_to_letters() {
+  local csv="${1:-}"
+  [[ -z "$csv" ]] && { printf ''; return 0; }
+  local letters=""
+  case ",$csv," in *",claude-code,"*) letters="${letters}c" ;; esac
+  case ",$csv," in *",codex,"*)       letters="${letters}x" ;; esac
+  case ",$csv," in *",copilot,"*)     letters="${letters}o" ;; esac
+  case ",$csv," in *",cursor,"*)      letters="${letters}u" ;; esac
+  case ",$csv," in *",opencode,"*)    letters="${letters}p" ;; esac
+  printf '%s' "$letters"
 }
 
 # ─── Free-text input ─────────────────────────────────────────────────────

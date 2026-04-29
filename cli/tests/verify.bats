@@ -15,16 +15,16 @@ version, commit, tree, archive_sha, manifest_sha = sys.argv[1:6]
 path = Path("custom-nexus/roster/index.yaml")
 text = path.read_text()
 needle = '''    versions:
-      latest: "1.0.5"
+      latest: "1.2.2"
       pins:
-        stable: "1.0.5"
+        stable: "1.2.2"
 '''
 archive_value = f'"{archive_sha}"' if archive_sha else 'null'
 manifest_value = f'"{manifest_sha}"' if manifest_sha else 'null'
 replacement = f'''    versions:
-      latest: "1.0.5"
+      latest: "1.2.2"
       pins:
-        stable: "1.0.5"
+        stable: "1.2.2"
       releases:
         "{version}":
           tag: "v{version}"
