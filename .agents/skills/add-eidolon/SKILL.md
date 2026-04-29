@@ -174,6 +174,53 @@ git checkout -b feat/roster-<name>-shipped
 ```
 If the new Eidolon suggests a named bundle, add a preset (e.g. `diagnostics: [apivr, vigil, forge]`).
 
+**B.6** — **Release-integrity setup (v1.0+)**.
+
+Every `status: shipped` Eidolon should declare release integrity metadata
+under `versions.releases.<latest>`. Compatibility mode (`integrity.enforcement:
+warn` at the top of `roster/index.yaml`) keeps unannotated entries non-fatal,
+but a future registry bump will switch enforcement to `strict` — at which
+point every shipped Eidolon must populate metadata or fail the
+`shipped-status integrity metadata posture` step in `roster-health.yml`.
+
+Authoring loop:
+
+1. **Adopt the release workflow template.** Copy
+   `.github/workflows/eidolon-release-template.yml` from the nexus into the
+   upstream Eidolon repo as `.github/workflows/release.yml`. The template
+   uses `workflow_call` so the upstream repo wraps it with a thin `on:
+   workflow_dispatch` caller. The template emits a `release-manifest.json`
+   with `commit`, `tree`, `archive_sha256`, optional `manifest_sha256`, and
+   `provenance.github_attestation: true`.
+2. **Run a release.** Trigger the wrapper workflow with the SemVer (no
+   leading `v`). It tags, attests, and uploads `release-manifest.json` plus
+   `SHA256SUMS` to the GitHub release.
+3. **Run `Roster Intake` from the nexus.** From the nexus repo's Actions
+   tab, dispatch `roster-intake.yml` with the Eidolon name + version. The
+   workflow downloads the upstream `release-manifest.json`, verifies the
+   SHA256SUMS file and the GitHub artifact attestation, edits
+   `roster/index.yaml` (writing `versions.releases.<v>`), and opens a draft
+   PR.
+4. **Review + merge the intake PR.** The body is auto-generated; nothing to
+   hand-author. Merging activates the new metadata.
+
+After merge, every consumer running `eidolons sync` or `eidolons upgrade`
+clones the exact tag, verifies `commit` + `tree` + `archive_sha256` against
+the cloned repo, and writes `verification: "verified"` into
+`eidolons.lock`. Consumers can re-check at any time with `eidolons verify`,
+or surface the per-member status from `eidolons doctor`.
+
+Hash semantics (see `docs/release-integrity.md` for full detail):
+
+- `commit` / `tree`: Git object IDs. Tree is content-addressed and survives
+  history rewrites that preserve tree contents.
+- `archive_sha256`: SHA-256 of `git archive --format=tar HEAD`. Tree-wide
+  drift detection.
+- `manifest_sha256`: SHA-256 of the single file
+  `./.eidolons/<name>/install.manifest.json` after install. File-scoped, so
+  it survives legitimate host-wiring variation. Optional — many Eidolons
+  leave it `null`.
+
 ### Phase C — CI matrix + documentation
 
 **C.1** — `.github/workflows/roster-health.yml` line 69 area:
@@ -278,14 +325,26 @@ Branch: `fix/roster-<eidolon>-<version-dashes>` (example: `fix/roster-spectra-4-
    Also bump `methodology.version:` if the major.minor changed.
    Bump `updated_at:` at the top.
 
-3. **CHANGELOG.md** (nexus) under `[Unreleased]` → `### Added` or `### Changed`:
+3. **(Preferred) Run `Roster Intake`** from the nexus Actions tab with the
+   Eidolon name + version. It auto-edits `versions.latest`,
+   `versions.pins.stable`, and `versions.releases.<new-version>` from the
+   upstream `release-manifest.json` and opens a draft PR. Skip the manual
+   roster edit when the upstream Eidolon ships signed releases via
+   `eidolon-release-template.yml`.
+
+4. **(Manual fallback)** If the upstream Eidolon hasn't adopted the release
+   workflow, edit the roster as above. Compatibility-mode warnings will
+   surface in `roster-health.yml` until release metadata is added — that's
+   intentional, not a regression.
+
+5. **CHANGELOG.md** (nexus) under `[Unreleased]` → `### Added` or `### Changed`:
    ```
    - <NAME> v<X.Y.Z> published in the roster. <One-line release summary if non-trivial.>
    ```
 
-4. **Verification** — same commands as Phase D above.
+6. **Verification** — same commands as Phase D above.
 
-5. **PR**: commit message `fix(roster): publish <NAME> v<X.Y.Z>`, PR title matches.
+7. **PR**: commit message `fix(roster): publish <NAME> v<X.Y.Z>`, PR title matches.
 
 No other touchpoints. Schema doesn't change; docs (README/MANIFESTO/composition) don't change unless the version bump introduces new capabilities worth surfacing.
 
