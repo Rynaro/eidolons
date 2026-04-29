@@ -59,6 +59,37 @@ jobs:
             jq empty "$schema"
           done
 
+      - name: Validate shipped-status integrity metadata posture
+        # Story 5.H: a roster entry with status=shipped must declare release
+        # integrity metadata under versions.releases.<latest>. Compatibility
+        # mode (integrity.enforcement: warn) makes this a warning; strict
+        # mode promotes it to a hard failure. in_construction Eidolons skip
+        # — consistent with the EIIS-conformance matrix job.
+        run: |
+          set -euo pipefail
+          enforcement="$(yq -r '.integrity.enforcement // "warn"' roster/index.yaml)"
+          missing_count=0
+          while IFS= read -r name; do
+            [[ -n "$name" ]] || continue
+            status="$(yq -r ".eidolons[] | select(.name == \"$name\") | .status" roster/index.yaml)"
+            if [[ "$status" != "shipped" ]]; then
+              continue
+            fi
+            latest="$(yq -r ".eidolons[] | select(.name == \"$name\") | .versions.latest" roster/index.yaml)"
+            meta="$(yq -o=json ".eidolons[] | select(.name == \"$name\") | .versions.releases.\"$latest\" // {}" roster/index.yaml)"
+            if [[ "$meta" == "{}" ]]; then
+              if [[ "$enforcement" == "strict" ]]; then
+                echo "::error::$name is shipped at v$latest but versions.releases.\"$latest\" is missing"
+                missing_count=$((missing_count + 1))
+              else
+                echo "::warning::$name is shipped at v$latest without release integrity metadata (compatibility mode)"
+              fi
+            fi
+          done < <(yq -r '.eidolons[].name' roster/index.yaml)
+          if [[ "$missing_count" -gt 0 ]]; then
+            exit 1
+          fi
+
   check-eidolon-repos:
     name: Check every Eidolon repo is reachable and EIIS-conformant
     runs-on: ubuntu-latest
