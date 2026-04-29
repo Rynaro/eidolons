@@ -98,7 +98,7 @@ sha256_of() {
   seed_lock_with_versions atlas=1.0.0
   run eidolons verify
   [ "$status" -eq 0 ]
-  [[ "$output" =~ legacy ]]
+  [[ "$output" =~ "compatibility verification is warning-only" ]]
   [[ "$output" =~ "Integrity verification complete" ]]
 }
 
