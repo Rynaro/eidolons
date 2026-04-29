@@ -213,6 +213,11 @@ verify_release_integrity() {
   return 0
 }
 
+# lock_manifest_sha256 hashes the per-Eidolon install.manifest.json file (a
+# single JSON file emitted by the upstream installer), not the tree of files
+# under .eidolons/<name>/. See docs/release-integrity.md "Hash semantics" for
+# the trade-off — manifest_sha256 is file-scoped so it stays stable across
+# legitimate host-wiring variations; archive_sha256 covers tree-wide drift.
 lock_manifest_sha256() {
   local manifest="$1"
   [[ -f "$manifest" ]] || return 1
