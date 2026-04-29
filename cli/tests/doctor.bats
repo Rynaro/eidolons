@@ -50,3 +50,65 @@ load helpers
   [ "$status" -eq 0 ]
   [[ "$output" =~ Usage:\ eidolons\ doctor ]]
 }
+
+# ─── Release integrity surface (Story 5.G) ────────────────────────────────
+
+@test "doctor: surfaces verified release integrity from lock" {
+  seed_manifest
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@deadbeef"
+    commit: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    tree: "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+    archive_sha256: ""
+    manifest_sha256: ""
+    verification: "verified"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+EOF
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Release integrity" ]]
+  [[ "$output" =~ "atlas@1.0.0 release integrity verified" ]]
+}
+
+@test "doctor: surfaces legacy compatibility entries non-fatally" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "no roster release metadata (legacy)" ]]
+}
+
+@test "doctor: flags missing release integrity as error" {
+  seed_manifest
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@deadbeef"
+    verification: "missing"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+EOF
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "MISMATCH" ]]
+}

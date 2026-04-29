@@ -115,12 +115,17 @@ eidolons roster atlas --json           # raw JSON
 
 ## `eidolons doctor`
 
-Health check: manifest/lock consistency, per-member installs, host dispatch wiring.
+Health check: manifest/lock consistency, per-member installs, host dispatch
+wiring, and release-integrity status surfaced from `eidolons.lock`.
 
 ```
 eidolons doctor            # report
 eidolons doctor --fix      # report + attempt auto-repair via sync
 ```
+
+The "Release integrity" section is read-only and derives entirely from the
+`verification` field of each `eidolons.lock` member. To re-check against the
+roster (commit/tree/archive checksum, manifest re-hash) run `eidolons verify`.
 
 ---
 
