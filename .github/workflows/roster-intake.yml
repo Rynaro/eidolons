@@ -1,0 +1,145 @@
+name: Roster Intake
+
+on:
+  workflow_dispatch:
+    inputs:
+      eidolon:
+        description: Roster member name, e.g. atlas
+        required: true
+        type: string
+      version:
+        description: SemVer version without the leading v
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+  attestations: read
+
+jobs:
+  intake:
+    name: Intake ${{ inputs.eidolon }} v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Resolve roster source
+        id: resolve
+        run: |
+          set -euo pipefail
+          name="${{ inputs.eidolon }}"
+          version="${{ inputs.version }}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] \
+            || { echo "::error::version must be SemVer without leading v"; exit 1; }
+          repo="$(yq -r ".eidolons[] | select(.name == \"$name\") | .source.repo" roster/index.yaml)"
+          [[ -n "$repo" && "$repo" != "null" ]] || { echo "::error::$name not found in roster"; exit 1; }
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Download release metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/eidolon-release
+          gh release download "${{ steps.resolve.outputs.tag }}" \
+            --repo "${{ steps.resolve.outputs.repo }}" \
+            --pattern release-manifest.json \
+            --pattern SHA256SUMS \
+            --dir /tmp/eidolon-release
+          (cd /tmp/eidolon-release && sha256sum --check SHA256SUMS --ignore-missing)
+
+      - name: Verify GitHub artifact attestation
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify /tmp/eidolon-release/release-manifest.json \
+            --repo "${{ steps.resolve.outputs.repo }}"
+
+      - name: Validate release manifest
+        run: |
+          set -euo pipefail
+          jq -e \
+            --arg repo "${{ steps.resolve.outputs.repo }}" \
+            --arg version "${{ inputs.version }}" \
+            --arg tag "${{ steps.resolve.outputs.tag }}" '
+              .source.repo == $repo and
+              .version == $version and
+              .tag == $tag and
+              (.commit | test("^[0-9a-f]{40}$")) and
+              (.tree | test("^[0-9a-f]{40}$")) and
+              (.archive_sha256 | test("^[0-9a-f]{64}$")) and
+              (.provenance.github_attestation == true)
+            ' /tmp/eidolon-release/release-manifest.json >/dev/null
+
+      - name: Update roster and changelog
+        run: |
+          set -euo pipefail
+          name="${{ inputs.eidolon }}"
+          version="${{ inputs.version }}"
+          manifest=/tmp/eidolon-release/release-manifest.json
+          tag="$(jq -r '.tag' "$manifest")"
+          commit="$(jq -r '.commit' "$manifest")"
+          tree="$(jq -r '.tree' "$manifest")"
+          archive_sha="$(jq -r '.archive_sha256' "$manifest")"
+          manifest_sha="$(jq -r '.manifest_sha256 // ""' "$manifest")"
+          workflow="$(jq -r '.provenance.workflow // ".github/workflows/release.yml"' "$manifest")"
+          updated_at="$(date -u +%FT%RZ)"
+          export name version tag commit tree archive_sha manifest_sha workflow updated_at
+          yq -i '
+            .updated_at = strenv(updated_at) |
+            (.eidolons[] | select(.name == strenv(name)) | .versions.latest) = strenv(version) |
+            (.eidolons[] | select(.name == strenv(name)) | .versions.pins.stable) = strenv(version) |
+            (.eidolons[] | select(.name == strenv(name)) | .versions.releases[strenv(version)]) = {
+              "tag": strenv(tag),
+              "commit": strenv(commit),
+              "tree": strenv(tree),
+              "archive_sha256": strenv(archive_sha),
+              "manifest_sha256": (strenv(manifest_sha) | select(. != "") // null),
+              "provenance": {
+                "github_attestation": true,
+                "workflow": strenv(workflow)
+              }
+            }
+          ' roster/index.yaml
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          path = Path("CHANGELOG.md")
+          text = path.read_text()
+          entry = f"- {os.environ['name']} v{os.environ['version']} published in the roster with release integrity metadata.\n"
+          marker = "## [Unreleased]\n"
+          if entry not in text:
+              text = text.replace(marker, marker + "\n" + entry, 1)
+          path.write_text(text)
+          PY
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="${{ inputs.eidolon }}"
+          version="${{ inputs.version }}"
+          branch="codex/roster-${name}-${version//./-}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add roster/index.yaml CHANGELOG.md
+          git commit -m "fix(roster): publish ${name} v${version}"
+          git push --set-upstream origin "$branch"
+          gh pr create \
+            --draft \
+            --title "fix(roster): publish ${name} v${version}" \
+            --body "Automated roster intake for ${name} v${version}. The upstream release manifest checksums and GitHub artifact attestation were verified before this PR was opened."

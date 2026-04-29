@@ -47,6 +47,7 @@ Commands:
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
+  verify         Verify installed Eidolon release integrity
   upgrade        Upgrade pinned Eidolon versions
   <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
                  Each Eidolon exposes its own subcommands via
@@ -82,6 +83,7 @@ case "$cmd" in
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
+  verify)      exec bash "$CLI_SRC/verify.sh"  "$@" ;;
   upgrade)     exec bash "$CLI_SRC/upgrade.sh" "$@" ;;
   version|--version|-v) echo "eidolons $EIDOLONS_VERSION" ;;
   help|--help|-h|"")    usage ;;

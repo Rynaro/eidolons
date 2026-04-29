@@ -59,6 +59,37 @@ jobs:
             jq empty "$schema"
           done
 
+      - name: Validate shipped-status integrity metadata posture
+        # Story 5.H: a roster entry with status=shipped must declare release
+        # integrity metadata under versions.releases.<latest>. Compatibility
+        # mode (integrity.enforcement: warn) makes this a warning; strict
+        # mode promotes it to a hard failure. in_construction Eidolons skip
+        # — consistent with the EIIS-conformance matrix job.
+        run: |
+          set -euo pipefail
+          enforcement="$(yq -r '.integrity.enforcement // "warn"' roster/index.yaml)"
+          missing_count=0
+          while IFS= read -r name; do
+            [[ -n "$name" ]] || continue
+            status="$(yq -r ".eidolons[] | select(.name == \"$name\") | .status" roster/index.yaml)"
+            if [[ "$status" != "shipped" ]]; then
+              continue
+            fi
+            latest="$(yq -r ".eidolons[] | select(.name == \"$name\") | .versions.latest" roster/index.yaml)"
+            meta="$(yq -o=json ".eidolons[] | select(.name == \"$name\") | .versions.releases.\"$latest\" // {}" roster/index.yaml)"
+            if [[ "$meta" == "{}" ]]; then
+              if [[ "$enforcement" == "strict" ]]; then
+                echo "::error::$name is shipped at v$latest but versions.releases.\"$latest\" is missing"
+                missing_count=$((missing_count + 1))
+              else
+                echo "::warning::$name is shipped at v$latest without release integrity metadata (compatibility mode)"
+              fi
+            fi
+          done < <(yq -r '.eidolons[].name' roster/index.yaml)
+          if [[ "$missing_count" -gt 0 ]]; then
+            exit 1
+          fi
+
   check-eidolon-repos:
     name: Check every Eidolon repo is reachable and EIIS-conformant
     runs-on: ubuntu-latest
@@ -83,8 +114,11 @@ jobs:
         run: |
           REPO=$(yq -r ".eidolons[] | select(.name == \"${{ matrix.eidolon }}\") | .source.repo" roster/index.yaml)
           STATUS=$(yq -r ".eidolons[] | select(.name == \"${{ matrix.eidolon }}\") | .status" roster/index.yaml)
+          LATEST=$(yq -r ".eidolons[] | select(.name == \"${{ matrix.eidolon }}\") | .versions.latest" roster/index.yaml)
           echo "repo=$REPO" >> "$GITHUB_OUTPUT"
           echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+          echo "latest=$LATEST" >> "$GITHUB_OUTPUT"
+          echo "tag=v$LATEST" >> "$GITHUB_OUTPUT"
 
       - name: Skip in-construction Eidolons
         if: steps.resolve.outputs.status == 'in_construction'
@@ -93,7 +127,41 @@ jobs:
       - name: Clone ${{ matrix.eidolon }}
         if: steps.resolve.outputs.status == 'shipped'
         run: |
-          git clone --depth 1 "https://github.com/${{ steps.resolve.outputs.repo }}" /tmp/eidolon
+          git clone --depth 1 --branch "${{ steps.resolve.outputs.tag }}" \
+            "https://github.com/${{ steps.resolve.outputs.repo }}" /tmp/eidolon
+
+      - name: Verify release integrity metadata
+        if: steps.resolve.outputs.status == 'shipped'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          name="${{ matrix.eidolon }}"
+          version="${{ steps.resolve.outputs.latest }}"
+          meta="$(yq -o=json ".eidolons[] | select(.name == \"$name\") | .versions.releases.\"$version\" // {}" roster/index.yaml)"
+          if [[ "$meta" == "{}" ]]; then
+            enforcement="$(yq -r '.integrity.enforcement // "warn"' roster/index.yaml)"
+            if [[ "$enforcement" == "strict" ]]; then
+              echo "::error::$name@$version missing release integrity metadata"
+              exit 1
+            fi
+            echo "::warning::$name@$version missing release integrity metadata (compatibility mode)"
+            exit 0
+          fi
+          expected_commit="$(echo "$meta" | jq -r '.commit')"
+          expected_tree="$(echo "$meta" | jq -r '.tree')"
+          actual_commit="$(git -C /tmp/eidolon rev-parse HEAD)"
+          actual_tree="$(git -C /tmp/eidolon rev-parse 'HEAD^{tree}')"
+          [[ "$actual_commit" == "$expected_commit" ]] || { echo "::error::$name commit mismatch"; exit 1; }
+          [[ "$actual_tree" == "$expected_tree" ]] || { echo "::error::$name tree mismatch"; exit 1; }
+          if [[ "$(echo "$meta" | jq -r '.provenance.github_attestation // false')" == "true" ]]; then
+            gh release download "v$version" \
+              --repo "${{ steps.resolve.outputs.repo }}" \
+              --pattern release-manifest.json \
+              --dir /tmp/eidolon-release
+            gh attestation verify /tmp/eidolon-release/release-manifest.json \
+              --repo "${{ steps.resolve.outputs.repo }}"
+          fi
 
       - name: Resolve EIIS tag
         if: steps.resolve.outputs.status == 'shipped'

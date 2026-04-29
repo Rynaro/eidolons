@@ -257,19 +257,36 @@ STUB
   if [[ -f "$target/install.manifest.json" ]]; then
     ver="$(jq -r '.version' "$target/install.manifest.json" 2>/dev/null || echo "$version")"
     commit="$(git -C "$clone_dir" rev-parse HEAD)"
+    tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+    archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
+    manifest_sha="$(lock_manifest_sha256 "$target/install.manifest.json" 2>/dev/null || echo "")"
+    verification="$(release_integrity_status "$name" "$ver")"
     cat >> "$LOCK_TMP" <<LOCK
   - name: $name
     version: "$ver"
     resolved: "github:$(echo "$entry" | jq -r '.source.repo')@$commit"
+    commit: "$commit"
+    tree: "$tree"
+    archive_sha256: "$archive_sha"
+    manifest_sha256: "$manifest_sha"
+    verification: "$verification"
     target: "$target"
     hosts_wired: $(jq -c '.hosts_wired' "$target/install.manifest.json")
 LOCK
   else
     warn "$name did not produce install.manifest.json (not strictly EIIS-conformant)"
+    commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo unknown)"
+    tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+    archive_sha="$(release_metadata_for "$name" "$version" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
+    verification="$(release_integrity_status "$name" "$version")"
     cat >> "$LOCK_TMP" <<LOCK
   - name: $name
     version: "$version"
-    resolved: "github:$(echo "$entry" | jq -r '.source.repo')"
+    resolved: "github:$(echo "$entry" | jq -r '.source.repo')@$commit"
+    commit: "$commit"
+    tree: "$tree"
+    archive_sha256: "$archive_sha"
+    verification: "$verification"
     target: "$target"
     manifest_missing: true
 LOCK

@@ -93,3 +93,22 @@ EOF
   run eidolons sync --dry-run
   grep -q 'shared_dispatch: false' eidolons.yaml
 }
+
+# ─── Lockfile integrity fields (Story 5.D) ────────────────────────────────
+
+@test "sync: writes manifest_sha256 + commit + tree + verification into lockfile" {
+  setup_fake_git_for_upgrade
+  seed_manifest_with atlas=^1.0.0
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  # The fake installer writes a known install.manifest.json; sync must hash it
+  # and record commit/tree from the cloned repo. Each field is in its own line.
+  # (Use + rather than {N} for portable BSD/GNU grep -E compatibility.)
+  grep -E 'manifest_sha256: "[0-9a-f]+"' eidolons.lock
+  # commit and tree appear under each member entry, indented; nexus_commit on
+  # the lockfile root is the only un-indented `commit:` and is excluded.
+  grep -E ' commit: "[0-9a-f]+"' eidolons.lock
+  grep -E ' tree: "[0-9a-f]+"' eidolons.lock
+  # In compatibility mode (no roster releases entry) atlas is "legacy-warning".
+  grep -q 'verification: "legacy-warning"' eidolons.lock
+}

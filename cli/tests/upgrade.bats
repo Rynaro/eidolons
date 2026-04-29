@@ -558,6 +558,50 @@ v1.1.0"
 # (none — we keep --all) stay intact. Also confirms the new --system flag is
 # documented in the help output and --nexus is absent.
 
+# ─── Lockfile carry: integrity fields survive selective upgrade ───────────
+
+# Story 5.D guard: when `upgrade <member>` runs, members not in the work
+# list are emitted via emit_lock_fragment_carry. The jq projection at
+# upgrade.sh:540 must preserve commit/tree/archive_sha256/manifest_sha256/
+# verification or the next `eidolons verify` will see ghost values.
+@test "upgrade: carry path preserves integrity fields for non-upgraded members" {
+  setup_fake_git_for_upgrade
+  export FAKE_LSREMOTE_TAGS="v1.0.0"
+  export FAKE_NEXUS_HEAD_TAG="v1.0.0"
+  seed_manifest_with atlas=^1.0.0 spectra=^4.2.0
+  # Hand-craft a lockfile with realistic integrity fields on spectra.
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+  - name: spectra
+    version: "4.2.0"
+    resolved: "github:Rynaro/SPECTRA@deadbeef0deadbeef0deadbeef0deadbeef0dead"
+    commit: "deadbeef0deadbeef0deadbeef0deadbeef0dead"
+    tree: "feedfeedfeedfeedfeedfeedfeedfeedfeedfeed"
+    archive_sha256: "1111111111111111111111111111111111111111111111111111111111111111"
+    manifest_sha256: "2222222222222222222222222222222222222222222222222222222222222222"
+    verification: "verified"
+    target: "./.eidolons/spectra"
+    hosts_wired: ["claude-code"]
+EOF
+  # Upgrade only atlas — spectra goes through emit_lock_fragment_carry.
+  run eidolons upgrade --non-interactive --yes atlas
+  [ "$status" -eq 0 ]
+  grep -q 'name: spectra' eidolons.lock
+  grep -q 'commit: "deadbeef0deadbeef0deadbeef0deadbeef0dead"' eidolons.lock
+  grep -q 'tree: "feedfeedfeedfeedfeedfeedfeedfeedfeedfeed"' eidolons.lock
+  grep -q 'archive_sha256: "1111111111111111111111111111111111111111111111111111111111111111"' eidolons.lock
+  grep -q 'manifest_sha256: "2222222222222222222222222222222222222222222222222222222222222222"' eidolons.lock
+  grep -q 'verification: "verified"' eidolons.lock
+}
+
 # ─── Help / argument parsing ─────────────────────────────────────────────
 
 @test "upgrade -h: help prints usage" {

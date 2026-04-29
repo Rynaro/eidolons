@@ -1,0 +1,123 @@
+name: Release Nexus
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: SemVer version without the leading v
+        required: true
+        type: string
+      prerelease:
+        description: Mark the GitHub release as a prerelease
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  release:
+    name: Release nexus v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate SemVer input
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] \
+            || { echo "::error::version must be SemVer without leading v"; exit 1; }
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y shellcheck jq bats
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate shell, schemas, and tests
+        run: |
+          set -euo pipefail
+          find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
+          shellcheck -x -S error cli/eidolons
+          for schema in schemas/*.json; do jq empty "$schema"; done
+          yq eval '.' roster/index.yaml >/dev/null
+          bats cli/tests/
+
+      - name: Build release artifacts
+        id: meta
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          tag="v$version"
+          mkdir -p dist
+          git archive --format=tar --prefix="eidolons-$version/" HEAD -o "dist/eidolons-$version.tar"
+          cp cli/install.sh dist/install.sh
+          cp roster/index.yaml dist/roster.index.yaml
+          tar -czf "dist/schemas-$version.tgz" schemas
+          commit="$(git rev-parse HEAD)"
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          archive_sha="$(sha256sum "dist/eidolons-$version.tar" | awk '{print $1}')"
+          jq -n \
+            --arg name "eidolons" \
+            --arg version "$version" \
+            --arg tag "$tag" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg commit "$commit" \
+            --arg tree "$tree" \
+            --arg archive_sha "$archive_sha" \
+            --arg workflow ".github/workflows/release.yml" \
+            '{
+              name: $name,
+              version: $version,
+              tag: $tag,
+              source: { type: "github", repo: $repo },
+              commit: $commit,
+              tree: $tree,
+              archive_sha256: $archive_sha,
+              provenance: {
+                github_attestation: true,
+                workflow: $workflow
+              }
+            }' > dist/release-manifest.json
+          (cd dist && sha256sum * > SHA256SUMS)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.meta.outputs.tag }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [[ "${{ inputs.prerelease }}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${{ steps.meta.outputs.tag }}" dist/* \
+            --title "${{ steps.meta.outputs.tag }}" \
+            --notes "Automated nexus release with checksums and provenance." \
+            "${args[@]}"

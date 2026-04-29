@@ -491,13 +491,24 @@ upgrade_install_member() {
 emit_lock_fragment_from_target() {
   local name="$1" target="./.eidolons/$1" repo="$2"
   if [[ -f "$target/install.manifest.json" ]]; then
-    local ver hosts_wired
+    local ver hosts_wired clone_dir commit tree archive_sha manifest_sha verification
     ver="$(jq -r '.version' "$target/install.manifest.json" 2>/dev/null || echo "")"
     hosts_wired="$(jq -c '.hosts_wired // []' "$target/install.manifest.json")"
+    clone_dir="$CACHE_DIR/$name@$ver"
+    commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo unknown)"
+    tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+    archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
+    manifest_sha="$(lock_manifest_sha256 "$target/install.manifest.json" 2>/dev/null || echo "")"
+    verification="$(release_integrity_status "$name" "$ver")"
     cat <<LOCK
   - name: $name
     version: "$ver"
-    resolved: "github:${repo}@$(git -C "$CACHE_DIR/$name@$ver" rev-parse HEAD 2>/dev/null || echo unknown)"
+    resolved: "github:${repo}@$commit"
+    commit: "$commit"
+    tree: "$tree"
+    archive_sha256: "$archive_sha"
+    manifest_sha256: "$manifest_sha"
+    verification: "$verification"
     target: "$target"
     hosts_wired: $hosts_wired
 LOCK
@@ -524,6 +535,11 @@ emit_lock_fragment_carry() {
         "  - name: \(.name)",
         "    version: \"\(.version // "")\"",
         "    resolved: \"\(.resolved // "")\"",
+        if .commit then "    commit: \"\(.commit)\"" else empty end,
+        if .tree then "    tree: \"\(.tree)\"" else empty end,
+        if .archive_sha256 then "    archive_sha256: \"\(.archive_sha256)\"" else empty end,
+        if .manifest_sha256 then "    manifest_sha256: \"\(.manifest_sha256)\"" else empty end,
+        if .verification then "    verification: \"\(.verification)\"" else empty end,
         "    target: \"\(.target // "")\"",
         if .hosts_wired then "    hosts_wired: \(.hosts_wired | tojson)" else empty end,
         if .manifest_missing then "    manifest_missing: \(.manifest_missing | tojson)" else empty end

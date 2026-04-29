@@ -1,0 +1,131 @@
+name: Eidolon Release Template
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: SemVer version without the leading v
+        required: true
+        type: string
+      test-command:
+        description: Optional repository-specific test command to run before release
+        required: false
+        type: string
+        default: ""
+      eiis-version:
+        description: EIIS major.minor compatibility version
+        required: false
+        type: string
+        default: "1.1"
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+jobs:
+  release:
+    name: Release Eidolon v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate SemVer input
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]] \
+            || { echo "::error::version must be SemVer without leading v"; exit 1; }
+
+      - name: Install release dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Run repository tests
+        if: inputs.test-command != ''
+        run: ${{ inputs.test-command }}
+
+      - name: Validate EIIS conformance
+        run: |
+          set -euo pipefail
+          req="${{ inputs.eiis-version }}"
+          if [[ "$req" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            tag="$(git ls-remote --tags --refs https://github.com/Rynaro/eidolons-eiis \
+              | awk -v p="refs/tags/v${req}." '$2 ~ "^"p { sub("refs/tags/v", "", $2); print $2 }' \
+              | sort -V | tail -1)"
+          fi
+          tag="${tag:-$req}"
+          git clone --depth 1 --branch "v$tag" https://github.com/Rynaro/eidolons-eiis /tmp/eiis
+          bash /tmp/eiis/conformance/check.sh "$GITHUB_WORKSPACE"
+
+      - name: Build release metadata
+        id: meta
+        run: |
+          set -euo pipefail
+          version="${{ inputs.version }}"
+          tag="v$version"
+          mkdir -p dist
+          git archive --format=tar --prefix="${GITHUB_REPOSITORY#*/}-$version/" HEAD -o "dist/source.tar"
+          archive_sha="$(sha256sum dist/source.tar | awk '{print $1}')"
+          manifest_sha="null"
+          if [[ -f install.manifest.json ]]; then
+            manifest_sha="\"$(sha256sum install.manifest.json | awk '{print $1}')\""
+          fi
+          commit="$(git rev-parse HEAD)"
+          tree="$(git rev-parse 'HEAD^{tree}')"
+          jq -n \
+            --arg name "${GITHUB_REPOSITORY#*/}" \
+            --arg version "$version" \
+            --arg tag "$tag" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg commit "$commit" \
+            --arg tree "$tree" \
+            --arg archive_sha "$archive_sha" \
+            --arg workflow ".github/workflows/release.yml" \
+            --argjson manifest_sha "$manifest_sha" \
+            '{
+              name: $name,
+              version: $version,
+              tag: $tag,
+              source: { type: "github", repo: $repo },
+              commit: $commit,
+              tree: $tree,
+              archive_sha256: $archive_sha,
+              manifest_sha256: $manifest_sha,
+              provenance: {
+                github_attestation: true,
+                workflow: $workflow
+              }
+            }' > dist/release-manifest.json
+          (cd dist && sha256sum source.tar release-manifest.json > SHA256SUMS)
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag
+        run: |
+          set -euo pipefail
+          tag="${{ steps.meta.outputs.tag }}"
+          if git rev-parse "$tag" >/dev/null 2>&1; then
+            echo "::error::$tag already exists"
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$tag" -m "Release $tag"
+          git push origin "$tag"
+
+      - name: Attest release artifacts
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "${{ steps.meta.outputs.tag }}" dist/* \
+            --title "${{ steps.meta.outputs.tag }}" \
+            --notes "Automated Eidolon release with checksums and provenance."

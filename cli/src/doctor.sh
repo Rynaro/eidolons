@@ -23,6 +23,7 @@ Checks:
   - Each installed Eidolon has its files in .eidolons/<n>/
   - Each installed Eidolon's install.manifest.json is valid
   - Host dispatch files exist for every host listed in eidolons.yaml
+  - Release-integrity status per lock entry (verified / legacy / missing)
 EOF
 }
 
@@ -164,6 +165,49 @@ for f in "${FRESHNESS_FILES[@]}"; do
   fi
   pass "$f clean (no stale pointers)"
 done
+
+# ─── Check 5: release integrity ─────────────────────────────────────────
+# Read-only summary derived from eidolons.lock's `verification` field. We do
+# not re-fetch the roster or recompute hashes here — that's `eidolons verify`'s
+# job. Doctor surfaces what was recorded at sync/upgrade time so a stale lock
+# is visible without leaving cwd. A `MISMATCH` outcome is treated as a hard
+# error (something has drifted since sync); `verified` and `legacy-warning`
+# are informational.
+ui_section_out "Release integrity"
+if [[ -f "$PROJECT_LOCK" ]]; then
+  LOCK_JSON_DOCTOR="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null || echo '{}')"
+  member_names="$(echo "$LOCK_JSON_DOCTOR" | jq -r '(.members // [])[].name')"
+  if [[ -z "$member_names" ]]; then
+    pass "No members locked — integrity check skipped"
+  else
+    while IFS= read -r mname; do
+      [[ -n "$mname" ]] || continue
+      mver="$(echo "$LOCK_JSON_DOCTOR" | jq -r --arg n "$mname" \
+        '(.members // [])[] | select(.name == $n) | .version // ""')"
+      mverif="$(echo "$LOCK_JSON_DOCTOR" | jq -r --arg n "$mname" \
+        '(.members // [])[] | select(.name == $n) | .verification // ""')"
+      case "$mverif" in
+        verified)
+          pass "$mname@$mver release integrity verified"
+          ;;
+        legacy-warning|"")
+          # Compatibility mode or pre-integrity lock — informational, not blocking.
+          printf "  %s·%s %s@%s no roster release metadata (legacy)\n" \
+            "${YELLOW:-}" "${RESET:-}" "$mname" "$mver"
+          ;;
+        missing)
+          err "$mname@$mver MISMATCH — release metadata missing under strict enforcement"
+          ;;
+        *)
+          err "$mname@$mver unknown verification status: $mverif"
+          ;;
+      esac
+    done <<< "$member_names"
+  fi
+else
+  printf "  %s·%s eidolons.lock missing — integrity check deferred\n" \
+    "${YELLOW:-}" "${RESET:-}"
+fi
 
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""

@@ -18,12 +18,19 @@
           "name":     { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
           "version":  { "type": "string" },
           "resolved": { "type": "string", "description": "Source reference including commit SHA" },
+          "commit":   { "type": "string", "pattern": "^(unknown|[0-9a-f]{40})$" },
+          "tree":     { "type": "string", "pattern": "^$|^[0-9a-f]{40}$" },
+          "archive_sha256":  { "type": "string", "pattern": "^$|^[0-9a-f]{64}$" },
+          "manifest_sha256": { "type": "string", "pattern": "^$|^[0-9a-f]{64}$" },
+          "verification": {
+            "type": "string",
+            "enum": ["verified", "legacy-warning", "missing"]
+          },
           "target":   { "type": "string" },
           "hosts_wired": {
             "type": "array",
             "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] }
           },
-          "manifest_sha256":  { "type": "string" },
           "manifest_missing": { "type": "boolean" }
         }
       }
