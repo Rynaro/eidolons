@@ -160,7 +160,8 @@ jobs:
               --pattern release-manifest.json \
               --dir /tmp/eidolon-release
             gh attestation verify /tmp/eidolon-release/release-manifest.json \
-              --repo "${{ steps.resolve.outputs.repo }}"
+              --repo "${{ steps.resolve.outputs.repo }}" \
+              --signer-workflow "${{ github.repository }}/.github/workflows/eidolon-release-template.yml"
           fi
 
       - name: Resolve EIIS tag
