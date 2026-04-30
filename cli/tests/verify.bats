@@ -8,24 +8,40 @@ add_atlas_release_metadata() {
   mkdir -p custom-nexus/roster
   cp "$EIDOLONS_ROOT/roster/index.yaml" custom-nexus/roster/index.yaml
   python3 - "$version" "$commit" "$tree" "$archive_sha" "$manifest_sha" <<'PY'
+import re
 import sys
 from pathlib import Path
 
 version, commit, tree, archive_sha, manifest_sha = sys.argv[1:6]
 path = Path("custom-nexus/roster/index.yaml")
 text = path.read_text()
-needle = '''    versions:
+
+# Anchor: atlas's versions block. After PR #40 landed on main, the roster
+# already contains a `releases:` block under atlas; we must strip it (and
+# any other existing 6-space-indented siblings of `pins:`) before
+# inserting our test-only fixture, otherwise YAML emits two `releases:`
+# keys at the same level and the second-load-wins rule overrides our
+# fixture with the real metadata.
+versions_anchor = '''    versions:
       latest: "1.2.2"
       pins:
         stable: "1.2.2"
 '''
+if versions_anchor not in text:
+    raise SystemExit("verify.bats helper: atlas versions anchor not found in roster")
+
+# Capture from the end of the anchor up to (but not including) the next
+# 4-space-indented sibling key under atlas (e.g. `    install:` or
+# `    handoffs:`). Anything in that range is currently a child of
+# `versions:` — we drop it, then rebuild with only `pins:` + the test's
+# `releases:`.
+end_of_anchor = text.index(versions_anchor) + len(versions_anchor)
+next_sibling = re.search(r"^    [a-z_]+:\s*$", text[end_of_anchor:], re.MULTILINE)
+stop = end_of_anchor + next_sibling.start() if next_sibling else len(text)
+
 archive_value = f'"{archive_sha}"' if archive_sha else 'null'
 manifest_value = f'"{manifest_sha}"' if manifest_sha else 'null'
-replacement = f'''    versions:
-      latest: "1.2.2"
-      pins:
-        stable: "1.2.2"
-      releases:
+new_releases = f'''      releases:
         "{version}":
           tag: "v{version}"
           commit: "{commit}"
@@ -36,7 +52,7 @@ replacement = f'''    versions:
             github_attestation: false
             workflow: ".github/workflows/release.yml"
 '''
-text = text.replace(needle, replacement, 1)
+text = text[:end_of_anchor] + new_releases + text[stop:]
 path.write_text(text)
 PY
   export EIDOLONS_NEXUS="$PWD/custom-nexus"
