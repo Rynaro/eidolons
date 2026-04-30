@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-30T19:28Z"
+updated_at: "2026-04-30T19:29Z"
 eiis_required: "1.1"
 integrity:
   enforcement: warn  # future registry bump may switch this to strict
@@ -263,6 +263,16 @@ eidolons:
       latest: "1.0.3"
       pins:
         stable: "1.0.3"
+      releases:
+        1.0.3:
+          tag: v1.0.3
+          commit: fa1c4d0cec5ad53065e0334ec9e1e733d9dab4c7
+          tree: c5c7ec3649a3bc82cf199b04ee529df63cb4aaf2
+          archive_sha256: 4d96e4b21a01acfcbec2a262ab82c1c7ec70ef2841ef5ec3913db801dca96d23
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/vigil"
       standalone: true
