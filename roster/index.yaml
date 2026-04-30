@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-30T19:26Z"
+updated_at: "2026-04-30T19:27Z"
 eiis_required: "1.1"
 integrity:
   enforcement: warn  # future registry bump may switch this to strict
@@ -162,6 +162,16 @@ eidolons:
       latest: "1.1.5"
       pins:
         stable: "1.1.5"
+      releases:
+        1.1.5:
+          tag: v1.1.5
+          commit: f426b952f5c63927c9c6529ed616b9ddfb729932
+          tree: 3ed4426de063a9294f2b608a00fc01ce3a0e9e3e
+          archive_sha256: 9eda0dea75bbe8eb3b0819fd73cd5878d5ea51bbccfdee3b360e73315bc15769
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/idg"
       standalone: true
