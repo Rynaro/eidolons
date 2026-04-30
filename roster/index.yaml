@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-29T20:30Z"
+updated_at: "2026-04-30T19:20Z"
 eiis_required: "1.1"
 integrity:
   enforcement: warn  # future registry bump may switch this to strict
@@ -105,6 +105,16 @@ eidolons:
       latest: "3.0.5"
       pins:
         stable: "3.0.5"
+      releases:
+        3.0.5:
+          tag: v3.0.5
+          commit: e79663204a4db868f82264041c3fd79fdd5e6613
+          tree: 48a7151075e2ddbc3499b70366e4dd5141792b69
+          archive_sha256: 9cad7f3f0662b5a6196bfc04ba2436423154a946fdd8cb030f37e7ad789d4edf
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/apivr"
       standalone: true
