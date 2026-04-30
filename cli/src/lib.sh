@@ -146,16 +146,39 @@ release_integrity_status() {
 }
 
 git_archive_sha256() {
-  local dir="$1" tmp sum
+  # The release template (eidolon-release-template.yml) generates the
+  # source archive with:
+  #   git archive --format=tar --prefix="${GITHUB_REPOSITORY#*/}-$version/" HEAD
+  # The prefix changes every byte of the tar (every entry's path is
+  # prepended with it), so the consumer-side hash MUST use the same
+  # prefix or every comparison will be a false mismatch.
+  #
+  # Args: dir [prefix]
+  #   dir    — git working tree to archive
+  #   prefix — optional tar entry prefix (e.g. "ATLAS-1.2.2/"). If
+  #            omitted, archive without prefix (legacy callers).
+  local dir="$1" prefix="${2:-}" tmp sum
   tmp="$(mktemp)"
-  if git -C "$dir" archive --format=tar HEAD > "$tmp" 2>/dev/null; then
-    sum="$(sha256_file "$tmp")"
-    rm -f "$tmp"
-    echo "$sum"
-    return 0
+  if [[ -n "$prefix" ]]; then
+    if ! git -C "$dir" archive --format=tar --prefix="$prefix" HEAD > "$tmp" 2>/dev/null; then
+      rm -f "$tmp"; return 1
+    fi
+  else
+    if ! git -C "$dir" archive --format=tar HEAD > "$tmp" 2>/dev/null; then
+      rm -f "$tmp"; return 1
+    fi
   fi
+  sum="$(sha256_file "$tmp")"
   rm -f "$tmp"
-  return 1
+  echo "$sum"
+}
+
+# Derive the canonical archive prefix from a roster source.repo and
+# release version. Mirrors the release template's
+# `${GITHUB_REPOSITORY#*/}-$version/` convention.
+release_archive_prefix() {
+  local source_repo="$1" version="$2"
+  echo "${source_repo#*/}-${version}/"
 }
 
 verify_release_integrity() {
@@ -202,7 +225,11 @@ verify_release_integrity() {
   fi
 
   if [[ -n "$expected_archive" ]]; then
-    actual_archive="$(git_archive_sha256 "$clone_dir" || echo "")"
+    local source_repo prefix
+    source_repo="$(roster_get "$name" | jq -r '.source.repo // empty')"
+    [[ -n "$source_repo" ]] || die "$name@$version cannot resolve source.repo for archive verification"
+    prefix="$(release_archive_prefix "$source_repo" "$version")"
+    actual_archive="$(git_archive_sha256 "$clone_dir" "$prefix" || echo "")"
     [[ -n "$actual_archive" ]] || die "$name@$version cannot compute release archive checksum"
     if [[ "$actual_archive" != "$expected_archive" ]]; then
       die "$name@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
