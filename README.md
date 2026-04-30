@@ -11,6 +11,7 @@ Most AI coding tools ship a single generalist that tries to plan, scout, build, 
 <a href="https://github.com/Rynaro/eidolons/actions/workflows/ci.yml"><img src="https://github.com/Rynaro/eidolons/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0"></a>
 <img src="https://img.shields.io/badge/EIIS-v1.1-blue" alt="EIIS v1.1">
+<img src="https://img.shields.io/badge/integrity-strict-success" alt="Integrity: strict">
 </p>
 
 ---
@@ -33,7 +34,7 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. For the full install fl
 
 | Eidolon | What it does for you | When to reach for it | Repo | Latest |
 |---------|---------------------|----------------------|------|--------|
-| **ATLAS**<br><sub>A→T→L→A→S</sub> | Maps an unfamiliar codebase without writing a single line. Evidence-anchored findings, read-only by construction. | Auditing a new repo, onboarding, before any change. | [Rynaro/ATLAS](https://github.com/Rynaro/ATLAS) | 1.1.0 |
+| **ATLAS**<br><sub>A→T→L→A→S</sub> | Maps an unfamiliar codebase without writing a single line. Evidence-anchored findings, read-only by construction. | Auditing a new repo, onboarding, before any change. | [Rynaro/ATLAS](https://github.com/Rynaro/ATLAS) | 1.2.2 |
 | **SPECTRA**<br><sub>S→P→E→C→T→R→A</sub> | Turns a scout report or rough idea into a decision-ready spec — scoring rubrics, validation gates, GIVEN/WHEN/THEN stories. | Planning a feature before you build it. | [Rynaro/SPECTRA](https://github.com/Rynaro/SPECTRA) | 4.2.10 |
 | **APIVR-Δ**<br><sub>A→P→I→V→Δ/R</sub> | Implements features in brownfield code — pattern-first, test-anchored, bounded failure-recovery loop. | Shipping the change SPECTRA planned. | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | 3.0.5 |
 | **IDG**<br><sub>I→D→G</sub> | Synthesizes documentation from sessions, specs, and deltas — provenance-first, with `[GAP]` / `[DISPUTED]` markers. | Chronicling what you (or the team) just built. | [Rynaro/IDG](https://github.com/Rynaro/IDG) | 1.1.5 |
@@ -84,9 +85,18 @@ cd <any-project>
 eidolons init                    # interactive — choose members and preset
 eidolons add forge               # add a single member later
 eidolons sync                    # reconcile installed members to eidolons.yaml
+eidolons verify                  # re-check installed Eidolons against the roster's signed metadata
 ```
 
-Commit `eidolons.lock` alongside `eidolons.yaml` — the lockfile pins resolved versions for reproducible installs. For the full flow, read [`docs/getting-started.md`](docs/getting-started.md).
+Commit `eidolons.lock` alongside `eidolons.yaml` — the lockfile pins resolved versions and integrity checksums (`commit`, `tree`, `archive_sha256`, `manifest_sha256`) for reproducible, tamper-evident installs. For the full flow, read [`docs/getting-started.md`](docs/getting-started.md).
+
+---
+
+## Verified releases
+
+Every shipped Eidolon publishes attestation-backed releases through a canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) hosted in this nexus. Each release records its commit, tree, and archive SHA-256 into `roster/index.yaml` via [`Roster Intake`](.github/workflows/roster-intake.yml), with GitHub artifact attestations bound to the canonical signer workflow.
+
+`eidolons sync` and `eidolons verify` enforce that contract on the consumer side. Under the default `integrity.enforcement: strict` posture, any installed Eidolon whose commit/tree/archive checksum drifts from the roster's signed metadata aborts with exit 1 — same gate `Roster Health` runs nightly against every shipped Eidolon. Read the trust model end-to-end at [`docs/release-integrity.md`](docs/release-integrity.md).
 
 ---
 
@@ -112,6 +122,7 @@ Each Eidolon is independently installable and independently versioned — that's
 2. **Composition.** The team is more than the sum of its members. Handoff contracts, pipeline conventions, and partial-team deployment patterns live here, not in any individual Eidolon's repo.
 3. **Research.** The scientific backing for the whole program — papers, production precedents, evidence-to-design mappings — is a shared asset. Duplicating it across five repos is wasteful and drifts.
 4. **Installation orchestration.** A single `eidolons add atlas,spectra,apivr` is worth fifty lines of documentation explaining how to clone three repos and run three installers.
+5. **Supply-chain integrity.** The release-integrity contract is a *shared* asset: one canonical signing workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) every Eidolon adopts, one ingestion path ([`Roster Intake`](.github/workflows/roster-intake.yml)) that verifies attestations, one consumer-side gate (`eidolons verify`) that enforces them. Six independent repos with six independent signing schemes would defeat the trust model.
 
 Each Eidolon remains a first-class repo. This nexus is a coordinator, not an owner. The four-layer architecture (install standard → Eidolon repos → this nexus → consumer project) is documented in [`docs/architecture.md`](docs/architecture.md).
 
@@ -120,9 +131,9 @@ Each Eidolon remains a first-class repo. This nexus is a coordinator, not an own
 <!-- Curated highlights from CHANGELOG.md "Unreleased". Refresh on every release. -->
 ## Recently shipped
 
-- **ATLAS v1.1.0 adds container-mode** for the atlas-aci MCP server — build locally with Docker or Podman, no GHCR pull required. See [CHANGELOG.md](CHANGELOG.md).
+- **Ecosystem normalized — supply-chain integrity end-to-end.** All six shipped Eidolons (ATLAS, SPECTRA, APIVR-Δ, IDG, FORGE, VIGIL) now publish attestation-backed releases via the canonical [`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml). Every `versions.releases.<v>` block in [`roster/index.yaml`](roster/index.yaml) carries `commit`, `tree`, `archive_sha256`, and a GitHub-signed provenance attestation, ingested via [`Roster Intake`](.github/workflows/roster-intake.yml). `integrity.enforcement` is `strict` by default — any consumer install with a checksum mismatch aborts with exit 1. See [`docs/release-integrity.md`](docs/release-integrity.md).
+- **ATLAS v1.2.2** — atlas-aci MCP tools now reach the Claude Code subagent (`tools:` allowlist rewrite); MCP config writes absolute project paths instead of `${workspaceFolder}`; new `eidolons atlas aci index` first-class re-index subcommand. See [CHANGELOG.md](CHANGELOG.md).
 - **VIGIL v1.0 is shipped** — forensic root-cause attribution for failures resistant to normal repair, with dependency-graph ranking and counterfactual verification. See [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL).
-- **OpenAI Codex is now a first-class host** — `detect_hosts` wires `.codex/agents/` and `AGENTS.md` co-ownership on `eidolons sync`. See [CHANGELOG.md](CHANGELOG.md).
 - **`eidolons upgrade` is fully implemented** — `--check` for read-only diffs, applies member upgrades within `eidolons.yaml` SemVer constraints, idempotent on repeat runs. See [CHANGELOG.md](CHANGELOG.md).
 - **EIIS bumped to v1.1** with an external standalone conformance checker. See [Rynaro/eidolons-eiis](https://github.com/Rynaro/eidolons-eiis).
 
