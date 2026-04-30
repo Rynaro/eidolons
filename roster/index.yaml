@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-30T19:27Z"
+updated_at: "2026-04-30T19:28Z"
 eiis_required: "1.1"
 integrity:
   enforcement: warn  # future registry bump may switch this to strict
@@ -80,6 +80,16 @@ eidolons:
       latest: "4.2.10"
       pins:
         stable: "4.2.10"
+      releases:
+        4.2.10:
+          tag: v4.2.10
+          commit: 2230ac5bbb2be47173b959b804aae6176a544731
+          tree: 47903139ff1b39e482934c54f7dd1e11ad8b29db
+          archive_sha256: 4331a9f36f0424cdc4bf2162ec2db11885ca04a8db8f71b11305bcfb017be26e
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/spectra"
       standalone: true
