@@ -166,6 +166,13 @@ setup_fake_git_for_upgrade() {
   : "${FAKE_FETCH_RESULT:=ok}"
   export FAKE_CLONE_RESULT FAKE_FETCH_RESULT
 
+  # Force compatibility mode for the duration of these tests. The real
+  # roster's integrity.enforcement may be `strict` (post-rollout); under
+  # strict, missing release metadata is fatal — but these tests
+  # deliberately exercise paths where metadata is absent. The override
+  # is honored by integrity_enforcement_mode() in lib.sh.
+  export EIDOLONS_INTEGRITY_ENFORCEMENT="${EIDOLONS_INTEGRITY_ENFORCEMENT:-warn}"
+
   # Upgrade tests use fake-git stubs that emit synthetic commit SHAs
   # (e.g. abc1234...). After PR #40-#48 landed, the real roster
   # contains real release-integrity metadata pinned to actual upstream
