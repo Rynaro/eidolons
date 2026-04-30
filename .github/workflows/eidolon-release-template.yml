@@ -59,7 +59,22 @@ jobs:
           fi
           tag="${tag:-$req}"
           git clone --depth 1 --branch "v$tag" https://github.com/Rynaro/eidolons-eiis /tmp/eiis
+          set +e
           bash /tmp/eiis/conformance/check.sh "$GITHUB_WORKSPACE"
+          rc=$?
+          set -e
+          case "$rc" in
+            0)
+              echo "::notice::EIIS conformance passed all MUSTs and SHOULDs"
+              ;;
+            4)
+              echo "::warning::EIIS conformance passed MUSTs with grandfathered SHOULD warnings (exit 4) — release continues"
+              ;;
+            *)
+              echo "::error::EIIS conformance failed (exit $rc)"
+              exit "$rc"
+              ;;
+          esac
 
       - name: Build release metadata
         id: meta
