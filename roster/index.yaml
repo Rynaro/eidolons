@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-29T20:30Z"
+updated_at: "2026-04-30T19:20Z"
 eiis_required: "1.1"
 integrity:
   enforcement: warn  # future registry bump may switch this to strict
@@ -33,6 +33,16 @@ eidolons:
       latest: "1.2.2"
       pins:
         stable: "1.2.2"
+      releases:
+        1.2.2:
+          tag: v1.2.2
+          commit: c40b825e47a597211ea6a1d50cf2b51d6a473494
+          tree: b39caad797e1706f4d4ea7ac17519e8400498034
+          archive_sha256: 194d3ce1b90f18545a98639cf1f00073a04a01e4983ba3011d65386fbdd6db97
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/atlas"
       standalone: true
