@@ -165,6 +165,40 @@ setup_fake_git_for_upgrade() {
   : "${FAKE_CLONE_RESULT:=ok}"
   : "${FAKE_FETCH_RESULT:=ok}"
   export FAKE_CLONE_RESULT FAKE_FETCH_RESULT
+
+  # Upgrade tests use fake-git stubs that emit synthetic commit SHAs
+  # (e.g. abc1234...). After PR #40-#48 landed, the real roster
+  # contains real release-integrity metadata pinned to actual upstream
+  # commits — verify_release_integrity would compare the stub's SHA to
+  # the real commit and abort with a "commit mismatch" before the
+  # upgrade test code path can be exercised. Strip release blocks from
+  # the roster so verify falls through compatibility mode for these
+  # tests; integrity verification is covered separately in verify.bats.
+  local custom="$BATS_TEST_TMPDIR/upgrade-nexus"
+  mkdir -p "$custom/roster" "$custom/.git"
+  # nexus_current_tag / nexus_self_update gate on `[[ -d "$NEXUS/.git" ]]`
+  # before invoking git. Create an empty .git so the existence check
+  # passes; the fake git on PATH (installed below) handles every actual
+  # git invocation, so the directory's content is irrelevant.
+  python3 - "$EIDOLONS_ROOT/roster/index.yaml" "$custom/roster/index.yaml" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+src, dst = sys.argv[1], sys.argv[2]
+text = Path(src).read_text()
+# Match `      releases:` blocks (6-space indent, child of `versions:`)
+# and consume every following line at >= 8-space indent (the block body)
+# until a line returns to 4-space indent (the next `    install:` / etc.
+# sibling key under the Eidolon entry). Replace with the empty string.
+pattern = re.compile(
+    r"^      releases:\s*\n(?:        [^\n]*\n|        [^\n]*$)+",
+    re.MULTILINE,
+)
+text = pattern.sub("", text)
+Path(dst).write_text(text)
+PY
+  export EIDOLONS_NEXUS="$custom"
   cat > "$FAKE_BIN/git" <<'EOF'
 #!/usr/bin/env bash
 # Fake git for upgrade tests. Falls back to the real git for any operation
