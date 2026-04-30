@@ -111,6 +111,7 @@ sha256_of() {
 }
 
 @test "verify: legacy roster metadata warns but passes in compatibility mode" {
+  override_integrity_enforcement warn
   seed_lock_with_versions atlas=1.0.0
   run eidolons verify
   [ "$status" -eq 0 ]
