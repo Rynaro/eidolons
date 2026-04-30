@@ -7,10 +7,10 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-30T19:29Z"
+updated_at: "2026-04-30T19:40Z"
 eiis_required: "1.1"
 integrity:
-  enforcement: warn  # future registry bump may switch this to strict
+  enforcement: strict  # all shipped Eidolons publish release metadata; mismatches are fatal
 
 # ─── Roster ────────────────────────────────────────────────────────────────────
 
