@@ -103,33 +103,91 @@ jobs:
           workflow="$(jq -r '.provenance.workflow // ".github/workflows/release.yml"' "$manifest")"
           updated_at="$(date -u +%FT%RZ)"
           export name version tag commit tree archive_sha manifest_sha workflow updated_at
-          yq -i '
-            .updated_at = strenv(updated_at) |
-            (.eidolons[] | select(.name == strenv(name)) | .versions.latest) = strenv(version) |
-            (.eidolons[] | select(.name == strenv(name)) | .versions.pins.stable) = strenv(version) |
-            (.eidolons[] | select(.name == strenv(name)) | .versions.releases[strenv(version)]) = {
-              "tag": strenv(tag),
-              "commit": strenv(commit),
-              "tree": strenv(tree),
-              "archive_sha256": strenv(archive_sha),
-              "manifest_sha256": (strenv(manifest_sha) | select(. != "") // null),
-              "provenance": {
-                "github_attestation": true,
-                "workflow": strenv(workflow)
-              }
-            }
-          ' roster/index.yaml
+          # Use ruamel.yaml for the roster edit so blank lines and inline
+          # comments are preserved across the round-trip. yq -i drops the
+          # blank-line separators between Eidolon entries and shifts the
+          # spacing on inline `# comment` markers, producing diffs that
+          # are dominated by formatting churn rather than the actual
+          # versions.releases.<v> addition.
+          pip install --quiet ruamel.yaml >/dev/null
           python3 - <<'PY'
           import os
+          from pathlib import Path
+          from ruamel.yaml import YAML
+
+          yaml = YAML()
+          yaml.preserve_quotes = True
+          yaml.indent(mapping=2, sequence=4, offset=2)
+          yaml.width = 1000  # avoid line-wrap reflow
+
+          path = Path("roster/index.yaml")
+          data = yaml.load(path)
+
+          name = os.environ["name"]
+          version = os.environ["version"]
+          manifest_sha_raw = os.environ["manifest_sha"]
+          manifest_sha = manifest_sha_raw if manifest_sha_raw else None
+
+          data["updated_at"] = os.environ["updated_at"]
+          for entry in data.get("eidolons", []):
+              if entry.get("name") != name:
+                  continue
+              versions = entry.setdefault("versions", {})
+              versions["latest"] = version
+              pins = versions.setdefault("pins", {})
+              pins["stable"] = version
+              releases = versions.setdefault("releases", {})
+              releases[version] = {
+                  "tag": os.environ["tag"],
+                  "commit": os.environ["commit"],
+                  "tree": os.environ["tree"],
+                  "archive_sha256": os.environ["archive_sha"],
+                  "manifest_sha256": manifest_sha,
+                  "provenance": {
+                      "github_attestation": True,
+                      "workflow": os.environ["workflow"],
+                  },
+              }
+              break
+
+          yaml.dump(data, path)
+          PY
+
+          # Insert the CHANGELOG bullet under `### Added` inside the
+          # `## [Unreleased]` section. Create the subsection if it does
+          # not already exist. This keeps Keep-a-Changelog conventions
+          # (matches the rest of CHANGELOG.md).
+          python3 - <<'PY'
+          import os
+          import re
           from pathlib import Path
 
           path = Path("CHANGELOG.md")
           text = path.read_text()
-          entry = f"- {os.environ['name']} v{os.environ['version']} published in the roster with release integrity metadata.\n"
-          marker = "## [Unreleased]\n"
-          if entry not in text:
-              text = text.replace(marker, marker + "\n" + entry, 1)
-          path.write_text(text)
+          name = os.environ["name"]
+          version = os.environ["version"]
+          entry = f"- {name} v{version} published in the roster with release integrity metadata."
+          if entry in text:
+              raise SystemExit(0)
+
+          unreleased = re.search(r"^## \[Unreleased\]\s*$", text, re.MULTILINE)
+          if not unreleased:
+              raise SystemExit("CHANGELOG.md missing [Unreleased] section")
+          start = unreleased.end()
+          # Slice from end of [Unreleased] heading to next ## heading (or EOF).
+          next_section = re.search(r"^## ", text[start:], re.MULTILINE)
+          stop = start + next_section.start() if next_section else len(text)
+          section = text[start:stop]
+
+          added = re.search(r"^### Added\s*$", section, re.MULTILINE)
+          if added:
+              # Append to existing ### Added block (right after the heading).
+              insert_at = start + added.end() + 1  # +1 for trailing newline
+              new_text = text[:insert_at] + entry + "\n" + text[insert_at:]
+          else:
+              # Create a new ### Added subsection right after [Unreleased].
+              new_text = text[:start] + "\n\n### Added\n" + entry + "\n" + text[start:]
+          path.write_text(new_text)
           PY
 
       - name: Open pull request
