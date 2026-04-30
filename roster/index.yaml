@@ -7,15 +7,12 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-04-29T20:30Z"
+updated_at: "2026-04-30T19:05Z"
 eiis_required: "1.1"
 integrity:
-  enforcement: warn  # future registry bump may switch this to strict
-
+  enforcement: warn # future registry bump may switch this to strict
 # ─── Roster ────────────────────────────────────────────────────────────────────
-
 eidolons:
-
   - name: atlas
     display_name: ATLAS
     capability_class: scout
@@ -33,6 +30,16 @@ eidolons:
       latest: "1.2.2"
       pins:
         stable: "1.2.2"
+      releases:
+        1.2.2:
+          tag: v1.2.2
+          commit: c40b825e47a597211ea6a1d50cf2b51d6a473494
+          tree: b39caad797e1706f4d4ea7ac17519e8400498034
+          archive_sha256: 194d3ce1b90f18545a98639cf1f00073a04a01e4983ba3011d65386fbdd6db97
+          manifest_sha256: null
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/atlas"
       standalone: true
@@ -52,7 +59,6 @@ eidolons:
       - "research/papers/agent-fold.md"
       - "research/papers/scatter-gather.md"
       - "research/production-patterns.md#bounded-aci"
-
   - name: spectra
     display_name: SPECTRA
     capability_class: planner
@@ -87,7 +93,6 @@ eidolons:
       persists: []
     references:
       - "research/production-patterns.md#plan-mode"
-
   - name: apivr
     display_name: "APIVR-Δ"
     capability_class: coder
@@ -124,7 +129,6 @@ eidolons:
       - "research/papers/correctbench.md"
       - "research/papers/reflexion.md"
       - "research/production-patterns.md#failure-recovery"
-
   - name: idg
     display_name: IDG
     capability_class: scriber
@@ -160,8 +164,7 @@ eidolons:
     references:
       - "research/papers/docagent.md"
       - "research/papers/correctbench.md"
-    aliases: [scribe]  # transitional — accept old name, warn user
-
+    aliases: [scribe] # transitional — accept old name, warn user
   - name: forge
     display_name: FORGE
     capability_class: reasoner
@@ -183,7 +186,7 @@ eidolons:
       target_default: "./.eidolons/forge"
       standalone: true
     handoffs:
-      upstream: []       # lateral consultant — called by any member
+      upstream: [] # lateral consultant — called by any member
       downstream: []
       lateral: [atlas, spectra, apivr, idg, vigil]
     working_set_tokens:
@@ -195,7 +198,6 @@ eidolons:
       writes_repo: false
       persists: []
     references: []
-
   - name: vigil
     display_name: VIGIL
     capability_class: debugger
@@ -217,7 +219,7 @@ eidolons:
       target_default: "./.eidolons/vigil"
       standalone: true
     handoffs:
-      upstream: []       # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
+      upstream: [] # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
       downstream: []
       lateral: [atlas, spectra, apivr, idg, forge]
     working_set_tokens:
@@ -226,38 +228,30 @@ eidolons:
     security:
       reads_repo: true
       reads_network: false
-      writes_repo: false   # default read-only; sandbox never touches tree; write emits verified-patch.diff (never auto-applies)
+      writes_repo: false # default read-only; sandbox never touches tree; write emits verified-patch.diff (never auto-applies)
       persists: [".vigil/config.yml", "memories/vigil-failures.yaml"]
     references:
       - "research/papers/graphtracer.md"
       - "research/papers/agentracer.md"
       - "research/papers/lifecycle-of-failures.md"
-
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
-
 presets:
-
   minimal:
     description: "Solo scout. For read-only exploration of unfamiliar codebases."
     members: [atlas]
-
   pipeline:
     description: "Full pipeline. Scout → Plan → Build → Chronicle."
     members: [atlas, spectra, apivr, idg]
-
   plan-and-build:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [spectra, apivr]
-
   full:
     description: "Every shipped Eidolon — pipeline plus lateral specialists (FORGE, VIGIL)."
     members: [atlas, spectra, apivr, idg, forge, vigil]
-
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]
-
   diagnostics:
     description: "Debug-focused bundle. Implementation + forensic attribution."
     members: [apivr, vigil, forge]
