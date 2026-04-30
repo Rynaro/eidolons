@@ -199,6 +199,16 @@ eidolons:
       latest: "1.2.1"
       pins:
         stable: "1.2.1"
+      releases:
+        1.2.1:
+          tag: v1.2.1
+          commit: bcd2720a5cc2d42e86c1d3738fa627d1fad28ce9
+          tree: 3d4e6f5f8df7d4ecf751abed6a1c89675df660dd
+          archive_sha256: 050b3666082c155227b4eab0ddc6ff1d8e11d0c2b32ab3aafdd86cd25533c5d8
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/forge"
       standalone: true
