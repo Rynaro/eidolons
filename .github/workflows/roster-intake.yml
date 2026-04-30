@@ -63,8 +63,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The release was produced by the nexus's reusable workflow
+          # (eidolon-release-template.yml). Reusable workflows sign with
+          # the called workflow's identity, not the caller's, so we must
+          # require the signer to be Rynaro/eidolons rather than the
+          # upstream Eidolon repo. This also enforces that only signatures
+          # from the canonical nexus release template are accepted.
           gh attestation verify /tmp/eidolon-release/release-manifest.json \
-            --repo "${{ steps.resolve.outputs.repo }}"
+            --repo "${{ steps.resolve.outputs.repo }}" \
+            --signer-workflow "${{ github.repository }}/.github/workflows/eidolon-release-template.yml"
 
       - name: Validate release manifest
         run: |
