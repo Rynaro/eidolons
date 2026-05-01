@@ -380,10 +380,24 @@ file_md5() {
   # exists on PATH — command -v docker checks file presence, not exit status.
   local no_docker_bin="$BATS_TEST_TMPDIR/no-docker-bin"
   mkdir -p "$no_docker_bin"
-  # Override PATH: only the empty bin dir + minimal system paths (no docker).
-  PATH="$no_docker_bin:/usr/bin:/bin"
-
+  # Symlink only the externals the generator needs BEFORE the docker CLI
+  # gate (dirname for SELF_DIR + panel.sh source-time; mkdir for lib.sh's
+  # CACHE_DIR; bash so bats's run can exec the generator). Resolved at
+  # runtime via `command -v` so the targets are correct on macOS
+  # (/usr/bin/dirname, /bin/mkdir, /bin/bash) and Ubuntu
+  # (/usr/bin/dirname, /usr/bin/mkdir, /usr/bin/bash). Crucially, NO
+  # docker symlink and NO system bin dir on PATH — so `command -v docker`
+  # finds nothing on every runner regardless of where the host's real
+  # docker lives.
+  ln -s "$(command -v dirname)" "$no_docker_bin/dirname"
+  ln -s "$(command -v mkdir)"   "$no_docker_bin/mkdir"
+  ln -s "$(command -v bash)"    "$no_docker_bin/bash"
+  # Scope the restricted PATH to only the generator invocation so bats
+  # post-test cleanup (rm, etc.) keeps access to system tools.
+  local _saved_path="$PATH"
+  PATH="$no_docker_bin"
   run_generator --project-root "$project"
+  PATH="$_saved_path"
 
   # Must fail.
   [ "$status" -eq 1 ]
