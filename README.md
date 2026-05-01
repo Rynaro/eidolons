@@ -88,6 +88,14 @@ eidolons sync                    # reconcile installed members to eidolons.yaml
 eidolons verify                  # re-check installed Eidolons against the roster's signed metadata
 ```
 
+**MCP server scaffold (Atlas-ACI).** If you use the Atlas-ACI code-graph MCP server alongside ATLAS, run the nexus scaffold step once per project before starting the MCP server. It writes a per-project `.mcp.json` with the correct bind-mount paths and pre-creates `.atlas/memex/` so the sqlite codegraph DB has a writable host-side surface — skipping this step is the most common cause of `sqlite3.OperationalError: unable to open database file` on fresh clones.
+
+```bash
+eidolons mcp atlas-aci [--force] [--image-digest <sha256>]
+```
+
+Note that `atlas-aci` is an external Python MCP package (a tool Eidolons consume); it is not an Eidolon and does not appear in `roster/index.yaml`. The `atlas` Eidolon (scout methodology) and the `atlas-aci` MCP server are distinct — see [`docs/architecture.md`](docs/architecture.md) for the boundary.
+
 Commit `eidolons.lock` alongside `eidolons.yaml` — the lockfile pins resolved versions and integrity checksums (`commit`, `tree`, `archive_sha256`, `manifest_sha256`) for reproducible, tamper-evident installs. For the full flow, read [`docs/getting-started.md`](docs/getting-started.md).
 
 ---

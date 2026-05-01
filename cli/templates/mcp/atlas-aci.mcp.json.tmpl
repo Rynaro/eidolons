@@ -1,0 +1,27 @@
+{
+  "mcpServers": {
+    "atlas-aci": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--read-only",
+        "--name",
+        "atlas-aci-__PROJECT_SLUG__",
+        "--label",
+        "eidolons.project=__PROJECT_SLUG__",
+        "-v",
+        "__PROJECT_ROOT__:/repo:ro",
+        "-v",
+        "__PROJECT_ROOT__/.atlas/memex:/memex",
+        "atlas-aci@__IMAGE_DIGEST__",
+        "serve",
+        "--repo",
+        "/repo",
+        "--memex-root",
+        "/memex"
+      ]
+    }
+  }
+}
