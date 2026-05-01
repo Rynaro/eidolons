@@ -160,6 +160,8 @@ Every layer has a narrow privilege:
 
 **MCP-server scaffolding is a nexus responsibility, not an Eidolon.** The `eidolons mcp atlas-aci` subcommand lives in `cli/src/mcp_atlas_aci.sh` and `cli/templates/mcp/` — it is a generator that writes a per-project `.mcp.json` and pre-creates `.atlas/memex/` so the Atlas-ACI sqlite codegraph DB has a writable host-side bind-mount surface. It has no entry in `roster/index.yaml`, triggers no EIIS conformance check, and is not installed via `eidolons init`. This distinction matters: `atlas` (the Eidolon) is the scout methodology shipped from `Rynaro/ATLAS` and registered in the roster; `atlas-aci` is an external Python package that provides a Docker-based MCP code-graph server — a tool that Eidolons (and other agents) can consume, but not itself an Eidolon.
 
+MCP server prerequisites (e.g. Docker images) are validated by the corresponding `eidolons mcp <server>` generator at scaffold time. The generator refuses to write configuration that would fail at runtime, emitting an actionable error that names `eidolons mcp atlas-aci pull` as the corrective step; `--skip-image-check` is the explicit escape hatch for CI environments that load the image after scaffolding. `eidolons doctor` performs the same checks post-hoc as a regression guard, surfacing MCP image health under a dedicated "MCP servers" section.
+
 ---
 
 ## Versioning

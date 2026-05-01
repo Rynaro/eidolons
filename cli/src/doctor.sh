@@ -6,6 +6,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_atlas_aci.sh"
 
 usage() {
   cat <<EOF
@@ -207,6 +209,64 @@ if [[ -f "$PROJECT_LOCK" ]]; then
 else
   printf "  %s·%s eidolons.lock missing — integrity check deferred\n" \
     "${YELLOW:-}" "${RESET:-}"
+fi
+
+# ─── Check 6: MCP servers ───────────────────────────────────────────────
+# Scans .mcp.json in cwd (if present) and reports image health for known
+# MCP servers. Currently handles atlas-aci only; other servers are skipped.
+# jq is a hard dep elsewhere; if absent here, we degrade gracefully.
+ui_section_out "MCP servers"
+if [[ ! -f ".mcp.json" ]]; then
+  printf "  %s·%s no .mcp.json in this project — MCP check skipped\n" \
+    "${YELLOW:-}" "${RESET:-}"
+elif ! command -v jq >/dev/null 2>&1; then
+  printf "  %s·%s jq not on PATH — MCP server check skipped\n" \
+    "${YELLOW:-}" "${RESET:-}"
+else
+  mcp_server_names="$(jq -r '.mcpServers | keys[]' .mcp.json 2>/dev/null || true)"
+  if [[ -z "$mcp_server_names" ]]; then
+    printf "  %s·%s .mcp.json has no mcpServers entries\n" \
+      "${YELLOW:-}" "${RESET:-}"
+  else
+    while IFS= read -r mcp_name; do
+      [[ -n "$mcp_name" ]] || continue
+      case "$mcp_name" in
+        atlas-aci)
+          # Extract the image ref from the args array (element matching ^atlas-aci@sha256:)
+          mcp_image_ref="$(jq -r \
+            '.mcpServers["atlas-aci"].args[]? | select(test("^atlas-aci@sha256:"))' \
+            .mcp.json 2>/dev/null || true)"
+          if [[ -z "$mcp_image_ref" ]]; then
+            err "atlas-aci: cannot find image ref in .mcp.json args (expected element matching atlas-aci@sha256:)"
+          else
+            # Call lib functions with stderr suppressed — doctor summarises, not dumps.
+            # Use `|| _rc=$?` idiom (set -e safe: failure captured, not propagated).
+            _mcp_cli_rc=0; atlas_aci_check_docker_cli 2>/dev/null || _mcp_cli_rc=$?
+            if [[ "$_mcp_cli_rc" -ne 0 ]]; then
+              err "atlas-aci needs Docker but 'docker' is not on PATH"
+            else
+              _mcp_daemon_rc=0; atlas_aci_check_docker_daemon 2>/dev/null || _mcp_daemon_rc=$?
+              if [[ "$_mcp_daemon_rc" -ne 0 ]]; then
+                err "atlas-aci needs Docker daemon — start Docker Desktop / docker daemon"
+              else
+                _mcp_image_rc=0; atlas_aci_check_image "$mcp_image_ref" 2>/dev/null || _mcp_image_rc=$?
+                if [[ "$_mcp_image_rc" -ne 0 ]]; then
+                  err "atlas-aci image NOT loaded — run 'eidolons mcp atlas-aci pull'"
+                else
+                  # Extract just the digest portion for the pass message
+                  _mcp_digest="${mcp_image_ref#atlas-aci@}"
+                  pass "atlas-aci image loaded ($_mcp_digest)"
+                fi
+              fi
+            fi
+          fi
+          ;;
+        *)
+          # Out of scope for this cycle — ignore other server names silently.
+          ;;
+      esac
+    done <<< "$mcp_server_names"
+  fi
 fi
 
 # ─── Summary ────────────────────────────────────────────────────────────

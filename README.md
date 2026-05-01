@@ -94,6 +94,8 @@ eidolons verify                  # re-check installed Eidolons against the roste
 eidolons mcp atlas-aci [--force] [--image-digest <sha256>]
 ```
 
+If the image isn't on your host yet, run `eidolons mcp atlas-aci pull` first; the generator refuses to write `.mcp.json` until the image is loadable. Use `--skip-image-check` only in CI where the image is loaded after scaffolding.
+
 Note that `atlas-aci` is an external Python MCP package (a tool Eidolons consume); it is not an Eidolon and does not appear in `roster/index.yaml`. The `atlas` Eidolon (scout methodology) and the `atlas-aci` MCP server are distinct — see [`docs/architecture.md`](docs/architecture.md) for the boundary.
 
 Commit `eidolons.lock` alongside `eidolons.yaml` — the lockfile pins resolved versions and integrity checksums (`commit`, `tree`, `archive_sha256`, `manifest_sha256`) for reproducible, tamper-evident installs. For the full flow, read [`docs/getting-started.md`](docs/getting-started.md).
