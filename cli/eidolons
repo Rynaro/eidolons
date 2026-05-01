@@ -51,8 +51,10 @@ Commands:
   upgrade        Upgrade pinned Eidolon versions
   mcp <sub>      MCP server scaffolding helpers.
                  Subcommands:
-                   atlas-aci  Generate a per-project .mcp.json for Atlas-ACI
+                   atlas-aci        Generate a per-project .mcp.json for Atlas-ACI
+                   atlas-aci pull   Fetch/load the Atlas-ACI Docker image
                  Run 'eidolons mcp atlas-aci --help' for options.
+                 Run 'eidolons mcp atlas-aci pull --help' for pull options.
   <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
                  Each Eidolon exposes its own subcommands via
                  .eidolons/<eidolon>/commands/*.sh after install.
@@ -93,7 +95,13 @@ case "$cmd" in
     mcp_sub="${1:-}"
     [[ $# -gt 0 ]] && shift
     case "$mcp_sub" in
-      atlas-aci) exec bash "$CLI_SRC/mcp_atlas_aci.sh" "$@" ;;
+      atlas-aci)
+        sub2="${1:-}"
+        case "$sub2" in
+          pull) shift; exec bash "$CLI_SRC/mcp_atlas_aci_pull.sh" "$@" ;;
+          *)    exec bash "$CLI_SRC/mcp_atlas_aci.sh" "$@" ;;
+        esac
+        ;;
       "")
         echo "Usage: eidolons mcp <subcommand> [options]" >&2
         echo "" >&2

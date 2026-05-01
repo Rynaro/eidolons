@@ -7,12 +7,17 @@
 #
 # Usage:
 #   eidolons mcp atlas-aci [--force] [--image-digest <sha256>] [--project-root <path>]
+#                          [--skip-image-check]
 #
 # Subcommand surface (routed here from cli/eidolons — see T3):
-#   --project-root PATH   Directory to scaffold (default: cwd).
-#   --image-digest DIGEST Override the pinned Docker image digest.
-#   --force               Overwrite an existing .mcp.json without prompting.
-#   -h, --help            Print this help.
+#   --project-root PATH    Directory to scaffold (default: cwd).
+#   --image-digest DIGEST  Override the pinned Docker image digest.
+#   --force                Overwrite an existing .mcp.json without prompting.
+#   --skip-image-check     Skip Docker + image pre-flight checks. Use only in CI
+#                          where the image is loaded after scaffolding. Emits a
+#                          warning; the MCP server will fail at boot if the image
+#                          is absent.
+#   -h, --help             Print this help.
 #
 # Bash 3.2 compatible — no associative arrays, no ${var,,}, no readarray.
 # See CLAUDE.md §"Bash 3.2 compatibility".
@@ -22,6 +27,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_atlas_aci.sh"
 
 # ─── Constants ────────────────────────────────────────────────────────────
 # Default image digest — bump here (one place) on Atlas-ACI image version bumps.
@@ -34,6 +41,7 @@ TEMPLATE_FILE="$SELF_DIR/../templates/mcp/atlas-aci.mcp.json.tmpl"
 PROJECT_ROOT=""
 IMAGE_DIGEST=""
 FORCE=false
+SKIP_IMAGE_CHECK=false
 
 usage() {
   cat >&2 <<EOF
@@ -45,18 +53,23 @@ Options:
   --project-root PATH    Project directory to scaffold (default: current dir).
   --image-digest DIGEST  Docker image digest to pin (default: ${DEFAULT_IMAGE_DIGEST}).
   --force                Overwrite an existing .mcp.json without prompting.
+  --skip-image-check     Skip Docker + image pre-flight. Use only in CI where
+                         the image is loaded after scaffolding. The MCP server
+                         will fail at boot if the image is absent.
   -h, --help             Show this help.
 
 What it does:
-  1. Computes a project slug from the project root directory name.
-  2. Pre-creates <project-root>/.atlas/memex/ and writes .gitkeep if absent.
-  3. Renders the Atlas-ACI MCP template into <project-root>/.mcp.json.
+  1. Runs a Docker + image pre-flight check (skip with --skip-image-check).
+  2. Computes a project slug from the project root directory name.
+  3. Pre-creates <project-root>/.atlas/memex/ and writes .gitkeep if absent.
+  4. Renders the Atlas-ACI MCP template into <project-root>/.mcp.json.
 
 The generated .mcp.json wires Atlas-ACI as a Docker-based MCP server with:
   - A per-project container name (atlas-aci-<slug>) for parallel-project isolation.
   - Distinct bind mounts so each project's codegraph.db is independent.
   - The pinned image digest (no tag drift).
 
+If the image is not on your host yet, run 'eidolons mcp atlas-aci pull' first.
 Rerun with --force to regenerate .mcp.json after an image-digest bump.
 Existing .atlas/memex/codegraph.db is NEVER deleted.
 EOF
@@ -78,6 +91,10 @@ while [[ $# -gt 0 ]]; do
       FORCE=true
       shift
       ;;
+    --skip-image-check)
+      SKIP_IMAGE_CHECK=true
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -97,6 +114,24 @@ IMAGE_DIGEST="${IMAGE_DIGEST:-$DEFAULT_IMAGE_DIGEST}"
 # Resolve to an absolute path (guard against relative inputs).
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd)" \
   || die "Project root does not exist: ${PROJECT_ROOT}"
+
+# ─── Docker + image pre-flight ────────────────────────────────────────────
+# Runs before any filesystem write so a broken setup never leaves a partial
+# scaffold tree. Use --skip-image-check only in CI where the image is loaded
+# after scaffolding (e.g. the image is built in a later pipeline step).
+if [ "$SKIP_IMAGE_CHECK" = "true" ]; then
+  warn "Skipping image pre-flight check (--skip-image-check). The MCP server will fail at boot if the image is not loaded."
+else
+  if ! atlas_aci_check_docker_cli; then
+    exit 1
+  fi
+  if ! atlas_aci_check_docker_daemon; then
+    exit 1
+  fi
+  if ! atlas_aci_check_image "atlas-aci@${IMAGE_DIGEST}"; then
+    exit 1
+  fi
+fi
 
 # ─── Template presence check ──────────────────────────────────────────────
 # The template is shipped by T2. If T2 has not landed yet, fail clearly.
