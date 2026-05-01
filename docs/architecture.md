@@ -158,6 +158,8 @@ Every layer has a narrow privilege:
 
 **Explicit limits.** The CLI never executes code from a consumer project's `eidolons.yaml`. It reads, resolves, and delegates — `yaml → jq query → bash exec` with no evaluation. Eidolon repos are trusted at install time (they're on your roster); untrusted sources require a manual override.
 
+**MCP-server scaffolding is a nexus responsibility, not an Eidolon.** The `eidolons mcp atlas-aci` subcommand lives in `cli/src/mcp_atlas_aci.sh` and `cli/templates/mcp/` — it is a generator that writes a per-project `.mcp.json` and pre-creates `.atlas/memex/` so the Atlas-ACI sqlite codegraph DB has a writable host-side bind-mount surface. It has no entry in `roster/index.yaml`, triggers no EIIS conformance check, and is not installed via `eidolons init`. This distinction matters: `atlas` (the Eidolon) is the scout methodology shipped from `Rynaro/ATLAS` and registered in the roster; `atlas-aci` is an external Python package that provides a Docker-based MCP code-graph server — a tool that Eidolons (and other agents) can consume, but not itself an Eidolon.
+
 ---
 
 ## Versioning
