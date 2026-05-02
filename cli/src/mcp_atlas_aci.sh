@@ -34,9 +34,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Default image reference and digest — bump here (one place) on Atlas-ACI image version bumps.
 # Mirror the same constants in cli/src/mcp_atlas_aci_pull.sh (comment-bound contract).
 #
-# TODO(ghcr-bootstrap): replace with the real digest from the first successful release.yml run on Rynaro/atlas-aci. See .spectra/plans/atlas-aci-ghcr-distribution-2026-05-01/spec.md §"Bootstrap problem".
+# Pin: ghcr.io/rynaro/atlas-aci v0.2.2 (first signed GHCR publish, multi-arch amd64+arm64,
+# cosign keyless signature + SBOM (SPDX) + build provenance, Trivy gate green).
 DEFAULT_IMAGE_REF="ghcr.io/rynaro/atlas-aci"
-DEFAULT_IMAGE_DIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+DEFAULT_IMAGE_DIGEST="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
 DEFAULT_IMAGE_FULL_REF="${DEFAULT_IMAGE_REF}@${DEFAULT_IMAGE_DIGEST}"
 
 # Template path — resolved relative to the nexus (SELF_DIR/../templates/...).

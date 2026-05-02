@@ -545,27 +545,39 @@ file_md5() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ─── H2 Test 1: placeholder digest → generator refuses before docker ───────
+# Once a real digest is pinned in source, the bootstrap guard is dormant in
+# normal use. To keep regression coverage (so the H2 invariant fires if a
+# contributor accidentally re-introduces the placeholder), this test runs a
+# TEMPORARY COPY of the script with the placeholder forced as the default.
 @test "bootstrap-digest: placeholder digest → generator refuses with helpful message" {
   local project="$BATS_TEST_TMPDIR/bootstrap-project"
   mkdir -p "$project"
 
-  # All docker checks would pass — but the bootstrap guard fires first.
   FAKE_DOCKER_CLI_PRESENT=1
   FAKE_DOCKER_INFO_RESULT=ok
   FAKE_DOCKER_INSPECT_RESULT=ok
 
-  # Invoke the script directly with no --image-digest flag (bypassing
-  # run_generator's injection) so IMAGE_DIGEST_EXPLICIT stays false and the
-  # bootstrap guard fires on the default all-zeros placeholder.
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --project-root "$project"
+  # Build a temp copy of the generator script with the placeholder forced.
+  # Symlink lib deps so the fixture's SELF_DIR-relative sourcing works.
+  local fixture_dir="$BATS_TEST_TMPDIR/fixture-src"
+  mkdir -p "$fixture_dir"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib.sh" "$fixture_dir/lib.sh"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$fixture_dir/lib_mcp_atlas_aci.sh"
+  local fixture="$fixture_dir/mcp_atlas_aci.fixture.sh"
+  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  sed -E "s|^DEFAULT_IMAGE_DIGEST=\"sha256:[0-9a-f]{64}\"|DEFAULT_IMAGE_DIGEST=\"${placeholder}\"|" \
+    "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" > "$fixture"
+  chmod +x "$fixture"
+  grep -q "DEFAULT_IMAGE_DIGEST=\"${placeholder}\"" "$fixture"
 
-  # Must refuse.
+  # The generator references TEMPLATE_FILE relative to SELF_DIR/../templates;
+  # symlink the templates dir so that resolves too.
+  ln -sf "$EIDOLONS_ROOT/cli/templates" "$BATS_TEST_TMPDIR/templates"
+
+  run bash "$fixture" --project-root "$project"
+
   [ "$status" -ne 0 ]
-
-  # .mcp.json must NOT have been written (guard fires before any fs writes).
   [ ! -f "$project/.mcp.json" ]
-
-  # stderr must mention the bootstrap placeholder and recovery options.
   [[ "$output" =~ "bootstrap placeholder" ]]
   [[ "$output" =~ "build-locally" ]]
 }

@@ -425,27 +425,40 @@ run_pull() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 # ─── H2 Case 1: placeholder digest → pull refuses with helpful message ─────
+# Once a real digest is pinned in the source, the bootstrap guard is dormant
+# in normal use. To keep regression coverage for the guard (so the H2 design
+# is enforced if a contributor accidentally re-introduces the placeholder),
+# this test runs against a TEMPORARY COPY of the script with the placeholder
+# forced as the default digest. The fixture is local to the test; the source
+# script is untouched.
 @test "bootstrap-digest: placeholder digest → pull refuses with helpful message" {
-  # All docker checks would pass — but the bootstrap guard fires first.
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=ok
 
-  # Invoke the script directly with no flags (bypassing run_pull's digest
-  # injection) so the default all-zeros placeholder digest is used and the
-  # bootstrap guard fires (IMAGE_DIGEST_EXPLICIT stays false).
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  # Build a temp script that forces the placeholder as the default digest.
+  # Symlink lib deps so the fixture's SELF_DIR-relative sourcing works.
+  local fixture_dir="$BATS_TEST_TMPDIR/fixture-src"
+  mkdir -p "$fixture_dir"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib.sh" "$fixture_dir/lib.sh"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$fixture_dir/lib_mcp_atlas_aci.sh"
+  local fixture="$fixture_dir/mcp_atlas_aci_pull.fixture.sh"
+  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  sed -E "s|^DEFAULT_IMAGE_DIGEST=\"sha256:[0-9a-f]{64}\"|DEFAULT_IMAGE_DIGEST=\"${placeholder}\"|" \
+    "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" > "$fixture"
+  chmod +x "$fixture"
 
-  # Must refuse.
+  # Sanity: the fixture must actually carry the placeholder.
+  grep -q "DEFAULT_IMAGE_DIGEST=\"${placeholder}\"" "$fixture"
+
+  run bash "$fixture"
+
   [ "$status" -ne 0 ]
-
-  # stderr must mention the bootstrap placeholder and recovery options.
   [[ "$output" =~ "bootstrap placeholder" ]]
   [[ "$output" =~ "build-locally" ]]
 
   # docker.log must NOT contain any docker invocations — guard fires before
   # any docker call.
   local log="$BATS_TEST_TMPDIR/docker.log"
-  # Either no log file exists, or it has no lines.
   if [ -f "$log" ]; then
     local line_count
     line_count="$(wc -l < "$log" | tr -d ' ')"
