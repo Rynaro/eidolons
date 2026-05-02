@@ -162,8 +162,28 @@ teardown() {
 # roster from the checkout. The template path inside the script is resolved
 # relative to SELF_DIR (the script's own directory), so it always finds
 # cli/templates/mcp/atlas-aci.mcp.json.tmpl regardless of cwd.
+#
+# A non-placeholder test digest is always injected so tests exercise the
+# rendering logic without hitting the bootstrap-digest pre-flight guard (H2).
+# Tests that specifically test the bootstrap guard must call the script
+# directly with bash (no --image-digest) to trigger IMAGE_DIGEST_EXPLICIT=false.
+TEST_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 run_generator() {
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" "$@"
+  # Inject TEST_IMAGE_DIGEST unless the caller already supplies --image-digest.
+  local _has_digest=false
+  local _arg
+  for _arg in "$@"; do
+    if [ "$_arg" = "--image-digest" ]; then
+      _has_digest=true
+      break
+    fi
+  done
+  if [ "$_has_digest" = "false" ]; then
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --image-digest "$TEST_IMAGE_DIGEST" "$@"
+  else
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" "$@"
+  fi
 }
 
 # ─── Portable md5 ─────────────────────────────────────────────────────────
@@ -204,6 +224,37 @@ file_md5() {
   ' "$project/.mcp.json")"
 
   [ "$name_val" = "atlas-aci-fresh-project" ]
+
+  # Security hardening flags (H1): --cap-drop ALL and --security-opt no-new-privileges
+  # must be present in the args array (defense-in-depth on top of the UID 10001 Dockerfile).
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"--cap-drop\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"ALL\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"--security-opt\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"no-new-privileges\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # --cap-drop must immediately precede ALL, and --security-opt must immediately
+  # precede no-new-privileges — guard against accidental reordering.
+  local cap_idx sec_idx
+  cap_idx="$(jq -r '(.mcpServers."atlas-aci".args | indices("--cap-drop"))[0]' "$project/.mcp.json")"
+  sec_idx="$(jq -r '(.mcpServers."atlas-aci".args | indices("--security-opt"))[0]' "$project/.mcp.json")"
+  local cap_val sec_val
+  cap_val="$(jq -r ".mcpServers.\"atlas-aci\".args[$((cap_idx + 1))]" "$project/.mcp.json")"
+  sec_val="$(jq -r ".mcpServers.\"atlas-aci\".args[$((sec_idx + 1))]" "$project/.mcp.json")"
+  [ "$cap_val" = "ALL" ]
+  [ "$sec_val" = "no-new-privileges" ]
+
+  # Security flags must appear AFTER the second -v mount and BEFORE the image ref.
+  # Verify ordering: cap-drop index < image-ref index.
+  local img_idx
+  img_idx="$(jq -r '[.mcpServers."atlas-aci".args[] | select(startswith("ghcr.io/rynaro/atlas-aci@"))] | length' "$project/.mcp.json")"
+  # img_idx here is the count (1), not the position — use index() for the position.
+  img_idx="$(jq -r '(.mcpServers."atlas-aci".args | map(startswith("ghcr.io/rynaro/atlas-aci@")) | index(true))' "$project/.mcp.json")"
+  [ "$cap_idx" -lt "$img_idx" ]
+  [ "$sec_idx" -lt "$img_idx" ]
 }
 
 # ─── Test 2: idempotent rerun without --force ──────────────────────────────
@@ -253,7 +304,8 @@ file_md5() {
 
   # Use a different image digest on the --force run so the regenerated
   # .mcp.json is guaranteed to differ from the first run's output.
-  local alt_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  # Note: TEST_IMAGE_DIGEST uses 'a'-repeated; use 'b'-repeated here to differ.
+  local alt_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   run_generator --project-root "$project" --force --image-digest "$alt_digest"
   [ "$status" -eq 0 ]
 
@@ -486,4 +538,67 @@ file_md5() {
 
   # No skip-warning: the image was present so no --skip-image-check was needed.
   [[ ! "$output" =~ "--skip-image-check" ]]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H2 tests — bootstrap-digest pre-flight refusal
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── H2 Test 1: placeholder digest → generator refuses before docker ───────
+# Once a real digest is pinned in source, the bootstrap guard is dormant in
+# normal use. To keep regression coverage (so the H2 invariant fires if a
+# contributor accidentally re-introduces the placeholder), this test runs a
+# TEMPORARY COPY of the script with the placeholder forced as the default.
+@test "bootstrap-digest: placeholder digest → generator refuses with helpful message" {
+  local project="$BATS_TEST_TMPDIR/bootstrap-project"
+  mkdir -p "$project"
+
+  FAKE_DOCKER_CLI_PRESENT=1
+  FAKE_DOCKER_INFO_RESULT=ok
+  FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # Build a temp copy of the generator script with the placeholder forced.
+  # Symlink lib deps so the fixture's SELF_DIR-relative sourcing works.
+  local fixture_dir="$BATS_TEST_TMPDIR/fixture-src"
+  mkdir -p "$fixture_dir"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib.sh" "$fixture_dir/lib.sh"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$fixture_dir/lib_mcp_atlas_aci.sh"
+  local fixture="$fixture_dir/mcp_atlas_aci.fixture.sh"
+  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  sed -E "s|^DEFAULT_IMAGE_DIGEST=\"sha256:[0-9a-f]{64}\"|DEFAULT_IMAGE_DIGEST=\"${placeholder}\"|" \
+    "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" > "$fixture"
+  chmod +x "$fixture"
+  grep -q "DEFAULT_IMAGE_DIGEST=\"${placeholder}\"" "$fixture"
+
+  # The generator references TEMPLATE_FILE relative to SELF_DIR/../templates;
+  # symlink the templates dir so that resolves too.
+  ln -sf "$EIDOLONS_ROOT/cli/templates" "$BATS_TEST_TMPDIR/templates"
+
+  run bash "$fixture" --project-root "$project"
+
+  [ "$status" -ne 0 ]
+  [ ! -f "$project/.mcp.json" ]
+  [[ "$output" =~ "bootstrap placeholder" ]]
+  [[ "$output" =~ "build-locally" ]]
+}
+
+# ─── H2 Test 2: --image-digest real digest bypasses bootstrap guard ─────────
+@test "bootstrap-digest: explicit --image-digest with real digest bypasses guard" {
+  local project="$BATS_TEST_TMPDIR/override-project"
+  mkdir -p "$project"
+
+  # All docker checks pass.
+  FAKE_DOCKER_CLI_PRESENT=1
+  FAKE_DOCKER_INFO_RESULT=ok
+  FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # An explicit non-placeholder digest must bypass the guard and produce output.
+  local real_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  run_generator --project-root "$project" --image-digest "$real_digest"
+
+  [ "$status" -eq 0 ]
+  [ -f "$project/.mcp.json" ]
+
+  # The digest must appear in the rendered file.
+  grep -q "$real_digest" "$project/.mcp.json"
 }

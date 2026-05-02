@@ -31,8 +31,14 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib_mcp_atlas_aci.sh"
 
 # ─── Constants ────────────────────────────────────────────────────────────
-# Default image digest — bump here (one place) on Atlas-ACI image version bumps.
-DEFAULT_IMAGE_DIGEST="sha256:f66dc2578f1fe4a028f42dd8d09c2e07576dd1fd6587ddd46c8704c44f8e502c"
+# Default image reference and digest — bump here (one place) on Atlas-ACI image version bumps.
+# Mirror the same constants in cli/src/mcp_atlas_aci_pull.sh (comment-bound contract).
+#
+# Pin: ghcr.io/rynaro/atlas-aci v0.2.2 (first signed GHCR publish, multi-arch amd64+arm64,
+# cosign keyless signature + SBOM (SPDX) + build provenance, Trivy gate green).
+DEFAULT_IMAGE_REF="ghcr.io/rynaro/atlas-aci"
+DEFAULT_IMAGE_DIGEST="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
+DEFAULT_IMAGE_FULL_REF="${DEFAULT_IMAGE_REF}@${DEFAULT_IMAGE_DIGEST}"
 
 # Template path — resolved relative to the nexus (SELF_DIR/../templates/...).
 TEMPLATE_FILE="$SELF_DIR/../templates/mcp/atlas-aci.mcp.json.tmpl"
@@ -40,6 +46,7 @@ TEMPLATE_FILE="$SELF_DIR/../templates/mcp/atlas-aci.mcp.json.tmpl"
 # ─── Argument parsing ─────────────────────────────────────────────────────
 PROJECT_ROOT=""
 IMAGE_DIGEST=""
+IMAGE_DIGEST_EXPLICIT=false   # set to true when user passes --image-digest
 FORCE=false
 SKIP_IMAGE_CHECK=false
 
@@ -85,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --image-digest)
       [[ -z "${2:-}" ]] && die "--image-digest requires an argument"
       IMAGE_DIGEST="$2"
+      IMAGE_DIGEST_EXPLICIT=true
       shift 2
       ;;
     --force)
@@ -115,6 +123,21 @@ IMAGE_DIGEST="${IMAGE_DIGEST:-$DEFAULT_IMAGE_DIGEST}"
 PROJECT_ROOT="$(cd "$PROJECT_ROOT" 2>/dev/null && pwd)" \
   || die "Project root does not exist: ${PROJECT_ROOT}"
 
+# ─── Bootstrap-digest pre-flight ──────────────────────────────────────────
+# Refuse early if the digest is still the all-zeros placeholder that ships
+# before the first ghcr.io/rynaro/atlas-aci release. A literal string compare
+# is portable to bash 3.2 (no regex, no ${var,,}, no external tools).
+# Bypassed when the user explicitly passes --image-digest (they know what they
+# are doing — the guard is for the default case only).
+_BOOTSTRAP_PLACEHOLDER="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+if [ "$IMAGE_DIGEST_EXPLICIT" = "false" ] && [ "$IMAGE_DIGEST" = "$_BOOTSTRAP_PLACEHOLDER" ]; then
+  die "DEFAULT_IMAGE_DIGEST is still the bootstrap placeholder. The first ghcr.io/rynaro/atlas-aci release has not landed yet (or the digest constant has not been updated). Either:
+  1. Run 'eidolons mcp atlas-aci pull --build-locally' to build from source (air-gap escape hatch).
+  2. Pass --image-digest sha256:<real-digest> to override.
+  3. Wait for the first published release and the corresponding digest-bump PR.
+See .spectra/plans/atlas-aci-ghcr-distribution-2026-05-01/spec.md §'Bootstrap problem'."
+fi
+
 # ─── Docker + image pre-flight ────────────────────────────────────────────
 # Runs before any filesystem write so a broken setup never leaves a partial
 # scaffold tree. Use --skip-image-check only in CI where the image is loaded
@@ -128,7 +151,7 @@ else
   if ! atlas_aci_check_docker_daemon; then
     exit 1
   fi
-  if ! atlas_aci_check_image "atlas-aci@${IMAGE_DIGEST}"; then
+  if ! atlas_aci_check_image "${DEFAULT_IMAGE_REF}@${IMAGE_DIGEST}"; then
     exit 1
   fi
 fi

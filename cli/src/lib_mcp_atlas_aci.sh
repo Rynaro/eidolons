@@ -27,6 +27,108 @@ fi
 _LIB_MCP_ATLAS_ACI_LOADED=1
 
 # ---------------------------------------------------------------------------
+# atlas_aci_check_registry_reachable <full-ref>
+#   Performs an anonymous-token-authenticated HEAD request against the ghcr.io
+#   v2 manifests endpoint to verify the pinned digest is publicly reachable.
+#
+#   Protocol (two-step):
+#     1. Fetch an anonymous bearer token scoped to the repository.
+#     2. HEAD the manifest URL; 200 → reachable, anything else → unreachable.
+#
+#   <full-ref> must be in the form: ghcr.io/<namespace>/<image>@sha256:<hex>
+#   The function parses the namespace, image, and digest from the ref.
+#
+#   Returns 0 on 200 OK.
+#   Returns 5 on 404, network error, missing curl, missing jq, or parse error.
+#   All diagnostic output goes to stderr only.
+# ---------------------------------------------------------------------------
+atlas_aci_check_registry_reachable() {
+  local full_ref="$1"
+
+  # Graceful degradation: curl must be present.
+  if ! command -v curl >/dev/null 2>&1; then
+    printf '%s\n' \
+      "atlas_aci_check_registry_reachable: curl not on PATH — skipping registry probe." \
+      >&2
+    return 5
+  fi
+
+  # Graceful degradation: jq must be present (used to extract the token).
+  if ! command -v jq >/dev/null 2>&1; then
+    printf '%s\n' \
+      "atlas_aci_check_registry_reachable: jq not on PATH — skipping registry probe." \
+      >&2
+    return 5
+  fi
+
+  # Parse the full-ref: ghcr.io/<namespace>/<image>@sha256:<hex>
+  # Strip the registry host prefix.
+  local _ref_no_host
+  _ref_no_host="${full_ref#ghcr.io/}"
+
+  # Extract namespace (first path segment before '/').
+  local _namespace
+  _namespace="${_ref_no_host%%/*}"
+
+  # Extract image+digest (everything after the first '/').
+  local _image_and_digest
+  _image_and_digest="${_ref_no_host#*/}"
+
+  # Split image from digest at the '@'.
+  local _image
+  _image="${_image_and_digest%%@*}"
+
+  # Extract the digest (sha256:<hex>).
+  local _digest
+  _digest="${_image_and_digest#*@}"
+
+  # Validate that we extracted non-empty parts.
+  if [ -z "$_namespace" ] || [ -z "$_image" ] || [ -z "$_digest" ]; then
+    printf '%s\n' \
+      "atlas_aci_check_registry_reachable: cannot parse full-ref '${full_ref}' — expected ghcr.io/<ns>/<img>@sha256:<hex>. Use --build-locally as the recovery path." \
+      >&2
+    return 5
+  fi
+
+  # Step 1: fetch an anonymous bearer token for the repository.
+  local _token_url="https://ghcr.io/token?scope=repository:${_namespace}/${_image}:pull"
+  local _token_json
+  _token_json="$(curl -fsSL "$_token_url" 2>/dev/null)" || {
+    printf '%s\n' \
+      "atlas_aci_check_registry_reachable: failed to fetch token from ghcr.io — network unreachable? Use --build-locally as the recovery path." \
+      >&2
+    return 5
+  }
+
+  local _token
+  _token="$(printf '%s' "$_token_json" | jq -r '.token // empty' 2>/dev/null)"
+  if [ -z "$_token" ]; then
+    printf '%s\n' \
+      "atlas_aci_check_registry_reachable: token response did not contain .token — unexpected ghcr.io response. Use --build-locally as the recovery path." \
+      >&2
+    return 5
+  fi
+
+  # Step 2: HEAD the manifest endpoint; 200 means the digest is reachable.
+  local _manifest_url="https://ghcr.io/v2/${_namespace}/${_image}/manifests/${_digest}"
+  local _http_status
+  _http_status="$(curl -fsI \
+    -H "Authorization: Bearer ${_token}" \
+    -o /dev/null \
+    -w '%{http_code}' \
+    "$_manifest_url" 2>/dev/null)" || true
+
+  if [ "$_http_status" = "200" ]; then
+    return 0
+  fi
+
+  printf '%s\n' \
+    "atlas_aci_check_registry_reachable: manifest HEAD returned '${_http_status:-<no response>}' for ${full_ref} — offline? or pinned digest yanked? Use --build-locally as the recovery path." \
+    >&2
+  return 5
+}
+
+# ---------------------------------------------------------------------------
 # atlas_aci_check_docker_cli
 #   Returns 0 if the `docker` binary is on PATH, 2 otherwise.
 #   On failure: writes a one-line actionable message to stderr.

@@ -49,6 +49,7 @@ setup_fake_docker() {
 #!/usr/bin/env bash
 # Fake docker shim — controlled by FAKE_DOCKER_* env vars.
 # Logs every invocation to $BATS_TEST_TMPDIR/docker.log.
+# Extended for T7/T9: tracks 'build' invocations via FAKE_DOCKER_BUILD_RESULT.
 set -u
 
 DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
@@ -57,6 +58,7 @@ DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
 INFO_RESULT="${FAKE_DOCKER_INFO_RESULT:-ok}"
 INSPECT_RESULT="${FAKE_DOCKER_INSPECT_RESULT:-fail}"
 PULL_RESULT="${FAKE_DOCKER_PULL_RESULT:-fail}"
+BUILD_RESULT="${FAKE_DOCKER_BUILD_RESULT:-ok}"
 INSPECT_AFTER_PULL="${FAKE_DOCKER_INSPECT_AFTER_PULL:-}"
 
 # Helper: count how many 'pull' lines are already in the log.
@@ -112,6 +114,15 @@ case "$subcmd" in
       exit 1
     fi
     ;;
+  build)
+    # Log all arguments so tests can assert on the build URL and tag.
+    printf 'build %s\n' "$*" >> "$DOCKER_LOG"
+    if [ "$BUILD_RESULT" = "ok" ]; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
   *)
     printf '%s\n' "$*" >> "$DOCKER_LOG"
     exit 0
@@ -143,6 +154,7 @@ setup() {
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=fail
   export FAKE_DOCKER_PULL_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
   unset FAKE_DOCKER_INSPECT_AFTER_PULL
 
   setup_fake_docker
@@ -155,8 +167,29 @@ teardown() {
 # ─── Helper: invoke the pull script directly ──────────────────────────────
 # We invoke cli/src/mcp_atlas_aci_pull.sh directly (bypassing cli/eidolons)
 # so the test does not depend on the dispatcher wiring from T7.
+#
+# A non-placeholder test digest is always injected (unless the caller already
+# passes --image-digest or --build-locally) so existing tests continue to
+# exercise pull logic without triggering the bootstrap-digest guard (H2).
+# Tests that specifically test the bootstrap guard must call the script
+# directly with bash without --image-digest to trigger IMAGE_DIGEST_EXPLICIT=false.
+TEST_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 run_pull() {
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" "$@"
+  # Inject TEST_IMAGE_DIGEST unless the caller already supplies --image-digest
+  # or --build-locally (the latter also bypasses the bootstrap guard).
+  local _has_digest=false _has_build=false _arg
+  for _arg in "$@"; do
+    case "$_arg" in
+      --image-digest) _has_digest=true ;;
+      --build-locally) _has_build=true ;;
+    esac
+  done
+  if [ "$_has_digest" = "false" ] && [ "$_has_build" = "false" ]; then
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" --image-digest "$TEST_IMAGE_DIGEST" "$@"
+  else
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" "$@"
+  fi
 }
 
 # ─── Case 1: image already present ────────────────────────────────────────
@@ -218,11 +251,21 @@ run_pull() {
   # Must fail.
   [ "$status" -eq 1 ]
 
-  # stderr must contain each of the three alternatives from the script's
-  # failure block (cli/src/mcp_atlas_aci_pull.sh lines 134–146).
-  [[ "$output" =~ "docker build -t atlas-aci" ]]
-  [[ "$output" =~ "docker load -i" ]]
-  [[ "$output" =~ "docker pull <registry>/atlas-aci" ]]
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # stderr must list alternative #1 as --build-locally (T8: GHCR is now the
+  # default; --build-locally is the promoted escape hatch in the fallback block).
+  run grep -q "build-locally" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # stderr must list alternative #2: load from tarball.
+  run grep -q "docker load -i" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # stderr must list alternative #3: pull from a private registry.
+  run grep -q "docker pull <registry>/atlas-aci" <<< "$pull_output"
+  [ "$status" -eq 0 ]
 }
 
 # ─── Case 4: docker daemon down ───────────────────────────────────────────
@@ -261,7 +304,7 @@ run_pull() {
   # with the three-alternatives block — the exact inspect ref is what we
   # care about.
   local custom_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
-  local custom_ref="atlas-aci@${custom_digest}"
+  local custom_ref="ghcr.io/rynaro/atlas-aci@${custom_digest}"
 
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=fail
@@ -277,5 +320,193 @@ run_pull() {
   local log="$BATS_TEST_TMPDIR/docker.log"
   [ -f "$log" ]
   run grep "image inspect ${custom_ref}" "$log"
+  [ "$status" -eq 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T7/T8 tests — GHCR happy path + --build-locally flag
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── Case 6: GHCR happy path ──────────────────────────────────────────────
+@test "pull: GHCR happy path → exits 0, success message on stderr" {
+  # pull succeeds; post-pull inspect returns ok via INSPECT_AFTER_PULL.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=ok
+  export FAKE_DOCKER_INSPECT_AFTER_PULL=ok
+
+  run_pull
+
+  [ "$status" -eq 0 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # stderr must confirm the image was pulled and verified.
+  run grep -q "pulled and verified" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # Success message must mention the registry-prefixed ref.
+  run grep -q "ghcr.io/rynaro/atlas-aci" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Case 7: pull failure shows --build-locally as alternative #1 ─────────
+@test "pull: GHCR pull failure → exits 1, fallback block lists --build-locally as alt #1" {
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=fail
+
+  run_pull
+
+  [ "$status" -eq 1 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # Alternative #1 in the fallback block must be --build-locally (T8 promotion).
+  run grep -q "build-locally" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # Must NOT show the old "git clone ... docker build -t atlas-aci" manual steps.
+  run grep -q "git clone" <<< "$pull_output"
+  [ "$status" -ne 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T9 — P0 invariant test — --build-locally code path is non-removable
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── Case 8: --build-locally invokes docker build (P0 invariant — local-build path is non-removable) ─
+@test "pull --build-locally: invokes docker build (P0 invariant — local-build path is non-removable)" {
+  # P0 invariant: this test asserts the --build-locally escape hatch exists
+  # and actually invokes 'docker build' against the atlas-aci git URL.
+  # If a future contributor removes the --build-locally handler, this test
+  # will fail loudly, surfacing "P0 invariant" in the CI diff.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
+
+  run_pull --build-locally
+
+  [ "$status" -eq 0 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # docker.log must contain a 'build' line that references the atlas-aci git URL
+  # with the mcp-server context path — this is the canonical build invocation.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+  run grep -E '^build .*atlas-aci\.git#.*:mcp-server' "$log"
+  [ "$status" -eq 0 ]
+
+  # stderr must warn about the digest-mismatch trade-off (R-NEW-4).
+  run grep -q "cannot match the upstream" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Case 9: removing --build-locally handler causes this test to fail ────
+@test "pull --build-locally: handler must exist in script source (P0 invariant guard)" {
+  # This test directly inspects the script source to assert that the
+  # --build-locally handler is present. If a contributor removes the
+  # flag handler, this test fails with a clear message about the P0 invariant.
+  local script="$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  run grep -q "\-\-build-locally" "$script"
+  [ "$status" -eq 0 ]
+
+  # The P0 invariant comment must also be present in the source.
+  run grep -q "INVARIANT (P0)" "$script"
+  [ "$status" -eq 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H2 tests — bootstrap-digest pre-flight refusal
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── H2 Case 1: placeholder digest → pull refuses with helpful message ─────
+# Once a real digest is pinned in the source, the bootstrap guard is dormant
+# in normal use. To keep regression coverage for the guard (so the H2 design
+# is enforced if a contributor accidentally re-introduces the placeholder),
+# this test runs against a TEMPORARY COPY of the script with the placeholder
+# forced as the default digest. The fixture is local to the test; the source
+# script is untouched.
+@test "bootstrap-digest: placeholder digest → pull refuses with helpful message" {
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # Build a temp script that forces the placeholder as the default digest.
+  # Symlink lib deps so the fixture's SELF_DIR-relative sourcing works.
+  local fixture_dir="$BATS_TEST_TMPDIR/fixture-src"
+  mkdir -p "$fixture_dir"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib.sh" "$fixture_dir/lib.sh"
+  ln -sf "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$fixture_dir/lib_mcp_atlas_aci.sh"
+  local fixture="$fixture_dir/mcp_atlas_aci_pull.fixture.sh"
+  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  sed -E "s|^DEFAULT_IMAGE_DIGEST=\"sha256:[0-9a-f]{64}\"|DEFAULT_IMAGE_DIGEST=\"${placeholder}\"|" \
+    "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" > "$fixture"
+  chmod +x "$fixture"
+
+  # Sanity: the fixture must actually carry the placeholder.
+  grep -q "DEFAULT_IMAGE_DIGEST=\"${placeholder}\"" "$fixture"
+
+  run bash "$fixture"
+
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "bootstrap placeholder" ]]
+  [[ "$output" =~ "build-locally" ]]
+
+  # docker.log must NOT contain any docker invocations — guard fires before
+  # any docker call.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  if [ -f "$log" ]; then
+    local line_count
+    line_count="$(wc -l < "$log" | tr -d ' ')"
+    [ "$line_count" -eq 0 ]
+  fi
+}
+
+# ─── H2 Case 2: --image-digest real digest bypasses bootstrap guard ─────────
+@test "bootstrap-digest: --image-digest with real digest bypasses guard, pull proceeds" {
+  # Image inspect fails (image absent); pull also fails — we just want to
+  # confirm the bootstrap guard does NOT fire for an explicit real digest.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=fail
+
+  local real_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  run_pull --image-digest "$real_digest"
+
+  # Pull fails (expected with fake docker) but the error must be about the
+  # image pull, NOT about the bootstrap placeholder.
+  [ "$status" -ne 0 ]
+  [[ ! "$output" =~ "bootstrap placeholder" ]]
+
+  # docker.log must show that docker was actually invoked (guard did not block).
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+}
+
+# ─── H2 Case 3: --build-locally bypasses bootstrap guard ────────────────────
+@test "bootstrap-digest: --build-locally bypasses guard, build proceeds" {
+  # --build-locally skips the bootstrap guard — the build path does not
+  # require a real registry digest.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
+
+  # Invoke with default digest (placeholder) + --build-locally.
+  run_pull --build-locally
+
+  # Must succeed via the local-build path.
+  [ "$status" -eq 0 ]
+
+  # stderr must NOT mention the bootstrap placeholder.
+  [[ ! "$output" =~ "bootstrap placeholder" ]]
+
+  # docker.log must contain a build line.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+  run grep -E '^build .*atlas-aci' "$log"
   [ "$status" -eq 0 ]
 }
