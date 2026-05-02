@@ -204,6 +204,37 @@ file_md5() {
   ' "$project/.mcp.json")"
 
   [ "$name_val" = "atlas-aci-fresh-project" ]
+
+  # Security hardening flags (H1): --cap-drop ALL and --security-opt no-new-privileges
+  # must be present in the args array (defense-in-depth on top of the UID 10001 Dockerfile).
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"--cap-drop\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"ALL\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"--security-opt\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"no-new-privileges\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # --cap-drop must immediately precede ALL, and --security-opt must immediately
+  # precede no-new-privileges — guard against accidental reordering.
+  local cap_idx sec_idx
+  cap_idx="$(jq -r '(.mcpServers."atlas-aci".args | indices("--cap-drop"))[0]' "$project/.mcp.json")"
+  sec_idx="$(jq -r '(.mcpServers."atlas-aci".args | indices("--security-opt"))[0]' "$project/.mcp.json")"
+  local cap_val sec_val
+  cap_val="$(jq -r ".mcpServers.\"atlas-aci\".args[$((cap_idx + 1))]" "$project/.mcp.json")"
+  sec_val="$(jq -r ".mcpServers.\"atlas-aci\".args[$((sec_idx + 1))]" "$project/.mcp.json")"
+  [ "$cap_val" = "ALL" ]
+  [ "$sec_val" = "no-new-privileges" ]
+
+  # Security flags must appear AFTER the second -v mount and BEFORE the image ref.
+  # Verify ordering: cap-drop index < image-ref index.
+  local img_idx
+  img_idx="$(jq -r '[.mcpServers."atlas-aci".args[] | select(startswith("ghcr.io/rynaro/atlas-aci@"))] | length' "$project/.mcp.json")"
+  # img_idx here is the count (1), not the position — use index() for the position.
+  img_idx="$(jq -r '(.mcpServers."atlas-aci".args | map(startswith("ghcr.io/rynaro/atlas-aci@")) | index(true))' "$project/.mcp.json")"
+  [ "$cap_idx" -lt "$img_idx" ]
+  [ "$sec_idx" -lt "$img_idx" ]
 }
 
 # ─── Test 2: idempotent rerun without --force ──────────────────────────────
