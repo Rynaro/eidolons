@@ -162,8 +162,28 @@ teardown() {
 # roster from the checkout. The template path inside the script is resolved
 # relative to SELF_DIR (the script's own directory), so it always finds
 # cli/templates/mcp/atlas-aci.mcp.json.tmpl regardless of cwd.
+#
+# A non-placeholder test digest is always injected so tests exercise the
+# rendering logic without hitting the bootstrap-digest pre-flight guard (H2).
+# Tests that specifically test the bootstrap guard must call the script
+# directly with bash (no --image-digest) to trigger IMAGE_DIGEST_EXPLICIT=false.
+TEST_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 run_generator() {
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" "$@"
+  # Inject TEST_IMAGE_DIGEST unless the caller already supplies --image-digest.
+  local _has_digest=false
+  local _arg
+  for _arg in "$@"; do
+    if [ "$_arg" = "--image-digest" ]; then
+      _has_digest=true
+      break
+    fi
+  done
+  if [ "$_has_digest" = "false" ]; then
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --image-digest "$TEST_IMAGE_DIGEST" "$@"
+  else
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" "$@"
+  fi
 }
 
 # ─── Portable md5 ─────────────────────────────────────────────────────────
@@ -284,7 +304,8 @@ file_md5() {
 
   # Use a different image digest on the --force run so the regenerated
   # .mcp.json is guaranteed to differ from the first run's output.
-  local alt_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  # Note: TEST_IMAGE_DIGEST uses 'a'-repeated; use 'b'-repeated here to differ.
+  local alt_digest="sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
   run_generator --project-root "$project" --force --image-digest "$alt_digest"
   [ "$status" -eq 0 ]
 
@@ -517,4 +538,55 @@ file_md5() {
 
   # No skip-warning: the image was present so no --skip-image-check was needed.
   [[ ! "$output" =~ "--skip-image-check" ]]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H2 tests — bootstrap-digest pre-flight refusal
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── H2 Test 1: placeholder digest → generator refuses before docker ───────
+@test "bootstrap-digest: placeholder digest → generator refuses with helpful message" {
+  local project="$BATS_TEST_TMPDIR/bootstrap-project"
+  mkdir -p "$project"
+
+  # All docker checks would pass — but the bootstrap guard fires first.
+  FAKE_DOCKER_CLI_PRESENT=1
+  FAKE_DOCKER_INFO_RESULT=ok
+  FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # Invoke the script directly with no --image-digest flag (bypassing
+  # run_generator's injection) so IMAGE_DIGEST_EXPLICIT stays false and the
+  # bootstrap guard fires on the default all-zeros placeholder.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --project-root "$project"
+
+  # Must refuse.
+  [ "$status" -ne 0 ]
+
+  # .mcp.json must NOT have been written (guard fires before any fs writes).
+  [ ! -f "$project/.mcp.json" ]
+
+  # stderr must mention the bootstrap placeholder and recovery options.
+  [[ "$output" =~ "bootstrap placeholder" ]]
+  [[ "$output" =~ "build-locally" ]]
+}
+
+# ─── H2 Test 2: --image-digest real digest bypasses bootstrap guard ─────────
+@test "bootstrap-digest: explicit --image-digest with real digest bypasses guard" {
+  local project="$BATS_TEST_TMPDIR/override-project"
+  mkdir -p "$project"
+
+  # All docker checks pass.
+  FAKE_DOCKER_CLI_PRESENT=1
+  FAKE_DOCKER_INFO_RESULT=ok
+  FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # An explicit non-placeholder digest must bypass the guard and produce output.
+  local real_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  run_generator --project-root "$project" --image-digest "$real_digest"
+
+  [ "$status" -eq 0 ]
+  [ -f "$project/.mcp.json" ]
+
+  # The digest must appear in the rendered file.
+  grep -q "$real_digest" "$project/.mcp.json"
 }

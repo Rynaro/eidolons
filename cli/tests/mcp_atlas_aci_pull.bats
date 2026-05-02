@@ -167,8 +167,29 @@ teardown() {
 # ─── Helper: invoke the pull script directly ──────────────────────────────
 # We invoke cli/src/mcp_atlas_aci_pull.sh directly (bypassing cli/eidolons)
 # so the test does not depend on the dispatcher wiring from T7.
+#
+# A non-placeholder test digest is always injected (unless the caller already
+# passes --image-digest or --build-locally) so existing tests continue to
+# exercise pull logic without triggering the bootstrap-digest guard (H2).
+# Tests that specifically test the bootstrap guard must call the script
+# directly with bash without --image-digest to trigger IMAGE_DIGEST_EXPLICIT=false.
+TEST_IMAGE_DIGEST="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
 run_pull() {
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" "$@"
+  # Inject TEST_IMAGE_DIGEST unless the caller already supplies --image-digest
+  # or --build-locally (the latter also bypasses the bootstrap guard).
+  local _has_digest=false _has_build=false _arg
+  for _arg in "$@"; do
+    case "$_arg" in
+      --image-digest) _has_digest=true ;;
+      --build-locally) _has_build=true ;;
+    esac
+  done
+  if [ "$_has_digest" = "false" ] && [ "$_has_build" = "false" ]; then
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" --image-digest "$TEST_IMAGE_DIGEST" "$@"
+  else
+    run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" "$@"
+  fi
 }
 
 # ─── Case 1: image already present ────────────────────────────────────────
@@ -396,5 +417,83 @@ run_pull() {
 
   # The P0 invariant comment must also be present in the source.
   run grep -q "INVARIANT (P0)" "$script"
+  [ "$status" -eq 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H2 tests — bootstrap-digest pre-flight refusal
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── H2 Case 1: placeholder digest → pull refuses with helpful message ─────
+@test "bootstrap-digest: placeholder digest → pull refuses with helpful message" {
+  # All docker checks would pass — but the bootstrap guard fires first.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # Invoke the script directly with no flags (bypassing run_pull's digest
+  # injection) so the default all-zeros placeholder digest is used and the
+  # bootstrap guard fires (IMAGE_DIGEST_EXPLICIT stays false).
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+
+  # Must refuse.
+  [ "$status" -ne 0 ]
+
+  # stderr must mention the bootstrap placeholder and recovery options.
+  [[ "$output" =~ "bootstrap placeholder" ]]
+  [[ "$output" =~ "build-locally" ]]
+
+  # docker.log must NOT contain any docker invocations — guard fires before
+  # any docker call.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  # Either no log file exists, or it has no lines.
+  if [ -f "$log" ]; then
+    local line_count
+    line_count="$(wc -l < "$log" | tr -d ' ')"
+    [ "$line_count" -eq 0 ]
+  fi
+}
+
+# ─── H2 Case 2: --image-digest real digest bypasses bootstrap guard ─────────
+@test "bootstrap-digest: --image-digest with real digest bypasses guard, pull proceeds" {
+  # Image inspect fails (image absent); pull also fails — we just want to
+  # confirm the bootstrap guard does NOT fire for an explicit real digest.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=fail
+
+  local real_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  run_pull --image-digest "$real_digest"
+
+  # Pull fails (expected with fake docker) but the error must be about the
+  # image pull, NOT about the bootstrap placeholder.
+  [ "$status" -ne 0 ]
+  [[ ! "$output" =~ "bootstrap placeholder" ]]
+
+  # docker.log must show that docker was actually invoked (guard did not block).
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+}
+
+# ─── H2 Case 3: --build-locally bypasses bootstrap guard ────────────────────
+@test "bootstrap-digest: --build-locally bypasses guard, build proceeds" {
+  # --build-locally skips the bootstrap guard — the build path does not
+  # require a real registry digest.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
+
+  # Invoke with default digest (placeholder) + --build-locally.
+  run_pull --build-locally
+
+  # Must succeed via the local-build path.
+  [ "$status" -eq 0 ]
+
+  # stderr must NOT mention the bootstrap placeholder.
+  [[ ! "$output" =~ "bootstrap placeholder" ]]
+
+  # docker.log must contain a build line.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+  run grep -E '^build .*atlas-aci' "$log"
   [ "$status" -eq 0 ]
 }

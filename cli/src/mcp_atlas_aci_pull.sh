@@ -42,6 +42,7 @@ ATLAS_ACI_BUILD_REF="main"
 
 # ─── Argument parsing ─────────────────────────────────────────────────────
 IMAGE_DIGEST=""
+IMAGE_DIGEST_EXPLICIT=false   # set to true when user passes --image-digest
 BUILD_LOCALLY=false
 GIT_REF=""
 
@@ -76,6 +77,7 @@ while [ $# -gt 0 ]; do
     --image-digest)
       [ -z "${2:-}" ] && die "--image-digest requires an argument"
       IMAGE_DIGEST="$2"
+      IMAGE_DIGEST_EXPLICIT=true
       shift 2
       ;;
     --build-locally)
@@ -103,6 +105,20 @@ done
 IMAGE_DIGEST="${IMAGE_DIGEST:-$DEFAULT_IMAGE_DIGEST}"
 GIT_REF="${GIT_REF:-$ATLAS_ACI_BUILD_REF}"
 IMAGE_REF="${DEFAULT_IMAGE_REF}@${IMAGE_DIGEST}"
+
+# ─── Bootstrap-digest pre-flight ──────────────────────────────────────────
+# Refuse early if the digest is still the all-zeros placeholder (no real release
+# yet). Bypassed when the user explicitly passes --image-digest (known override)
+# or --build-locally (the build path doesn't require a real registry digest).
+# Literal string compare — bash 3.2 portable, no external tools.
+_BOOTSTRAP_PLACEHOLDER="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+if [ "$IMAGE_DIGEST_EXPLICIT" = "false" ] && [ "$BUILD_LOCALLY" = "false" ] && [ "$IMAGE_DIGEST" = "$_BOOTSTRAP_PLACEHOLDER" ]; then
+  die "DEFAULT_IMAGE_DIGEST is still the bootstrap placeholder. The first ghcr.io/rynaro/atlas-aci release has not landed yet (or the digest constant has not been updated). Either:
+  1. Run 'eidolons mcp atlas-aci pull --build-locally' to build from source (air-gap escape hatch).
+  2. Pass --image-digest sha256:<real-digest> to override.
+  3. Wait for the first published release and the corresponding digest-bump PR.
+See .spectra/plans/atlas-aci-ghcr-distribution-2026-05-01/spec.md §'Bootstrap problem'."
+fi
 
 # ─── Step 1: Docker CLI check ─────────────────────────────────────────────
 if ! atlas_aci_check_docker_cli; then
