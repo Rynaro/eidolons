@@ -232,12 +232,14 @@ else
       [[ -n "$mcp_name" ]] || continue
       case "$mcp_name" in
         atlas-aci)
-          # Extract the image ref from the args array (element matching ^atlas-aci@sha256:)
+          # Extract the image ref from the args array. Accept both the legacy
+          # bare form (atlas-aci@sha256:) and the registry-prefixed form
+          # (ghcr.io/rynaro/atlas-aci@sha256:) introduced in T6.
           mcp_image_ref="$(jq -r \
-            '.mcpServers["atlas-aci"].args[]? | select(test("^atlas-aci@sha256:"))' \
-            .mcp.json 2>/dev/null || true)"
+            '.mcpServers["atlas-aci"].args[]? | select(test("^(ghcr\\.io/[^@]+|atlas-aci)@sha256:"))' \
+            .mcp.json 2>/dev/null | head -1 || true)"
           if [[ -z "$mcp_image_ref" ]]; then
-            err "atlas-aci: cannot find image ref in .mcp.json args (expected element matching atlas-aci@sha256:)"
+            err "atlas-aci: cannot find image ref in .mcp.json args (expected element matching atlas-aci@sha256: or ghcr.io/rynaro/atlas-aci@sha256:)"
           else
             # Call lib functions with stderr suppressed — doctor summarises, not dumps.
             # Use `|| _rc=$?` idiom (set -e safe: failure captured, not propagated).
@@ -253,8 +255,8 @@ else
                 if [[ "$_mcp_image_rc" -ne 0 ]]; then
                   err "atlas-aci image NOT loaded — run 'eidolons mcp atlas-aci pull'"
                 else
-                  # Extract just the digest portion for the pass message
-                  _mcp_digest="${mcp_image_ref#atlas-aci@}"
+                  # Extract just the digest portion for the pass message.
+                  _mcp_digest="${mcp_image_ref##*@}"
                   pass "atlas-aci image loaded ($_mcp_digest)"
                 fi
               fi
@@ -268,6 +270,44 @@ else
     done <<< "$mcp_server_names"
   fi
 fi
+
+# ─── Check 7: ghcr.io registry reachability probe ───────────────────────
+# Non-fatal: a registry outage or a yanked digest surfaces early (warn) but
+# does not increment ERRORS — it is informational / advisory only.
+atlas_aci_doctor_probe() {
+  if [[ ! -f ".mcp.json" ]]; then
+    return 0
+  fi
+  if ! command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+  if ! jq -e '.mcpServers["atlas-aci"]' .mcp.json >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # Extract the ghcr.io-prefixed image ref from the args array.
+  local _probe_ref
+  _probe_ref="$(jq -r \
+    '.mcpServers["atlas-aci"].args[]? | select(test("^ghcr\\.io/"))' \
+    .mcp.json 2>/dev/null | head -1 || true)"
+
+  if [[ -z "$_probe_ref" ]]; then
+    # No ghcr.io ref found in args — probe is not applicable.
+    return 0
+  fi
+
+  local _probe_rc=0
+  atlas_aci_check_registry_reachable "$_probe_ref" 2>/dev/null || _probe_rc=$?
+  if [[ "$_probe_rc" -eq 0 ]]; then
+    pass "atlas-aci image reachable on ghcr.io"
+  else
+    printf "  %s!%s %s\n" "${YELLOW:-}" "${RESET:-}" \
+      "warn: atlas-aci image not reachable (offline? or pinned digest yanked? — try 'eidolons mcp atlas-aci pull --build-locally')"
+  fi
+}
+
+ui_section_out "Registry reachability"
+atlas_aci_doctor_probe
 
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
