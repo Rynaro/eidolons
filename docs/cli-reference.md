@@ -116,7 +116,8 @@ eidolons roster atlas --json           # raw JSON
 ## `eidolons doctor`
 
 Health check: manifest/lock consistency, per-member installs, host dispatch
-wiring, and release-integrity status surfaced from `eidolons.lock`.
+wiring, release-integrity status surfaced from `eidolons.lock`, and (when
+`.mcp.json` contains an `atlas-aci` entry) ghcr.io registry reachability.
 
 ```
 eidolons doctor            # report
@@ -126,6 +127,17 @@ eidolons doctor --fix      # report + attempt auto-repair via sync
 The "Release integrity" section is read-only and derives entirely from the
 `verification` field of each `eidolons.lock` member. To re-check against the
 roster (commit/tree/archive checksum, manifest re-hash) run `eidolons verify`.
+
+**ghcr.io reachability probe (Check 7):** when `.mcp.json` contains an
+`atlas-aci` entry with a `ghcr.io/rynaro/atlas-aci@sha256:<digest>` arg, doctor
+performs an anonymous-token HEAD against the ghcr.io v2 manifests endpoint:
+
+- `pass: atlas-aci image reachable on ghcr.io` — digest is publicly reachable.
+- `warn: atlas-aci image not reachable (offline? or pinned digest yanked? — try 'eidolons mcp atlas-aci pull --build-locally')` — network error or 404.
+
+This probe is **non-fatal**: it does not increment the error count or change
+the doctor exit code. It is silently skipped when `.mcp.json` is absent, when
+there is no `atlas-aci` entry, or when `curl` is not on PATH.
 
 ---
 
@@ -219,6 +231,35 @@ contract. The command is opt-in and never invoked by `init` / `sync`.
 The `--host` flag restricts wiring to a single host. Allowed values:
 `claude-code`, `cursor`, `copilot`, `codex`. Omit `--host` to target
 all MCP-capable hosts detected in the project.
+
+**Bootstrap pre-flight:** `eidolons mcp atlas-aci` (scaffold) aborts with an
+actionable error if `DEFAULT_IMAGE_DIGEST` is still the all-zeros placeholder
+value. This prevents misconfigured `.mcp.json` files from reaching users before
+the first real ghcr.io release has been pinned by a maintainer.
+
+#### `eidolons mcp atlas-aci pull` — image fetch flags
+
+```
+eidolons mcp atlas-aci pull [OPTIONS]
+```
+
+| Flag | Default | Purpose |
+|---|---|---|
+| `--build-locally` | off | Build the image locally from the upstream git source instead of pulling from ghcr.io. Use in air-gap, restricted-network, or registry-outage scenarios. |
+| `--git-ref REF` | `main` | Git ref (branch, tag, or SHA) to build from when `--build-locally` is used. Paired with `--build-locally`; no effect otherwise. |
+| `--image-digest DIGEST` | `DEFAULT_IMAGE_DIGEST` | Override the pinned digest. Accepts the bare `sha256:<hex>` form. Bypasses the bootstrap pre-flight check (use to adopt a locally-built tag or a different registry digest). |
+
+**`--build-locally` trade-off:** the locally-built image is tagged
+`ghcr.io/rynaro/atlas-aci:locally-built-<timestamp>` and cannot match the
+upstream digest pin. `docker run ghcr.io/rynaro/atlas-aci@sha256:<digest>`
+will not resolve to it — pass `--image-digest` with the local tag to use it.
+See [`atlas-aci.md` §Image distribution](atlas-aci.md#image-distribution) for the
+full runbook.
+
+**Bootstrap pre-flight on pull:** `eidolons mcp atlas-aci pull` also refuses to
+run when `DEFAULT_IMAGE_DIGEST` is the all-zeros placeholder unless `--image-digest`
+is explicitly supplied (which bypasses the guard). The error message names the
+two recovery options: wait for the first ghcr.io release, or use `--build-locally`.
 
 ---
 
