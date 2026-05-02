@@ -49,6 +49,7 @@ setup_fake_docker() {
 #!/usr/bin/env bash
 # Fake docker shim — controlled by FAKE_DOCKER_* env vars.
 # Logs every invocation to $BATS_TEST_TMPDIR/docker.log.
+# Extended for T7/T9: tracks 'build' invocations via FAKE_DOCKER_BUILD_RESULT.
 set -u
 
 DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
@@ -57,6 +58,7 @@ DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
 INFO_RESULT="${FAKE_DOCKER_INFO_RESULT:-ok}"
 INSPECT_RESULT="${FAKE_DOCKER_INSPECT_RESULT:-fail}"
 PULL_RESULT="${FAKE_DOCKER_PULL_RESULT:-fail}"
+BUILD_RESULT="${FAKE_DOCKER_BUILD_RESULT:-ok}"
 INSPECT_AFTER_PULL="${FAKE_DOCKER_INSPECT_AFTER_PULL:-}"
 
 # Helper: count how many 'pull' lines are already in the log.
@@ -112,6 +114,15 @@ case "$subcmd" in
       exit 1
     fi
     ;;
+  build)
+    # Log all arguments so tests can assert on the build URL and tag.
+    printf 'build %s\n' "$*" >> "$DOCKER_LOG"
+    if [ "$BUILD_RESULT" = "ok" ]; then
+      exit 0
+    else
+      exit 1
+    fi
+    ;;
   *)
     printf '%s\n' "$*" >> "$DOCKER_LOG"
     exit 0
@@ -143,6 +154,7 @@ setup() {
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=fail
   export FAKE_DOCKER_PULL_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
   unset FAKE_DOCKER_INSPECT_AFTER_PULL
 
   setup_fake_docker
@@ -218,11 +230,21 @@ run_pull() {
   # Must fail.
   [ "$status" -eq 1 ]
 
-  # stderr must contain each of the three alternatives from the script's
-  # failure block (cli/src/mcp_atlas_aci_pull.sh lines 134–146).
-  [[ "$output" =~ "docker build -t atlas-aci" ]]
-  [[ "$output" =~ "docker load -i" ]]
-  [[ "$output" =~ "docker pull <registry>/atlas-aci" ]]
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # stderr must list alternative #1 as --build-locally (T8: GHCR is now the
+  # default; --build-locally is the promoted escape hatch in the fallback block).
+  run grep -q "build-locally" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # stderr must list alternative #2: load from tarball.
+  run grep -q "docker load -i" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # stderr must list alternative #3: pull from a private registry.
+  run grep -q "docker pull <registry>/atlas-aci" <<< "$pull_output"
+  [ "$status" -eq 0 ]
 }
 
 # ─── Case 4: docker daemon down ───────────────────────────────────────────
@@ -261,7 +283,7 @@ run_pull() {
   # with the three-alternatives block — the exact inspect ref is what we
   # care about.
   local custom_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
-  local custom_ref="atlas-aci@${custom_digest}"
+  local custom_ref="ghcr.io/rynaro/atlas-aci@${custom_digest}"
 
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=fail
@@ -277,5 +299,102 @@ run_pull() {
   local log="$BATS_TEST_TMPDIR/docker.log"
   [ -f "$log" ]
   run grep "image inspect ${custom_ref}" "$log"
+  [ "$status" -eq 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T7/T8 tests — GHCR happy path + --build-locally flag
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── Case 6: GHCR happy path ──────────────────────────────────────────────
+@test "pull: GHCR happy path → exits 0, success message on stderr" {
+  # pull succeeds; post-pull inspect returns ok via INSPECT_AFTER_PULL.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=ok
+  export FAKE_DOCKER_INSPECT_AFTER_PULL=ok
+
+  run_pull
+
+  [ "$status" -eq 0 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # stderr must confirm the image was pulled and verified.
+  run grep -q "pulled and verified" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # Success message must mention the registry-prefixed ref.
+  run grep -q "ghcr.io/rynaro/atlas-aci" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Case 7: pull failure shows --build-locally as alternative #1 ─────────
+@test "pull: GHCR pull failure → exits 1, fallback block lists --build-locally as alt #1" {
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=fail
+
+  run_pull
+
+  [ "$status" -eq 1 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # Alternative #1 in the fallback block must be --build-locally (T8 promotion).
+  run grep -q "build-locally" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+
+  # Must NOT show the old "git clone ... docker build -t atlas-aci" manual steps.
+  run grep -q "git clone" <<< "$pull_output"
+  [ "$status" -ne 0 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T9 — P0 invariant test — --build-locally code path is non-removable
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── Case 8: --build-locally invokes docker build (P0 invariant — local-build path is non-removable) ─
+@test "pull --build-locally: invokes docker build (P0 invariant — local-build path is non-removable)" {
+  # P0 invariant: this test asserts the --build-locally escape hatch exists
+  # and actually invokes 'docker build' against the atlas-aci git URL.
+  # If a future contributor removes the --build-locally handler, this test
+  # will fail loudly, surfacing "P0 invariant" in the CI diff.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_BUILD_RESULT=ok
+
+  run_pull --build-locally
+
+  [ "$status" -eq 0 ]
+
+  # Save output before nested 'run' calls (each 'run' overwrites $output).
+  local pull_output="$output"
+
+  # docker.log must contain a 'build' line that references the atlas-aci git URL
+  # with the mcp-server context path — this is the canonical build invocation.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+  run grep -E '^build .*atlas-aci\.git#.*:mcp-server' "$log"
+  [ "$status" -eq 0 ]
+
+  # stderr must warn about the digest-mismatch trade-off (R-NEW-4).
+  run grep -q "cannot match the upstream" <<< "$pull_output"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Case 9: removing --build-locally handler causes this test to fail ────
+@test "pull --build-locally: handler must exist in script source (P0 invariant guard)" {
+  # This test directly inspects the script source to assert that the
+  # --build-locally handler is present. If a contributor removes the
+  # flag handler, this test fails with a clear message about the P0 invariant.
+  local script="$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  run grep -q "\-\-build-locally" "$script"
+  [ "$status" -eq 0 ]
+
+  # The P0 invariant comment must also be present in the source.
+  run grep -q "INVARIANT (P0)" "$script"
   [ "$status" -eq 0 ]
 }
