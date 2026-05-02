@@ -31,8 +31,13 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib_mcp_atlas_aci.sh"
 
 # ─── Constants ────────────────────────────────────────────────────────────
-# Default image digest — bump here (one place) on Atlas-ACI image version bumps.
-DEFAULT_IMAGE_DIGEST="sha256:f66dc2578f1fe4a028f42dd8d09c2e07576dd1fd6587ddd46c8704c44f8e502c"
+# Default image reference and digest — bump here (one place) on Atlas-ACI image version bumps.
+# Mirror the same constants in cli/src/mcp_atlas_aci_pull.sh (comment-bound contract).
+#
+# TODO(ghcr-bootstrap): replace with the real digest from the first successful release.yml run on Rynaro/atlas-aci. See .spectra/plans/atlas-aci-ghcr-distribution-2026-05-01/spec.md §"Bootstrap problem".
+DEFAULT_IMAGE_REF="ghcr.io/rynaro/atlas-aci"
+DEFAULT_IMAGE_DIGEST="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+DEFAULT_IMAGE_FULL_REF="${DEFAULT_IMAGE_REF}@${DEFAULT_IMAGE_DIGEST}"
 
 # Template path — resolved relative to the nexus (SELF_DIR/../templates/...).
 TEMPLATE_FILE="$SELF_DIR/../templates/mcp/atlas-aci.mcp.json.tmpl"
@@ -128,7 +133,7 @@ else
   if ! atlas_aci_check_docker_daemon; then
     exit 1
   fi
-  if ! atlas_aci_check_image "atlas-aci@${IMAGE_DIGEST}"; then
+  if ! atlas_aci_check_image "${DEFAULT_IMAGE_REF}@${IMAGE_DIGEST}"; then
     exit 1
   fi
 fi
