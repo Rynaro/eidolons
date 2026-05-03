@@ -35,7 +35,7 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #
 # Pin: ghcr.io/rynaro/atlas-aci v0.2.2 (first signed GHCR publish).
 DEFAULT_IMAGE_REF="ghcr.io/rynaro/atlas-aci"
-DEFAULT_IMAGE_DIGEST="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
+DEFAULT_IMAGE_DIGEST="${DEFAULT_IMAGE_DIGEST:-sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96}"
 DEFAULT_IMAGE_FULL_REF="${DEFAULT_IMAGE_REF}@${DEFAULT_IMAGE_DIGEST}"
 # Default git ref for --build-locally. Override with --git-ref.
 ATLAS_ACI_BUILD_REF="main"
