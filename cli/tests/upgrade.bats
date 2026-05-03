@@ -23,8 +23,9 @@ load helpers
   setup_fake_git_for_upgrade
   export FAKE_LSREMOTE_TAGS="v1.0.0"
   export FAKE_NEXUS_HEAD_TAG="v1.0.0"
-  seed_manifest_with atlas=^1.2.2
-  seed_lock_with_versions atlas=1.2.2
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  seed_manifest_with atlas="^$atlas_latest"
+  seed_lock_with_versions atlas="$atlas_latest"
   run eidolons upgrade --check
   [ "$status" -eq 0 ]
   [[ "$output" =~ up-to-date ]]
@@ -42,7 +43,8 @@ load helpers
   [ "$status" -eq 0 ]
   [[ "$output" =~ "upgrade available" ]]
   [[ "$output" =~ 1\.0\.0 ]]
-  [[ "$output" =~ 1\.2\.2 ]]
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  [[ "$output" =~ $atlas_latest ]]
 }
 
 # T4
@@ -226,7 +228,7 @@ v1.1.0"
   setup_fake_git_for_upgrade
   export FAKE_LSREMOTE_TAGS="v1.0.0"
   export FAKE_NEXUS_HEAD_TAG="v1.0.0"
-  # atlas stale (1.0.0 → 1.2.2); set spectra to its current latest so it's up-to-date.
+  # atlas stale (1.0.0 → roster latest); set spectra to its current latest so it's up-to-date.
   spectra_latest="$(yq -r '.eidolons[] | select(.name == "spectra") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
   seed_manifest_with atlas=^1.0.0 spectra=^4.2.0
   seed_lock_with_versions atlas=1.0.0 spectra="$spectra_latest"
@@ -265,7 +267,8 @@ v1.1.0"
   seed_lock_with_versions atlas=1.0.0
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
-  grep -q '1\.2\.2' eidolons.lock
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  grep -qF "$atlas_latest" eidolons.lock
 }
 
 # T18
@@ -273,8 +276,9 @@ v1.1.0"
   setup_fake_git_for_upgrade
   export FAKE_LSREMOTE_TAGS="v1.0.0"
   export FAKE_NEXUS_HEAD_TAG="v1.0.0"
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
   seed_manifest_with atlas=^1.0.0
-  seed_lock_with_versions atlas=1.2.2
+  seed_lock_with_versions atlas="$atlas_latest"
   before="$(ls -l eidolons.lock | awk '{print $6, $7, $8}')"
   if stat -f %m eidolons.lock >/dev/null 2>&1; then
     before_mt="$(stat -f %m eidolons.lock)"
@@ -499,7 +503,8 @@ v1.1.0"
   count="$(grep -c '^install ' "$FAKE_INSTALL_LOG" 2>/dev/null || echo 0)"
   [ "$count" -eq 1 ]
   grep -q atlas "$FAKE_INSTALL_LOG"
-  grep -q '1\.2\.2' eidolons.lock
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  grep -qF "$atlas_latest" eidolons.lock
 }
 
 # T33
