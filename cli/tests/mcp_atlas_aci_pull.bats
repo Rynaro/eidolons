@@ -428,29 +428,15 @@ run_pull() {
 # Once a real digest is pinned in the source, the bootstrap guard is dormant
 # in normal use. To keep regression coverage for the guard (so the H2 design
 # is enforced if a contributor accidentally re-introduces the placeholder),
-# this test runs against a TEMPORARY COPY of the script with the placeholder
-# forced as the default digest. The fixture is local to the test; the source
-# script is untouched.
+# we override the source's `DEFAULT_IMAGE_DIGEST="${DEFAULT_IMAGE_DIGEST:-…}"`
+# fallback by setting the env var. Cross-platform clean (no fixture/symlink).
 @test "bootstrap-digest: placeholder digest → pull refuses with helpful message" {
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=ok
 
-  # Build a temp script that forces the placeholder as the default digest.
-  # Symlink lib deps so the fixture's SELF_DIR-relative sourcing works.
-  local fixture_dir="$BATS_TEST_TMPDIR/fixture-src"
-  mkdir -p "$fixture_dir"
-  ln -sf "$EIDOLONS_ROOT/cli/src/lib.sh" "$fixture_dir/lib.sh"
-  ln -sf "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$fixture_dir/lib_mcp_atlas_aci.sh"
-  local fixture="$fixture_dir/mcp_atlas_aci_pull.fixture.sh"
   local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
-  sed -E "s|^DEFAULT_IMAGE_DIGEST=\"sha256:[0-9a-f]{64}\"|DEFAULT_IMAGE_DIGEST=\"${placeholder}\"|" \
-    "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh" > "$fixture"
-  chmod +x "$fixture"
 
-  # Sanity: the fixture must actually carry the placeholder.
-  grep -q "DEFAULT_IMAGE_DIGEST=\"${placeholder}\"" "$fixture"
-
-  run bash "$fixture"
+  DEFAULT_IMAGE_DIGEST="$placeholder" run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
 
   [ "$status" -ne 0 ]
   [[ "$output" =~ "bootstrap placeholder" ]]
