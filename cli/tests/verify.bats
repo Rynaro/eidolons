@@ -16,19 +16,29 @@ version, commit, tree, archive_sha, manifest_sha = sys.argv[1:6]
 path = Path("custom-nexus/roster/index.yaml")
 text = path.read_text()
 
-# Anchor: atlas's versions block. After PR #40 landed on main, the roster
-# already contains a `releases:` block under atlas; we must strip it (and
-# any other existing 6-space-indented siblings of `pins:`) before
-# inserting our test-only fixture, otherwise YAML emits two `releases:`
-# keys at the same level and the second-load-wins rule overrides our
-# fixture with the real metadata.
-versions_anchor = '''    versions:
-      latest: "1.2.2"
-      pins:
-        stable: "1.2.2"
-'''
-if versions_anchor not in text:
+# Anchor: atlas's versions block. The shape is:
+#     versions:
+#       latest: "X.Y.Z"
+#       pins:
+#         stable: "X.Y.Z"
+# The X.Y.Z values track whatever is currently the published latest in the
+# real roster; we match the shape via regex so the helper survives roster
+# bumps without manual updates. After this anchor, the roster already
+# contains a `releases:` block under atlas; we strip it (and any other
+# existing 6-space-indented siblings of `pins:`) before inserting our
+# test-only fixture, otherwise YAML emits two `releases:` keys at the same
+# level and the second-load-wins rule overrides our fixture.
+anchor_re = re.compile(
+    r'^    versions:\n'
+    r'      latest: "\d+\.\d+\.\d+"\n'
+    r'      pins:\n'
+    r'        stable: "\d+\.\d+\.\d+"\n',
+    re.MULTILINE,
+)
+match = anchor_re.search(text)
+if match is None:
     raise SystemExit("verify.bats helper: atlas versions anchor not found in roster")
+versions_anchor = match.group(0)
 
 # Capture from the end of the anchor up to (but not including) the next
 # 4-space-indented sibling key under atlas (e.g. `    install:` or
