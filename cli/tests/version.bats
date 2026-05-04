@@ -5,7 +5,17 @@ load helpers
 @test "version: prints eidolons <semver>" {
   run eidolons version
   [ "$status" -eq 0 ]
-  [[ "$output" =~ ^eidolons\ [0-9]+\.[0-9]+\.[0-9]+$ ]]
+  # The first line of output must be the version line; subsequent lines
+  # carry enriched metadata (commit, ref, installed, nexus path).
+  echo "$output" | head -1 | grep -qE '^eidolons [0-9]+\.[0-9]+\.[0-9]'
+}
+
+@test "version: --quiet prints single-line grep-compat output" {
+  run eidolons --version --quiet
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ^eidolons\ [0-9]+\.[0-9]+\.[0-9]+ ]]
+  # Must not contain newlines (single line).
+  [ "$(echo "$output" | wc -l | tr -d ' ')" -eq 1 ]
 }
 
 @test "version: --version flag works" {

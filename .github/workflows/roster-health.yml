@@ -224,3 +224,81 @@ jobs:
 # bats). This workflow now focuses on its namesake: verifying the roster
 # itself is valid and every upstream Eidolon repo is reachable + EIIS-
 # conformant (runs on path-filtered pushes and nightly).
+
+  nexus-integrity:
+    name: Nexus release integrity
+    runs-on: ubuntu-latest
+    needs: validate-roster
+    # Skip if roster nexus block is absent (old roster) — defensive guard for
+    # forks/PRs that pre-date the nexus: block.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Check nexus integrity metadata
+        run: |
+          set -euo pipefail
+
+          # Read latest nexus version from roster.
+          latest="$(yq -r '.nexus.versions.latest // ""' roster/index.yaml)"
+          if [[ -z "$latest" || "$latest" == "null" ]]; then
+            echo "::notice::nexus: block absent from roster — skipping integrity check (bootstrap window)"
+            exit 0
+          fi
+
+          echo "Nexus latest: v$latest"
+
+          # Read metadata.
+          commit="$(yq -r ".nexus.versions.releases[\"$latest\"].commit // \"\"" roster/index.yaml)"
+
+          # Skip if placeholder (bootstrap window before first release workflow run).
+          case "$commit" in
+            "<"*|"")
+              echo "::notice::nexus@$latest has placeholder commit — skipping integrity check (bootstrap window)"
+              exit 0
+              ;;
+          esac
+
+          # Clone the tagged nexus.
+          git clone --depth 1 --branch "v$latest" \
+            https://github.com/Rynaro/eidolons /tmp/nexus-check
+
+          actual_commit="$(git -C /tmp/nexus-check rev-parse HEAD)"
+          actual_tree="$(git -C /tmp/nexus-check rev-parse 'HEAD^{tree}')"
+
+          expected_tree="$(yq -r ".nexus.versions.releases[\"$latest\"].tree // \"\"" roster/index.yaml)"
+          expected_archive="$(yq -r ".nexus.versions.releases[\"$latest\"].archive_sha256 // \"\"" roster/index.yaml)"
+
+          [[ "$actual_commit" == "$commit" ]] \
+            || { echo "::error::nexus commit mismatch: got $actual_commit, expected $commit"; exit 1; }
+          [[ -z "$expected_tree" ]] || [[ "${expected_tree:0:1}" == "<" ]] \
+            || [[ "$actual_tree" == "$expected_tree" ]] \
+            || { echo "::error::nexus tree mismatch: got $actual_tree, expected $expected_tree"; exit 1; }
+
+          if [[ -n "$expected_archive" && "${expected_archive:0:1}" != "<" ]]; then
+            tmp_tar="$(mktemp)"
+            git -C /tmp/nexus-check archive --format=tar --prefix="eidolons-${latest}/" HEAD \
+              | gzip > "$tmp_tar"
+            # Compare the .tar.gz sha256 (gzip deterministic with consistent settings).
+            # Note: git archive produces deterministic output; gzip without timestamp matches workflow.
+            # For now check the raw tar sha256 to match what the workflow records.
+            git -C /tmp/nexus-check archive --format=tar --prefix="eidolons-${latest}/" HEAD \
+              > /tmp/nexus.tar
+            if command -v sha256sum >/dev/null 2>&1; then
+              actual_archive="$(sha256sum /tmp/nexus.tar | awk '{print $1}')"
+            else
+              actual_archive="$(shasum -a 256 /tmp/nexus.tar | awk '{print $1}')"
+            fi
+            rm -f /tmp/nexus.tar "$tmp_tar"
+            [[ "$actual_archive" == "$expected_archive" ]] \
+              || { echo "::error::nexus archive sha256 mismatch: got $actual_archive, expected $expected_archive"; exit 1; }
+          fi
+
+          echo "::notice::nexus@$latest integrity verified (commit=$actual_commit)"

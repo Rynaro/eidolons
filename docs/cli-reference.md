@@ -164,12 +164,12 @@ release metadata warn in compatibility mode.
 
 ## `eidolons upgrade`
 
-Surface and apply upgrades for the nexus and/or installed members.
+Surface and apply upgrades for installed members.
 
 ```
 eidolons upgrade [TARGET] [OPTIONS]                 # default: project scope (members)
 eidolons upgrade --check [SCOPE] [TARGET] [--json]  # read-only diff
-eidolons upgrade --system  [OPTIONS]                # nexus only
+eidolons upgrade --system  [OPTIONS]                # nexus only (git fetch + reset --hard)
 eidolons upgrade --project [TARGET] [OPTIONS]       # explicit project scope
 eidolons upgrade --all     [OPTIONS]                # nexus then members
 ```
@@ -178,7 +178,7 @@ eidolons upgrade --all     [OPTIONS]                # nexus then members
 |------------|---------|
 | `TARGET` | Member name or comma-separated list (mutually exclusive with `--system` / `--all`). |
 | `--check` | Read-only diff: prints nexus and member upgrade availability, no disk writes. Pair with `--system` or `--project` to narrow the report. |
-| `--system` | Upgrade only the nexus at `~/.eidolons/nexus` (`git fetch + reset --hard`). |
+| `--system` | Upgrade only the nexus at `~/.eidolons/nexus` (`git fetch + reset --hard`). For an atomic, integrity-verified self-upgrade, use `eidolons upgrade self` instead. |
 | `--project` | Operate on cwd members. Equivalent to bare `eidolons upgrade` when given alone; useful for explicit symmetry with `--system` and for narrowing `--check`. |
 | `--all` | Upgrade nexus first (must succeed), then members. Equivalent to `--system --project`. |
 | `--json` | Combine with `--check` for machine-readable output (banner stays on stderr). |
@@ -193,6 +193,59 @@ eidolons upgrade --all     [OPTIONS]                # nexus then members
 **Network failure:** `--check` degrades gracefully (10s timeout on the nexus probe; member rows are purely local). Mutating runs fail per-member; the final exit code is 1 if any member upgrade failed. `eidolons upgrade --system` exits 1 if the nexus fetch fails (state is left untouched).
 
 **Statuses (`--check`):** `up-to-date`, `upgrade available`, `pinned-out`, `not-installed`.
+
+---
+
+## `eidolons upgrade self`
+
+Upgrade the nexus CLI itself. Atomic, integrity-verified, rollback-safe.
+
+```
+eidolons upgrade self                      # upgrade to latest stable
+eidolons upgrade self --ref vX.Y.Z         # pin to a specific tag or commit
+eidolons upgrade self --check              # read-only: show what would change
+eidolons upgrade self --rollback           # revert to nexus.prev
+eidolons upgrade self --force              # skip dirty-tree and downgrade guards
+eidolons upgrade self --non-interactive    # fail on any prompt (for CI)
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--ref REF` | Specific git tag, branch, or commit SHA to upgrade to. Default: latest stable tag. |
+| `--check` | Read-only mode: prints the current version, latest available, and upgrade plan. No disk writes. |
+| `--rollback` | Swap `~/.eidolons/nexus.prev` back into place. Only one previous version is retained. Exit 7 if no `nexus.prev` exists. |
+| `--force` | Skip the dirty-tree guard and downgrade confirmation. Required when the current nexus has uncommitted changes. |
+| `--non-interactive` | Fail instead of prompting (e.g. downgrade confirmation). Safe for CI use. |
+
+**How it works.** `upgrade self` never modifies your current install until it is safe to do so:
+
+1. Resolves the target ref (default: latest stable tag via `git ls-remote`).
+2. Checks whether current version already matches — exits 0 (no-op) if so.
+3. Clones the target into `~/.eidolons/nexus.new/`.
+4. Verifies integrity: commit SHA, Git tree SHA, and archive SHA-256 all match `nexus.versions.releases.<v>` in `roster/index.yaml`. Exit 5 on mismatch (unless the release block contains placeholder values, which is the bootstrap-window sentinel).
+5. Runs a smoke test: `bash ~/.eidolons/nexus.new/cli/eidolons --version --quiet` exits 0. Exit 6 on failure.
+6. Atomically swaps:
+   - `~/.eidolons/nexus` → `~/.eidolons/nexus.prev`
+   - `~/.eidolons/nexus.new` → `~/.eidolons/nexus`
+7. The symlink at `~/.local/bin/eidolons` is unchanged — it already points at `~/.eidolons/nexus/cli/eidolons`.
+
+On any failure before step 6, `~/.eidolons/nexus.new` is removed and the current install is untouched.
+
+**Downgrade detection.** If `--ref` targets a version older than the current install, the command warns and requires explicit confirmation (or `--force` / `--non-interactive` with `--force`).
+
+**Dirty-tree guard.** If the current nexus directory has uncommitted changes (common when working directly from a checkout), the command refuses to proceed unless `--force` is passed.
+
+**Exit codes.**
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success (or already up-to-date) |
+| 1 | Generic failure (details on stderr) |
+| 2 | Already at the requested ref (no-op, same as 0 for no-op check) |
+| 4 | Network error — could not reach upstream |
+| 5 | Integrity verification failed |
+| 6 | Smoke test failed on the new nexus |
+| 7 | Rollback requested but no `nexus.prev` exists |
 
 ---
 

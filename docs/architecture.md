@@ -171,11 +171,21 @@ MCP server prerequisites (e.g. Docker images) are validated by the corresponding
 | EIIS | SemVer | Major bump requires migration guide |
 | Each Eidolon methodology | Independent SemVer | Breaking change → methodology major bump |
 | Each Eidolon repo | SemVer (git tags) | Tags map to registry `versions.latest` |
-| `eidolons` CLI | SemVer | CLI minor bump tolerates old rosters |
+| `eidolons` CLI (nexus) | SemVer — see bump table below | CLI minor bump tolerates old rosters |
 | `roster/index.yaml` | `registry_version` field | Breaking schema change → new registry version |
 | `eidolons.yaml` | `version: N` field | Breaking schema change → bump version |
 
 A consumer project pins nothing implicitly. Versions are pinned in `eidolons.yaml` (constraints) and `eidolons.lock` (resolved exact).
+
+### Nexus CLI bump rules
+
+| Bump | Triggers |
+|------|---------|
+| **MAJOR** | Removing or renaming a built-in CLI subcommand; breaking-change to `eidolons.yaml` or `eidolons.lock` schema (`version` field bump); breaking-change to `roster/index.yaml` shape (`registry_version` bump) when consumed by the CLI; raising minimum bash / git / jq / yq version; dropping a host wiring (claude-code / copilot / cursor / opencode / codex). |
+| **MINOR** | Adding a new built-in subcommand or top-level flag; adding a new optional field to `roster/index.yaml` or schemas; adding a new host wiring; new methodology cortex layer; adding a new MCP scaffold (e.g. `eidolons mcp <new-server>`). |
+| **PATCH** | Bug fix; doc-only change; CHANGELOG-only change; **roster bump for a shipped Eidolon** (the most frequent change in this repo); internal refactor with no surface change; CI workflow tweak. |
+
+The initial managed release is `v1.0.0` (2026-05-04). The `EIDOLONS_VERSION` constant that was previously hardcoded in `cli/eidolons` is now read from `VERSION` at the nexus root with a `git describe → 0.0.0-dev` fallback.
 
 Release integrity metadata lives beside each roster version under
 `versions.releases.<version>`. When present, the CLI verifies the exact
@@ -183,6 +193,29 @@ Release integrity metadata lives beside each roster version under
 Eidolon's installer. Missing metadata is warning-only while
 `integrity.enforcement: warn`; the next enforcement bump can make it strict.
 See [`release-integrity.md`](release-integrity.md).
+
+The nexus itself has a parallel integrity block under `nexus.versions.releases.<version>`
+in `roster/index.yaml`, consumed by `eidolons upgrade self`.
+
+### Nexus self-upgrade
+
+The nexus releases itself via `.github/workflows/release-nexus.yml`. Users update with
+`eidolons upgrade self` instead of re-running the curl bootstrap.
+
+The upgrade path is:
+
+```
+git ls-remote (latest tag)
+  → clone to ~/.eidolons/nexus.new/
+  → verify commit+tree+archive SHA-256 against roster/index.yaml nexus block
+  → smoke test: bash nexus.new/cli/eidolons --version --quiet
+  → mv nexus → nexus.prev  &&  mv nexus.new → nexus  (atomic rename)
+```
+
+The symlink at `~/.local/bin/eidolons` points at `~/.eidolons/nexus/cli/eidolons` and
+needs no update — it resolves through the renamed directory. Rollback is a single
+`eidolons upgrade self --rollback` that swaps `nexus.prev` back. Only one previous
+version is retained.
 
 ---
 

@@ -311,6 +311,29 @@ eidolons:
       - "research/papers/agentracer.md"
       - "research/papers/lifecycle-of-failures.md"
 
+# ─── Nexus ─────────────────────────────────────────────────────────────────────
+# Self-describing metadata for the nexus CLI. Not an Eidolon — not listed in
+# eidolons[] and not subject to roster-intake. The release workflow
+# (.github/workflows/release-nexus.yml) fills commit/tree/archive_sha256
+# after tagging; placeholders here are a bootstrap-window sentinel that
+# nexus_verify_release() detects and skips gracefully.
+
+nexus:
+  version: "1.0.0"
+  versions:
+    latest: "1.0.0"
+    pins:
+      stable: "1.0.0"
+    releases:
+      "1.0.0":
+        tag: "v1.0.0"
+        commit: "<filled-by-release-workflow>"
+        tree: "<filled-by-release-workflow>"
+        archive_sha256: "<filled-by-release-workflow>"
+        provenance:
+          github_attestation: false
+        released_at: "2026-05-04T00:00:00Z"
+
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 
