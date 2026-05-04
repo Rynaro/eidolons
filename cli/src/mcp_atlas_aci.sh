@@ -6,13 +6,17 @@
 # the Atlas-ACI Docker container needs for its sqlite codegraph DB).
 #
 # Usage:
-#   eidolons mcp atlas-aci [--force] [--image-digest <sha256>] [--project-root <path>]
-#                          [--skip-image-check]
+#   eidolons mcp atlas-aci [--force] [--image-digest <sha256>] [--print-pinned-ref]
+#                          [--project-root <path>] [--skip-image-check]
 #
 # Subcommand surface (routed here from cli/eidolons — see T3):
-#   --project-root PATH    Directory to scaffold (default: cwd).
 #   --image-digest DIGEST  Override the pinned Docker image digest.
 #   --force                Overwrite an existing .mcp.json without prompting.
+#   --print-pinned-ref     Print the full pinned image ref to stdout and exit 0.
+#                          No Docker pre-flight, no template render, no filesystem
+#                          writes. Designed for ATLAS's commands/aci.sh to read
+#                          the digest without sourcing nexus libraries.
+#   --project-root PATH    Directory to scaffold (default: cwd).
 #   --skip-image-check     Skip Docker + image pre-flight checks. Use only in CI
 #                          where the image is loaded after scaffolding. Emits a
 #                          warning; the MCP server will fail at boot if the image
@@ -48,6 +52,7 @@ PROJECT_ROOT=""
 IMAGE_DIGEST=""
 IMAGE_DIGEST_EXPLICIT=false   # set to true when user passes --image-digest
 FORCE=false
+PRINT_PINNED_REF=false
 SKIP_IMAGE_CHECK=false
 
 usage() {
@@ -57,9 +62,12 @@ eidolons mcp atlas-aci — generate a per-project Atlas-ACI MCP configuration
 Usage: eidolons mcp atlas-aci [OPTIONS]
 
 Options:
-  --project-root PATH    Project directory to scaffold (default: current dir).
   --image-digest DIGEST  Docker image digest to pin (default: ${DEFAULT_IMAGE_DIGEST}).
   --force                Overwrite an existing .mcp.json without prompting.
+  --print-pinned-ref     Print the full pinned image ref (ghcr.io/rynaro/atlas-aci@sha256:<hex>)
+                         to stdout and exit 0. No side effects — no Docker pre-flight,
+                         no template render, no filesystem writes.
+  --project-root PATH    Project directory to scaffold (default: current dir).
   --skip-image-check     Skip Docker + image pre-flight. Use only in CI where
                          the image is loaded after scaffolding. The MCP server
                          will fail at boot if the image is absent.
@@ -99,6 +107,10 @@ while [[ $# -gt 0 ]]; do
       FORCE=true
       shift
       ;;
+    --print-pinned-ref)
+      PRINT_PINNED_REF=true
+      shift
+      ;;
     --skip-image-check)
       SKIP_IMAGE_CHECK=true
       shift
@@ -114,6 +126,14 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+# ─── Early exit: --print-pinned-ref ──────────────────────────────────────
+# No Docker pre-flight, no template render, no filesystem writes.
+# Stdout only — no info/say/ok calls per the stderr-only logging invariant.
+if [ "$PRINT_PINNED_REF" = "true" ]; then
+  printf '%s@%s\n' "$DEFAULT_IMAGE_REF" "$DEFAULT_IMAGE_DIGEST"
+  exit 0
+fi
 
 # ─── Defaults ─────────────────────────────────────────────────────────────
 PROJECT_ROOT="${PROJECT_ROOT:-$(pwd)}"
