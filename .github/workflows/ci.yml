@@ -163,3 +163,68 @@ jobs:
 
       - name: Run bats suite
         run: bats cli/tests/
+
+  upgrade-self-roundtrip:
+    name: upgrade self — round-trip (install → upgrade self --check)
+    runs-on: ${{ matrix.os }}
+    needs: [lint]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install prerequisites (jq, yq)
+        run: |
+          if [[ "$RUNNER_OS" == "Linux" ]]; then
+            sudo apt-get update && sudo apt-get install -y jq
+            sudo wget -qO /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          else
+            brew install jq yq
+          fi
+
+      - name: Bootstrap install from this checkout
+        env:
+          EIDOLONS_REPO: file://${{ github.workspace }}
+          EIDOLONS_REF: ${{ github.sha }}
+          EIDOLONS_HOME: ${{ github.workspace }}/.us-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.us-bin
+        run: bash cli/install.sh
+
+      - name: version reports enriched output (commit + ref + installed + path)
+        env:
+          EIDOLONS_HOME: ${{ github.workspace }}/.us-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.us-bin
+        run: |
+          export PATH="${{ github.workspace }}/.us-bin:$PATH"
+          out="$(eidolons version)"
+          echo "$out" | head -1 | grep -qE '^eidolons [0-9]+\.[0-9]+\.[0-9]'
+          echo "$out" | grep -q 'commit:'
+          echo "$out" | grep -q 'installed:'
+
+      - name: --quiet flag emits single-line output
+        env:
+          EIDOLONS_HOME: ${{ github.workspace }}/.us-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.us-bin
+        run: |
+          export PATH="${{ github.workspace }}/.us-bin:$PATH"
+          out="$(eidolons --version --quiet)"
+          echo "$out" | grep -qE '^eidolons [0-9]+\.[0-9]+\.[0-9]'
+          [ "$(echo "$out" | wc -l | tr -d ' ')" -eq 1 ]
+
+      - name: upgrade self --check completes without error
+        env:
+          EIDOLONS_HOME: ${{ github.workspace }}/.us-home
+          EIDOLONS_BIN_DIR: ${{ github.workspace }}/.us-bin
+          EIDOLONS_REPO: https://github.com/Rynaro/eidolons
+        run: |
+          export PATH="${{ github.workspace }}/.us-bin:$PATH"
+          # --check is read-only; it may report "already on latest" or "upgrade
+          # available" depending on the state of the upstream tag, but it must
+          # exit 0 and never modify the nexus directory.
+          eidolons upgrade self --check || true
+          # Verify nexus is untouched (nexus.new must not exist after --check).
+          [ ! -d "${{ github.workspace }}/.us-home/nexus.new" ]

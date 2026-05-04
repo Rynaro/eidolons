@@ -8,6 +8,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Nexus CLI self-versioning + `eidolons upgrade self`.**
+  - `VERSION` file at the nexus root (initial content `1.0.0`) is now the single
+    source of truth for the nexus version. `cli/eidolons` reads it via an inline
+    `_read_nexus_version()` helper (fallback: `git describe --tags --abbrev=0`, then
+    `0.0.0-dev`). The hardcoded `EIDOLONS_VERSION="1.0.0"` constant is replaced.
+  - `eidolons --version` (and `eidolons version`, `-v`, `--version`) now prints a
+    multi-line enriched block: version, commit SHA, install ref, install date, nexus
+    path. `--quiet` / `-q` flag restores the single-line grep-compat form.
+  - `eidolons upgrade self` — atomic, integrity-verified, rollback-safe nexus
+    self-upgrade. Clones the target ref into `~/.eidolons/nexus.new/`, verifies commit
+    + tree + archive SHA-256 against `nexus.versions.releases.<v>` in
+    `roster/index.yaml`, runs a smoke test, then renames atomically
+    (`nexus → nexus.prev`, `nexus.new → nexus`). Exit codes: 0 ok/no-op, 4 network
+    error, 5 integrity mismatch, 6 smoke test failed, 7 no `nexus.prev` for rollback.
+    Flags: `--ref`, `--check`, `--rollback`, `--force`, `--non-interactive`.
+  - `nexus:` block added to `roster/index.yaml` with `versions.releases.1.0.0`
+    integrity metadata (placeholders filled by the release workflow).
+  - `.github/workflows/release-nexus.yml` — release workflow that tags, builds the
+    archive, computes SHA-256, updates the `nexus.versions.releases.<v>` block in
+    `roster/index.yaml`, commits the updated roster, and creates a GitHub Release.
+  - `roster-health.yml` gains a `nexus-integrity` job that validates the latest nexus
+    release block and skips gracefully when placeholders are still present (bootstrap
+    window).
+  - `cli/install.sh` writes `VERSION` (from `git describe` when absent) and sidecars
+    `.install_date`, `.install_ref`, `.install_commit` into the cloned nexus after
+    every fresh install. The sidecars are gitignored.
+  - 15 new bats tests in `cli/tests/upgrade_self.bats` covering no-op, upgrade,
+    rollback, dirty-tree guard, downgrade warning, integrity failure, smoke-test
+    failure, `--check`, and first-install sidecar presence.
+  - Versioning bump rules documented in `docs/architecture.md` §"Nexus CLI bump rules"
+    and reproduced in `CHANGELOG.md` §"Versioning notes".
+  - `docs/cli-reference.md` gains a dedicated `## eidolons upgrade self` section with
+    flags, safety properties, and exit codes.
+  - README gains a `### Updating` subsection and updated `## Recently shipped` entry.
+
 ### Fixed
 - `eidolons init` / `eidolons sync` now auto-recover from stale or corrupt
   `~/.eidolons/cache/` entries by re-cloning once before failing. The
@@ -120,4 +156,10 @@ Initial release target. Release criteria:
 - **Individual Eidolon versions** are independent — bumping APIVR-Δ doesn't bump the nexus.
 - **EIIS version** is independent — EIIS can bump to 1.1 without forcing a nexus bump.
 
-A breaking change to `eidolons.yaml` or `eidolons.lock` schemas requires a **major** nexus bump with a migration guide in this file.
+### Nexus bump rules (from `docs/architecture.md`)
+
+| Bump | Triggers |
+|------|---------|
+| **MAJOR** | Removing or renaming a built-in CLI subcommand; breaking-change to `eidolons.yaml` or `eidolons.lock` schema; breaking-change to `roster/index.yaml` shape when consumed by the CLI; raising minimum bash / git / jq / yq version; dropping a supported host wiring. |
+| **MINOR** | Adding a new built-in subcommand or top-level flag; adding a new optional roster field or schema; adding a new host wiring; new methodology cortex layer; new MCP scaffold. |
+| **PATCH** | Bug fix; doc-only change; roster bump for a shipped Eidolon (the most frequent change); internal refactor; CI tweak. |

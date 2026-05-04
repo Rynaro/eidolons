@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/blob/main/schemas/roster.schema.json",
+  "title": "Eidolons Roster",
+  "description": "Top-level schema for roster/index.yaml, validating the registry_version, eidolons list, nexus block, and presets.",
+  "type": "object",
+  "required": ["registry_version", "eidolons", "nexus"],
+  "properties": {
+    "registry_version": { "type": "string" },
+    "updated_at":       { "type": "string" },
+    "eiis_required":    { "type": "string" },
+    "integrity": {
+      "type": "object",
+      "properties": {
+        "enforcement": { "enum": ["strict", "warn"] }
+      }
+    },
+    "eidolons": {
+      "type": "array",
+      "items": { "$ref": "roster-entry.schema.json" }
+    },
+    "nexus": {
+      "type": "object",
+      "description": "Self-describing metadata for the nexus CLI. Not an Eidolon.",
+      "required": ["version", "versions"],
+      "properties": {
+        "version": { "type": "string" },
+        "versions": {
+          "type": "object",
+          "required": ["latest"],
+          "properties": {
+            "latest": { "type": "string" },
+            "pins": {
+              "type": "object",
+              "additionalProperties": { "type": "string" }
+            },
+            "releases": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "required": ["tag", "released_at"],
+                "properties": {
+                  "tag": { "type": "string" },
+                  "commit": { "type": "string" },
+                  "tree": { "type": "string" },
+                  "archive_sha256": { "type": "string" },
+                  "released_at": { "type": "string" },
+                  "provenance": {
+                    "type": "object",
+                    "properties": {
+                      "github_attestation": { "type": "boolean" },
+                      "workflow": { "type": "string" }
+                    },
+                    "additionalProperties": true
+                  }
+                },
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "presets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["description", "members"],
+        "properties": {
+          "description": { "type": "string" },
+          "members": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,194 @@
+name: Release Nexus
+
+# Canonical self-versioning release workflow for the Eidolons nexus CLI.
+#
+# Divergence from eidolon-release-template.yml (documented here for reviewers):
+#   - No "Roster Intake" step. The nexus is not ingested into any roster.
+#   - No manifest_sha256. The nexus has no install.manifest.json (EIIS concept
+#     that does not apply here).
+#   - provenance.github_attestation is false for v1.0.0. Adopt
+#     actions/attest-build-provenance in a follow-up (OQ-3).
+#   - The release metadata PR targets main via a chore/nexus-release-<v> branch.
+#     It does NOT push directly to main — same discipline as the eidolon
+#     roster-bump flow.
+#
+# Trigger:
+#   Canonical path: workflow_dispatch with `version` input (e.g. "1.0.0").
+#   Fallback path:  push to tags matching v*.*.* (for manually-pushed tags).
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0 — without the leading v)'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release:
+    name: Build and release nexus v${{ github.event.inputs.version || github.ref_name }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Resolve version
+        id: ver
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            # Strip leading 'v' from tag ref.
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
+
+      - name: Checkout at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.ver.outputs.tag }}
+          fetch-depth: 0
+
+      - name: Validate VERSION file matches tag
+        run: |
+          FILE_VER="$(tr -d '[:space:]' < VERSION)"
+          TAG_VER="${{ steps.ver.outputs.version }}"
+          if [[ "$FILE_VER" != "$TAG_VER" ]]; then
+            echo "::error::VERSION file ($FILE_VER) does not match tag ($TAG_VER)"
+            exit 1
+          fi
+          echo "VERSION file matches tag: $FILE_VER"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate roster/index.yaml schema
+        run: |
+          jq empty schemas/*.json
+          yq eval '.' roster/index.yaml > /dev/null
+
+      - name: Resolve commit and tree
+        id: shas
+        run: |
+          COMMIT="$(git rev-parse HEAD)"
+          TREE="$(git rev-parse 'HEAD^{tree}')"
+          echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
+          echo "tree=$TREE"     >> "$GITHUB_OUTPUT"
+          echo "Commit: $COMMIT"
+          echo "Tree:   $TREE"
+
+      - name: Build canonical archive
+        id: archive
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          PREFIX="eidolons-${VERSION}/"
+          ARCHIVE="eidolons-${VERSION}.tar.gz"
+
+          # Produce the tar and gzip — deterministic with git archive.
+          git archive --format=tar --prefix="$PREFIX" HEAD | gzip > "$ARCHIVE"
+
+          # Also produce the raw tar for sha256 computation (mirrors what
+          # nexus_verify_release computes on the consumer side).
+          git archive --format=tar --prefix="$PREFIX" HEAD > "eidolons-${VERSION}.tar"
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            ARCHIVE_SHA256="$(sha256sum "eidolons-${VERSION}.tar" | awk '{print $1}')"
+          else
+            ARCHIVE_SHA256="$(shasum -a 256 "eidolons-${VERSION}.tar" | awk '{print $1}')"
+          fi
+
+          echo "archive_sha256=$ARCHIVE_SHA256" >> "$GITHUB_OUTPUT"
+          echo "archive_file=$ARCHIVE"          >> "$GITHUB_OUTPUT"
+          echo "Archive:  $ARCHIVE"
+          echo "SHA-256:  $ARCHIVE_SHA256"
+
+          rm -f "eidolons-${VERSION}.tar"
+
+      - name: Extract CHANGELOG section for release notes
+        id: notes
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          # Extract the [VERSION] section from CHANGELOG.md.
+          NOTES="$(awk "/^## \[$VERSION\]/,/^## \[/{if(/^## \[/ && !/^## \[$VERSION\]/) exit; print}" CHANGELOG.md \
+            | tail -n +2 | head -n -1 || echo "See CHANGELOG.md for details.")"
+          # Write to file so multiline passes cleanly to the next step.
+          printf '%s\n' "$NOTES" > /tmp/release-notes.md
+          echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
+
+      - name: Update roster/index.yaml with release metadata
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          COMMIT="${{ steps.shas.outputs.commit }}"
+          TREE="${{ steps.shas.outputs.tree }}"
+          SHA256="${{ steps.archive.outputs.archive_sha256 }}"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # Use yq to update the release metadata in-place.
+          yq e ".nexus.versions.releases[\"$VERSION\"].commit = \"$COMMIT\" |
+                .nexus.versions.releases[\"$VERSION\"].tree = \"$TREE\" |
+                .nexus.versions.releases[\"$VERSION\"].archive_sha256 = \"$SHA256\" |
+                .nexus.versions.releases[\"$VERSION\"].released_at = \"$NOW\"" \
+            -i roster/index.yaml
+
+          echo "Updated roster nexus release block for v$VERSION"
+
+      - name: Commit and open PR for roster update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          BRANCH="chore/nexus-release-${VERSION}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git checkout -b "$BRANCH"
+          git add roster/index.yaml
+          git commit -m "chore(roster): record nexus v${VERSION} release integrity metadata
+
+Commit: ${{ steps.shas.outputs.commit }}
+Tree:   ${{ steps.shas.outputs.tree }}
+SHA256: ${{ steps.archive.outputs.archive_sha256 }}"
+
+          git push origin "$BRANCH"
+
+          gh pr create \
+            --title "chore(roster): record nexus v${VERSION} release integrity metadata" \
+            --body "$(cat <<'PREOF'
+Automated roster update from the release-nexus workflow.
+
+Records the commit, tree, and archive_sha256 for nexus v${VERSION} under
+`nexus.versions.releases["${VERSION}"]` in `roster/index.yaml`.
+
+**Do not edit this PR manually.** Values are derived deterministically
+from the tag at `v${VERSION}` by the release workflow.
+PREOF
+)" \
+            --base main \
+            --head "$BRANCH"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.ver.outputs.version }}"
+          ARCHIVE="${{ steps.archive.outputs.archive_file }}"
+
+          gh release create "v${VERSION}" \
+            "$ARCHIVE" \
+            --title "eidolons v${VERSION}" \
+            --notes-file "${{ steps.notes.outputs.notes_file }}" \
+            --verify-tag

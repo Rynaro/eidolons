@@ -583,6 +583,163 @@ nexus_self_update() {
   return 0
 }
 
+# read_nexus_version → echoes the installed nexus version from $NEXUS/VERSION,
+# falling back to `git describe` then to "0.0.0-dev".
+read_nexus_version() {
+  local vfile="$NEXUS/VERSION"
+  if [[ -f "$vfile" ]]; then
+    tr -d '[:space:]' < "$vfile"
+    return 0
+  fi
+  local gdesc
+  gdesc="$(git -C "$NEXUS" describe --tags --abbrev=0 2>/dev/null || true)"
+  if [[ -n "$gdesc" ]]; then
+    echo "${gdesc#v}"
+    return 0
+  fi
+  echo "0.0.0-dev"
+}
+
+# nexus_install_date → ISO date from .install_date sidecar; falls back to "unknown".
+nexus_install_date() {
+  cat "$NEXUS/.install_date" 2>/dev/null || echo "unknown"
+}
+
+# nexus_install_ref → ref string from .install_ref sidecar; falls back to "unknown".
+nexus_install_ref() {
+  cat "$NEXUS/.install_ref" 2>/dev/null || echo "unknown"
+}
+
+# nexus_clone_to_sibling TAG DEST_DIR → shallow-clones the nexus remote at TAG
+# into DEST_DIR. Returns 0 on success, 1 on failure. stdout is the dest dir.
+# The actual swap is the caller's responsibility.
+nexus_clone_to_sibling() {
+  local tag="$1" dest="$2"
+  local repo="${EIDOLONS_REPO:-https://github.com/Rynaro/eidolons}"
+  rm -rf "$dest"
+  if ! git clone --depth 1 --branch "$tag" "$repo" "$dest" >/dev/null 2>&1; then
+    rm -rf "$dest"
+    return 1
+  fi
+  echo "$dest"
+  return 0
+}
+
+# nexus_atomic_swap NEW_DIR PREV_DIR → moves $NEXUS to $PREV_DIR then $NEW_DIR to $NEXUS.
+# Verifies NEW_DIR contains cli/eidolons before starting. Pure renames — reversible.
+nexus_atomic_swap() {
+  local new_dir="$1" prev_dir="$2"
+  if [[ ! -f "$new_dir/cli/eidolons" ]]; then
+    warn "nexus_atomic_swap: $new_dir does not contain cli/eidolons — refusing"
+    return 1
+  fi
+  if [[ -d "$prev_dir" ]]; then
+    rm -rf "$prev_dir"
+  fi
+  mv "$NEXUS" "$prev_dir"
+  mv "$new_dir" "$NEXUS"
+  return 0
+}
+
+# nexus_rollback PREV_DIR FAILED_DIR → moves $NEXUS to $FAILED_DIR then $PREV_DIR to $NEXUS.
+# Verifies PREV_DIR exists and contains cli/eidolons.
+nexus_rollback() {
+  local prev_dir="$1" failed_dir="$2"
+  if [[ ! -d "$prev_dir" ]]; then
+    warn "nexus_rollback: no previous nexus at $prev_dir"
+    return 1
+  fi
+  if [[ ! -f "$prev_dir/cli/eidolons" ]]; then
+    warn "nexus_rollback: $prev_dir does not contain cli/eidolons — refusing"
+    return 1
+  fi
+  if [[ -d "$failed_dir" ]]; then
+    rm -rf "$failed_dir"
+  fi
+  mv "$NEXUS" "$failed_dir"
+  mv "$prev_dir" "$NEXUS"
+  return 0
+}
+
+# nexus_verify_release VERSION CLONE_DIR → verifies the clone against
+# roster/index.yaml nexus.versions.releases.<version>. Unlike
+# _verify_release_integrity_internal (which reads from eidolons[]), this
+# function reads from the top-level nexus: block.
+# Return codes:
+#   0 — verified (all checks pass, or metadata absent — skip with warning)
+#   2 — mismatch (commit / tree / archive drift)
+#   3 — corrupt clone (HEAD unresolvable)
+nexus_verify_release() {
+  local version="$1" clone_dir="$2"
+  local actual_commit
+
+  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
+  if [[ -z "$actual_commit" ]]; then
+    warn "nexus@$version cannot resolve cloned commit"
+    return 3
+  fi
+
+  # Read metadata from roster nexus.versions.releases.<version>
+  local meta
+  meta="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null \
+    | jq --arg v "$version" '.nexus.versions.releases[$v] // empty' 2>/dev/null || true)"
+
+  if [[ -z "$meta" || "$meta" == "null" || "$meta" == "empty" ]]; then
+    warn "nexus@$version has no release integrity metadata in roster — skipping verification"
+    return 0
+  fi
+
+  # Check for placeholder values written at bootstrap time.
+  local expected_commit expected_tree expected_archive
+  expected_commit="$(echo "$meta" | jq -r '.commit // empty')"
+  expected_tree="$(echo "$meta" | jq -r '.tree // empty')"
+  expected_archive="$(echo "$meta" | jq -r '.archive_sha256 // empty')"
+
+  # Skip verification when placeholders are present (bootstrap window).
+  case "$expected_commit" in
+    "<"*) warn "nexus@$version commit placeholder detected — skipping verification (bootstrap window)"; return 0 ;;
+  esac
+
+  if [[ -n "$expected_commit" && "$actual_commit" != "$expected_commit" ]]; then
+    warn "nexus@$version commit mismatch: got $actual_commit, expected $expected_commit"
+    return 2
+  fi
+
+  local actual_tree
+  actual_tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+  case "$expected_tree" in
+    "<"*) : ;;  # placeholder
+    "")  : ;;
+    *)
+      if [[ "$actual_tree" != "$expected_tree" ]]; then
+        warn "nexus@$version tree mismatch: got ${actual_tree:-unknown}, expected $expected_tree"
+        return 2
+      fi
+      ;;
+  esac
+
+  case "$expected_archive" in
+    "<"*) : ;;  # placeholder
+    "")  : ;;
+    *)
+      local prefix actual_archive
+      prefix="eidolons-${version}/"
+      actual_archive="$(git_archive_sha256 "$clone_dir" "$prefix" || echo "")"
+      if [[ -z "$actual_archive" ]]; then
+        warn "nexus@$version cannot compute archive checksum"
+        return 2
+      fi
+      if [[ "$actual_archive" != "$expected_archive" ]]; then
+        warn "nexus@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
+        return 2
+      fi
+      ;;
+  esac
+
+  ok "nexus@$version release integrity verified"
+  return 0
+}
+
 # ─── SemVer helpers (pure bash, no external deps) ─────────────────────────
 # semver_lt A B → exit 0 when A < B (strict), exit 1 otherwise.
 # Uses `sort -V` for the comparison; both args must be plain X.Y.Z (no prefix).

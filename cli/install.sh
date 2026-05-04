@@ -148,6 +148,38 @@ else
   ok "Nexus cloned to $NEXUS_DIR"
 fi
 
+# ─── Write install metadata sidecars ─────────────────────────────────────
+# These three files are gitignored (added to $NEXUS_DIR/.gitignore below) so
+# the nexus working tree stays clean. On a re-install they are always
+# overwritten (idempotent: correct — it is a fresh install). VERSION is left
+# untouched when it already exists (upstream source-of-truth).
+say "Writing install metadata"
+
+# Ensure .gitignore excludes sidecar files so `git status` stays clean.
+if [[ ! -f "$NEXUS_DIR/.gitignore" ]]; then
+  printf '.install_date\n.install_ref\n.install_commit\n' > "$NEXUS_DIR/.gitignore"
+else
+  for _sc in .install_date .install_ref .install_commit; do
+    grep -qxF "$_sc" "$NEXUS_DIR/.gitignore" 2>/dev/null \
+      || printf '%s\n' "$_sc" >> "$NEXUS_DIR/.gitignore"
+  done
+fi
+
+# Write VERSION if absent (from git describe; falls back to 0.0.0-dev).
+if [[ ! -f "$NEXUS_DIR/VERSION" ]]; then
+  _ver="$(git -C "$NEXUS_DIR" describe --tags --abbrev=0 2>/dev/null || true)"
+  _ver="${_ver#v}"
+  printf '%s\n' "${_ver:-0.0.0-dev}" > "$NEXUS_DIR/VERSION"
+fi
+
+# Always write the three install-time sidecars.
+printf '%s\n' "$(date -u +%Y-%m-%d)" > "$NEXUS_DIR/.install_date"
+printf '%s\n' "$EIDOLONS_REF" > "$NEXUS_DIR/.install_ref"
+printf '%s\n' "$(git -C "$NEXUS_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+  > "$NEXUS_DIR/.install_commit"
+
+ok "Install metadata written"
+
 # ─── Install the CLI ──────────────────────────────────────────────────────
 say "Installing CLI"
 

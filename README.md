@@ -88,6 +88,20 @@ eidolons sync                    # reconcile installed members to eidolons.yaml
 eidolons verify                  # re-check installed Eidolons against the roster's signed metadata
 ```
 
+### Updating
+
+Keep the nexus itself up to date with:
+
+```bash
+eidolons upgrade self            # upgrade to latest stable nexus release
+eidolons upgrade self --check    # read-only: see what would change, no writes
+eidolons upgrade self --rollback # revert to the previous install (nexus.prev)
+```
+
+`upgrade self` is atomic and rollback-safe: it clones the new version alongside your current install, verifies integrity (commit SHA, tree SHA, archive SHA-256 from `roster/index.yaml`), runs a smoke test, then renames atomically. On any failure before the rename, the candidate is discarded and your current install is untouched. The previous install is retained as `~/.eidolons/nexus.prev` for one-step rollback.
+
+To upgrade installed Eidolons (ATLAS, SPECTRA, etc.), use `eidolons upgrade` (no `self`) — see the CLI reference.
+
 **MCP server scaffold (Atlas-ACI).** If you use the Atlas-ACI code-graph MCP server alongside ATLAS, run the nexus scaffold step once per project before starting the MCP server. It writes a per-project `.mcp.json` with the correct bind-mount paths and pre-creates `.atlas/memex/` so the sqlite codegraph DB has a writable host-side surface — skipping this step is the most common cause of `sqlite3.OperationalError: unable to open database file` on fresh clones.
 
 ```bash
@@ -107,6 +121,8 @@ Commit `eidolons.lock` alongside `eidolons.yaml` — the lockfile pins resolved 
 Every shipped Eidolon publishes attestation-backed releases through a canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) hosted in this nexus. Each release records its commit, tree, and archive SHA-256 into `roster/index.yaml` via [`Roster Intake`](.github/workflows/roster-intake.yml), with GitHub artifact attestations bound to the canonical signer workflow.
 
 `eidolons sync` and `eidolons verify` enforce that contract on the consumer side. Under the default `integrity.enforcement: strict` posture, any installed Eidolon whose commit/tree/archive checksum drifts from the roster's signed metadata aborts with exit 1 — same gate `Roster Health` runs nightly against every shipped Eidolon. Read the trust model end-to-end at [`docs/release-integrity.md`](docs/release-integrity.md).
+
+**Nexus releases** use the same commit/tree/archive-SHA-256 model. Each `eidolons upgrade self` re-verifies the downloaded nexus against the `nexus.versions.releases.<v>` block in `roster/index.yaml` before swapping it in. The release workflow ([`.github/workflows/release-nexus.yml`](.github/workflows/release-nexus.yml)) produces these artefacts automatically on each `vX.Y.Z` tag.
 
 ---
 
@@ -141,9 +157,9 @@ Each Eidolon remains a first-class repo. This nexus is a coordinator, not an own
 <!-- Curated highlights from CHANGELOG.md "Unreleased". Refresh on every release. -->
 ## Recently shipped
 
+- **Nexus CLI self-versioning + `eidolons upgrade self`** — the nexus now carries a real `VERSION` file and release process. `eidolons --version` reports version + commit SHA + install date + source ref. `eidolons upgrade self` replaces the re-curl flow with an atomic, integrity-verified, rollback-safe upgrade. See [CHANGELOG.md](CHANGELOG.md).
 - **Ecosystem normalized — supply-chain integrity end-to-end.** All six shipped Eidolons (ATLAS, SPECTRA, APIVR-Δ, IDG, FORGE, VIGIL) now publish attestation-backed releases via the canonical [`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml). Every `versions.releases.<v>` block in [`roster/index.yaml`](roster/index.yaml) carries `commit`, `tree`, `archive_sha256`, and a GitHub-signed provenance attestation, ingested via [`Roster Intake`](.github/workflows/roster-intake.yml). `integrity.enforcement` is `strict` by default — any consumer install with a checksum mismatch aborts with exit 1. See [`docs/release-integrity.md`](docs/release-integrity.md).
-- **ATLAS v1.2.2** — atlas-aci MCP tools now reach the Claude Code subagent (`tools:` allowlist rewrite); MCP config writes absolute project paths instead of `${workspaceFolder}`; new `eidolons atlas aci index` first-class re-index subcommand. See [CHANGELOG.md](CHANGELOG.md).
-- **VIGIL v1.0 is shipped** — forensic root-cause attribution for failures resistant to normal repair, with dependency-graph ranking and counterfactual verification. See [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL).
+- **ATLAS v1.3.0** — registry-prefixed canonical body for `eidolons atlas aci --container`; container-runtime security hardening. See [CHANGELOG.md](CHANGELOG.md).
 - **`eidolons upgrade` is fully implemented** — `--check` for read-only diffs, applies member upgrades within `eidolons.yaml` SemVer constraints, idempotent on repeat runs. See [CHANGELOG.md](CHANGELOG.md).
 - **EIIS bumped to v1.1** with an external standalone conformance checker. See [Rynaro/eidolons-eiis](https://github.com/Rynaro/eidolons-eiis).
 

@@ -14,6 +14,12 @@ export EIDOLONS_ROOT
 EIDOLONS_BIN="$EIDOLONS_ROOT/cli/eidolons"
 export EIDOLONS_BIN
 
+# EIDOLONS_REPO can be overridden per-test to point at a local bare git
+# repo fixture (used by upgrade_self.bats to avoid real network calls).
+# The default is the real upstream; tests that need offline behavior must
+# set this explicitly.  lib.sh honors EIDOLONS_REPO for nexus_latest_tag
+# and nexus_clone_to_sibling, so pointing it at a local path is sufficient.
+
 # Convenience: run the CLI. Bats captures output in $output and status in $status.
 eidolons() {
   "$EIDOLONS_BIN" "$@"
