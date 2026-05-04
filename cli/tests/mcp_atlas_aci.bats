@@ -588,3 +588,58 @@ file_md5() {
   # The digest must appear in the rendered file.
   grep -q "$real_digest" "$project/.mcp.json"
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T7 tests — --print-pinned-ref flag (T2) and lib accessor (T1)
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── T7 Test 1: --print-pinned-ref ─────────────────────────────────────────
+# GIVEN the CLI is invoked with --print-pinned-ref.
+# WHEN no Docker daemon, no template, no project-root are supplied.
+# THEN stdout contains the full pinned ref, exit 0, no .mcp.json or .atlas/ written.
+@test "pinned-ref: --print-pinned-ref prints full ref to stdout, exits 0, no files created" {
+  local project="$BATS_TEST_TMPDIR/pinned-ref-project"
+  mkdir -p "$project"
+
+  # Run via the CLI dispatcher (not run_generator) to exercise the full flag path.
+  # --print-pinned-ref must work even when Docker is absent and no template is needed.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --print-pinned-ref
+
+  [ "$status" -eq 0 ]
+
+  # stdout must match the full pinned ref format.
+  [[ "$output" =~ ^ghcr\.io/rynaro/atlas-aci@sha256:[0-9a-f]{64}$ ]]
+
+  # No .mcp.json must have been created in cwd.
+  [ ! -f ".mcp.json" ]
+
+  # No .atlas/ directory must have been created.
+  [ ! -d ".atlas" ]
+}
+
+# ─── T7 Test 2: lib accessor matches --print-pinned-ref ────────────────────
+# GIVEN lib_mcp_atlas_aci.sh is sourced directly.
+# WHEN atlas_aci_print_pinned_ref is called.
+# THEN stdout matches the same value as --print-pinned-ref and the regex contract.
+@test "pinned-ref: lib atlas_aci_print_pinned_ref matches --print-pinned-ref output" {
+  # Capture output from the CLI flag.
+  local flag_output
+  flag_output="$(bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci.sh" --print-pinned-ref)"
+
+  # Capture output from the library function.
+  local lib_output
+  lib_output="$(bash -c ". '$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh'; atlas_aci_print_pinned_ref")"
+
+  # Both must be non-empty.
+  [ -n "$flag_output" ]
+  [ -n "$lib_output" ]
+
+  # Both must satisfy the format contract.
+  run bash -c "printf '%s' '$flag_output' | grep -Eq '^ghcr\\.io/rynaro/atlas-aci@sha256:[0-9a-f]{64}\$'"
+  [ "$status" -eq 0 ]
+  run bash -c "printf '%s' '$lib_output' | grep -Eq '^ghcr\\.io/rynaro/atlas-aci@sha256:[0-9a-f]{64}\$'"
+  [ "$status" -eq 0 ]
+
+  # Both must be identical.
+  [ "$flag_output" = "$lib_output" ]
+}

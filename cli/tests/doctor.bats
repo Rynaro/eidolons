@@ -527,3 +527,95 @@ EOF
   # The pass message must NOT appear.
   [[ ! "$output" =~ "atlas-aci image reachable on ghcr.io" ]]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# T7 tests — .atlas/memex/ writability probe (T3 coverage)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These tests use the setup_fake_curl harness (which also provides a fake
+# docker shim) so that the image-presence check in Check 7 always passes.
+# The memex probe runs in the same block, after the image check.
+#
+# A seed_mcp_json_with_memex helper writes a .mcp.json whose args array
+# includes a ":/memex" bind mount pointing at a path we control per-test.
+
+seed_mcp_json_with_memex() {
+  local memex_host_path="$1"
+  local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "atlas-aci": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "-v",
+        "${memex_host_path}:/memex",
+        "ghcr.io/rynaro/atlas-aci@${digest}",
+        "serve"
+      ]
+    }
+  }
+}
+EOF
+}
+
+# ─── T7/T3 Test 1: memex directory missing → doctor exits non-zero ─────────
+# GIVEN .mcp.json references atlas-aci with a :/memex bind mount.
+# AND the host-side .atlas/memex/ directory does not exist.
+# WHEN eidolons doctor runs.
+# THEN doctor exits non-zero and output mentions "memex bind directory missing".
+@test "doctor: memex bind directory missing → exits non-zero with diagnostic" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # Point .mcp.json at a path we know doesn't exist.
+  local memex_path="$BATS_TEST_TMPDIR/project/.atlas/memex"
+  # Ensure it truly doesn't exist.
+  rm -rf "$BATS_TEST_TMPDIR/project/.atlas"
+  seed_mcp_json_with_memex "$memex_path"
+
+  # Use fake curl + docker so image checks pass; only the memex probe should fail.
+  export FAKE_CURL_TOKEN_RESULT=ok
+  export FAKE_CURL_MANIFEST_STATUS=200
+  setup_fake_curl
+
+  run eidolons doctor
+  # Memex missing is a hard error (increments ERRORS) → non-zero exit.
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "memex bind directory missing" ]]
+}
+
+# ─── T7/T3 Test 2: memex directory exists and writable → doctor probe passes ─
+# GIVEN .mcp.json references atlas-aci with a :/memex bind mount.
+# AND the host-side .atlas/memex/ directory exists and is writable.
+# WHEN eidolons doctor runs.
+# THEN the memex probe contributes 0 errors and output mentions "memex writable".
+@test "doctor: memex bind directory exists and writable → probe passes" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # Create the memex directory with explicit writable permissions.
+  local memex_path="$BATS_TEST_TMPDIR/project/.atlas/memex"
+  mkdir -p "$memex_path"
+  chmod 755 "$memex_path"
+  seed_mcp_json_with_memex "$memex_path"
+
+  # Use fake curl + docker so all other checks pass.
+  export FAKE_CURL_TOKEN_RESULT=ok
+  export FAKE_CURL_MANIFEST_STATUS=200
+  setup_fake_curl
+
+  run eidolons doctor
+  # All checks green → exit 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "memex writable" ]]
+}

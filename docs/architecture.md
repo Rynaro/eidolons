@@ -162,6 +162,8 @@ Every layer has a narrow privilege:
 
 MCP server prerequisites (e.g. Docker images) are validated by the corresponding `eidolons mcp <server>` generator at scaffold time. The generator refuses to write configuration that would fail at runtime, emitting an actionable error that names `eidolons mcp atlas-aci pull` as the corrective step; `--skip-image-check` is the explicit escape hatch for CI environments that load the image after scaffolding. `eidolons doctor` performs the same checks post-hoc as a regression guard, surfacing MCP image health under a dedicated "MCP servers" section.
 
+ATLAS's `commands/aci.sh` reuses the image when the pinned digest is already loaded (skipping the `docker build`); the `index` `docker run` writes to a writable bind mount, distinct from the `--read-only` `serve` invocation rendered into `.mcp.json`.
+
 ---
 
 ## Versioning
