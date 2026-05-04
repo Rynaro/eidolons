@@ -12,6 +12,12 @@
 #   atlas_aci_check_image <ref>     exit 0 (loaded) / 4 (missing)
 #   atlas_aci_image_status <ref>    stdout: one-line status token + ref;
 #                                   exit code mirrors the underlying function
+#   atlas_aci_print_pinned_ref      stdout: full pinned image ref
+#                                   (ghcr.io/rynaro/atlas-aci@sha256:<hex>);
+#                                   public read-only accessor for the pinned
+#                                   digest — consumed by ATLAS's commands/aci.sh
+#                                   to short-circuit redundant image rebuilds.
+#                                   No side effects. Always exits 0.
 #
 # All diagnostic output goes to stderr only — never stdout — so callers that
 # capture the return value of atlas_aci_image_status see only the status line.
@@ -212,5 +218,30 @@ atlas_aci_image_status() {
   fi
 
   printf 'ok %s\n' "$ref"
+  return 0
+}
+
+# ---------------------------------------------------------------------------
+# atlas_aci_print_pinned_ref
+#   Prints the full pinned image reference to stdout:
+#     ghcr.io/rynaro/atlas-aci@sha256:<hex>
+#
+#   Public read-only accessor for the pinned digest. Consumed by ATLAS's
+#   commands/aci.sh to short-circuit redundant image rebuilds: if the ref
+#   printed here is already in the local Docker store, the build step is
+#   skipped.
+#
+#   No side effects. Always exits 0.
+#   Stdout: the full ref string.
+#   Stderr: nothing (no diagnostics expected or emitted).
+#
+# Mirror of cli/src/mcp_atlas_aci.sh constants — keep in sync.
+# ---------------------------------------------------------------------------
+# shellcheck disable=SC2034  # constants consumed by printf below
+_ATLAS_ACI_LIB_IMAGE_REF="ghcr.io/rynaro/atlas-aci"
+_ATLAS_ACI_LIB_IMAGE_DIGEST="${DEFAULT_IMAGE_DIGEST:-sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96}"
+
+atlas_aci_print_pinned_ref() {
+  printf '%s@%s\n' "$_ATLAS_ACI_LIB_IMAGE_REF" "$_ATLAS_ACI_LIB_IMAGE_DIGEST"
   return 0
 }
