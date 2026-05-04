@@ -157,26 +157,25 @@ jobs:
 
           git checkout -b "$BRANCH"
           git add roster/index.yaml
-          git commit -m "chore(roster): record nexus v${VERSION} release integrity metadata
-
-Commit: ${{ steps.shas.outputs.commit }}
-Tree:   ${{ steps.shas.outputs.tree }}
-SHA256: ${{ steps.archive.outputs.archive_sha256 }}"
+          git commit \
+            -m "chore(roster): record nexus v${VERSION} release integrity metadata" \
+            -m "Commit: ${{ steps.shas.outputs.commit }}" \
+            -m "Tree: ${{ steps.shas.outputs.tree }}" \
+            -m "SHA256: ${{ steps.archive.outputs.archive_sha256 }}"
 
           git push origin "$BRANCH"
 
+          {
+            printf 'Automated roster update from the release-nexus workflow.\n\n'
+            printf 'Records the commit, tree, and archive_sha256 for nexus v%s under ' "$VERSION"
+            printf '`nexus.versions.releases["%s"]` in `roster/index.yaml`.\n\n' "$VERSION"
+            printf '**Do not edit this PR manually.** Values are derived deterministically '
+            printf 'from the tag at `v%s` by the release workflow.\n' "$VERSION"
+          } > /tmp/roster-pr-body.md
+
           gh pr create \
             --title "chore(roster): record nexus v${VERSION} release integrity metadata" \
-            --body "$(cat <<'PREOF'
-Automated roster update from the release-nexus workflow.
-
-Records the commit, tree, and archive_sha256 for nexus v${VERSION} under
-`nexus.versions.releases["${VERSION}"]` in `roster/index.yaml`.
-
-**Do not edit this PR manually.** Values are derived deterministically
-from the tag at `v${VERSION}` by the release workflow.
-PREOF
-)" \
+            --body-file /tmp/roster-pr-body.md \
             --base main \
             --head "$BRANCH"
 
