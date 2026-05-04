@@ -8,6 +8,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- `eidolons init` / `eidolons sync` now auto-recover from stale or corrupt
+  `~/.eidolons/cache/` entries by re-cloning once before failing. The
+  strict integrity contract is preserved: a re-clone that still mismatches
+  the roster is fatal with an explicit "upstream-truth mismatch" message.
+  Affects all six shipped Eidolons (atlas, spectra, apivr, idg, forge, vigil).
+  Root cause was `fetch_eidolon` reusing a cached clone without re-verification
+  or recovery, causing fatal `commit mismatch` errors when a force-moved
+  upstream tag had updated the roster commit after the initial cache was
+  populated. Also handles interrupted clones and corrupt `.git` directories.
+  Cache mismatch recovery is bounded to one retry.
+- `eidolons doctor` now includes a `Cache hygiene` section (read-only) that
+  walks `eidolons.lock` members and compares each `~/.eidolons/cache/` entry
+  against the roster's recorded commit, reporting stale or corrupt entries
+  with an actionable next-step.
+
 ### Added
 - **`EIDOLONS.md` routing cortex at the repo root** (`.spectra/plans/eidolons-cortex-spec.md` §11.1). Always-loaded ≤900-token descriptor table + 5-step dispatch protocol + 8 chain templates + 6 TRANCE activation gates + 10 cortex invariants, marker-bounded `<!-- eidolon:cortex start --> … <!-- eidolon:cortex end -->`. Closes the routing gap from `.spectra/research/eidolons-cortex-foundation.md` §5: free-form natural-language prompts arriving through Claude Code / Cursor / OpenCode / Codex now have a semantic dispatch path; `cli/eidolons` deterministic string-match (`cli/src/dispatch_eidolon.sh`) is unchanged. Architecture is hierarchical-supervisor with two-stage hybrid dispatch (descriptor soft-match → confidence gate + TRANCE escalation) per spec §4.4 — single-router, cascade-by-strength, and MoA-as-default were rejected with cited reasons.
 - **Deep cortex tables under `methodology/cortex/`** (spec §4 progressive disclosure, P3). Loaded on demand by a host that needs them: `handoff-graph.md` (canonical hand-off graph as the union of `roster/index.yaml` and `methodology/composition.md` edges with `edge_origin` labels per spec §7.1, resolving the foundation §4 dispute), `trance-matrix.md` (per-Eidolon TRANCE form, granted capabilities, refusal gates R1–R5, cost ceilings C1–C6), `validation-gates.md` (all 14 GIVEN/WHEN/THEN gates V1–V14 the cortex must satisfy). The README in that directory documents the load-order contract.

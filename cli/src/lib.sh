@@ -181,10 +181,31 @@ release_archive_prefix() {
   echo "${source_repo#*/}-${version}/"
 }
 
-verify_release_integrity() {
+# _verify_release_integrity_internal NAME VERSION CLONE_DIR
+# Internal variant that returns codes instead of calling die on cache drift.
+# Return codes:
+#   0  — verified (all checks pass)
+#   2  — cache-stale (commit/tree/archive mismatch; clone is intact but wrong)
+#   3  — cache-corrupt (HEAD unresolvable; git plumbing failed)
+# Exits 1 (via die) only for invariant violations that are not cache drift:
+#   - no release metadata under strict mode
+#   - non-SemVer version
+#   - metadata tag != expected tag (roster configuration error)
+# All log output goes to stderr. No stdout output.
+_verify_release_integrity_internal() {
   local name="$1" version="$2" clone_dir="$3"
   local meta mode expected_tag expected_commit expected_tree expected_archive
   local actual_tag actual_commit actual_tree actual_archive
+
+  # Always check HEAD resolvability first, regardless of roster metadata.
+  # A corrupt or partial clone (rc=3) always needs re-cloning, even in compat
+  # mode where we cannot compare commits. This catches F2 (interrupted clone)
+  # and F3 (corrupt .git) before the metadata gate.
+  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
+  if [[ -z "$actual_commit" ]]; then
+    warn "$name@$version cannot resolve cloned commit (corrupt or incomplete clone)"
+    return 3
+  fi
 
   meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
   if [[ -z "$meta" || "$meta" == "null" ]]; then
@@ -210,18 +231,20 @@ verify_release_integrity() {
 
   actual_tag="$(git -C "$clone_dir" describe --tags --exact-match HEAD 2>/dev/null || true)"
   if [[ -n "$actual_tag" && "$actual_tag" != "$expected_tag" ]]; then
-    die "$name@$version tag drift: clone is $actual_tag but roster expects $expected_tag"
+    warn "$name@$version tag drift: clone is $actual_tag but roster expects $expected_tag"
+    return 2
   fi
 
-  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
-  [[ -n "$actual_commit" ]] || die "$name@$version cannot resolve cloned commit"
+  # actual_commit already resolved above.
   if [[ -n "$expected_commit" && "$actual_commit" != "$expected_commit" ]]; then
-    die "$name@$version commit mismatch: got $actual_commit, expected $expected_commit"
+    warn "$name@$version commit mismatch: got $actual_commit, expected $expected_commit"
+    return 2
   fi
 
   actual_tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
   if [[ -n "$expected_tree" && "$actual_tree" != "$expected_tree" ]]; then
-    die "$name@$version tree mismatch: got ${actual_tree:-unknown}, expected $expected_tree"
+    warn "$name@$version tree mismatch: got ${actual_tree:-unknown}, expected $expected_tree"
+    return 2
   fi
 
   if [[ -n "$expected_archive" ]]; then
@@ -232,11 +255,45 @@ verify_release_integrity() {
     actual_archive="$(git_archive_sha256 "$clone_dir" "$prefix" || echo "")"
     [[ -n "$actual_archive" ]] || die "$name@$version cannot compute release archive checksum"
     if [[ "$actual_archive" != "$expected_archive" ]]; then
-      die "$name@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
+      warn "$name@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
+      return 2
     fi
   fi
 
   ok "$name@$version release integrity verified"
+  return 0
+}
+
+# verify_release_integrity NAME VERSION CLONE_DIR
+# Public wrapper — calls die on any failure (cache drift or upstream truth mismatch).
+# Used by callers that do not need the auto-recovery path.
+verify_release_integrity() {
+  local name="$1" version="$2" clone_dir="$3"
+  local _vri_rc=0
+  _verify_release_integrity_internal "$name" "$version" "$clone_dir" || _vri_rc=$?
+  case "$_vri_rc" in
+    0) return 0 ;;
+    2) die "$name@$version integrity check failed (commit/tree/archive mismatch)" ;;
+    3) die "$name@$version integrity check failed (cannot resolve HEAD — clone may be corrupt)" ;;
+    *) die "$name@$version integrity check failed (rc=$_vri_rc)" ;;
+  esac
+}
+
+# cache_invalidate NAME VERSION
+# Removes the cache directory for NAME@VERSION. Idempotent. Bash 3.2 safe.
+# Defensively pins the prefix to $CACHE_DIR/ to avoid rm -rf on arbitrary paths.
+cache_invalidate() {
+  local name="$1" version="$2"
+  local target="$CACHE_DIR/${name}@${version}"
+  # Safety: must start with the known cache dir prefix.
+  case "$target" in
+    "$CACHE_DIR/"*) : ;;
+    *) warn "cache_invalidate: refusing to remove path outside CACHE_DIR: $target"; return 1 ;;
+  esac
+  if [[ -d "$target" ]]; then
+    rm -rf "$target"
+    info "cache_invalidate: removed $target"
+  fi
   return 0
 }
 
@@ -300,6 +357,15 @@ detect_hosts() {
 
 # ─── Eidolon repo fetching ────────────────────────────────────────────────
 # fetch_eidolon NAME VERSION → echoes path to cached clone
+#
+# Auto-recovery flow:
+#   1. If clone dir has no .git → fresh clone (unchanged path).
+#   2. If .git exists → run internal integrity check (returns code 0/2/3).
+#      rc=0 → cache is valid; log and return path.
+#      rc∈{2,3} → log stale/corrupt status, invalidate cache, re-clone once,
+#                 then call verify_release_integrity (the die-on-failure variant).
+#                 If THAT fails, die with an "upstream-truth mismatch" message.
+# Stdout is the cache path only. All log output via info/warn/say (stderr).
 fetch_eidolon() {
   local name="$1" version="${2:-latest}"
   local entry; entry="$(roster_get "$name")"
@@ -320,10 +386,30 @@ fetch_eidolon() {
     say "Fetching $name@$version from github.com/$repo"
     git clone --depth 1 --branch "$ref" "https://github.com/$repo" "$clone_dir" >/dev/null 2>&1 \
       || die "Failed to clone github.com/$repo at $ref"
+    verify_release_integrity "$name" "$version" "$clone_dir"
   else
-    info "Using cached $name@$version"
+    # Cache exists — run internal check to detect stale or corrupt state.
+    local _fe_rc=0
+    _verify_release_integrity_internal "$name" "$version" "$clone_dir" || _fe_rc=$?
+    if [[ "$_fe_rc" -eq 0 ]]; then
+      info "Using cached $name@$version"
+    else
+      # Cache is stale (rc=2) or corrupt (rc=3) — invalidate and re-clone once.
+      local _status_label="stale"
+      [[ "$_fe_rc" -eq 3 ]] && _status_label="corrupt"
+      warn "$name@$version cache invalid (${_status_label}); re-cloning from github.com/$repo"
+      cache_invalidate "$name" "$version"
+      say "Fetching $name@$version from github.com/$repo"
+      git clone --depth 1 --branch "$ref" "https://github.com/$repo" "$clone_dir" >/dev/null 2>&1 \
+        || die "Failed to clone github.com/$repo at $ref after cache invalidation"
+      # Re-verify after fresh clone. If this fails it is an upstream-truth mismatch — fatal.
+      local _fe_rc2=0
+      _verify_release_integrity_internal "$name" "$version" "$clone_dir" || _fe_rc2=$?
+      if [[ "$_fe_rc2" -ne 0 ]]; then
+        die "$name@$version commit mismatch persists after cache re-clone — upstream tag at github.com/$repo may have been force-moved. Investigate roster vs. upstream attestation."
+      fi
+    fi
   fi
-  verify_release_integrity "$name" "$version" "$clone_dir"
   echo "$clone_dir"
 }
 

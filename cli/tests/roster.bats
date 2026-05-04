@@ -57,3 +57,45 @@ load helpers
   [ "$status" -eq 0 ]
   [[ "$output" =~ Usage:\ eidolons\ roster ]]
 }
+
+# ─── G15: source.repo casing audit ────────────────────────────────────────
+# Static check: assert that roster/index.yaml source.repo values match the
+# GitHub canonical casing confirmed by the audit in spec §2.
+# Canonical values (verified 2026-05-04 via GitHub API / curl redirect):
+#   atlas  → Rynaro/ATLAS
+#   spectra → Rynaro/SPECTRA
+#   apivr  → Rynaro/APIVR-Delta
+#   idg    → Rynaro/IDG
+#   forge  → Rynaro/FORGE
+#   vigil  → Rynaro/VIGIL
+@test "roster source.repo casing matches GitHub canonical casing for all shipped Eidolons" {
+  run eidolons roster atlas --json
+  [ "$status" -eq 0 ]
+  actual_atlas="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_atlas" = "Rynaro/ATLAS" ]
+
+  run eidolons roster spectra --json
+  [ "$status" -eq 0 ]
+  actual_spectra="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_spectra" = "Rynaro/SPECTRA" ]
+
+  run eidolons roster apivr --json
+  [ "$status" -eq 0 ]
+  actual_apivr="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_apivr" = "Rynaro/APIVR-Delta" ]
+
+  run eidolons roster idg --json
+  [ "$status" -eq 0 ]
+  actual_idg="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_idg" = "Rynaro/IDG" ]
+
+  run eidolons roster forge --json
+  [ "$status" -eq 0 ]
+  actual_forge="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_forge" = "Rynaro/FORGE" ]
+
+  run eidolons roster vigil --json
+  [ "$status" -eq 0 ]
+  actual_vigil="$(echo "$output" | jq -r '.source.repo')"
+  [ "$actual_vigil" = "Rynaro/VIGIL" ]
+}
