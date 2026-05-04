@@ -299,6 +299,28 @@ done <<< "$MEMBERS_JSON"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
 ok "Wrote $PROJECT_LOCK"
 
+# ─── Mirror cortex into consumer project ─────────────────────────────────
+# The cortex (EIDOLONS.md) is a nexus-level concern, not a per-Eidolon one.
+# Per spec §11.1 and invariant [F §9 #10] the mirror lands at
+# ./.eidolons/cortex/EIDOLONS.md (dot-prefixed install convention).
+# The operation is idempotent: copy only when content differs.
+# Runs even in --dry-run=false mode; skipped in --dry-run mode.
+CORTEX_SRC="$NEXUS/EIDOLONS.md"
+CORTEX_DEST="./.eidolons/cortex/EIDOLONS.md"
+if [[ "$DRY_RUN" == "true" ]]; then
+  info "  [dry-run] would mirror cortex to $CORTEX_DEST"
+elif [[ -f "$CORTEX_SRC" ]]; then
+  mkdir -p "./.eidolons/cortex"
+  if [[ ! -f "$CORTEX_DEST" ]] || ! diff -q "$CORTEX_SRC" "$CORTEX_DEST" >/dev/null 2>&1; then
+    cp "$CORTEX_SRC" "$CORTEX_DEST"
+    ok "Mirrored cortex → $CORTEX_DEST"
+  else
+    info "Cortex already up-to-date at $CORTEX_DEST"
+  fi
+else
+  warn "Cortex source not found at $CORTEX_SRC — skipping mirror"
+fi
+
 # ─── Final guidance ──────────────────────────────────────────────────────
 echo ""
 ok "Sync complete."

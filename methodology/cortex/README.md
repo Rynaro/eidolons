@@ -1,0 +1,25 @@
+# Cortex Deep Tables
+
+Deep reference content for `EIDOLONS.md`. Loaded on demand per the progressive
+disclosure principle (spec P3). The always-loaded section of `EIDOLONS.md` stays
+under 900 tokens; detail that doesn't need to be resident in every session lives
+here.
+
+## Files in this directory
+
+| File | Contents | Load when |
+|------|----------|-----------|
+| `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
+| `elite-matrix.md` | Per-Eidolon ELITE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an ELITE escalation |
+| `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
+
+## Token budget note
+
+Each file here is on-demand only. A host that loads `EIDOLONS.md` and then
+hits a chain-composition step should load `handoff-graph.md`; a host evaluating
+whether to escalate to ELITE should load `elite-matrix.md`. Neither is needed
+for simple single-Eidolon standard-tier dispatch.
+
+The cortex itself (EIDOLONS.md always-loaded section) + one deep table still
+stays well inside the ≤3500-token specialist working-set budget
+(`methodology/prime-directives.md D1`).
