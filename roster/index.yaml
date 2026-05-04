@@ -86,10 +86,19 @@ eidolons:
       repo: Rynaro/SPECTRA
       default_ref: main
     versions:
-      latest: "4.2.10"
+      latest: "4.2.11"
       pins:
-        stable: "4.2.10"
+        stable: "4.2.11"
       releases:
+        4.2.11:
+          tag: v4.2.11
+          commit: 9b9bc31d0275e54f0aac31b1eeb78db1ff12963f
+          tree: 061320c0948d3475cdf3063815fe4a8c94c27063
+          archive_sha256: 0d92c234ad310f60463f38b2c6d90c0c5b0472997b13469133f159d19fd5debd
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
         4.2.10:
           tag: v4.2.10
           commit: 2230ac5bbb2be47173b959b804aae6176a544731
