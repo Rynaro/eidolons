@@ -34,12 +34,12 @@
 
 **Step 3 — Refusal check.** If the top-scored Eidolon would refuse the prompt's intent (see Refuses column), set `refusal_rerouting: true`, select the capable peer, emit `[DECISION]` explaining the override.
 
-**Step 4 — Tier.** Default is `standard`. Escalate to `elite` only when **both** hold: (a) complexity flags fire AND (b) user supplies explicit `ELITE` token or upstream Eidolon flags high-stakes. See ELITE Activation Gates below.
+**Step 4 — Tier.** Default is `standard`. Escalate to `trance` only when **both** hold: (a) complexity flags fire AND (b) user supplies explicit `TRANCE` token or upstream Eidolon flags high-stakes. See TRANCE Activation Gates below.
 
 **Step 5 — Emit routing artifact.**
 ```
 selected: [<eidolon>, ...]
-tier: standard | elite
+tier: standard | trance
 chain: [{eidolon, role, hand_off_artifact_path, edge_origin}, ...]
 model_tier_per_step: [speed-class | reasoning-class, ...]
 confidence: 0..1
@@ -65,22 +65,22 @@ refusal_rerouting: <bool>
 
 ---
 
-## ELITE Activation Gates (always-loaded)
+## TRANCE Activation Gates (always-loaded)
 
-ELITE grants: parallel fan-out (max 5 branches), worktree isolation per branch, verifier-cascade wrapping, evaluator-optimizer loop (cap 3 iterations), model-tier upgrade (lead = reasoning-class, workers = speed-class).
+TRANCE grants: parallel fan-out (max 5 branches), worktree isolation per branch, verifier-cascade wrapping, evaluator-optimizer loop (cap 3 iterations), model-tier upgrade (lead = reasoning-class, workers = speed-class).
 
-ELITE is **never** the default. Auto-trigger requires **both** a complexity flag AND a stakes flag. Cost warning emitted at ≥ 5× standard-tier budget.
+TRANCE is **never** the default. Auto-trigger requires **both** a complexity flag AND a stakes flag. Cost warning emitted at ≥ 5× standard-tier budget.
 
 | Gate | Eidolon | Condition |
 |------|---------|-----------|
 | G1 — Discovery scatter | ATLAS | Surface > 25 files OR > 5 modules → scatter sub-agents per module, aggregate via Abstract phase |
-| G2 — Hard-decision consistency | FORGE | ≥ 3 plausible alternatives AND (high-stakes flag OR explicit ELITE token) → N=3 reasoning traces, majority-vote |
+| G2 — Hard-decision consistency | FORGE | ≥ 3 plausible alternatives AND (high-stakes flag OR explicit TRANCE token) → N=3 reasoning traces, majority-vote |
 | G3 — Spec evaluator-optimizer | SPECTRA | Complexity ≥ 7/12 AND (high-stakes OR ambiguous reqs) → generator + evaluator, max 3 iterations |
 | G4 — Parallel implementation | APIVR-Δ | SPECTRA emitted > 1 independent story AND budget bounded → one APIVR-Δ per track, worktree isolation |
 | G5 — Doc parallel synthesis | IDG | Large source artifact set AND topological order allows parallelism → per-section parallel, CHT per section, one-revision cap preserved |
 | G6 — Forensic counterfactuals | VIGIL | ≥ 2 plausible root-cause hypotheses AND bisect surface allows independent testing → parallel hypothesis tests on isolated bisects |
 
-**ELITE refusals (immutable):** A refused capability does not become available at ELITE. ATLAS still does not write. SPECTRA still does not implement. IDG still does not retrieve. FORGE still does not tool-call. VIGIL still does not auto-apply patches. Per-Eidolon retry budgets remain enforced inside ELITE.
+**TRANCE refusals (immutable):** A refused capability does not become available at TRANCE. ATLAS still does not write. SPECTRA still does not implement. IDG still does not retrieve. FORGE still does not tool-call. VIGIL still does not auto-apply patches. Per-Eidolon retry budgets remain enforced inside TRANCE.
 
 ---
 
@@ -89,7 +89,7 @@ ELITE is **never** the default. Auto-trigger requires **both** a complexity flag
 | Signal | Effect | Target |
 |--------|--------|--------|
 | Stack trace, panic, "still failing after retry" | +0.3 | VIGIL |
-| Surface > 25 files or 5 modules | +0.2 | ATLAS-ELITE |
+| Surface > 25 files or 5 modules | +0.2 | ATLAS-TRANCE |
 | "Greenfield", "from scratch", "novel" | −0.3 | APIVR-Δ (it refuses greenfield) |
 | "I don't have a spec yet" | +0.2 | SPECTRA |
 | Prior failed APIVR-Δ attempt in conversation | +0.4 | VIGIL |
@@ -113,6 +113,6 @@ ELITE is **never** the default. Auto-trigger requires **both** a complexity flag
 
 ---
 
-*Deep tables (ELITE matrix, hand-off graph, disambiguation table, validation gates, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
+*Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 
 <!-- eidolon:cortex end -->

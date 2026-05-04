@@ -10,14 +10,14 @@ here.
 | File | Contents | Load when |
 |------|----------|-----------|
 | `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
-| `elite-matrix.md` | Per-Eidolon ELITE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an ELITE escalation |
+| `trance-matrix.md` | Per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
 | `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
 
 ## Token budget note
 
 Each file here is on-demand only. A host that loads `EIDOLONS.md` and then
 hits a chain-composition step should load `handoff-graph.md`; a host evaluating
-whether to escalate to ELITE should load `elite-matrix.md`. Neither is needed
+whether to escalate to TRANCE should load `trance-matrix.md`. Neither is needed
 for simple single-Eidolon standard-tier dispatch.
 
 The cortex itself (EIDOLONS.md always-loaded section) + one deep table still

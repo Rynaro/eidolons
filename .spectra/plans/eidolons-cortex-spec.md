@@ -24,10 +24,10 @@ natural-language prompt arriving through Claude Code, Cursor, OpenCode, or
 the API has no semantic dispatch path. `EIDOLONS.md` adds that path —
 without replacing the deterministic name-match — by publishing the
 fixed-roster descriptor table and an explicit decision protocol that maps
-an arbitrary prompt to one or more Eidolons, a tier (standard or ELITE),
+an arbitrary prompt to one or more Eidolons, a tier (standard or TRANCE),
 and a hand-off chain. **Success** means: (a) a host LLM reading
 `EIDOLONS.md` once at session start can route a free-form prompt to the
-correct Eidolon(s) at the correct tier with the correct chain, (b) ELITE
+correct Eidolon(s) at the correct tier with the correct chain, (b) TRANCE
 escalation is gated, audited, and refusable rather than always-on, and
 (c) the cortex itself fits the working-set budget the manifesto refuses
 to bloat (`MANIFESTO.md:39`, D1 `≤3500` tokens for specialists).
@@ -40,7 +40,7 @@ to bloat (`MANIFESTO.md:39`, D1 `≤3500` tokens for specialists).
 - A descriptor table for all six roster members (ATLAS, SPECTRA,
   APIVR-Δ, IDG, FORGE, VIGIL) suitable for soft-matching by a host LLM.
 - A scoring rubric mapping prompt features → eidolon(s) and confidence.
-- A definition of the ELITE tier — what it grants, when it activates,
+- A definition of the TRANCE tier — what it grants, when it activates,
   when it must refuse to activate, and how cost is bounded.
 - The canonical hand-off graph the cortex assumes when composing chains,
   including resolution of the disagreement flagged in `[F §4]`.
@@ -74,11 +74,11 @@ to bloat (`MANIFESTO.md:39`, D1 `≤3500` tokens for specialists).
 | P1 | Routing is a calibrated classifier with a tunable threshold, not LLM-as-judge. | RouteLLM ICLR 2025 `[D §2 #1]`; Hybrid-LLM ICLR 2024 `[D §2 #2]`; RouterArena `[D bib]`. 30-85% cost cut at matched quality. | v1 has no trained classifier — we approximate with descriptor-soft-matching plus an explicit confidence threshold τ. Migrate later (OQ-1). |
 | P2 | Heterogeneity is preserved by exposing every Eidolon distinctly. | X-MAS `[D §2 #6]`; Stop-Overvaluing-MAD NeurIPS 2025 `[D §2 #6]`. 8-47% lift comes from distinct methodologies, not from debate. | Six descriptors, six refusal lists. The cortex never collapses two Eidolons into one role. Cost: ~600 always-loaded tokens vs a generic mega-prompt's ~5000. |
 | P3 | Descriptors follow progressive disclosure. | Anthropic Agent Skills (Oct 2025) `[D §3.1]`; Skill survey `[D §2 #22]`. ≤100-tok metadata in system prompt, body loaded on trigger. | Cortex stays under D1's 3500-token specialist budget (`prime-directives.md:27`); deep methodology is not duplicated here. |
-| P4 | ELITE = parallel fan-out + isolation + verifier wrapping, not "longer thinking." | Anthropic multi-agent research-system blog (90.2% lift, ~15× tokens) `[D §3.4]`; Revisiting o1 ACL 2025 (longer CoT often degrades) `[D §2 #18]`; o1 / s1 (parallel > sequential) `[D §2 #17]`. | ELITE costs ~15× tokens; we cap blast-radius via budget gates (§6). Pure self-revision rejected as the ELITE primitive. |
-| P5 | Confidence-gated escalation, not always-on ELITE. | Self-Consistency `[D §2 #8]`; Self-Refine `[D §2 #9]`; Reflexion `[D §2 #10]`; Ask-or-Assume `[D §2 #19]` (61.2 → 69.4% resolve rate via clarification). | ELITE auto-trigger lives behind a complexity-score gate; the user can also opt-in. Mis-routed cheap dispatch is preferred to over-spending on a simple prompt. |
+| P4 | TRANCE = parallel fan-out + isolation + verifier wrapping, not "longer thinking." | Anthropic multi-agent research-system blog (90.2% lift, ~15× tokens) `[D §3.4]`; Revisiting o1 ACL 2025 (longer CoT often degrades) `[D §2 #18]`; o1 / s1 (parallel > sequential) `[D §2 #17]`. | TRANCE costs ~15× tokens; we cap blast-radius via budget gates (§6). Pure self-revision rejected as the TRANCE primitive. |
+| P5 | Confidence-gated escalation, not always-on TRANCE. | Self-Consistency `[D §2 #8]`; Self-Refine `[D §2 #9]`; Reflexion `[D §2 #10]`; Ask-or-Assume `[D §2 #19]` (61.2 → 69.4% resolve rate via clarification). | TRANCE auto-trigger lives behind a complexity-score gate; the user can also opt-in. Mis-routed cheap dispatch is preferred to over-spending on a simple prompt. |
 | P6 | Refusals are routing signals, not stops. | `[F §9 invariant 5]`; D2 (`prime-directives.md:34`). ATLAS-won't-write, SPECTRA-won't-implement, etc. | If a target Eidolon would refuse, the cortex must re-route to a peer that can act. One extra reasoning step on the cortex's side; never bypasses the refusal. |
 | P7 | Hand-off contracts are structured artifacts on disk, not chat threads. | `[F §9 invariant 4]`; `methodology/composition.md:54-58`; Plan-and-Act ICML 2025 `[D §2 #13]`. | Cortex chains are emitted as a structured plan (markers + paths), not as conversational hand-waving. |
-| P8 | Heterogeneous models per role at ELITE. | X-MAS `[D §2 #6]`; Anthropic research blog (Opus lead + Sonnet workers) `[D §3.4]`; APIVR memory feedback (sonnet pinned) `[F §1]`. | Cortex emits **capability-class tiers**, never vendor names (D9, `prime-directives.md:152-162`). Translation to specific models is a host-config concern. |
+| P8 | Heterogeneous models per role at TRANCE. | X-MAS `[D §2 #6]`; Anthropic research blog (Opus lead + Sonnet workers) `[D §3.4]`; APIVR memory feedback (sonnet pinned) `[F §1]`. | Cortex emits **capability-class tiers**, never vendor names (D9, `prime-directives.md:152-162`). Translation to specific models is a host-config concern. |
 | P9 | Reflexion-style memory is opt-in and bounded. | Reflexion NeurIPS 2023 `[D §2 #10]`; APIVR `apivr-memory-management/SKILL.md:16-23,141`. | v1 emits routing-decision artifacts but does not consume past decisions. Stateless cortex is reproducible; learned cortex is OQ-9. |
 | P10 | The cortex itself respects D1, D2, D9, D10 — it is not a new monolith. | `prime-directives.md:9-46,152-188`; `MANIFESTO.md:39`. | Always-loaded section ≤900 tokens; deep tables in collapsible/anchored sections; no vendor names; reads-only summary of refusals it cannot override. |
 
@@ -96,7 +96,7 @@ to bloat (`MANIFESTO.md:39`, D1 `≤3500` tokens for specialists).
 4. **Roster availability** — `eidolons.lock` and `./.eidolons/<name>/`
    presence determine which members are installed (`[F §6]`;
    `methodology/composition.md:86-107`).
-5. **User-supplied tier hint** (optional) — explicit `ELITE` token in the
+5. **User-supplied tier hint** (optional) — explicit `TRANCE` token in the
    prompt or a project-level config flag (see §6.4).
 
 ### 4.2 Output
@@ -104,7 +104,7 @@ to bloat (`MANIFESTO.md:39`, D1 `≤3500` tokens for specialists).
 A **routing decision artifact** (structured, parseable) containing:
 
 - `selected: [<eidolon>, …]` — ordered list of Eidolons to invoke.
-- `tier: standard | elite` — capability tier.
+- `tier: standard | trance` — capability tier.
 - `chain: [<step>, …]` — each step is `{eidolon, role, hand_off_artifact_path}`.
 - `model_tier_per_step: [<capability_class>, …]` — speed-class /
   reasoning-class only; never vendor names (P8, D9).
@@ -122,7 +122,7 @@ A **routing decision artifact** (structured, parseable) containing:
 |---|---|---|---|---|---|
 | S1 | **Classify** | prompt + context | feature vector: verbs, surface size hints, prior-attempt flag, refusal trigger flags | `[F §3]` verb taxonomy; descriptor `triggers` / `refuses`; conversation history | All-zero feature vector → S5 emits CLARIFY |
 | S2 | **Score** | feature vector + descriptors | `score[eidolon] ∈ [0,1]` for each of 6 members | LLM soft-match against descriptor name+description+triggers (P3); structural overlap of trigger keywords | All scores < τ → S5 CLARIFY or fallback to FORGE for routing-decision (`[D §3.1]`) |
-| S3 | **Tier-Select** | top-K scores, complexity heuristics, user hint | `tier ∈ {standard, elite}` | Complexity rubric (§6.2); explicit user `ELITE` token; surface-size hint; prior-attempt failure (→ VIGIL) | Insufficient signal → default `standard`; never default `elite` (P5) |
+| S3 | **Tier-Select** | top-K scores, complexity heuristics, user hint | `tier ∈ {standard, trance}` | Complexity rubric (§6.2); explicit user `TRANCE` token; surface-size hint; prior-attempt failure (→ VIGIL) | Insufficient signal → default `standard`; never default `trance` (P5) |
 | S4 | **Plan (Compose Chain)** | top-K + tier | ordered chain with hand-off contracts | Hand-off graph (§7.1); chain templates (§7.3); refusal table (§5.4) | Cycle detected → break with `[BLOCKED]` and emit `clarification_request` |
 | S5 | **Emit** | full decision | routing artifact (§4.2) | Output schema; D7 markers | Schema-invalid → re-emit once; second failure → `[BLOCKED]` |
 
@@ -135,9 +135,9 @@ A **routing decision artifact** (structured, parseable) containing:
   six descriptors, and produces a top-K with confidence per Eidolon.
   Backed by Anthropic Skills (`[D §3.1]`) and the LangGraph supervisor
   consensus pattern (`[D §2 #20]`).
-- **Stage 2**: Confidence gate + ELITE escalation. If
-  `top_score ≥ τ_elite` AND complexity flags fire AND budget is
-  available, escalate to ELITE (§6). Otherwise dispatch standard or
+- **Stage 2**: Confidence gate + TRANCE escalation. If
+  `top_score ≥ τ_trance` AND complexity flags fire AND budget is
+  available, escalate to TRANCE (§6). Otherwise dispatch standard or
   trigger CLARIFY (`[D §3.5]`).
 
 **Patterns rejected (with reason):**
@@ -148,10 +148,10 @@ A **routing decision artifact** (structured, parseable) containing:
   *role*, not *strength* (`[D §4]`); a "weaker" ATLAS is not a
   smaller-budget APIVR-Δ.
 - **Mixture-of-Agents aggregation as default:** ~N× cost; reserved for
-  ELITE on hard queries only (`[D §3.4]`).
+  TRANCE on hard queries only (`[D §3.4]`).
 - **Multi-agent debate:** `[D §2 #6]` shows it underperforms
   self-consistency at equal cost without heterogeneity. Available only
-  as an opt-in FORGE-ELITE add-on.
+  as an opt-in FORGE-TRANCE add-on.
 
 ---
 
@@ -195,7 +195,7 @@ tracked in OQ-12).
 | Signal | Direction | Target Eidolon |
 |---|---|---|
 | Stack trace, panic, traceback, "still failing after retry" in prompt | +0.3 | VIGIL |
-| Surface size > N files (heuristic; user-mentioned or implied) | +0.2 | ATLAS-ELITE |
+| Surface size > N files (heuristic; user-mentioned or implied) | +0.2 | ATLAS-TRANCE |
 | "Greenfield", "from scratch", "novel" | -0.3 | APIVR-Δ (it refuses) |
 | "Just write it", complexity score < 4/12 | -0.2 | SPECTRA |
 | "I don't have a spec yet" | +0.2 | SPECTRA |
@@ -217,9 +217,9 @@ tracked in OQ-12).
 
 ---
 
-## 6. ELITE Tier Specification
+## 6. TRANCE Tier Specification
 
-### 6.1 What ELITE means (capabilities granted)
+### 6.1 What TRANCE means (capabilities granted)
 
 | Capability | Mechanism | Source |
 |---|---|---|
@@ -228,10 +228,10 @@ tracked in OQ-12).
 | Verifier-cascade wrapping | Generator → step-level verifier → emit (PRM / Math-Shepherd) | `[D §2 #14]` |
 | Evaluator-optimizer loop, capped at 3 iterations | Generator + evaluator + termination gate | `[D §3.7]` |
 | Model-tier upgrade per step | Capability-class override (lead = reasoning-class, workers = speed-class) | `[D §3.4]`; D9 |
-| Self-consistency on reasoning chains (FORGE only) | N=3 standard ELITE, N=5 high-stakes; majority-vote / judge-merge | `[D §3.6]` |
+| Self-consistency on reasoning chains (FORGE only) | N=3 standard TRANCE, N=5 high-stakes; majority-vote / judge-merge | `[D §3.6]` |
 | Reflexion-style routing-decision artifacts | Structured emit per turn | `[D §3.8]` (memory propagation is opt-in v2) |
 
-ELITE is **not**: longer single-thread thinking, unbounded loops, or
+TRANCE is **not**: longer single-thread thinking, unbounded loops, or
 arbitrary new tool surfaces. `[D §2 #18]` (Revisiting o1) explicitly
 warns against this.
 
@@ -239,37 +239,37 @@ warns against this.
 
 Each gate must hold **all** GIVEN clauses for the WHEN to apply.
 
-- **G1 — Discovery scatter (ATLAS-ELITE).**
+- **G1 — Discovery scatter (ATLAS-TRANCE).**
   GIVEN a discovery prompt over a repo where the prompt or detected
   surface implies > N files (cortex heuristic; see §6.4 C5)
   WHEN the cortex selects ATLAS at standard tier
-  THEN escalate to ELITE: scatter parallel sub-agents per module/path,
+  THEN escalate to TRANCE: scatter parallel sub-agents per module/path,
   isolation `worktree`, then aggregate via ATLAS Abstract phase
   (`atlas-abstract/SKILL.md:34-138`).
 
-- **G2 — Hard-decision self-consistency (FORGE-ELITE).**
+- **G2 — Hard-decision self-consistency (FORGE-TRANCE).**
   GIVEN a FORGE invocation flagged "high-stakes" by upstream Eidolon OR
-  an explicit user `ELITE` token
+  an explicit user `TRANCE` token
   WHEN the decision space has ≥3 plausible alternatives
   THEN sample N=3 reasoning traces (N=5 if user marks high-stakes),
   majority-vote or judge-merge; if consensus < 60% emit `no decision`
   with sampled disagreements (`[D §3.6]`).
 
-- **G3 — Spec evaluator-optimizer (SPECTRA-ELITE).**
+- **G3 — Spec evaluator-optimizer (SPECTRA-TRANCE).**
   GIVEN SPECTRA at complexity ≥7/12 (`spectra-planning/SKILL.md:14`)
   WHEN the user has signaled high-stakes OR the upstream Eidolon flagged
   ambiguous requirements
   THEN run generator + evaluator loop, max 3 iterations
   (`[D §3.7]`); on 3rd failure escalate to FORGE.
 
-- **G4 — Parallel implementation (APIVR-Δ-ELITE).**
+- **G4 — Parallel implementation (APIVR-Δ-TRANCE).**
   GIVEN a multi-track feature where SPECTRA emitted >1 independent story
   WHEN total verifier cost is bounded
   THEN spawn one APIVR-Δ per track with `isolation: "worktree"`; merge
   via the verifier cascade; preserve APIVR's existing 3-attempt budget
   per track (`apivr-failure-recovery/SKILL.md:154-210`).
 
-- **G5 — Doc parallel synthesis (IDG-ELITE).**
+- **G5 — Doc parallel synthesis (IDG-TRANCE).**
   GIVEN an IDG synthesis where the source artifact set is large
   (multiple inputs / multiple sections)
   WHEN the topological order from `idg-composition/SKILL.md:7-22` allows
@@ -278,40 +278,40 @@ Each gate must hold **all** GIVEN clauses for the WHEN to apply.
   verification (`idg-verification/SKILL.md:69-86`); the **one-revision
   cap** (`idg-verification/SKILL.md:85`) is preserved per section.
 
-- **G6 — Forensic counterfactuals (VIGIL-ELITE).**
+- **G6 — Forensic counterfactuals (VIGIL-TRANCE).**
   GIVEN a VIGIL invocation with ≥2 plausible root-cause hypotheses
   WHEN bisect surface allows independent testing
   THEN spawn parallel hypothesis tests on isolated bisects (worktree
   isolation); merge into a single `root-cause-report.md` (`roster/index.yaml:298`).
 
-### 6.3 Refusal gates (when ELITE MUST NOT activate)
+### 6.3 Refusal gates (when TRANCE MUST NOT activate)
 
 - **R1 — Refusal-bound capabilities.** A refused capability does not
-  become available at ELITE. ATLAS still does not write at ELITE.
+  become available at TRANCE. ATLAS still does not write at TRANCE.
   SPECTRA still does not implement. IDG still does not retrieve. FORGE
   still does not tool-call. VIGIL still does not auto-apply patches
   (`[F §9 invariant 5]`; `prime-directives.md:38-46`; `roster/index.yaml:298`).
-- **R2 — FORGE parallel fan-out is reasoning-only.** FORGE's ELITE is
+- **R2 — FORGE parallel fan-out is reasoning-only.** FORGE's TRANCE is
   self-consistency on reasoning chains; it does not gain tool access.
   Direct corollary of `prime-directives.md:44`.
 - **R3 — Bounded budgets are inviolable.** Per-Eidolon retry budgets
-  remain enforced inside ELITE (`[F §9 invariant 11]`). ELITE adds
+  remain enforced inside TRANCE (`[F §9 invariant 11]`). TRANCE adds
   parallelism, not a fresh budget.
-- **R4 — D5 unbounded reflection.** ELITE may not extend reflection
+- **R4 — D5 unbounded reflection.** TRANCE may not extend reflection
   loops past published caps (SPECTRA 3 cycles, IDG 1 revision, APIVR
   ≤3 same-category attempts). `[D §2 #18]` evidence + D5
   (`prime-directives.md:82-91`).
 - **R5 — Partial-team deployment.** If a needed Eidolon is not
-  installed (`eidolons.lock` check), ELITE is degraded: cortex emits a
+  installed (`eidolons.lock` check), TRANCE is degraded: cortex emits a
   `[GAP]` and a fallback chain rather than spawning fan-out into a
   member that doesn't exist (`composition.md:86-107`).
 
 ### 6.4 Cost ceiling rules
 
-The dossier flags ELITE-always vs ELITE-on-demand as unresolved
-(`[D §6 row 1]`). v1 chooses **ELITE-on-demand** with explicit caps:
+The dossier flags TRANCE-always vs TRANCE-on-demand as unresolved
+(`[D §6 row 1]`). v1 chooses **TRANCE-on-demand** with explicit caps:
 
-- **C1 — Max parallel branches per ELITE invocation: 5** (Anthropic
+- **C1 — Max parallel branches per TRANCE invocation: 5** (Anthropic
   empirical sweet spot for orchestrator-workers `[D §3.4]`; "complex =
   10+ agents" reserved for nested supervisors, not v1 cortex).
 - **C2 — Max model-tier upgrade: lead = reasoning-class, workers =
@@ -331,9 +331,9 @@ The dossier flags ELITE-always vs ELITE-on-demand as unresolved
 - **C6 — Auto-trigger requires both a complexity flag AND a stakes
   flag.** Either alone keeps the cortex at standard tier (P5).
 
-### 6.5 Per-Eidolon ELITE matrix
+### 6.5 Per-Eidolon TRANCE matrix
 
-| Eidolon | ELITE form | Granted | Forbidden at ELITE |
+| Eidolon | TRANCE form | Granted | Forbidden at TRANCE |
 |---|---|---|---|
 | ATLAS | Scatter sub-agents per module | Parallel fan-out (G1); worktree isolation; Abstract-phase aggregation | Writing, editing — D2 refusal stands (R1) |
 | SPECTRA | Evaluator-optimizer loop on draft spec | Generator + evaluator + termination gate (G3); cap 3 iterations | Implementing code (R1); >3 cycles (R4) |
@@ -419,10 +419,10 @@ GIVEN the prompt "map the auth flow"
 WHEN no prior Eidolon has acted in this conversation AND surface size is unknown / small
 THEN the cortex routes to ATLAS standard tier; no chain; emit confidence ≥ 0.8.
 
-### V2 — Discovery over large surface (ELITE scatter)
+### V2 — Discovery over large surface (TRANCE scatter)
 GIVEN the prompt "map the entire monorepo's data layer"
 WHEN cortex heuristic estimates surface > 25 files OR > 5 modules
-THEN escalate to ATLAS-ELITE; scatter sub-agents per module with `isolation: worktree`; aggregate via Abstract phase (G1). Emit `[DECISION]` recording the threshold trip.
+THEN escalate to ATLAS-TRANCE; scatter sub-agents per module with `isolation: worktree`; aggregate via Abstract phase (G1). Emit `[DECISION]` recording the threshold trip.
 
 ### V3 — Spec-needs-research chain
 GIVEN the prompt "I need a spec for refactoring the dispatcher; I don't know the call graph yet"
@@ -444,10 +444,10 @@ GIVEN the prompt "Should we route via the hierarchical supervisor or a single-ro
 WHEN the prompt has decision verbs and no implementation verbs
 THEN FORGE standard; chain length 1; output is verdict + assumptions + alternatives (`composition.md:60-69`); no downstream chain.
 
-### V7 — Documentation synthesis from multiple sources (IDG-ELITE)
+### V7 — Documentation synthesis from multiple sources (IDG-TRANCE)
 GIVEN the prompt "Write the ADR set covering all six methodology docs"
 WHEN source artifact set ≥ N sections AND IDG topological order permits parallelism
-THEN IDG-ELITE (G5); per-section parallel synthesis; CHT verification per section; one-revision cap preserved.
+THEN IDG-TRANCE (G5); per-section parallel synthesis; CHT verification per section; one-revision cap preserved.
 
 ### V8 — Ambiguous "design and implement X" (chain)
 GIVEN the prompt "Design and implement the `--json` flag for `eidolons doctor`"
@@ -474,7 +474,7 @@ GIVEN the prompt "do the thing"
 WHEN no eidolon scores ≥ τ AND no chain template matches
 THEN emit `clarification_request` with 1-3 questions (`[D §3.5]`); do not dispatch; cap clarifications at 1 turn (Claude Code pattern).
 
-### V13 — ELITE cost ceiling enforcement
+### V13 — TRANCE cost ceiling enforcement
 GIVEN a prompt that would otherwise spawn 8 parallel branches
 WHEN C1 (`max_parallel = 5`) would be exceeded
 THEN cortex declines unbounded fan-out; emits `[DECISION]` citing C1 with the proposed alternative (sequenced batches of 5); awaits user consent OR proceeds at the cap with an `[ACTION]` flag.
@@ -506,7 +506,7 @@ following cortex-specific additions:
 - **I-C4 — Always-loaded section ≤ 900 tokens.** The body of
   `EIDOLONS.md` may be larger but only the descriptor index plus the
   dispatch protocol must always-load. Deep tables, chain templates, and
-  ELITE matrices live in collapsible / anchored sections subject to
+  TRANCE matrices live in collapsible / anchored sections subject to
   progressive disclosure (P3, D1).
 - **I-C5 — Refusals are immutable.** The cortex's emitted decision must
   never request a refused capability of a target Eidolon.
@@ -535,16 +535,16 @@ The eventual implementer carries these forward as labeled assumptions.
 | ID | Assumption | What would invalidate it | Mitigation |
 |---|---|---|---|
 | OQ-1 | LLM-self-routing against descriptors is good enough for v1 (no trained classifier). | Production telemetry shows mis-routing > 10% on a held-out set. | Migrate to a small calibrated classifier (RouteLLM `[D §2 #1]`); descriptors stay authoritative. |
-| OQ-2 | Confidence τ thresholds (τ_standard = 0.6, τ_elite = 0.8) are reasonable defaults from `[D §3.2]`. | Calibration experiment shows the optimal point is far off. | Tune τ from routing-decision logs; cite published Hybrid-LLM dial behavior. |
+| OQ-2 | Confidence τ thresholds (τ_standard = 0.6, τ_trance = 0.8) are reasonable defaults from `[D §3.2]`. | Calibration experiment shows the optimal point is far off. | Tune τ from routing-decision logs; cite published Hybrid-LLM dial behavior. |
 | OQ-3 | The hand-off graph union (§7.1) is acceptable until `roster/index.yaml` and `composition.md` are reconciled. | A consumer Eidolon refuses an edge the cortex relies on. | File a roster issue; cortex emits `[DISPUTED]` until resolved. |
-| OQ-4 | ELITE-on-demand (gated, not always-on) is the right v1 stance. | Cost-quality data on code-spec workloads contradicts the recommendation. | Add an ELITE-default flag in `eidolons.yaml`; cortex still emits `[DECISION]` at C4 ceilings. |
+| OQ-4 | TRANCE-on-demand (gated, not always-on) is the right v1 stance. | Cost-quality data on code-spec workloads contradicts the recommendation. | Add an TRANCE-default flag in `eidolons.yaml`; cortex still emits `[DECISION]` at C4 ceilings. |
 | OQ-5 | Verbal confidence is reliable enough to set τ. | "Know Your Limits" TACL 2024 / `[D §6 row 3]` evidence accumulates against verbal confidence. | Pair LLM-confidence with structural signals (descriptor keyword overlap, prior-turn context, explicit hints) per `[D §6 row 3]`. |
 | OQ-6 | Max 2 reroutes per turn is sufficient to prevent ping-pong. | Production logs show ≥3-step rerouting needed for legitimate cases. | Raise the cap with an explicit `[BLOCKED]` exit; never remove the cap. (`[D §6 row 4]`.) |
-| OQ-7 | Self-consistency at N=3 / N=5 is the right FORGE-ELITE shape. | Empirical study on FORGE-style decisions disagrees. | Drop N back to 3 or to FORGE-standard; tune from logs. (`[D §3.6]`.) |
+| OQ-7 | Self-consistency at N=3 / N=5 is the right FORGE-TRANCE shape. | Empirical study on FORGE-style decisions disagrees. | Drop N back to 3 or to FORGE-standard; tune from logs. (`[D §3.6]`.) |
 | OQ-8 | Refusal-as-routing (re-route, never override) is the right policy. | A new Eidolon with mechanically-enforceable selective refusal lands. | Update I-C5; the policy is per-Eidolon, not global. (`[D §6 row 5]`.) |
 | OQ-9 | Stateless cortex (no routing memory) is the v1 default. | Routing accuracy improves >5% with cross-session memory in pilot. | Add a Reflexion-style routing-decision store (`[D §3.8]`); initially read-only, opt-in write. |
 | OQ-10 | Multi-turn cortex cycle (think → score → route) is unnecessary at v1. | Single-shot dispatch yields high mis-routing. | Add an internal Plan-and-Act sub-cycle; cite `[D §2 #13]`. |
-| OQ-11 | Debate is not the ELITE primitive. | A heterogeneous-model debate study shows a clear lift on coding tasks. | Add as a FORGE-ELITE opt-in mode; never the default. (`[D §6 row 5]`.) |
+| OQ-11 | Debate is not the TRANCE primitive. | A heterogeneous-model debate study shows a clear lift on coding tasks. | Add as a FORGE-TRANCE opt-in mode; never the default. (`[D §6 row 5]`.) |
 | OQ-12 | Skill cards for IDG, FORGE, VIGIL not yet in the local nexus checkout (`[F §3]` note) is acceptable for v1 descriptors. | A new skill card lands with verbs that contradict the cortex descriptor. | Cortex re-aggregates skill cards on every roster change (`I-C7`). |
 
 ---

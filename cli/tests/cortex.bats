@@ -148,9 +148,9 @@ restore_cortex_source() {
   grep -q 'Chain Templates' "$REAL_CORTEX"
 }
 
-@test "cortex: EIDOLONS.md contains ELITE activation gates section" {
+@test "cortex: EIDOLONS.md contains TRANCE activation gates section" {
   REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
-  grep -q 'ELITE Activation Gates' "$REAL_CORTEX"
+  grep -q 'TRANCE Activation Gates' "$REAL_CORTEX"
 }
 
 @test "cortex: EIDOLONS.md uses capability-class terms not vendor names" {
@@ -172,7 +172,7 @@ restore_cortex_source() {
 @test "cortex: deep companion files exist under methodology/cortex/" {
   [ -f "$EIDOLONS_ROOT/methodology/cortex/README.md" ]
   [ -f "$EIDOLONS_ROOT/methodology/cortex/handoff-graph.md" ]
-  [ -f "$EIDOLONS_ROOT/methodology/cortex/elite-matrix.md" ]
+  [ -f "$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md" ]
   [ -f "$EIDOLONS_ROOT/methodology/cortex/validation-gates.md" ]
 }
 

@@ -73,7 +73,7 @@ This version-bump flow is the most frequent change in this repo — the majority
 
 ## Cortex
 
-`EIDOLONS.md` at the repo root is the **always-loaded routing cortex** — a ≤ 900-token descriptor table and dispatch protocol that a host LLM reads once at session start to route free-form prompts to the correct Eidolon(s), tier, and chain. Deep reference tables (ELITE matrix, hand-off graph, validation gates) live in `methodology/cortex/` and load on demand. `eidolons sync` mirrors the cortex into the consumer project at `.eidolons/cortex/EIDOLONS.md`.
+`EIDOLONS.md` at the repo root is the **always-loaded routing cortex** — a ≤ 900-token descriptor table and dispatch protocol that a host LLM reads once at session start to route free-form prompts to the correct Eidolon(s), tier, and chain. Deep reference tables (TRANCE matrix, hand-off graph, validation gates) live in `methodology/cortex/` and load on demand. `eidolons sync` mirrors the cortex into the consumer project at `.eidolons/cortex/EIDOLONS.md`.
 
 ## Notes on scope
 

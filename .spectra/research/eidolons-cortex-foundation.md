@@ -147,9 +147,9 @@ Edges are **declared**, not inferred:
 
 ## 7. Harness Affordances Inventory
 
-What the Claude Code harness exposes that an ELITE tier *could* leverage. Most are **not** in current roster declarations:
+What the Claude Code harness exposes that an TRANCE tier *could* leverage. Most are **not** in current roster declarations:
 
-| Affordance | Mechanism | Current usage in roster | Plausible ELITE consumer |
+| Affordance | Mechanism | Current usage in roster | Plausible TRANCE consumer |
 |---|---|---|---|
 | **Parallel agent fanout** (single message, multiple Agent calls) | Tool-call concurrency | ATLAS Locate "scatter subagents" (`atlas-locate/SKILL.md:94-141`) — only documented case | SPECTRA generating 3-5 strategies in parallel; FORGE running adversarial-pair deliberation; VIGIL fanning out counterfactuals |
 | **`isolation: "worktree"`** | Per-agent git worktree | Memory feedback flags collision risk (`feedback_parallel_agents_same_repo`) | APIVR-Δ when implementing; VIGIL when patching — both write `.diff`s |
@@ -158,7 +158,7 @@ What the Claude Code harness exposes that an ELITE tier *could* leverage. Most a
 | **Hooks** (pre/post-tool, pre/post-prompt) | Harness lifecycle | Not used in nexus | Marker-bounded section guards; idempotency pre-flight; refusal-boundary checks |
 | **MCP servers** | Tool surface | `eidolons mcp atlas-aci` scaffolds Atlas-ACI sqlite codegraph (`docs/architecture.md:161-163`) | Other Eidolons gaining MCP tools — IDG markdown linter, VIGIL trace-ingest |
 | **Slash-skills / progressive disclosure** | `.claude/skills/<name>/SKILL.md` with frontmatter `when_to_use:` | ATLAS (4 phase skills), SPECTRA (1), APIVR-Δ (4) — IDG/FORGE/VIGIL absent locally | Cortex itself as a skill; per-Eidolon trigger-card harvest |
-| **Memory across conversations** | `~/.claude/projects/.../MEMORY.md` etc. | User-level memory exists (`feedback_*`); APIVR-Δ has its own `.eidolons/apivr/memories/` | Cortex routing-decision history; ELITE escalation log |
+| **Memory across conversations** | `~/.claude/projects/.../MEMORY.md` etc. | User-level memory exists (`feedback_*`); APIVR-Δ has its own `.eidolons/apivr/memories/` | Cortex routing-decision history; TRANCE escalation log |
 | **Subagent spawn with clean context** | Documented in `atlas-abstract/SKILL.md:46-58` | ATLAS Abstract phase | SPECTRA Refine; FORGE adversarial-pair; VIGIL Locate-style probes |
 | **Structured outputs / JSON Schema** | Schemas at `schemas/*.json`, validated in CI | Roster + manifests | Routing decisions emitted as structured artifacts (auditable) |
 
@@ -169,7 +169,7 @@ What the Claude Code harness exposes that an ELITE tier *could* leverage. Most a
 Specific, scoped, answerable from peer-reviewed / frontier-lab literature:
 
 1. **Single-router vs hierarchical-router** for fixed rosters of ≤10 specialists with declared capability classes — which has lower routing error and what's the crossover roster size?
-2. **Confidence thresholds for ELITE escalation** — what published values for cascade systems (e.g., SCoRe, Routing Bandits, FrugalGPT-style) trigger escalation from base to high-capability tier? Numeric ranges, not directional.
+2. **Confidence thresholds for TRANCE escalation** — what published values for cascade systems (e.g., SCoRe, Routing Bandits, FrugalGPT-style) trigger escalation from base to high-capability tier? Numeric ranges, not directional.
 3. **Ensemble / parallel deliberation** — is N=2 adversarial pair, N=3 majority, or N=5 best-of-N the empirically dominant pattern for plan-class tasks? At what task complexity does the gain plateau?
 4. **Verbal-confidence calibration of LLMs** — how reliable is a model's self-reported confidence as the routing signal vs an external scorer? (Anthropic, OpenAI, DeepMind reports as of 2025-2026.)
 5. **Refusal-as-routing** — do production systems treat an Eidolon's hard refusal as a router signal (re-route to capable peer), or as a stop? Evidence either direction.
@@ -179,7 +179,7 @@ Specific, scoped, answerable from peer-reviewed / frontier-lab literature:
 9. **Memory across routers** — research on whether the *router* should accumulate routing-decision memory (improves with use) or remain stateless (reproducible). Trade-offs.
 10. **Multi-turn vs single-shot routing** — does literature support the cortex itself running an internal cycle (think → score → route) vs emitting a single-shot dispatch? Cite empirical comparisons.
 11. **Self-reflection bound** — given prime directive D5 ("bounded self-correction"), what's the published optimum for the cortex's own re-routing budget? CorrectBench (`MANIFESTO.md:41`) is one anchor; what others?
-12. **ELITE-tier definition prior art** — are there published "tier-2 / escalation" agent designs (e.g., Anthropic's harness work, GPT-4o orchestration patterns) the cortex should mirror or deliberately diverge from?
+12. **TRANCE-tier definition prior art** — are there published "tier-2 / escalation" agent designs (e.g., Anthropic's harness work, GPT-4o orchestration patterns) the cortex should mirror or deliberately diverge from?
 
 ---
 

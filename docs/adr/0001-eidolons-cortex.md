@@ -33,15 +33,15 @@ Architectures considered and rejected (`.spectra/plans/eidolons-cortex-spec.md` 
 - **Cascade by strength.** Wrong shape: Eidolons differ in *role*, not
   *strength* (dossier §4). A "weaker" ATLAS is not a smaller-budget APIVR-Δ.
 - **Mixture-of-Agents aggregation as default.** ~N× cost on every prompt;
-  reserved for ELITE on hard FORGE queries only (dossier §3.4, §3.6).
+  reserved for TRANCE on hard FORGE queries only (dossier §3.4, §3.6).
 - **Multi-agent debate as default.** Underperforms self-consistency at equal
   cost without heterogeneity (dossier §2 #6, X-MAS / Stop-Overvaluing-MAD).
-  Available only as an opt-in FORGE-ELITE mode.
+  Available only as an opt-in FORGE-TRANCE mode.
 
 ## Decision
 
 Adopt a **hierarchical-supervisor cortex with two-stage hybrid dispatch**:
-descriptor soft-match → confidence gate + ELITE escalation
+descriptor soft-match → confidence gate + TRANCE escalation
 (`.spectra/plans/eidolons-cortex-spec.md` §4.4).
 
 - **Artifact:** `EIDOLONS.md` at the nexus repo root, marker-bounded
@@ -52,23 +52,23 @@ descriptor soft-match → confidence gate + ELITE escalation
   model).
 - **Always-loaded content:** six-row roster descriptor table, 5-step dispatch
   protocol (Classify → Gate → Refusal-check → Tier → Emit), 8 chain templates,
-  6 ELITE activation gates G1–G6, confidence-signal table, 10 cortex
+  6 TRANCE activation gates G1–G6, confidence-signal table, 10 cortex
   invariants I-C1–I-C10.
 - **Progressive disclosure** for deep tables: `methodology/cortex/handoff-graph.md`,
-  `elite-matrix.md`, `validation-gates.md` load on demand
+  `trance-matrix.md`, `validation-gates.md` load on demand
   (dossier §3.1 Anthropic Skills; spec P3). The cortex + one deep table
   fits inside the 3500-token specialist budget.
 - **Capability classes only.** `model_tier ∈ {speed-class, reasoning-class}`;
   vendor model names never appear in the cortex
   (`methodology/prime-directives.md:152-162` D9; spec invariant I-C3).
-- **ELITE definition.** Parallel fan-out (max 5 branches), worktree isolation
+- **TRANCE definition.** Parallel fan-out (max 5 branches), worktree isolation
   per branch, verifier-cascade wrapping, evaluator-optimizer loop capped at 3
   iterations, capability-class upgrade per role. **Not** longer single-thread
   thinking — Anthropic multi-agent research-system blog (90.2% lift via
   parallelism, dossier §3.4) and ACL 2025 "Revisiting o1 test-time scaling"
   (longer CoT often degrades, dossier §2 #18). Auto-trigger requires **both**
   a complexity flag AND a stakes flag (spec §6.4 C6); refused capabilities
-  are never granted at ELITE (spec §6.3 R1).
+  are never granted at TRANCE (spec §6.3 R1).
 - **Hand-off graph dispute resolved.** Foundation §4 flagged a disagreement
   between `roster/index.yaml` declared edges and `methodology/composition.md`
   prose edges. The cortex adopts the **union as the routable set**, with
@@ -86,7 +86,7 @@ descriptor soft-match → confidence gate + ELITE escalation
 - Free-form natural-language prompts now route deterministically through a
   single always-loaded artifact; the headline gap from foundation §5 is
   closed (spec V10).
-- ELITE escalation is bounded by gates G1–G6 and cost ceilings C1–C6, with a
+- TRANCE escalation is bounded by gates G1–G6 and cost ceilings C1–C6, with a
   5× standard-tier budget warning (spec §6.4 C4) — the manifesto's "no
   always-on parallel fan-out" stance is preserved.
 - The cortex publishes a spec-grade rubric (14 GIVEN/WHEN/THEN gates V1–V14
@@ -131,6 +131,6 @@ descriptor soft-match → confidence gate + ELITE escalation
   routing-mechanism-today §5, mis-routing examples §6, harness affordances §7,
   15 cortex invariants §9).
 - Cortex self-test surface: `methodology/cortex/validation-gates.md`
-  (V1 pure-discovery, V2 ELITE scatter, V5 second-attempt → VIGIL, V10
+  (V1 pure-discovery, V2 TRANCE scatter, V5 second-attempt → VIGIL, V10
   free-form headline case, V11 refusal re-route, V13 cost ceiling, V14
   direct-implementation bypass).

@@ -11,10 +11,10 @@ GIVEN the prompt "map the auth flow"
 WHEN no prior Eidolon has acted in this conversation AND surface size is unknown / small
 THEN route to ATLAS standard tier; no chain; emit confidence ≥ 0.8.
 
-## V2 — Discovery over large surface (ELITE scatter)
+## V2 — Discovery over large surface (TRANCE scatter)
 GIVEN the prompt "map the entire monorepo's data layer"
 WHEN cortex heuristic estimates surface > 25 files OR > 5 modules
-THEN escalate to ATLAS-ELITE; scatter sub-agents per module with `isolation: worktree`; aggregate via Abstract phase (G1). Emit `[DECISION]` recording the threshold trip.
+THEN escalate to ATLAS-TRANCE; scatter sub-agents per module with `isolation: worktree`; aggregate via Abstract phase (G1). Emit `[DECISION]` recording the threshold trip.
 
 ## V3 — Spec-needs-research chain
 GIVEN the prompt "I need a spec for refactoring the dispatcher; I don't know the call graph yet"
@@ -36,10 +36,10 @@ GIVEN the prompt "Should we route via the hierarchical supervisor or a single-ro
 WHEN the prompt has decision verbs and no implementation verbs
 THEN FORGE standard; chain length 1; output is verdict + assumptions + alternatives; no downstream chain.
 
-## V7 — Documentation synthesis from multiple sources (IDG-ELITE)
+## V7 — Documentation synthesis from multiple sources (IDG-TRANCE)
 GIVEN the prompt "Write the ADR set covering all six methodology docs"
 WHEN source artifact set ≥ N sections AND IDG topological order permits parallelism
-THEN IDG-ELITE (G5); per-section parallel synthesis; CHT verification per section; one-revision cap preserved.
+THEN IDG-TRANCE (G5); per-section parallel synthesis; CHT verification per section; one-revision cap preserved.
 
 ## V8 — Ambiguous "design and implement X" (chain)
 GIVEN the prompt "Design and implement the `--json` flag for `eidolons doctor`"
@@ -66,7 +66,7 @@ GIVEN the prompt "do the thing"
 WHEN no Eidolon scores ≥ τ AND no chain template matches
 THEN emit `clarification_request` with 1–3 questions; do not dispatch; cap clarifications at 1 turn.
 
-## V13 — ELITE cost ceiling enforcement
+## V13 — TRANCE cost ceiling enforcement
 GIVEN a prompt that would otherwise spawn 8 parallel branches
 WHEN C1 (`max_parallel = 5`) would be exceeded
 THEN decline unbounded fan-out; emit `[DECISION]` citing C1 with the proposed alternative (sequenced batches of 5); await user consent OR proceed at the cap with an `[ACTION]` flag.
