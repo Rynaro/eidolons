@@ -82,6 +82,58 @@ can be checked in any combination:
   upstream source tarball, computed in CI by `eidolon-release-template.yml`),
   not by `manifest_sha256`.
 
+## Cache Recovery
+
+`fetch_eidolon` stores cloned Eidolon repos under `~/.eidolons/cache/<name>@<version>/`.
+If the cache directory exists but is stale, corrupt, or represents a partial
+(interrupted) clone, `fetch_eidolon` auto-recovers in one bounded retry:
+
+1. **Detection.** Before using the cache, `fetch_eidolon` calls an internal
+   integrity probe that returns one of:
+   - `0` — cache is valid (HEAD resolvable and commit matches roster, or no
+     roster metadata in compat mode and HEAD is resolvable).
+   - `2` — cache-stale (HEAD resolves but commit/tree/archive hash mismatches
+     the roster's expected values).
+   - `3` — cache-corrupt (HEAD is unresolvable; `.git` is absent, partial, or
+     damaged).
+
+2. **Recovery.** On `rc ∈ {2, 3}`: the cache directory is removed and the
+   Eidolon is re-cloned from the upstream tag. A `warn` log line reports the
+   cache status and the re-clone URL.
+
+3. **Strict re-verify.** After the fresh clone, the full integrity check runs
+   again (die-on-failure). If the re-clone also mismatches the roster's commit,
+   the install aborts with an explicit **upstream-truth mismatch** message:
+   > `<name>@<version> commit mismatch persists after cache re-clone —
+   > upstream tag at github.com/<repo> may have been force-moved.
+   > Investigate roster vs. upstream attestation.`
+   No third retry is attempted. A two-consecutive-failure outcome means the
+   upstream tag itself disagrees with the roster and requires human review.
+
+4. **Compat mode.** When a roster entry has no release metadata, HEAD
+   resolvability is still checked (a corrupt git dir triggers rc=3 and re-clone
+   even in compat mode). Commit/tree/archive comparisons are skipped.
+
+5. **Idempotency.** A valid cache is reused on repeat runs without network
+   access. Auto-recovery does not change the semantics of a subsequent
+   `eidolons sync` run; the second run sees a fresh, valid cache and skips
+   the re-clone.
+
+### Doctor cache hygiene check
+
+`eidolons doctor` includes a read-only `Cache hygiene` section that walks
+`eidolons.lock` members and compares each `~/.eidolons/cache/<name>@<version>/`
+entry against the roster's recorded commit. Stale or corrupt entries are
+reported with an actionable next-step:
+
+```
+· atlas@1.3.0 cache stale (got abc1234def56, roster expects 7d9f3acf1f5f)
+  — run 'eidolons sync' to auto-recover, or rm -rf ~/.eidolons/cache/atlas@1.3.0 to force
+```
+
+The doctor check is read-only; `--fix` delegates to `eidolons sync` which
+exercises the auto-recovery path.
+
 ## Verification
 
 Run:

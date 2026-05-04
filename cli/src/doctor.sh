@@ -211,7 +211,55 @@ else
     "${YELLOW:-}" "${RESET:-}"
 fi
 
-# ─── Check 6: MCP servers ───────────────────────────────────────────────
+# ─── Check 6: Cache hygiene ─────────────────────────────────────────────
+# Read-only check: for each member in eidolons.lock, verify the cache entry
+# at $CACHE_DIR/$name@$version matches the roster's recorded commit. This
+# surfaces stale caches before the next sync without triggering a re-clone
+# (re-clone happens automatically on the next 'eidolons sync').
+# Does NOT call cache_invalidate here — that is sync's job.
+ui_section_out "Cache hygiene"
+if [[ -f "$PROJECT_LOCK" ]]; then
+  LOCK_JSON_CACHE="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null || echo '{}')"
+  cache_member_names="$(echo "$LOCK_JSON_CACHE" | jq -r '(.members // [])[].name')"
+  if [[ -z "$cache_member_names" ]]; then
+    printf "  %s·%s No members locked — cache check skipped\n" \
+      "${YELLOW:-}" "${RESET:-}"
+  else
+    while IFS= read -r cname; do
+      [[ -n "$cname" ]] || continue
+      cver="$(echo "$LOCK_JSON_CACHE" | jq -r --arg n "$cname" \
+        '(.members // [])[] | select(.name == $n) | .version // ""')"
+      cache_entry="$CACHE_DIR/${cname}@${cver}"
+      if [[ ! -d "$cache_entry/.git" ]]; then
+        printf "  %s·%s %s@%s cache absent (run 'eidolons sync' to fetch)\n" \
+          "${YELLOW:-}" "${RESET:-}" "$cname" "$cver"
+        continue
+      fi
+      # Check HEAD resolution first (detects corrupt/partial clones).
+      actual_cache_commit="$(git -C "$cache_entry" rev-parse HEAD 2>/dev/null || echo "")"
+      if [[ -z "$actual_cache_commit" ]]; then
+        printf "  %s·%s %s@%s cache corrupt (HEAD unresolvable) — run 'eidolons sync' to auto-recover\n" \
+          "${YELLOW:-}" "${RESET:-}" "$cname" "$cver"
+        continue
+      fi
+      # Compare against roster expected commit.
+      expected_cache_commit="$(roster_get "$cname" 2>/dev/null \
+        | jq -r --arg v "$cver" '.versions.releases[$v].commit // empty' 2>/dev/null || echo "")"
+      if [[ -n "$expected_cache_commit" && "$actual_cache_commit" != "$expected_cache_commit" ]]; then
+        printf "  %s·%s %s@%s cache stale (got %s, roster expects %s) — run 'eidolons sync' to auto-recover, or rm -rf '%s' to force\n" \
+          "${YELLOW:-}" "${RESET:-}" "$cname" "$cver" \
+          "${actual_cache_commit:0:12}" "${expected_cache_commit:0:12}" "$cache_entry"
+      else
+        pass "$cname@$cver cache fresh"
+      fi
+    done <<< "$cache_member_names"
+  fi
+else
+  printf "  %s·%s eidolons.lock missing — cache check deferred\n" \
+    "${YELLOW:-}" "${RESET:-}"
+fi
+
+# ─── Check 7: MCP servers ─────────────────────────────────────────────────
 # Scans .mcp.json in cwd (if present) and reports image health for known
 # MCP servers. Currently handles atlas-aci only; other servers are skipped.
 # jq is a hard dep elsewhere; if absent here, we degrade gracefully.
@@ -271,7 +319,7 @@ else
   fi
 fi
 
-# ─── Check 7: ghcr.io registry reachability probe ───────────────────────
+# ─── Check 8: ghcr.io registry reachability probe ────────────────────────
 # Non-fatal: a registry outage or a yanked digest surfaces early (warn) but
 # does not increment ERRORS — it is informational / advisory only.
 atlas_aci_doctor_probe() {

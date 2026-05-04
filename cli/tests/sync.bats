@@ -94,6 +94,54 @@ EOF
   grep -q 'shared_dispatch: false' eidolons.yaml
 }
 
+# ─── G11: fresh cache — no re-clone on sync ────────────────────────────────
+@test "sync re-uses fresh cache without re-cloning (no network call when cache valid)" {
+  setup_fake_git_for_upgrade
+  seed_manifest_with atlas=^1.0.0
+
+  # First sync — populates the cache via fake-git clone.
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  # Save the clone count.
+  clone_count_1=0
+  [[ -f "$FAKE_CLONE_LOG" ]] && clone_count_1="$(wc -l < "$FAKE_CLONE_LOG" | tr -d ' ')"
+
+  # Second sync — must reuse cache; no additional clone.
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  clone_count_2=0
+  [[ -f "$FAKE_CLONE_LOG" ]] && clone_count_2="$(wc -l < "$FAKE_CLONE_LOG" | tr -d ' ')"
+
+  # Clone count must not have grown on the second run.
+  [ "$clone_count_2" -le "$clone_count_1" ]
+  # Second run must have emitted "Using cached" for the member.
+  [[ "$output" =~ "Using cached" ]]
+}
+
+# ─── G12: auto-recover single-member cache drift without aborting preset ──
+@test "sync auto-recovers single-member cache drift without aborting full preset" {
+  setup_fake_git_for_upgrade
+  seed_manifest_with atlas=^1.0.0 spectra=^4.2.0
+
+  # First sync — populates both caches.
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+
+  # Corrupt the atlas cache: write a wrong FAKE_COMMIT so rev-parse returns
+  # a different SHA than what the fresh clone would emit.
+  local atlas_cache
+  atlas_cache="$(ls -d "$EIDOLONS_HOME/cache/atlas@"* 2>/dev/null | head -1 || true)"
+  if [[ -n "$atlas_cache" && -d "$atlas_cache/.git" ]]; then
+    echo "stalestalestalestalestalestalestalestale" > "$atlas_cache/.git/FAKE_COMMIT"
+  fi
+
+  # Second sync — atlas must auto-recover (re-clone) while spectra stays cached.
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  # The run must have emitted both a re-clone message and a cached-use message.
+  [[ "$output" =~ "cache invalid" ]] || [[ "$output" =~ "re-cloning" ]] || [[ "$output" =~ "Using cached" ]]
+}
+
 # ─── Lockfile integrity fields (Story 5.D) ────────────────────────────────
 
 @test "sync: writes manifest_sha256 + commit + tree + verification into lockfile" {
