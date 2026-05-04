@@ -569,6 +569,93 @@ semver_satisfies() {
   return 1
 }
 
+# ─── Marker-bounded block upsert ─────────────────────────────────────────
+# upsert_marker_block DST MARKER_NAME CONTENT
+#
+# Owns a marker-bounded region in a composable host-doc file (CLAUDE.md,
+# AGENTS.md, .github/copilot-instructions.md). If the region already
+# exists, rewrites its body in place. Otherwise appends a new block.
+# The marker pattern is <!-- eidolon:<MARKER_NAME> start/end -->.
+# All arguments must be plain strings (no embedded newlines in MARKER_NAME).
+# Idempotent: calling twice with the same content leaves the file unchanged.
+# Bash 3.2 safe — no associative arrays, no ${var,,}, no mapfile.
+# All log output goes to stderr; stdout is clean for captured callers.
+upsert_marker_block() {
+  local dst="$1" marker_name="$2" content="$3"
+  local start="<!-- eidolon:${marker_name} start -->"
+  local end="<!-- eidolon:${marker_name} end -->"
+
+  mkdir -p "$(dirname "$dst")" 2>/dev/null || true
+
+  local content_file tmp mode
+  content_file="$(mktemp)"
+  printf '%s\n' "$content" > "$content_file"
+
+  if [[ -f "$dst" ]] && grep -qF "$start" "$dst" 2>/dev/null; then
+    mode="rewritten"
+    tmp="$(mktemp)"
+    awk -v start="$start" -v end="$end" -v cf="$content_file" '
+      BEGIN { in_block = 0 }
+      $0 == start {
+        print start
+        while ((getline line < cf) > 0) print line
+        close(cf)
+        in_block = 1
+        next
+      }
+      $0 == end {
+        print end
+        in_block = 0
+        next
+      }
+      !in_block { print }
+    ' "$dst" > "$tmp"
+    mv "$tmp" "$dst"
+  elif [[ -f "$dst" ]]; then
+    mode="appended"
+    {
+      printf '\n%s\n' "$start"
+      cat "$content_file"
+      printf '%s\n' "$end"
+    } >> "$dst"
+  else
+    mode="created"
+    {
+      printf '%s\n' "$start"
+      cat "$content_file"
+      printf '%s\n' "$end"
+    } > "$dst"
+  fi
+
+  rm -f "$content_file"
+  info "  upsert_marker_block: $mode $marker_name block in $dst"
+}
+
+# remove_marker_block DST MARKER_NAME
+#
+# Removes the marker-bounded block <!-- eidolon:<MARKER_NAME> start/end -->
+# from DST. No-ops when the marker is absent or DST does not exist.
+# Idempotent. Bash 3.2 safe.
+remove_marker_block() {
+  local dst="$1" marker_name="$2"
+  local start="<!-- eidolon:${marker_name} start -->"
+  local end="<!-- eidolon:${marker_name} end -->"
+
+  [[ -f "$dst" ]] || return 0
+  grep -qF "$start" "$dst" 2>/dev/null || return 0
+
+  local tmp
+  tmp="$(mktemp)"
+  awk -v start="$start" -v end="$end" '
+    BEGIN { in_block = 0 }
+    $0 == start { in_block = 1; next }
+    $0 == end   { in_block = 0; next }
+    !in_block   { print }
+  ' "$dst" > "$tmp"
+  mv "$tmp" "$dst"
+  info "  remove_marker_block: removed $marker_name block from $dst"
+}
+
 # ─── Lockfile readers ─────────────────────────────────────────────────────
 # lock_member_version NAME → echoes the resolved version for NAME from
 # eidolons.lock, or empty string if absent / no lockfile.

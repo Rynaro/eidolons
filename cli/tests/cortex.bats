@@ -184,3 +184,212 @@ restore_cortex_source() {
     grep -q "## V${i}" "$GATES"
   done
 }
+
+# ─── test: host-doc cortex injection (D1 follow-up) ───────────────────────
+
+# Helper: seed a shared-dispatch manifest (shared_dispatch: true).
+seed_shared_dispatch_manifest() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+# Helper: seed a no-shared-dispatch manifest (shared_dispatch: false).
+seed_no_shared_dispatch_manifest() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: false
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+# Helper: call the cortex-injection portion of sync directly via the
+# upsert_marker_block helper in lib.sh, simulating what sync does after
+# the per-member install loop. Avoids needing real git / cloned Eidolons.
+invoke_cortex_injection() {
+  local shared_dispatch="${1:-true}"
+  local nexus_dir="${2:-$EIDOLONS_ROOT}"
+
+  # Inline the injection logic — same block content as sync.sh.
+  # shellcheck disable=SC1090
+  bash -c '
+    set -euo pipefail
+    . "'"$EIDOLONS_ROOT"'/cli/src/lib.sh"
+    CORTEX_BLOCK="## Eidolons Routing Cortex
+
+When a free-form prompt arrives that does not already name an Eidolon, route it via the cortex.
+
+**Read:** \`.eidolons/cortex/EIDOLONS.md\` — always-loaded descriptor table + dispatch protocol. It tells you which Eidolon (or chain) handles the prompt, at what tier (\`standard\` or \`TRANCE\`), and what hand-off contract to use.
+
+**Deep tables** (load on demand): \`.eidolons/cortex/trance-matrix.md\`, \`.eidolons/cortex/handoff-graph.md\`, \`.eidolons/cortex/validation-gates.md\`."
+
+    if [[ "'"$shared_dispatch"'" == "true" ]]; then
+      for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md"; do
+        upsert_marker_block "$_host_doc" "cortex" "$CORTEX_BLOCK"
+      done
+    fi
+  '
+}
+
+@test "cortex: injection — cortex block IS in CLAUDE.md after shared-dispatch sync" {
+  setup_fake_git_for_upgrade
+  seed_shared_dispatch_manifest
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  [ -f "CLAUDE.md" ]
+  grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+  grep -q '<!-- eidolon:cortex end -->'   "CLAUDE.md"
+}
+
+@test "cortex: injection — block contains start marker" {
+  invoke_cortex_injection "true"
+  grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+}
+
+@test "cortex: injection — block contains end marker" {
+  invoke_cortex_injection "true"
+  grep -q '<!-- eidolon:cortex end -->' "CLAUDE.md"
+}
+
+@test "cortex: injection — block points to .eidolons/cortex/EIDOLONS.md" {
+  invoke_cortex_injection "true"
+  grep -q '\.eidolons/cortex/EIDOLONS\.md' "CLAUDE.md"
+}
+
+@test "cortex: injection — block NOT injected when shared-dispatch is off" {
+  invoke_cortex_injection "false"
+  # CLAUDE.md must either not exist or not contain the cortex marker.
+  if [ -f "CLAUDE.md" ]; then
+    ! grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+  else
+    true
+  fi
+}
+
+@test "cortex: injection — idempotency: two injections produce identical CLAUDE.md" {
+  invoke_cortex_injection "true"
+  CHECKSUM1="$(sha256sum 'CLAUDE.md' 2>/dev/null || shasum -a 256 'CLAUDE.md')"
+  invoke_cortex_injection "true"
+  CHECKSUM2="$(sha256sum 'CLAUDE.md' 2>/dev/null || shasum -a 256 'CLAUDE.md')"
+  [ "$CHECKSUM1" = "$CHECKSUM2" ]
+}
+
+@test "cortex: injection — idempotency via full sync --yes: two runs produce identical CLAUDE.md" {
+  setup_fake_git_for_upgrade
+  seed_shared_dispatch_manifest
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  CHECKSUM1="$(sha256sum 'CLAUDE.md' 2>/dev/null || shasum -a 256 'CLAUDE.md')"
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  CHECKSUM2="$(sha256sum 'CLAUDE.md' 2>/dev/null || shasum -a 256 'CLAUDE.md')"
+  [ "$CHECKSUM1" = "$CHECKSUM2" ]
+}
+
+@test "cortex: injection — deep tables mirrored to .eidolons/cortex/" {
+  setup_fake_git_for_upgrade
+  # setup_fake_git_for_upgrade replaces EIDOLONS_NEXUS with a stripped
+  # custom dir. Seed the cortex deep tables so the mirror logic finds them.
+  mkdir -p "$EIDOLONS_NEXUS/methodology/cortex"
+  cp "$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"  "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/handoff-graph.md"  "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/validation-gates.md" "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/README.md"         "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/EIDOLONS.md" "$EIDOLONS_NEXUS/EIDOLONS.md"
+  seed_shared_dispatch_manifest
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/cortex/trance-matrix.md" ]
+  [ -f ".eidolons/cortex/handoff-graph.md" ]
+  [ -f ".eidolons/cortex/validation-gates.md" ]
+  [ -f ".eidolons/cortex/README.md" ]
+}
+
+# ─── test: cortex removal (D2 follow-up) ─────────────────────────────────
+
+@test "cortex: removal — block gone from CLAUDE.md after last-eidolon remove" {
+  # Inject the cortex block first.
+  invoke_cortex_injection "true"
+  grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+
+  # Also set up a minimal .eidolons/cortex dir and eidolons.yaml with
+  # one member so remove treats atlas as the last member.
+  mkdir -p ".eidolons/cortex"
+  touch ".eidolons/cortex/EIDOLONS.md"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+
+  # Remove exits non-zero (per-Eidolon removal still stubbed) but must
+  # clean up the cortex block before dying.
+  run eidolons remove atlas
+  [ "$status" -ne 0 ]
+
+  # Cortex block must be gone from CLAUDE.md.
+  ! grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+}
+
+@test "cortex: removal — .eidolons/cortex/ removed after last-eidolon remove" {
+  mkdir -p ".eidolons/cortex"
+  touch ".eidolons/cortex/EIDOLONS.md"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+
+  run eidolons remove atlas
+  [ "$status" -ne 0 ]
+  [ ! -d ".eidolons/cortex" ]
+}
+
+@test "cortex: removal — cortex block survives when other eidolons remain" {
+  # Inject the cortex block.
+  invoke_cortex_injection "true"
+  grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+
+  # Manifest has two members — atlas is NOT the last.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+
+  run eidolons remove atlas
+  [ "$status" -ne 0 ]
+
+  # Cortex block must still be present.
+  grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
+}
