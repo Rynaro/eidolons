@@ -71,6 +71,10 @@ When a shipped Eidolon publishes a new version, the path is: update the Eidolon'
 
 This version-bump flow is the most frequent change in this repo — the majority of recent commits are `fix(roster): publish <EIDOLON> vX.Y.Z`. Follow the branch convention `fix/roster-<eidolon>-<version>` (e.g. `fix/roster-spectra-4-2-8`) and land it through a PR; direct pushes to `main` are not the pattern here. CHANGELOG.md gets a matching entry.
 
+## Cortex
+
+`EIDOLONS.md` at the repo root is the **always-loaded routing cortex** — a ≤ 900-token descriptor table and dispatch protocol that a host LLM reads once at session start to route free-form prompts to the correct Eidolon(s), tier, and chain. Deep reference tables (TRANCE matrix, hand-off graph, validation gates) live in `methodology/cortex/` and load on demand. `eidolons sync` mirrors the cortex into the consumer project at `.eidolons/cortex/EIDOLONS.md`.
+
 ## Notes on scope
 
 - Don't embed per-Eidolon methodology content in this repo. It belongs in the individual Eidolon repos.

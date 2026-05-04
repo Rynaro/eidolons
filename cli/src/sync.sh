@@ -299,6 +299,78 @@ done <<< "$MEMBERS_JSON"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
 ok "Wrote $PROJECT_LOCK"
 
+# ─── Mirror cortex into consumer project ─────────────────────────────────
+# The cortex (EIDOLONS.md + deep tables) is a nexus-level concern, not a
+# per-Eidolon one. Per spec §11.1 and invariant [F §9 #10] the mirror lands
+# at ./.eidolons/cortex/ (dot-prefixed install convention).
+# Deep tables (trance-matrix.md, handoff-graph.md, validation-gates.md,
+# README.md) are also mirrored so on-consumer self-references in EIDOLONS.md
+# resolve correctly (option (a) per design note in the follow-up spec).
+# All copies are idempotent: files are only written when content differs.
+CORTEX_SRC="$NEXUS/EIDOLONS.md"
+CORTEX_DEST="./.eidolons/cortex/EIDOLONS.md"
+CORTEX_DEEP_SRC="$NEXUS/methodology/cortex"
+CORTEX_DEEP_DEST="./.eidolons/cortex"
+if [[ "$DRY_RUN" == "true" ]]; then
+  info "  [dry-run] would mirror cortex to $CORTEX_DEST"
+  info "  [dry-run] would mirror deep tables to $CORTEX_DEEP_DEST/"
+elif [[ -f "$CORTEX_SRC" ]]; then
+  mkdir -p "./.eidolons/cortex"
+  if [[ ! -f "$CORTEX_DEST" ]] || ! diff -q "$CORTEX_SRC" "$CORTEX_DEST" >/dev/null 2>&1; then
+    cp "$CORTEX_SRC" "$CORTEX_DEST"
+    ok "Mirrored cortex → $CORTEX_DEST"
+  else
+    info "Cortex already up-to-date at $CORTEX_DEST"
+  fi
+  # Mirror deep companion tables if the source directory exists.
+  if [[ -d "$CORTEX_DEEP_SRC" ]]; then
+    for _deep_file in trance-matrix.md handoff-graph.md validation-gates.md README.md; do
+      _src="$CORTEX_DEEP_SRC/$_deep_file"
+      _dst="$CORTEX_DEEP_DEST/$_deep_file"
+      if [[ -f "$_src" ]]; then
+        if [[ ! -f "$_dst" ]] || ! diff -q "$_src" "$_dst" >/dev/null 2>&1; then
+          cp "$_src" "$_dst"
+          ok "Mirrored cortex deep table → $_dst"
+        else
+          info "Cortex deep table already up-to-date: $_dst"
+        fi
+      fi
+    done
+  fi
+else
+  warn "Cortex source not found at $CORTEX_SRC — skipping mirror"
+fi
+
+# ─── Cortex host-doc injection ────────────────────────────────────────────
+# When shared-dispatch is active, inject a pointer block into each root
+# host-doc surface so the host LLM is directed to the cortex at session
+# start. The block is marker-bounded (<!-- eidolon:cortex start/end -->) and
+# idempotent. It is NOT injected when shared-dispatch is off: a pointer to
+# per-Eidolon dispatch is useless without the per-Eidolon sections to
+# dispatch to. Mirrors the per-Eidolon upsert pattern via upsert_marker_block.
+CORTEX_BLOCK="## Eidolons Routing Cortex
+
+When a free-form prompt arrives that doesn't already name an Eidolon, route it via the cortex.
+
+**Read:** \`.eidolons/cortex/EIDOLONS.md\` — always-loaded descriptor table + dispatch protocol. It tells you which Eidolon (or chain) handles the prompt, at what tier (\`standard\` or \`TRANCE\`), and what hand-off contract to use.
+
+**Deep tables** (load on demand): \`.eidolons/cortex/trance-matrix.md\`, \`.eidolons/cortex/handoff-graph.md\`, \`.eidolons/cortex/validation-gates.md\`."
+
+if [[ "$DRY_RUN" == "true" ]]; then
+  if [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+    info "  [dry-run] would inject cortex block into root host docs (shared-dispatch on)"
+  else
+    info "  [dry-run] skipping cortex host-doc injection (shared-dispatch off)"
+  fi
+elif [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+  for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md"; do
+    upsert_marker_block "$_host_doc" "cortex" "$CORTEX_BLOCK"
+  done
+  ok "Cortex pointer block injected into root host docs"
+else
+  info "Shared dispatch off — skipping cortex host-doc injection"
+fi
+
 # ─── Final guidance ──────────────────────────────────────────────────────
 echo ""
 ok "Sync complete."

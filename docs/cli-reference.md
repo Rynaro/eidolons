@@ -50,6 +50,8 @@ eidolons init [--preset NAME | --members LIST] [--hosts LIST] [--force] [--non-i
 
 **Output**: `eidolons.yaml`, `eidolons.lock`, plus per-Eidolon installs.
 
+`init` delegates to `sync` after writing `eidolons.yaml`. The cortex is wired automatically via sync: `EIDOLONS.md` is mirrored to `.eidolons/cortex/`, deep tables are mirrored alongside it, and a marker-bounded pointer block is injected into the root host-docs when shared-dispatch is on (see `sync` below).
+
 ---
 
 ## `eidolons add`
@@ -68,6 +70,8 @@ Calls `sync` after writing to `eidolons.yaml`.
 
 Remove a member cleanly: manifest entry, `.eidolons/<n>/`, bounded sections in dispatch files, and lock entry.
 
+The cortex cleanup runs now (ahead of the full v1.1 implementation): `eidolons remove` strips the `<!-- eidolon:cortex start/end -->` block from all root host-docs and deletes `.eidolons/cortex/` when the named Eidolon is the last installed member. If other Eidolons remain, the cortex blocks are preserved.
+
 ---
 
 ## `eidolons sync`
@@ -81,6 +85,8 @@ eidolons sync [--non-interactive] [--dry-run]
 - Fetches each member's repo (cached in `~/.eidolons/cache/`).
 - Runs each per-Eidolon `install.sh` with the right `--hosts` and `--target`.
 - Aggregates per-Eidolon manifests into `eidolons.lock`.
+- Mirrors `EIDOLONS.md` to `.eidolons/cortex/EIDOLONS.md` and mirrors the deep companion tables (`trance-matrix.md`, `handoff-graph.md`, `validation-gates.md`, `README.md`) from `methodology/cortex/` to `.eidolons/cortex/`.
+- When `shared_dispatch: true`, injects a marker-bounded `<!-- eidolon:cortex start/end -->` pointer block into root `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md` so the host LLM is directed to the cortex at session start. The block is omitted when shared-dispatch is off.
 
 ---
 
