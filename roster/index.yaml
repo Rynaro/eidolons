@@ -10,12 +10,9 @@ registry_version: "1.0"
 updated_at: "2026-05-04T19:54Z"
 eiis_required: "1.1"
 integrity:
-  enforcement: strict  # all shipped Eidolons publish release metadata; mismatches are fatal
-
+  enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
 # ─── Roster ────────────────────────────────────────────────────────────────────
-
 eidolons:
-
   - name: atlas
     display_name: ATLAS
     capability_class: scout
@@ -71,7 +68,6 @@ eidolons:
       - "research/papers/agent-fold.md"
       - "research/papers/scatter-gather.md"
       - "research/production-patterns.md#bounded-aci"
-
   - name: spectra
     display_name: SPECTRA
     capability_class: planner
@@ -125,7 +121,6 @@ eidolons:
       persists: []
     references:
       - "research/production-patterns.md#plan-mode"
-
   - name: apivr
     display_name: "APIVR-Δ"
     capability_class: coder
@@ -172,7 +167,6 @@ eidolons:
       - "research/papers/correctbench.md"
       - "research/papers/reflexion.md"
       - "research/production-patterns.md#failure-recovery"
-
   - name: idg
     display_name: IDG
     capability_class: scriber
@@ -218,8 +212,7 @@ eidolons:
     references:
       - "research/papers/docagent.md"
       - "research/papers/correctbench.md"
-    aliases: [scribe]  # transitional — accept old name, warn user
-
+    aliases: [scribe] # transitional — accept old name, warn user
   - name: forge
     display_name: FORGE
     capability_class: reasoner
@@ -251,7 +244,7 @@ eidolons:
       target_default: "./.eidolons/forge"
       standalone: true
     handoffs:
-      upstream: []       # lateral consultant — called by any member
+      upstream: [] # lateral consultant — called by any member
       downstream: []
       lateral: [atlas, spectra, apivr, idg, vigil]
     working_set_tokens:
@@ -263,7 +256,6 @@ eidolons:
       writes_repo: false
       persists: []
     references: []
-
   - name: vigil
     display_name: VIGIL
     capability_class: debugger
@@ -295,7 +287,7 @@ eidolons:
       target_default: "./.eidolons/vigil"
       standalone: true
     handoffs:
-      upstream: []       # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
+      upstream: [] # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
       downstream: []
       lateral: [atlas, spectra, apivr, idg, forge]
     working_set_tokens:
@@ -304,20 +296,18 @@ eidolons:
     security:
       reads_repo: true
       reads_network: false
-      writes_repo: false   # default read-only; sandbox never touches tree; write emits verified-patch.diff (never auto-applies)
+      writes_repo: false # default read-only; sandbox never touches tree; write emits verified-patch.diff (never auto-applies)
       persists: [".vigil/config.yml", "memories/vigil-failures.yaml"]
     references:
       - "research/papers/graphtracer.md"
       - "research/papers/agentracer.md"
       - "research/papers/lifecycle-of-failures.md"
-
 # ─── Nexus ─────────────────────────────────────────────────────────────────────
 # Self-describing metadata for the nexus CLI. Not an Eidolon — not listed in
 # eidolons[] and not subject to roster-intake. The release workflow
 # (.github/workflows/release-nexus.yml) fills commit/tree/archive_sha256
 # after tagging; placeholders here are a bootstrap-window sentinel that
 # nexus_verify_release() detects and skips gracefully.
-
 nexus:
   version: "1.0.0"
   versions:
@@ -327,38 +317,30 @@ nexus:
     releases:
       "1.0.0":
         tag: "v1.0.0"
-        commit: "<filled-by-release-workflow>"
-        tree: "<filled-by-release-workflow>"
-        archive_sha256: "<filled-by-release-workflow>"
+        commit: "3a404f1b014bbf91142d08839c39f36041cbed01"
+        tree: "04b47a136c91ed770daf49e618f8c6f349ffe99f"
+        archive_sha256: "c3dd7ad78f66235c5228df9eb8e28301ab640e6cd6ccd2b24db8e2429d2e972b"
         provenance:
           github_attestation: false
-        released_at: "2026-05-04T00:00:00Z"
-
+        released_at: "2026-05-04T21:59:02Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
-
 presets:
-
   minimal:
     description: "Solo scout. For read-only exploration of unfamiliar codebases."
     members: [atlas]
-
   pipeline:
     description: "Full pipeline. Scout → Plan → Build → Chronicle."
     members: [atlas, spectra, apivr, idg]
-
   plan-and-build:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [spectra, apivr]
-
   full:
     description: "Every shipped Eidolon — pipeline plus lateral specialists (FORGE, VIGIL)."
     members: [atlas, spectra, apivr, idg, forge, vigil]
-
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]
-
   diagnostics:
     description: "Debug-focused bundle. Implementation + forensic attribution."
     members: [apivr, vigil, forge]
