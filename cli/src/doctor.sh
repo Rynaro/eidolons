@@ -323,6 +323,52 @@ else
                     pass "atlas-aci memex writable ($_memex_host_path)"
                   fi
                 fi
+                # ── Probe A: UID/GID pin check ────────────────────────────────
+                # Look for a "-u" "<uid>:<gid>" pair in the args array.
+                # jq emits the pinned "uid:gid" string when present, "" when absent.
+                _uid_pin="$(jq -r '
+                  .mcpServers["atlas-aci"].args as $arr
+                  | ($arr | to_entries | map(select(.value == "-u")) | .[0].key) as $i
+                  | if $i != null then ($arr[$i + 1] // "") else "" end' \
+                  .mcp.json 2>/dev/null || true)"
+                _cur_uid="$(id -u)"
+                _cur_gid="$(id -g)"
+                if [[ -z "$_uid_pin" ]]; then
+                  # No -u flag at all — warn (not err).
+                  printf "  %s!%s warn: atlas-aci .mcp.json has no -u UID:GID pin — container may run as root and clobber file ownership, or as non-root and fail to read your repo. Re-run 'eidolons atlas aci install' on this host to refresh.\n" \
+                    "${YELLOW:-}" "${RESET:-}"
+                else
+                  # -u flag present — compare to current user.
+                  _pin_uid="${_uid_pin%%:*}"
+                  _pin_gid="${_uid_pin##*:}"
+                  if [[ "$_pin_uid" != "$_cur_uid" || "$_pin_gid" != "$_cur_gid" ]]; then
+                    err "atlas-aci .mcp.json pins --user ${_uid_pin} but current user is ${_cur_uid}:${_cur_gid} — Claude's serve container will fail to read your repo. Re-run 'eidolons atlas aci install' to refresh."
+                  fi
+                  # On match: silent ok.
+                fi
+                # ── Probe B: bind-mount path readability ──────────────────────
+                # Find every "-v <host>:<container>[:opts]" pair and test host
+                # path readability. Skip relative host paths.
+                _bind_args="$(jq -r '
+                  .mcpServers["atlas-aci"].args as $arr
+                  | ($arr | to_entries | map(select(.value == "-v")) | .[].key) as $i
+                  | $arr[$i + 1] // ""' \
+                  .mcp.json 2>/dev/null || true)"
+                while IFS= read -r _bind_pair; do
+                  [[ -n "$_bind_pair" ]] || continue
+                  # Extract host path: everything before the first colon.
+                  _bind_host="${_bind_pair%%:*}"
+                  # Skip relative paths.
+                  case "$_bind_host" in
+                    /*) ;;
+                    *) continue ;;
+                  esac
+                  if [[ ! -e "$_bind_host" ]]; then
+                    err "atlas-aci .mcp.json bind '${_bind_host}' does not exist — Claude's serve container will fail."
+                  elif [ ! -r "$_bind_host" ]; then
+                    err "atlas-aci .mcp.json bind '${_bind_host}' is not readable by current user — Claude's serve container will fail."
+                  fi
+                done <<< "$_bind_args"
               fi
             fi
           fi
