@@ -12,6 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - fix(mcp): doctor probes .atlas/memex/ writability; lib_mcp_atlas_aci.sh exposes pinned-ref accessor; reuse-already-loaded image is now an ATLAS-side contract (PR #2 in Rynaro/ATLAS).
 
 ### Added
+- atlas v1.4.0 published in the roster with release integrity metadata.
 - **Nexus CLI self-versioning + `eidolons upgrade self`.**
   - `VERSION` file at the nexus root (initial content `1.0.0`) is now the single
     source of truth for the nexus version. `cli/eidolons` reads it via an inline
