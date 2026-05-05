@@ -8,6 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-05-05
+
+### Fixed
+- `.gitignore` now tracks the three install sidecar filenames
+  (`.install_date`, `.install_ref`, `.install_commit`) that
+  `cli/install.sh` and `cli/src/upgrade_self.sh` append to
+  `$NEXUS_DIR/.gitignore` at install time. Without this, every fresh
+  nexus install left the working tree dirty against upstream and tripped
+  `eidolons upgrade self`'s clean-tree precondition, forcing users into
+  `--force` (which also bypasses the integrity verification chain).
+  Existing dirty installs heal automatically on the next `upgrade self`.
+
+## [1.1.0] - 2026-05-05
+
 ### Added
 - **`eidolons release <eidolon> <version>` — one-touch maintainer command.**
   Collapses the `Release <EIDOLON>` + `Roster Intake` workflow_dispatch
