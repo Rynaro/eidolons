@@ -159,9 +159,9 @@ normalize_target_list() {
 }
 
 # ─── Nexus check ─────────────────────────────────────────────────────────
-# Echoes (on stdout) three space-separated tokens consumed by the report
+# Echoes (on stdout) three pipe-separated tokens consumed by the report
 # renderer:
-#   <current_tag> <current_commit> <latest_tag_or_empty>
+#   <current_tag>|<current_commit>|<latest_tag_or_empty>
 # The third token is empty when the probe failed (offline degradation).
 collect_nexus_status() {
   local cur_tag cur_commit latest=""
@@ -171,76 +171,17 @@ collect_nexus_status() {
   echo "$cur_tag|$cur_commit|$latest"
 }
 
-# Compare a current tag with a latest tag. Echoes one of:
-#   up-to-date | upgrade-available | unknown
+# nexus_status_label delegates to the lib helper (_lib_nexus_status_label).
+# Kept as a thin wrapper here for callers within this file.
 nexus_status_label() {
-  local cur="$1" latest="$2"
-  if [[ -z "$latest" ]]; then
-    echo "unknown"
-    return 0
-  fi
-  # Strip leading 'v' for SemVer comparison.
-  local c="${cur#v}" l="${latest#v}"
-  case "$c" in
-    [0-9]*.[0-9]*.[0-9]*) : ;;
-    *) echo "unknown"; return 0 ;;
-  esac
-  if [[ "$c" == "$l" ]]; then
-    echo "up-to-date"
-  elif semver_lt "$c" "$l"; then
-    echo "upgrade-available"
-  else
-    echo "up-to-date"   # ahead of remote (dev checkout); treat as current
-  fi
+  _lib_nexus_status_label "$@"
 }
 
 # ─── Member status collection ────────────────────────────────────────────
-# Echoes one TSV line per member: name<TAB>installed<TAB>latest<TAB>constraint<TAB>status
-# status ∈ {up-to-date, upgrade-available, pinned-out, not-installed}
-# When a target list is provided, restricts to those names (canonical).
+# collect_member_rows delegates to lib's collect_member_upgrade_rows, passing
+# the file-local TARGET_LIST variable so existing callers are unaffected.
 collect_member_rows() {
-  manifest_exists || return 0
-  local manifest_json members_json
-  manifest_json="$(yaml_to_json "$PROJECT_MANIFEST")"
-  members_json="$(echo "$manifest_json" | jq -c '.members[]')"
-
-  local target_canon=""
-  if [[ -n "$TARGET_LIST" ]]; then
-    target_canon="$(normalize_target_list "$TARGET_LIST")" || return $?
-  fi
-
-  while IFS= read -r mline; do
-    [[ -z "$mline" ]] && continue
-    local name constraint roster_entry latest installed status
-    name="$(echo "$mline" | jq -r '.name')"
-    constraint="$(echo "$mline" | jq -r '.version')"
-    if [[ -n "$target_canon" ]]; then
-      if ! printf '%s\n' "$target_canon" | grep -Fxq "$name"; then
-        continue
-      fi
-    fi
-    roster_entry="$(roster_get "$name" 2>/dev/null || true)"
-    if [[ -z "$roster_entry" ]]; then
-      latest=""
-    else
-      latest="$(echo "$roster_entry" | jq -r '.versions.latest // empty')"
-    fi
-    installed="$(lock_member_version "$name")"
-    if [[ -z "$installed" ]]; then
-      status="not-installed"
-    elif [[ -z "$latest" || "$installed" == "$latest" ]]; then
-      status="up-to-date"
-    elif semver_lt "$installed" "$latest"; then
-      if semver_satisfies "$constraint" "$latest"; then
-        status="upgrade-available"
-      else
-        status="pinned-out"
-      fi
-    else
-      status="up-to-date"
-    fi
-    printf '%s\t%s\t%s\t%s\t%s\n' "$name" "${installed:-—}" "${latest:-—}" "$constraint" "$status"
-  done <<<"$members_json"
+  collect_member_upgrade_rows "${TARGET_LIST:-}"
 }
 
 # ─── Report rendering ────────────────────────────────────────────────────

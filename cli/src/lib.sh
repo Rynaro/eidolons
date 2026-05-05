@@ -899,6 +899,129 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
+# ─── Member upgrade status helpers ───────────────────────────────────────
+# Extracted from upgrade.sh so both upgrade and doctor share the same data path.
+# (Bucket C, spec: eidolons-update-flow-2026-05-05.md)
+
+# nexus_status_label CUR LATEST → one of: up-to-date | upgrade-available | unknown
+# CUR and LATEST may carry a leading "v"; it is stripped before comparison.
+# (This function is also defined file-locally in upgrade.sh for backward
+#  compat; the lib copy is the canonical one going forward.)
+_lib_nexus_status_label() {
+  local cur="$1" latest="$2"
+  if [[ -z "$latest" ]]; then
+    echo "unknown"
+    return 0
+  fi
+  local c="${cur#v}" l="${latest#v}"
+  case "$c" in
+    [0-9]*.[0-9]*.[0-9]*) : ;;
+    *) echo "unknown"; return 0 ;;
+  esac
+  if [[ "$c" == "$l" ]]; then
+    echo "up-to-date"
+  elif semver_lt "$c" "$l"; then
+    echo "upgrade-available"
+  else
+    echo "up-to-date"
+  fi
+}
+
+# collect_member_upgrade_rows [TARGET_LIST]
+# Echoes one TSV line per declared member (filtered by TARGET_LIST if given):
+#   name<TAB>installed<TAB>latest<TAB>constraint<TAB>status
+# status ∈ {up-to-date, upgrade-available, pinned-out, not-installed}
+# TARGET_LIST is a comma-separated list of member names; empty = all members.
+# Silently skips if eidolons.yaml is absent (manifest_exists returns false).
+collect_member_upgrade_rows() {
+  local target_list="${1:-}"
+  manifest_exists || return 0
+  local manifest_json members_json
+  manifest_json="$(yaml_to_json "$PROJECT_MANIFEST")"
+  members_json="$(echo "$manifest_json" | jq -c '.members[]')"
+
+  local target_canon=""
+  if [[ -n "$target_list" ]]; then
+    target_canon="$(normalize_target_list "$target_list")" || return $?
+  fi
+
+  while IFS= read -r mline; do
+    [[ -z "$mline" ]] && continue
+    local name constraint roster_entry latest installed status
+    name="$(echo "$mline" | jq -r '.name')"
+    constraint="$(echo "$mline" | jq -r '.version')"
+    if [[ -n "$target_canon" ]]; then
+      if ! printf '%s\n' "$target_canon" | grep -Fxq "$name"; then
+        continue
+      fi
+    fi
+    roster_entry="$(roster_get "$name" 2>/dev/null || true)"
+    if [[ -z "$roster_entry" ]]; then
+      latest=""
+    else
+      latest="$(echo "$roster_entry" | jq -r '.versions.latest // empty')"
+    fi
+    installed="$(lock_member_version "$name")"
+    if [[ -z "$installed" ]]; then
+      status="not-installed"
+    elif [[ -z "$latest" || "$installed" == "$latest" ]]; then
+      status="up-to-date"
+    elif semver_lt "$installed" "$latest"; then
+      if semver_satisfies "$constraint" "$latest"; then
+        status="upgrade-available"
+      else
+        status="pinned-out"
+      fi
+    else
+      status="up-to-date"
+    fi
+    printf '%s\t%s\t%s\t%s\t%s\n' "$name" "${installed:-—}" "${latest:-—}" "$constraint" "$status"
+  done <<<"$members_json"
+}
+
+# ─── Release orchestration helpers ────────────────────────────────────────
+# (Bucket A, spec: eidolons-update-flow-2026-05-05.md §6 Bucket A)
+
+# release_check_gh_auth REPO SCOPE
+# Verifies that `gh auth status` has the named scope for the given repo.
+# Returns 0 on success, 1 on failure (auth missing or scope absent).
+# All output to stderr only.
+release_check_gh_auth() {
+  local repo="$1" scope="$2"
+  # Check gh auth status for the host.
+  local auth_out
+  auth_out="$(gh auth status --hostname github.com 2>&1 || true)"
+  if ! echo "$auth_out" | grep -qi "Logged in to github.com"; then
+    warn "gh not authenticated for github.com — run: gh auth login"
+    return 1
+  fi
+  # Attempt a lightweight API call against the repo to validate token access.
+  if ! gh api "repos/$repo" --silent 2>/dev/null; then
+    warn "gh authentication insufficient for $repo (need '$scope' scope)"
+    warn "Run: gh auth refresh -h github.com -s $scope"
+    return 1
+  fi
+  return 0
+}
+
+# release_workflow_run_id REPO WORKFLOW_NAME
+# Echoes the run ID of the most recently dispatched workflow run for WORKFLOW_NAME
+# in REPO. Returns empty string + exit 1 if no run is found.
+release_workflow_run_id() {
+  local repo="$1" workflow_name="$2"
+  local run_id
+  run_id="$(gh run list -R "$repo" \
+    --workflow "$workflow_name" \
+    --limit 1 \
+    --json databaseId \
+    -q '.[0].databaseId // empty' 2>/dev/null || true)"
+  if [[ -n "$run_id" ]]; then
+    echo "$run_id"
+    return 0
+  fi
+  return 1
+}
+
 # ─── Lockfile readers ─────────────────────────────────────────────────────
 # lock_member_version NAME → echoes the resolved version for NAME from
 # eidolons.lock, or empty string if absent / no lockfile.

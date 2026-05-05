@@ -619,3 +619,114 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" =~ "memex writable" ]]
 }
+
+# ─── S6: Pending upgrades section (D-NOTIFY) ─────────────────────────────
+# Three cases per spec §5 S6:
+#   1. renders — upgrade-available member shows name + version arrow
+#   2. pinned-out — member whose constraint blocks the latest shows "bump to allow"
+#   3. offline-degrades — broken roster degrades gracefully (no crash, no ERRORS)
+
+@test "doctor: pending upgrades section renders for upgrade-available member" {
+  # Seed manifest with atlas at ^1.3.0 and lock with atlas at 1.3.0.
+  # The real roster has atlas.versions.latest=1.4.0 — so atlas is upgrade-available.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.3.0"
+    source: github:Rynaro/ATLAS
+EOF
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.3.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+EOF
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor
+  # Pending upgrades section must appear without incrementing ERRORS.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Pending upgrades" ]]
+  [[ "$output" =~ "atlas" ]]
+  [[ "$output" =~ "→" ]]
+  # Must NOT have incremented errors (exit 0 confirms this).
+  [[ "$output" =~ "All checks passed" ]]
+}
+
+@test "doctor: pending upgrades shows pinned-out member with bump hint" {
+  # Seed a manifest where constraint ^1.0.0 cannot satisfy atlas 1.4.0
+  # because 1.4.0 > 1.x (actually ^1.0.0 DOES allow 1.4.0 per caret rules).
+  # Use a tighter constraint ~1.3.0 which only allows 1.3.x — 1.4.0 is pinned-out.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "~1.3.0"
+    source: github:Rynaro/ATLAS
+EOF
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.3.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+EOF
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor
+  # Exit 0: pinned-out is informational, not an error.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Pending upgrades" ]]
+  # Should show atlas as pinned-out with "bump to allow" hint.
+  [[ "$output" =~ "atlas" ]]
+  [[ "$output" =~ "bump to allow" ]]
+  [[ "$output" =~ "All checks passed" ]]
+}
+
+@test "doctor: pending upgrades degrades gracefully when roster is unreachable" {
+  # Seed a valid manifest and lock but point EIDOLONS_NEXUS at a broken dir
+  # so roster_get always fails (empty roster). Doctor must not crash.
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # Create a minimal broken nexus (has roster dir but no index.yaml).
+  local broken_nexus="$BATS_TEST_TMPDIR/broken-nexus"
+  mkdir -p "$broken_nexus/roster" "$broken_nexus/cli/src/ui"
+  # Copy real CLI scripts so dispatcher still works.
+  cp "$EIDOLONS_ROOT/cli/src/lib.sh"     "$broken_nexus/cli/src/lib.sh"
+  cp "$EIDOLONS_ROOT/cli/src/doctor.sh"  "$broken_nexus/cli/src/doctor.sh"
+  cp "$EIDOLONS_ROOT/cli/src/lib_mcp_atlas_aci.sh" "$broken_nexus/cli/src/lib_mcp_atlas_aci.sh"
+  cp "$EIDOLONS_ROOT/cli/src/ui/"*.sh    "$broken_nexus/cli/src/ui/" 2>/dev/null || true
+  # No roster/index.yaml — roster_get will fail.
+  export EIDOLONS_NEXUS="$broken_nexus"
+
+  run eidolons doctor
+  # Doctor must not crash hard; exit code may be non-zero due to other checks
+  # (e.g. cache hygiene reads from lock which needs roster), but the pending
+  # upgrades section must not cause an unhandled exit.
+  # Key assertion: output contains the section header and no unhandled error.
+  [[ "$output" =~ "Pending upgrades" ]]
+  # Must not see an unhandled bash error about the roster.
+  [[ ! "$output" =~ "roster/index.yaml: No such file" ]]
+}

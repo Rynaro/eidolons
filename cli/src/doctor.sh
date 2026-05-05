@@ -373,6 +373,51 @@ atlas_aci_doctor_probe() {
 ui_section_out "Registry reachability"
 atlas_aci_doctor_probe
 
+# ─── Check 9: Pending upgrades ──────────────────────────────────────────
+# Informational only — does NOT increment ERRORS. Degrades gracefully when
+# offline or when eidolons.yaml is absent.
+# (Bucket C / D-NOTIFY — spec: eidolons-update-flow-2026-05-05.md §4.3)
+ui_section_out "Pending upgrades"
+if ! manifest_exists; then
+  printf "  %s·%s eidolons.yaml missing — pending upgrades skipped\n" "${YELLOW:-}" "${RESET:-}"
+else
+  _pending_rows=""
+  _pending_offline=false
+  if ! _pending_rows="$(collect_member_upgrade_rows 2>/dev/null)"; then
+    _pending_offline=true
+  fi
+  if [[ "$_pending_offline" == "true" ]]; then
+    printf "  %s·%s unknown (offline — could not reach roster upstream)\n" "${YELLOW:-}" "${RESET:-}"
+  elif [[ -z "$_pending_rows" ]]; then
+    pass "All members up-to-date"
+  else
+    _n_avail=0
+    _n_pinned=0
+    while IFS="$(printf '\t')" read -r _pu_name _pu_inst _pu_lat _pu_con _pu_st; do
+      [[ -z "$_pu_name" ]] && continue
+      case "$_pu_st" in
+        upgrade-available)
+          _n_avail=$((_n_avail + 1))
+          printf "  %s·%s  %-14s %s  →  %s  (within %s)\n" \
+            "${YELLOW:-}" "${RESET:-}" "$_pu_name" "$_pu_inst" "$_pu_lat" "$_pu_con"
+          ;;
+        pinned-out)
+          _n_pinned=$((_n_pinned + 1))
+          printf "  %s·%s  %-14s %s  →  %s  (constraint %s — bump to allow)\n" \
+            "${YELLOW:-}" "${RESET:-}" "$_pu_name" "$_pu_inst" "$_pu_lat" "$_pu_con"
+          ;;
+        up-to-date|not-installed)
+          : ;;
+      esac
+    done <<<"$_pending_rows"
+    if [[ "$_n_avail" -eq 0 && "$_n_pinned" -eq 0 ]]; then
+      pass "All members up-to-date"
+    elif [[ "$_n_avail" -gt 0 ]]; then
+      printf "  %s·%s  Run \`eidolons upgrade\` to apply.\n" "${YELLOW:-}" "${RESET:-}"
+    fi
+  fi
+fi
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then
