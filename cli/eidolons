@@ -72,6 +72,7 @@ Commands:
   doctor         Health-check installed Eidolons and host wiring
   verify         Verify installed Eidolon release integrity
   upgrade        Upgrade pinned Eidolon versions (or 'upgrade self' to upgrade the CLI)
+  release        One-touch Eidolon release + Roster Intake (maintainer-only)
   mcp <sub>      MCP server scaffolding helpers.
                  Subcommands:
                    atlas-aci        Generate a per-project .mcp.json for Atlas-ACI
@@ -113,6 +114,7 @@ case "$cmd" in
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
   verify)      exec bash "$CLI_SRC/verify.sh"  "$@" ;;
+  release)     exec bash "$CLI_SRC/release.sh"   "$@" ;;
   upgrade)
     # Peek at the first remaining arg to decide which subcommand to dispatch.
     # If it's "self", consume it and dispatch to upgrade_self.sh.

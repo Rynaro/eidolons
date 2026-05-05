@@ -507,7 +507,11 @@ with_timeout() {
   fi
   "$@" &
   local pid=$!
-  ( sleep "$secs" && kill -9 "$pid" 2>/dev/null ) &
+  # Timer subshell stdout/stderr → /dev/null so it does not hold an inherited
+  # command-substitution pipe open after the main command completes (the
+  # parent's $(with_timeout ...) capture would otherwise block until the
+  # timer fires regardless of the polled function returning early).
+  ( sleep "$secs" && kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
   local timer=$!
   local rc=0
   wait "$pid" 2>/dev/null || rc=$?
