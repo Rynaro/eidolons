@@ -730,3 +730,217 @@ EOF
   # Must not see an unhandled bash error about the roster.
   [[ ! "$output" =~ "roster/index.yaml: No such file" ]]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# D-T3 tests — atlas-aci UID/GID + bind-path probes
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# These tests use the setup_fake_curl harness (which also provides a fake
+# docker shim) so that the image-presence check in Check 7 always passes.
+# The UID and bind probes run in the same atlas-aci block, after the memex
+# probe.
+#
+# seed_mcp_json_uid_probe writes a .mcp.json whose args array includes:
+#   - an optional "-u <uid>:<gid>" pair (omit by passing "" as uid_gid)
+#   - zero or more "-v <host>:<container>" pairs
+# The image ref is the same recognisable test digest used by seed_mcp_json_ghcr.
+
+seed_mcp_json_uid_probe() {
+  local uid_gid="$1"   # e.g. "1000:1000" or "" to omit
+  shift
+  # Remaining args are additional "-v host:container" values (each as one string).
+  local digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  # Build the args array as JSON.
+  local args_json
+  args_json='["run","--rm","-i"'
+  if [[ -n "$uid_gid" ]]; then
+    args_json="${args_json},\"-u\",\"${uid_gid}\""
+  fi
+  for bind_spec in "$@"; do
+    # bind_spec is "host:container" — JSON-escape colons are fine here since
+    # we control the values and they contain no special JSON chars.
+    args_json="${args_json},\"-v\",\"${bind_spec}\""
+  done
+  args_json="${args_json},\"ghcr.io/rynaro/atlas-aci@${digest}\",\"serve\"]"
+
+  cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "atlas-aci": {
+      "command": "docker",
+      "args": ${args_json}
+    }
+  }
+}
+EOF
+}
+
+# Shared setup boilerplate for all D-T3 tests: fully wired project so only
+# the probe under test can cause failures.
+_dt3_setup_project() {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  export FAKE_CURL_TOKEN_RESULT=ok
+  export FAKE_CURL_MANIFEST_STATUS=200
+  setup_fake_curl
+}
+
+# Tracks any chmod-000 dirs created during a test so teardown can restore
+# them before bats tries to remove the tmpdir.
+_DT3_CHMOD000_PATHS=()
+
+teardown() {
+  # Restore any chmod-000 paths created by D-T3.5 so bats can clean up.
+  for _p in "${_DT3_CHMOD000_PATHS[@]:-}"; do
+    [[ -n "$_p" ]] && chmod 755 "$_p" 2>/dev/null || true
+  done
+  cd "$EIDOLONS_ROOT"
+}
+
+# ─── D-T3.1: matching UID:GID → no err/warn ──────────────────────────────
+@test "D-T3.1: .mcp.json with -u UID:GID matching current user — no err/warn" {
+  _dt3_setup_project
+  local cur_uid cur_gid
+  cur_uid="$(id -u)"
+  cur_gid="$(id -g)"
+  seed_mcp_json_uid_probe "${cur_uid}:${cur_gid}"
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  # Neither the warn nor the err message must appear.
+  [[ ! "$output" =~ "no -u UID:GID pin" ]]
+  [[ ! "$output" =~ "pins --user" ]]
+}
+
+# ─── D-T3.2: mismatched UID:GID → err with both UIDs in message ──────────
+@test "D-T3.2: .mcp.json with -u 99999:99999 (wrong user) — err with both UIDs" {
+  _dt3_setup_project
+  local cur_uid cur_gid
+  cur_uid="$(id -u)"
+  cur_gid="$(id -g)"
+  seed_mcp_json_uid_probe "99999:99999"
+
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "pins --user 99999:99999" ]]
+  [[ "$output" =~ "${cur_uid}:${cur_gid}" ]]
+}
+
+# ─── D-T3.3: no -u flag at all → warn (not err) with re-run hint ─────────
+@test "D-T3.3: .mcp.json without -u flag — warn (not err) with re-run hint" {
+  _dt3_setup_project
+  # Pass empty string so seed_mcp_json_uid_probe omits the -u pair.
+  seed_mcp_json_uid_probe ""
+
+  run eidolons doctor
+  # warn does NOT increment ERRORS → exit 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "no -u UID:GID pin" ]]
+  [[ "$output" =~ "eidolons atlas aci install" ]]
+  # Must NOT trigger the "pins --user" error message.
+  [[ ! "$output" =~ "pins --user" ]]
+}
+
+# ─── D-T3.4: bind path that doesn't exist → err ──────────────────────────
+@test "D-T3.4: .mcp.json with bind path that does not exist — err" {
+  _dt3_setup_project
+  local cur_uid cur_gid
+  cur_uid="$(id -u)"
+  cur_gid="$(id -g)"
+  local nonexistent="/tmp/eidolons-dt3-nonexistent-$$"
+  rm -rf "$nonexistent"
+  seed_mcp_json_uid_probe "${cur_uid}:${cur_gid}" "${nonexistent}:/repo"
+
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "does not exist" ]]
+  [[ "$output" =~ "$nonexistent" ]]
+}
+
+# ─── D-T3.5: bind path exists but unreadable → err ───────────────────────
+@test "D-T3.5: .mcp.json with bind path that exists but is unreadable — err" {
+  # Skip if running as root (root reads everything — chmod 000 won't block).
+  if [[ "$(id -u)" -eq 0 ]]; then
+    skip "running as root — chmod 000 test not meaningful"
+  fi
+  _dt3_setup_project
+  local cur_uid cur_gid
+  cur_uid="$(id -u)"
+  cur_gid="$(id -g)"
+  local unreadable_dir="$BATS_TEST_TMPDIR/unreadable-dir-$$"
+  mkdir -p "$unreadable_dir"
+  chmod 000 "$unreadable_dir"
+  # Track for teardown restoration.
+  _DT3_CHMOD000_PATHS+=("$unreadable_dir")
+
+  seed_mcp_json_uid_probe "${cur_uid}:${cur_gid}" "${unreadable_dir}:/repo"
+
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "is not readable by current user" ]]
+  [[ "$output" =~ "$unreadable_dir" ]]
+}
+
+# ─── D-T3.6: no .mcp.json → silent skip ─────────────────────────────────
+@test "D-T3.6: .mcp.json absent — no UID/bind probes fire" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  # No .mcp.json written.
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "no -u UID:GID pin" ]]
+  [[ ! "$output" =~ "pins --user" ]]
+  [[ ! "$output" =~ "does not exist" ]]
+  [[ ! "$output" =~ "is not readable" ]]
+}
+
+# ─── D-T3.7: malformed (bad JSON) → silent skip ──────────────────────────
+@test "D-T3.7: malformed .mcp.json — silent skip (no probes fire)" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  printf 'NOT JSON AT ALL {{{' > .mcp.json
+
+  run eidolons doctor
+  # Doctor degrades gracefully; malformed .mcp.json emits the MCP section
+  # message but does NOT crash or emit probe-specific messages.
+  [[ ! "$output" =~ "no -u UID:GID pin" ]]
+  [[ ! "$output" =~ "pins --user" ]]
+  [[ ! "$output" =~ "does not exist" ]]
+  [[ ! "$output" =~ "is not readable" ]]
+}
+
+# ─── D-T3.8: mcpServers present but no atlas-aci key → silent skip ───────
+@test "D-T3.8: .mcp.json with mcpServers but no atlas-aci key — silent skip" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  cat > .mcp.json <<'EOF'
+{
+  "mcpServers": {
+    "some-other-server": {
+      "command": "node",
+      "args": ["server.js"]
+    }
+  }
+}
+EOF
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "no -u UID:GID pin" ]]
+  [[ ! "$output" =~ "pins --user" ]]
+  [[ ! "$output" =~ "does not exist" ]]
+  [[ ! "$output" =~ "is not readable" ]]
+}
