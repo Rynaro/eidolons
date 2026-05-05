@@ -307,6 +307,22 @@ else
                   _mcp_digest="${mcp_image_ref##*@}"
                   pass "atlas-aci image loaded ($_mcp_digest)"
                 fi
+                # ── Memex bind-directory writability probe (T3) ──────────────
+                # Resolve the host path for /memex from .mcp.json args.
+                # The element ending in ":/memex" contains "<host-path>:/memex".
+                _memex_arg="$(jq -r \
+                  '.mcpServers["atlas-aci"].args[]? | select(endswith(":/memex"))' \
+                  .mcp.json 2>/dev/null | head -1 || true)"
+                if [[ -n "$_memex_arg" ]]; then
+                  _memex_host_path="${_memex_arg%:/memex}"
+                  if [[ ! -d "$_memex_host_path" ]]; then
+                    err "atlas-aci memex bind directory missing — run 'eidolons mcp atlas-aci' to scaffold it ($_memex_host_path)"
+                  elif [ ! -w "$_memex_host_path" ]; then
+                    err "atlas-aci memex bind directory not writable by current user ($_memex_host_path; uid=$(id -u)) — fix ownership or re-run scaffolding"
+                  else
+                    pass "atlas-aci memex writable ($_memex_host_path)"
+                  fi
+                fi
               fi
             fi
           fi
