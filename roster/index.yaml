@@ -332,6 +332,11 @@ nexus:
         provenance:
           github_attestation: false
         released_at: "2026-05-04T21:59:02Z"
+      1.1.0:
+        commit: faef215bb11dc6df92c7a3d49654df0738c30523
+        tree: afd1a0a6d18c4e52b7f17ddce023b0329f764635
+        archive_sha256: f81cb056e49588bc31f0aadb7937ac44a089a05142568a57508e64b190e755ce
+        released_at: "2026-05-05T17:14:02Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:
