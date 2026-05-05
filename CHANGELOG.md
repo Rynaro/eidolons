@@ -8,10 +8,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **`eidolons release <eidolon> <version>` — one-touch maintainer command.**
+  Collapses the `Release <EIDOLON>` + `Roster Intake` workflow_dispatch
+  chain into a single command. Validates SemVer, gh auth scope per repo,
+  workflow file existence, and version precedence (rejects equals/downgrade
+  without `--force`). Polls upstream for the tag, dispatches Roster Intake,
+  polls for the resulting PR, prints final URLs. Flags: `--check` (dry-run,
+  no dispatch), `--resume` (skip Release dispatch when tag exists),
+  `--force`, `--auto-merge`, `--yes`, `--non-interactive`,
+  `--release-timeout=N` (default 600s), `--intake-timeout=N` (default 300s).
+  Exit codes: 0 success, 1 generic, 2 usage/validation, 4 network/timeout,
+  5 dispatch failure. Bash 3.2 safe.
+- **`eidolons doctor` — Pending Upgrades section.** New information-only
+  section between the registry-reachability probe and the summary. Lists
+  members where the roster's `versions.pins.stable` is ahead of the
+  installed lock entry (within constraint), and flags pinned-out members
+  separately. Does not increment `ERRORS`. Offline-degrades silently.
+- **Roster Intake auto-merge.** Routine version bumps now open as
+  ready-for-review and engage `gh pr merge --auto --squash`; GitHub holds
+  the merge until required status checks pass on `main`. First-shipped
+  transitions (`status == in_construction`) and bumps against an empty
+  `versions.releases` stay DRAFT for explicit human review. The
+  release-integrity contract is preserved — auto-merge only auto-clicks
+  the merge button after attestation verification has already succeeded.
+  See `docs/release-integrity.md` § "Auto-merge of routine roster bumps".
+
+### Changed
+- `cli/src/lib.sh` exposes `collect_member_upgrade_rows` and
+  `nexus_status_label` as public helpers. `cli/src/upgrade.sh` delegates
+  to the lib helpers (no behaviour change). Enables `cli/src/doctor.sh`
+  to render the new Pending Upgrades section without duplicating logic.
+
 ### Fixed
+- `with_timeout` in `cli/src/lib.sh` no longer holds an inherited
+  command-substitution pipe open after the polled function returns early
+  — the timer subshell now redirects stdout/stderr to `/dev/null`.
+  Without this, `$(with_timeout N _poll)` blocked until the timer fired
+  regardless of the polled function returning early.
 - fix(mcp): doctor probes .atlas/memex/ writability; lib_mcp_atlas_aci.sh exposes pinned-ref accessor; reuse-already-loaded image is now an ATLAS-side contract (PR #2 in Rynaro/ATLAS).
 
-### Added
+### Added (atlas roster)
 - atlas v1.4.0 published in the roster with release integrity metadata.
 - **Nexus CLI self-versioning + `eidolons upgrade self`.**
   - `VERSION` file at the nexus root (initial content `1.0.0`) is now the single

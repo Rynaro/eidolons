@@ -120,6 +120,34 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
 
 ---
 
+## Update flow — maintainer to consumer
+
+```
+maintainer                       upstream Eidolon repo            this nexus                       consumer project
+──────────                       ─────────────────────            ──────────                       ────────────────
+$ eidolons release atlas 1.4.0   ──[gh workflow run             ──[gh workflow run               (waits)
+                                    Release ATLAS]──>              Roster Intake                  
+                                                                    after tag visible]──>          
+                                  Release ATLAS workflow            Roster Intake workflow         
+                                  ─ tags v1.4.0                     ─ verifies attestation         
+                                  ─ signs attestation               ─ updates roster + CHANGELOG   
+                                  ─ publishes GH release            ─ opens PR (auto-merge if not  
+                                                                       first-shipped)              
+                                                                    PR auto-merges once required   
+                                                                    checks pass                    
+                                                                                                   $ eidolons doctor
+                                                                                                   → "Pending upgrades:
+                                                                                                       atlas 1.3.0 → 1.4.0"
+                                                                                                   $ eidolons upgrade atlas
+                                                                                                   → applies the new pin.
+```
+
+A single command (`eidolons release`) drives the whole maintainer side; the consumer side runs `eidolons doctor` to discover pending bumps and `eidolons upgrade` to apply them. Auto-merge of routine roster bumps closes the loop without requiring a human PR review for every upstream patch release. First-shipped Eidolon transitions are held as DRAFT for explicit review (see [`docs/release-integrity.md`](release-integrity.md) § "Auto-merge of routine roster bumps").
+
+The two `docker run`-style invocations on either side preserve layer separation: the maintainer's `eidolons release` only *dispatches* the upstream Eidolon's `release.yml`; it does not modify the upstream repo. The consumer's `eidolons upgrade` reads the roster and runs each Eidolon's own `install.sh`; the nexus never executes consumer-side code beyond the integrity gate.
+
+---
+
 ## Why not a monorepo
 
 Every Eidolon currently has its own public repo (atlas, SPECTRA, apivr, idg, forge). A monorepo would:

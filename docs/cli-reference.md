@@ -145,6 +145,20 @@ This probe is **non-fatal**: it does not increment the error count or change
 the doctor exit code. It is silently skipped when `.mcp.json` is absent, when
 there is no `atlas-aci` entry, or when `curl` is not on PATH.
 
+**Pending Upgrades section:** doctor reads the roster's `versions.pins.stable`
+for each declared member and reports any whose installed version (per
+`eidolons.lock`) is behind. Two states:
+
+- `<member>  <installed>  →  <latest>  (within <constraint>)` — applying
+  `eidolons upgrade <member>` would advance the lock.
+- `<member>  <installed>  →  <latest>  (constraint <constraint> — bump to allow)`
+  — pinned-out: the constraint pins below the new latest, so `upgrade` is
+  blocked until you edit the constraint in `eidolons.yaml`.
+
+The section is informational only — it does not increment the error count or
+change the exit code. Network failures degrade silently; the section is
+skipped entirely when `eidolons.yaml` is missing.
+
 ---
 
 ## `eidolons verify`
@@ -246,6 +260,88 @@ On any failure before step 6, `~/.eidolons/nexus.new` is removed and the current
 | 5 | Integrity verification failed |
 | 6 | Smoke test failed on the new nexus |
 | 7 | Rollback requested but no `nexus.prev` exists |
+
+---
+
+## `eidolons release`
+
+**Maintainer-only.** One-touch dispatch of an upstream Eidolon's `Release`
+workflow followed by this nexus's `Roster Intake`. Replaces the manual two-step
+`gh workflow run` chain.
+
+```
+eidolons release <eidolon> <version> [OPTIONS]
+```
+
+**Behaviour.**
+
+1. Validates SemVer (`X.Y.Z[-pre][+build]`) and the `gh` CLI version
+   (requires `gh >= 2.20.0` for `gh pr merge --auto` support).
+2. Resolves the Eidolon from the roster; checks `gh auth` scope per repo
+   (`Rynaro/<EIDOLON>` and `Rynaro/eidolons`); confirms the upstream
+   `release.yml` workflow file exists.
+3. Version-precedence guard: rejects when the requested version equals the
+   roster `versions.latest` (use `--resume`) or is older (use `--force`).
+4. Dispatches `Release <DISPLAY>` on the upstream repo via `gh workflow run`
+   (skipped when `--resume` and the tag already exists).
+5. Polls `gh release view v<version>` on the upstream repo until the tag
+   appears or `--release-timeout` elapses.
+6. Dispatches `Roster Intake` on `Rynaro/eidolons` with the resolved
+   eidolon + version inputs.
+7. Polls `gh pr list` for the resulting `codex/roster-<name>-<v>` branch
+   until the PR opens or `--intake-timeout` elapses.
+8. Prints the PR URL, auto-merge status, and a follow-up `gh pr checks`
+   command. Hints the consumer to run `eidolons upgrade <name>`.
+
+**Flags.**
+
+| Flag | Default | Purpose |
+|------|---------|---------|
+| `--check` | — | Dry-run: validate plan only; print what would dispatch; no side effects. |
+| `--resume` | — | Skip Release dispatch when the upstream tag already exists. Use after a partial completion. |
+| `--force` | — | Allow version equal to or less than the current roster latest (intentional rollback path). |
+| `--auto-merge` | — | Pass-through hint to Roster Intake (auto-merge is the default for routine bumps anyway). |
+| `--yes`, `-y` | — | Skip the interactive confirmation prompt. Required with `--non-interactive` for mutating runs. |
+| `--non-interactive` | — | Fail on prompts. Combine with `--yes` for unattended use (CI). |
+| `--release-timeout=N` | 600 | Seconds to wait for the upstream tag to appear. |
+| `--intake-timeout=N` | 300 | Seconds to wait for the Roster Intake PR to open. |
+| `-h`, `--help` | — | Print usage and exit 0. |
+
+**Safety properties.**
+
+- Idempotent: re-running with `--resume` after a partial completion never
+  re-dispatches a workflow that already produced its tag.
+- No mutating action runs before validation completes (auth, version
+  precedence, workflow existence).
+- All log output to stderr; stdout reserved for capturable values
+  (PR URL on success).
+- Bash 3.2 safe.
+
+**Exit codes.**
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success — tag landed, intake dispatched, PR URL printed |
+| 1 | Generic failure (details on stderr) |
+| 2 | Usage error or validation failure (bad SemVer, unknown eidolon, version not ahead, missing flags) |
+| 4 | Network/timeout — upstream tag never appeared, or intake PR never opened |
+| 5 | Dispatch failure — `gh workflow run` returned non-zero |
+
+**Examples.**
+
+```bash
+eidolons release atlas 1.4.0                         # interactive prompt
+eidolons release atlas 1.4.0 --yes                   # skip prompt
+eidolons release atlas 1.4.0 --check                 # dry-run
+eidolons release atlas 1.4.0 --resume                # tag already landed
+eidolons release atlas 1.4.0 --release-timeout=120   # short timeout
+```
+
+**Companion automation.** Routine roster bumps that pass attestation
+verification + required status checks now auto-merge once Roster Intake
+opens the PR. First-shipped Eidolon transitions stay DRAFT for explicit
+review. See `docs/release-integrity.md` § "Auto-merge of routine roster
+bumps".
 
 ---
 
