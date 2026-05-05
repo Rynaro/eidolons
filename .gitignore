@@ -54,3 +54,16 @@ secrets/
 
 # ─── Nexus bootstrap audit trail (one-shot working state) ──
 .nexus-bootstrap/
+
+# ─── Nexus install sidecars (written by cli/install.sh + upgrade_self.sh) ──
+# These three files capture install-time provenance (date, ref, commit) of
+# the nexus checkout. They live at $EIDOLONS_HOME/nexus/ but must not be
+# tracked — otherwise every install/upgrade dirties the working tree and
+# breaks `eidolons upgrade self`'s clean-tree precondition. Mirrors the
+# append done by cli/install.sh:158-166 and cli/src/upgrade_self.sh:88-96
+# — listing them here makes the append a no-op, so `.gitignore` itself
+# stays unmodified after install. Existing dirty installs heal on the next
+# `upgrade self` (the new clone's `.gitignore` matches the on-disk one).
+.install_date
+.install_ref
+.install_commit
