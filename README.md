@@ -124,6 +124,8 @@ Every shipped Eidolon publishes attestation-backed releases through a canonical 
 
 **Nexus releases** use the same commit/tree/archive-SHA-256 model. Each `eidolons upgrade self` re-verifies the downloaded nexus against the `nexus.versions.releases.<v>` block in `roster/index.yaml` before swapping it in. The release workflow ([`.github/workflows/release-nexus.yml`](.github/workflows/release-nexus.yml)) produces these artefacts automatically on each `vX.Y.Z` tag.
 
+**Auto-merge** of routine roster bumps. Roster bumps that pass attestation verification + required checks now auto-merge once Roster Intake opens the PR (via `gh pr merge --auto --squash`). First-shipped Eidolon transitions are held as DRAFT for manual review. Bad merges revert with `git revert <merge-sha>`; the next nightly `roster-health` re-validates. See `docs/release-integrity.md` § "Auto-merge of routine roster bumps".
+
 ---
 
 ## What's in this repo

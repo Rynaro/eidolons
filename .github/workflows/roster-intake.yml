@@ -43,8 +43,21 @@ jobs:
             || { echo "::error::version must be SemVer without leading v"; exit 1; }
           repo="$(yq -r ".eidolons[] | select(.name == \"$name\") | .source.repo" roster/index.yaml)"
           [[ -n "$repo" && "$repo" != "null" ]] || { echo "::error::$name not found in roster"; exit 1; }
+          # Capture pre-update status + prior-releases-count for the auto-merge
+          # carve-out (see "Open pull request" step). Reading current_status
+          # *before* the python YAML edit lets us tell first-shipped from a
+          # routine bump without inferring from the post-edit state.
+          current_status="$(yq -r ".eidolons[] | select(.name == \"$name\") | .status // \"in_construction\"" roster/index.yaml)"
+          prior_release_count="$(yq -r "[.eidolons[] | select(.name == \"$name\") | .versions.releases // {} | keys[]] | length" roster/index.yaml)"
+          if [[ "$current_status" != "shipped" || "$prior_release_count" -eq 0 ]]; then
+            is_first_shipped="true"
+          else
+            is_first_shipped="false"
+          fi
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          echo "current_status=$current_status" >> "$GITHUB_OUTPUT"
+          echo "is_first_shipped=$is_first_shipped" >> "$GITHUB_OUTPUT"
 
       - name: Download release metadata
         env:
@@ -191,8 +204,10 @@ jobs:
           PY
 
       - name: Open pull request
+        id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          IS_FIRST_SHIPPED: ${{ steps.resolve.outputs.is_first_shipped }}
         run: |
           set -euo pipefail
           name="${{ inputs.eidolon }}"
@@ -204,7 +219,34 @@ jobs:
           git add roster/index.yaml CHANGELOG.md
           git commit -m "fix(roster): publish ${name} v${version}"
           git push --set-upstream origin "$branch"
-          gh pr create \
-            --draft \
-            --title "fix(roster): publish ${name} v${version}" \
-            --body "Automated roster intake for ${name} v${version}. The upstream release manifest checksums and GitHub artifact attestation were verified before this PR was opened."
+          # First-shipped (in_construction → shipped) transitions and bumps
+          # against an empty versions.releases stay DRAFT for human review.
+          # Routine post-shipped bumps open as ready-for-review and pair
+          # with the auto-merge step below.
+          if [[ "$IS_FIRST_SHIPPED" == "true" ]]; then
+            body="Automated roster intake for ${name} v${version}. The upstream release manifest checksums and GitHub artifact attestation were verified before this PR was opened."$'\n\n'"> NOTE: First shipped release (or first release after status promotion) for ${name}. Held as DRAFT pending maintainer review."
+            pr_url="$(gh pr create --draft --title "fix(roster): publish ${name} v${version}" --body "$body")"
+          else
+            body="Automated roster intake for ${name} v${version}. The upstream release manifest checksums and GitHub artifact attestation were verified before this PR was opened. Auto-merge will engage once required status checks pass."
+            pr_url="$(gh pr create --title "fix(roster): publish ${name} v${version}" --body "$body")"
+          fi
+          pr_number="$(echo "$pr_url" | sed -E 's|.*/pull/||')"
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+          echo "pr_url=$pr_url" >> "$GITHUB_OUTPUT"
+
+      - name: Enable auto-merge
+        if: steps.resolve.outputs.is_first_shipped != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Auto-merge waits for required status checks (configure on main).
+          # If branch protection has not yet been enabled, --auto reduces to
+          # immediate merge — that is the maintainer's responsibility.
+          # Use SIGTERM-clean failure: do not block the workflow if
+          # auto-merge can't be enabled (e.g. branch protection missing).
+          if ! gh pr merge --auto --squash "${{ steps.pr.outputs.pr_number }}" -R "${{ github.repository }}"; then
+            echo "::warning::Could not enable auto-merge on PR ${{ steps.pr.outputs.pr_number }} — falling back to manual merge. Check branch-protection config."
+          else
+            echo "Auto-merge enabled on ${{ steps.pr.outputs.pr_url }} (waits for required checks)."
+          fi
