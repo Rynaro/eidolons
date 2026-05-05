@@ -15,6 +15,15 @@ name: Release Nexus
 # Trigger:
 #   Canonical path: workflow_dispatch with `version` input (e.g. "1.0.0").
 #   Fallback path:  push to tags matching v*.*.* (for manually-pushed tags).
+#
+# Tag handling:
+#   workflow_dispatch — checks out main HEAD; the workflow itself creates and
+#                       pushes the v<version> tag (mirrors the per-Eidolon
+#                       eidolon-release-template.yml pattern). This is the
+#                       canonical maintainer flow: bump VERSION + CHANGELOG
+#                       in a PR, merge, then dispatch Release Nexus.
+#   push:tags          — checks out the tag SHA (already exists by definition);
+#                       the "Create tag" step short-circuits.
 
 on:
   workflow_dispatch:
@@ -42,6 +51,12 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             VERSION="${{ github.event.inputs.version }}"
+            # Validate SemVer shape on dispatch input (push-tag path is gated by
+            # the on.tags glob, so it's already constrained).
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::version input must be SemVer without leading v (got '$VERSION')"
+              exit 1
+            fi
           else
             # Strip leading 'v' from tag ref.
             VERSION="${GITHUB_REF_NAME#v}"
@@ -49,21 +64,30 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tag=v$VERSION"    >> "$GITHUB_OUTPUT"
 
-      - name: Checkout at tag
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.ver.outputs.tag }}
+          # workflow_dispatch: default ref (the branch the workflow was
+          #   dispatched from, normally main). The "Create tag" step below
+          #   tags this commit and pushes v<version>.
+          # push:tags: GitHub already checks out the tag SHA; we don't need
+          #   to override the ref.
           fetch-depth: 0
+          # Use a deploy-grade token that can push tags and open PRs.
+          # GITHUB_TOKEN works for tag pushes when contents:write is granted
+          # by the workflow-level permissions block.
+          persist-credentials: true
 
-      - name: Validate VERSION file matches tag
+      - name: Validate VERSION file matches requested version
         run: |
           FILE_VER="$(tr -d '[:space:]' < VERSION)"
-          TAG_VER="${{ steps.ver.outputs.version }}"
-          if [[ "$FILE_VER" != "$TAG_VER" ]]; then
-            echo "::error::VERSION file ($FILE_VER) does not match tag ($TAG_VER)"
+          REQ_VER="${{ steps.ver.outputs.version }}"
+          if [[ "$FILE_VER" != "$REQ_VER" ]]; then
+            echo "::error::VERSION file ($FILE_VER) does not match requested release ($REQ_VER)."
+            echo "::error::Bump VERSION on main *before* dispatching Release Nexus, then re-run."
             exit 1
           fi
-          echo "VERSION file matches tag: $FILE_VER"
+          echo "VERSION file matches requested release: $FILE_VER"
 
       - name: Install dependencies
         run: |
@@ -126,6 +150,28 @@ jobs:
           printf '%s\n' "$NOTES" > /tmp/release-notes.md
           echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
 
+      - name: Create tag
+        # On workflow_dispatch we tag the current main HEAD here; on push:tags
+        # the tag already exists (it's how the workflow was triggered) and we
+        # short-circuit. Mirrors eidolon-release-template.yml's create-tag step.
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.ver.outputs.tag }}"
+          if git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null \
+             || git ls-remote --tags --exit-code origin "$TAG" >/dev/null 2>&1; then
+            echo "::notice::Tag $TAG already exists — skipping tag creation (push:tags trigger or re-run)."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Annotated tag — `git rev-parse` returns the tag-object SHA; consumers
+          # that need the commit SHA must use `^{}` to dereference. The roster
+          # block written below records the commit SHA explicitly so consumers
+          # do not have to dereference at install time.
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Created tag $TAG at $(git rev-parse 'HEAD')"
+
       - name: Update roster/index.yaml with release metadata
         run: |
           set -euo pipefail
@@ -186,8 +232,13 @@ jobs:
           VERSION="${{ steps.ver.outputs.version }}"
           ARCHIVE="${{ steps.archive.outputs.archive_file }}"
 
+          # Tag was created earlier in this same workflow run (or pre-exists
+          # via push:tags trigger). --verify-tag would fetch from origin to
+          # confirm the local tag matches; this round-trip is safe but
+          # unnecessary because we just pushed it ourselves. Drop the flag
+          # to avoid a transient race window where origin hasn't propagated
+          # the push yet.
           gh release create "v${VERSION}" \
             "$ARCHIVE" \
             --title "eidolons v${VERSION}" \
-            --notes-file "${{ steps.notes.outputs.notes_file }}" \
-            --verify-tag
+            --notes-file "${{ steps.notes.outputs.notes_file }}"
