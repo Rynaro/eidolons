@@ -159,9 +159,41 @@ remain the portable baseline.
   release workflow.
 - Nexus maintainers run `Roster Intake` with an Eidolon name and version. The
   workflow downloads the upstream release manifest, verifies checksums and the
-  GitHub attestation, updates the roster, and opens a draft PR.
+  GitHub attestation, updates the roster, and opens a PR. Routine version
+  bumps land as ready-for-review and auto-merge once required checks pass
+  (see "Auto-merge" below); first-shipped transitions stay DRAFT for review.
 - Nexus releases are produced by `Release Nexus`, which validates the CLI,
   publishes checksummed artifacts, and generates GitHub/Sigstore attestations.
+- Maintainers can drive the full chain with `eidolons release <name> <version>`
+  — one command dispatches the upstream `Release <NAME>` workflow, polls for
+  the tag, then dispatches `Roster Intake`. See `docs/cli-reference.md`.
+
+### Auto-merge of routine roster bumps
+
+Roster Intake auto-merges routine version bumps once required status checks
+pass. The PR is opened ready-for-review and the workflow immediately calls
+`gh pr merge --auto --squash`; GitHub holds the merge until every required
+check on `main` is green.
+
+Two carve-outs hold the PR as DRAFT for explicit human review instead:
+
+1. **First-shipped transition.** When the roster entry's `status` is
+   `in_construction` (i.e. the new release is the Eidolon's debut shipped
+   release), the PR is opened with `--draft` and auto-merge is skipped.
+2. **Empty `versions.releases`.** When the entry has zero prior releases
+   under `versions.releases` (regardless of `status`), the PR is also held
+   as DRAFT — protects against malformed roster entries that claim
+   `status: shipped` without ever recording a release.
+
+Override on a specific PR: `gh pr merge --disable-auto <num>`.
+Revert a bad auto-merge: `git revert <merge-sha>` on `main`. The next nightly
+`roster-health` re-validates upstream tags + integrity and stays green when
+the revert is correct.
+
+The release-integrity contract is preserved: auto-merge only auto-clicks the
+merge button after the existing checksum + GitHub attestation verification
+steps in `roster-intake.yml` have already validated the release manifest.
+Auto-merge does not bypass any verification.
 
 Enable GitHub immutable releases in the organization or repository settings
 where available. Immutable releases prevent release assets and their Git tags
