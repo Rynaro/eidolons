@@ -8,9 +8,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.1.3] - 2026-05-06
 
 ### Added
 - atlas v1.4.2 published in the roster with release integrity metadata.
+  Ships the dual-layer `HOME=/tmp` fix for tree-sitter `$HOME`-relative
+  EACCES on container hosts where the consumer overrides `-u` to match
+  host file ownership (atlas-aci-home-env-fix-2026-05-06). Layer 1
+  (atlas-aci v0.2.3 image) sets `ENV HOME=/tmp` in the production
+  Dockerfile; Layer 2 (atlas v1.4.2) emits `-e HOME=/tmp` in every
+  `docker run` argument array (`run_index_container`,
+  `container_json_fragment`, `_copilot_command_array`, and
+  `_codex_canonical_body_container`) as belt-and-braces against older
+  pinned image digests. Without this roster bump, `eidolons upgrade
+  --all` cannot see atlas v1.4.2 because the roster is pinned to the
+  nexus tag.
 
 ## [1.1.2] - 2026-05-06
 
