@@ -8,9 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.1.2] - 2026-05-06
 
 ### Added
+- **`eidolons doctor` — atlas-aci `.mcp.json` UID/GID + bind probes.** Two
+  new defense-in-depth checks inside the existing atlas-aci health
+  section. Probe A compares the `-u <uid>:<gid>` pin in
+  `mcpServers["atlas-aci"].args` against the current user (err on
+  mismatch, warn when no pin is present). Probe B verifies every
+  `-v <host>:<container>` bind path exists and is readable (err
+  otherwise). Catches the configuration drift that produces the same
+  failure mode as a fresh-install bug after rsyncing a project to a
+  different machine. Read-only; fail-soft on missing/malformed
+  `.mcp.json`. Spec id `atlas-aci-container-uid-perm-fix-2026-05-05` (T3).
 - atlas v1.4.1 published in the roster with release integrity metadata.
+  Ships the SELinux `:Z` mount-relabel + silent-success guard for
+  Fedora-class Docker hosts (atlas-aci-container-uid-perm-fix-2026-05-05
+  T1/T2). Without this roster bump, `eidolons upgrade --all` cannot see
+  atlas v1.4.1 because the roster is pinned to the nexus tag.
 
 ## [1.1.1] - 2026-05-05
 
