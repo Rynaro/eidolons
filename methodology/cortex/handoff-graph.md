@@ -19,15 +19,14 @@ SPECTRA ──(roster:downstream)──▶ APIVR-Δ
 APIVR-Δ ──(roster:downstream)──▶ IDG
 SPECTRA ──(composition.md)────▶  IDG            # plan-only docs
 ATLAS  ──(composition.md)────▶  IDG            # read-only audits
-VIGIL  ──(composition.md:49-51)▶ SPECTRA / IDG / FORGE  # not yet in roster
+VIGIL  ──(roster:lateral)──────▶ SPECTRA / IDG / FORGE / ATLAS / APIVR-Δ
 FORGE  ──(composition.md:67-68)▶ <any caller>  # consultation return
 ANY    ──(any)──▶  human                        # implicit terminal
 ```
 
-`[DISPUTED]` edges (roster vs composition.md disagree): VIGIL downstream edges
-are declared only in composition.md, not in `roster/index.yaml`. Until
-`roster/index.yaml` is reconciled (OQ-3), the cortex emits `[DISPUTED]` on
-any chain step using a VIGIL downstream edge.
+Lateral edges are bidirectional; both directions are roster-declared via the lateral array
+(`vigil.handoffs.lateral: [atlas, spectra, apivr, idg, forge]`). VIGIL→{atlas,spectra,apivr,idg,forge}
+edges previously marked `[DISPUTED]` (OQ-3) are now confirmed roster-declared.
 
 ---
 
@@ -64,5 +63,5 @@ any chain step using a VIGIL downstream edge.
 
 | ID | Assumption | Mitigation |
 |---|---|---|
-| OQ-3 | Hand-off graph union (roster + composition.md) is acceptable until roster/index.yaml and composition.md are reconciled. | File a roster issue; cortex emits `[DISPUTED]` until resolved. |
+| OQ-3 | VIGIL lateral edges are roster-declared via `vigil.handoffs.lateral`. | Resolved 2026-05-08 — `[DISPUTED]` markers removed; lateral array is the authoritative roster declaration. |
 | OQ-6 | Max 2 reroutes per turn is sufficient to prevent ping-pong. | Raise cap with explicit `[BLOCKED]` exit; never remove the cap. |

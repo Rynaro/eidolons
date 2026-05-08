@@ -168,6 +168,19 @@ while read -r member; do
   # EIIS sanity check (warn only; per-Eidolon install.sh is still the source of truth)
   eiis_check "$clone_dir" "$name" || true
 
+  # ECL version-check (warn only in v1.0; promotion path: v1.1 — fail on mismatch beyond ±1 minor).
+  # Compares the ECL_VERSION file shipped in the Eidolon repo (single-line, e.g. "1.0")
+  # against the roster's declared comm.envelope_version for this member.
+  # If the file is absent, skip silently — live Eidolons may not yet ship ECL_VERSION.
+  ecl_file="$clone_dir/ECL_VERSION"
+  if [[ -f "$ecl_file" ]]; then
+    ecl_repo_ver="$(tr -d '[:space:]' < "$ecl_file")"
+    ecl_roster_ver="$(echo "$entry" | jq -r '.comm.envelope_version // empty')"
+    if [[ -n "$ecl_roster_ver" && "$ecl_repo_ver" != "$ecl_roster_ver" ]]; then
+      warn "$name ECL version mismatch: repo declares $ecl_repo_ver, roster expects $ecl_roster_ver"
+    fi
+  fi
+
   # Delegate to the Eidolon's own install.sh (EIIS §3 contract).
   if [[ ! -x "$clone_dir/install.sh" ]]; then
     warn "$name has no executable install.sh — EIIS v1.0 contract violated. Skipping."
