@@ -35,6 +35,8 @@ ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
 
 Every Eidolon-to-Eidolon handoff is a **structured artifact**, not a free-form message. Artifacts are machine-parseable, validated against schemas, and persisted to disk for provenance.
 
+> Note (2026-05-08): the canonical machine-readable form of these contracts now lives at [`Rynaro/eidolons-ecl/contracts/`](https://github.com/Rynaro/eidolons-ecl/tree/main/contracts). This Markdown table will be regenerated from those YAML files in a follow-up PR. The two stay in sync.
+
 | From | To | Artifact | Contains |
 |------|----|----|----------|
 | ATLAS | SPECTRA | `scout-report.md` + `findings.json` | Evidence-anchored findings, decision target, open gaps, recommended scope |

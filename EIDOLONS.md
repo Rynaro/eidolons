@@ -113,6 +113,8 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 
 ---
 
+**ECL — Wire Format.** Inter-Eidolon hand-offs use the **Eidolons Communication Layer (ECL v1.0)** wire format: every emitted artefact carries a JSON sidecar envelope (`ecl-envelope.json`) containing the performative, sender/receiver identities, a SHA-256 integrity tag, and a JSONL trace stream. ECL is opt-in for v1.0; existing Eidolons remain conformant unchanged. Machine-readable hand-off contracts live at [`Rynaro/eidolons-ecl/contracts/`](https://github.com/Rynaro/eidolons-ecl/tree/main/contracts).
+
 *Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 
 <!-- eidolon:cortex end -->

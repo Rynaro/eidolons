@@ -83,6 +83,8 @@ eidolons:
       upstream: []
       downstream: [spectra, apivr]
       lateral: [forge, vigil]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 900
       target: 3500
@@ -138,6 +140,8 @@ eidolons:
       upstream: [atlas]
       downstream: [apivr]
       lateral: [forge, vigil]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 900
       target: 3500
@@ -182,6 +186,8 @@ eidolons:
       upstream: [atlas, spectra]
       downstream: [idg]
       lateral: [forge, vigil]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 2000
       target: 4500
@@ -228,6 +234,8 @@ eidolons:
       upstream: [apivr, spectra, atlas]
       downstream: []
       lateral: [forge, vigil]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 900
       target: 2200
@@ -274,6 +282,8 @@ eidolons:
       upstream: [] # lateral consultant — called by any member
       downstream: []
       lateral: [atlas, spectra, apivr, idg, vigil]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 1150
       target: 2550
@@ -317,6 +327,8 @@ eidolons:
       upstream: [] # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
       downstream: []
       lateral: [atlas, spectra, apivr, idg, forge]
+    comm:
+      envelope_version: "1.0"
     working_set_tokens:
       entry: 920
       target: 3500

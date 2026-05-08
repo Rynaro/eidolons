@@ -31,7 +31,18 @@
             "type": "array",
             "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] }
           },
-          "manifest_missing": { "type": "boolean" }
+          "manifest_missing": { "type": "boolean" },
+          "comm": {
+            "type": "object",
+            "description": "ECL communication metadata persisted from the roster at sync time. Optional.",
+            "properties": {
+              "envelope_version": {
+                "type": "string",
+                "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+              }
+            },
+            "additionalProperties": false
+          }
         }
       }
     }

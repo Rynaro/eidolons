@@ -80,3 +80,13 @@ This version-bump flow is the most frequent change in this repo — the majority
 - Don't embed per-Eidolon methodology content in this repo. It belongs in the individual Eidolon repos.
 - Don't add package-manager publishing (npm/pip/brew) — the `curl | bash` flow is a deliberate design choice (see `docs/architecture.md` §"Why not a package manager").
 - `MANIFESTO.md` and `methodology/prime-directives.md` are the voice/design documents; update them when the project's principles actually shift, not for incidental changes.
+
+## ECL — Eidolons Communication Layer (v1.0.0)
+
+Entry:     `https://github.com/Rynaro/eidolons-ecl`
+Spec:      `spec/ecl-1.0.md` in that repo
+Contracts: `contracts/` in that repo (machine-readable hand-off contracts, one YAML per directed edge)
+
+ECL is the **wire-format contract** for inter-Eidolon hand-offs. Every emitted artefact carries a JSON sidecar envelope (`ecl-envelope.json`) containing the performative, sender/receiver identities, a SHA-256 integrity tag over the payload, and a JSONL trace stream. The closed performative set has exactly ten members. ECL is a sibling spec to EIIS: EIIS governs install layout; ECL governs runtime communication.
+
+**P0 (non-negotiable):** opt-in for v1.0 (live Eidolons remain conformant unchanged); sidecar-on-disk envelopes (never in-context only); closed 10-performative set (no extensions without a spec revision); SHA-256 is the default integrity algorithm; conformance checker is bash 3.2 compatible.

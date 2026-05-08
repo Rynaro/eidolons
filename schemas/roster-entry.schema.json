@@ -107,6 +107,18 @@
     "aliases": {
       "type": "array",
       "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+    },
+    "comm": {
+      "type": "object",
+      "description": "ECL (Eidolons Communication Layer) communication metadata. Optional; v1.0 is informational only.",
+      "properties": {
+        "envelope_version": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "description": "ECL envelope version this Eidolon emits. See Rynaro/eidolons-ecl."
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

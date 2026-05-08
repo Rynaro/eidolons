@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **ECL v1.0.0 integration.** Teach the nexus that the Eidolons Communication Layer exists.
+  Adds `comm.envelope_version` (optional) to every roster entry and the lock schema so
+  consumers can declare which ECL envelope version each Eidolon emits. `eidolons sync`
+  now emits a `warn` when an installed Eidolon ships an `ECL_VERSION` file that disagrees
+  with the roster's declared `comm.envelope_version`; absent `ECL_VERSION` is silent
+  (live Eidolons may not yet ship the file). Resolves the `[DISPUTED]` VIGIL lateral
+  edges in `methodology/cortex/handoff-graph.md` — those edges are roster-declared via
+  `vigil.handoffs.lateral` and were never missing. Adds a one-line pointer in
+  `methodology/composition.md` directing readers to the canonical machine-readable
+  contracts at `Rynaro/eidolons-ecl/contracts/`. No breaking changes; all existing tests
+  continue to pass; `eidolons sync` idempotency is preserved.
+
 ## [1.1.3] - 2026-05-06
 
 ### Added
