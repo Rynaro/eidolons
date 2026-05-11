@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- spectra v4.3.0 published in the roster with release integrity metadata.
 - apivr v3.1.0 published in the roster with release integrity metadata.
 - atlas v1.5.0 published in the roster with release integrity metadata.
 - **ECL v1.0.0 integration.** Teach the nexus that the Eidolons Communication Layer exists.
