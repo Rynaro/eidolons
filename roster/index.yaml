@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-05-11T11:06Z"
+updated_at: "2026-05-11T11:09Z"
 eiis_required: "1.1"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -334,15 +334,24 @@ eidolons:
       repo: Rynaro/VIGIL
       default_ref: main
     versions:
-      latest: "1.0.3"
+      latest: "1.1.0"
       pins:
-        stable: "1.0.3"
+        stable: "1.1.0"
       releases:
         1.0.3:
           tag: v1.0.3
           commit: fa1c4d0cec5ad53065e0334ec9e1e733d9dab4c7
           tree: c5c7ec3649a3bc82cf199b04ee529df63cb4aaf2
           archive_sha256: 4d96e4b21a01acfcbec2a262ab82c1c7ec70ef2841ef5ec3913db801dca96d23
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.1.0:
+          tag: v1.1.0
+          commit: 91a7a28e0066421413de8dfbdbe00820b4db8055
+          tree: 25dc5ff507d02626bdd9455de1ad7934ba532c80
+          archive_sha256: aef91b2496d1e6be6679913abe40cbad68087f1f3a073c9333011910e4511cfe
           manifest_sha256:
           provenance:
             github_attestation: true
