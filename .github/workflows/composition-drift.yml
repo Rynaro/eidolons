@@ -1,0 +1,84 @@
+name: composition-drift
+
+# Gates `methodology/composition.md` against drift from
+# `Rynaro/eidolons-ecl@v1.2.0`'s `contracts/*.yaml`.
+#
+# Runs on every PR + push to main. Fails if the file as committed
+# differs from what `eidolons-ecl compose-gen` produces against the
+# pinned v1.2.0 contracts and the pinned template.
+#
+# To accept a new contracts shape:
+#   1. Edit / add contracts in eidolons-ecl, tag a new release.
+#   2. Bump the pinned tag below to the new release.
+#   3. Re-run `eidolons-ecl compose-gen` locally; commit the regenerated
+#      `methodology/composition.md`.
+#   4. Open a PR — this workflow will then pass.
+#
+# Per `eidolons-ecl/.spectra/phase2-scoping.md` decision D-P2-4.
+
+on:
+  pull_request:
+    paths:
+      - "methodology/composition.md"
+      - "methodology/composition.md.j2"
+      - ".github/workflows/composition-drift.yml"
+  push:
+    branches: [main]
+    paths:
+      - "methodology/composition.md"
+      - "methodology/composition.md.j2"
+      - ".github/workflows/composition-drift.yml"
+
+# The pinned ECL release tag. Bump this when you accept a new
+# `contracts/` shape from `eidolons-ecl`.
+env:
+  ECL_PINNED_TAG: v1.2.0
+
+jobs:
+  composition-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Clone eidolons-ecl at pinned tag
+        run: |
+          git clone --depth 1 --branch "${ECL_PINNED_TAG}" \
+            https://github.com/Rynaro/eidolons-ecl /tmp/ecl
+
+      - name: Install eidolons-ecl-sdk from the pinned source
+        run: |
+          pip install --quiet /tmp/ecl/reference-sdk/py
+
+      - name: Verify local template matches the pinned ecl template
+        # Catches the case where someone edits methodology/composition.md.j2
+        # without updating the pinned tag (template drift across repos).
+        run: |
+          diff -u \
+            /tmp/ecl/reference-sdk/py/src/eidolons_ecl/compose_gen/templates/composition.md.j2 \
+            methodology/composition.md.j2 \
+            || {
+              echo "::error::methodology/composition.md.j2 drifted from pinned eidolons-ecl@${ECL_PINNED_TAG}."
+              echo "Either update ECL_PINNED_TAG in this workflow to the release containing the new template,"
+              echo "or revert the local template change."
+              exit 1
+            }
+
+      - name: Regenerate composition.md from the pinned contracts
+        run: |
+          eidolons-ecl compose-gen \
+            --contracts /tmp/ecl/contracts \
+            --template methodology/composition.md.j2 \
+            --out /tmp/regen.md
+
+      - name: Diff regenerated output against committed file
+        run: |
+          diff -u methodology/composition.md /tmp/regen.md \
+            || {
+              echo "::error::methodology/composition.md drifted from the regenerated output."
+              echo "Run \`eidolons-ecl compose-gen --contracts <pinned-contracts> --template methodology/composition.md.j2 --out methodology/composition.md\` locally and commit the result."
+              exit 1
+            }
