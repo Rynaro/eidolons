@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- spectra v4.3.2 published in the roster with release integrity metadata.
 - atlas v1.5.2 published in the roster with release integrity metadata.
 - forge v1.3.1 published in the roster with release integrity metadata.
 - idg v1.2.1 published in the roster with release integrity metadata.
