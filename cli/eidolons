@@ -70,6 +70,13 @@ Commands:
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
+  harness <sub>  Manage the Junction harness (bootstrap, healthcheck, verify, remove).
+                 Subcommands:
+                   install [<version>]   Install Junction harness into the Eidolons cache
+                   up                    Verify harness is ready (version + path report)
+                   verify [<args>]       Pass-through to 'junction verify'
+                   uninstall [--yes]     Remove Junction harness cache and marker
+                 Run 'eidolons harness --help' for options.
   verify         Verify installed Eidolon release integrity
   upgrade        Upgrade pinned Eidolon versions (or 'upgrade self' to upgrade the CLI)
   release        One-touch Eidolon release + Roster Intake (maintainer-only)
@@ -113,6 +120,7 @@ case "$cmd" in
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
+  harness)     exec bash "$CLI_SRC/harness.sh" "$@" ;;
   verify)      exec bash "$CLI_SRC/verify.sh"  "$@" ;;
   release)     exec bash "$CLI_SRC/release.sh"   "$@" ;;
   upgrade)
