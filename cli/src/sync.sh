@@ -384,6 +384,60 @@ else
   info "Shared dispatch off — skipping cortex host-doc injection"
 fi
 
+# ─── Harness marker (F7-3 / S20b) ───────────────────────────────────────
+# If Junction is installed ($EIDOLONS_HOME/cache/junction@*/), write a
+# manifest.json marker at ./.eidolons/harness/manifest.json so consumer
+# projects have a uniform discovery surface for harness + Eidolons.
+#
+# Idempotency: the marker is written only when content would differ, so
+# repeated sync runs on an unchanged install produce no file mutations.
+# The installed_at timestamp is intentionally OMITTED to keep the file
+# byte-stable across re-runs (stable content = no VCS noise).
+# If Junction is absent, the marker dir is removed (clean removal).
+_harness_cache_dir=""
+_harness_ver=""
+for _hdir in "${CACHE_DIR}/junction@"*/; do
+  if [[ -d "$_hdir" ]]; then
+    _harness_cache_dir="${_hdir%/}"
+    _harness_ver="${_harness_cache_dir##*/junction@}"
+    break
+  fi
+done
+
+HARNESS_MARKER="./.eidolons/harness/manifest.json"
+
+if [[ -n "$_harness_cache_dir" ]]; then
+  if [[ "$DRY_RUN" == "true" ]]; then
+    info "  [dry-run] would write harness marker $HARNESS_MARKER (junction@${_harness_ver})"
+  else
+    _harness_json="{\"name\": \"junction\", \"version\": \"${_harness_ver}\", \"cache_path\": \"${_harness_cache_dir}\"}"
+    _write_marker=true
+    if [[ -f "$HARNESS_MARKER" ]]; then
+      _existing="$(cat "$HARNESS_MARKER" 2>/dev/null || true)"
+      if [[ "$_existing" == "$_harness_json" ]]; then
+        _write_marker=false
+      fi
+    fi
+    if [[ "$_write_marker" == "true" ]]; then
+      mkdir -p "./.eidolons/harness"
+      printf '%s\n' "$_harness_json" > "$HARNESS_MARKER"
+      ok "Wrote harness marker → $HARNESS_MARKER"
+    else
+      info "Harness marker already up-to-date at $HARNESS_MARKER"
+    fi
+  fi
+else
+  # Junction absent — remove marker if present (idempotent).
+  if [[ -d "./.eidolons/harness" ]]; then
+    if [[ "$DRY_RUN" == "true" ]]; then
+      info "  [dry-run] would remove harness marker dir (Junction not installed)"
+    else
+      rm -rf "./.eidolons/harness"
+      info "Removed harness marker (Junction not installed)"
+    fi
+  fi
+fi
+
 # ─── Final guidance ──────────────────────────────────────────────────────
 echo ""
 ok "Sync complete."
