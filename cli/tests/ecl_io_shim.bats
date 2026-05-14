@@ -39,8 +39,11 @@ build_fixture_eidolon_dir() {
 build_fixture_envelope() {
   local path="$1"
   local performative="${2:-PROPOSE}"
+  local fake_sha
+  fake_sha=$(printf 'a%.0s' $(seq 1 64))
   jq -n \
     --arg perf "$performative" \
+    --arg sha "$fake_sha" \
     '{
       envelope_version: "1.0",
       message_id: "11111111-1111-4111-8111-111111111111",
@@ -54,12 +57,12 @@ build_fixture_envelope() {
         kind: "spec",
         schema_version: "1.0",
         path: "fixture-spec.md",
-        sha256: "a" * 64,
+        sha256: $sha,
         size_bytes: 42
       },
       integrity: {
         method: "sha256",
-        value: "a" * 64
+        value: $sha
       },
       trace: {
         ts: "2026-05-14T00:00:00Z",

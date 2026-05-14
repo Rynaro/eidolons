@@ -31,8 +31,8 @@
 # Pin debian:bookworm-slim to an immutable digest (OQ-19 / AU16 linked set).
 # Update this digest when the base image is re-scanned or a CVE patch lands.
 # To find the current digest: docker manifest inspect debian:bookworm-slim
-# Pinned 2026-05-14; SHA256 of amd64 debian:bookworm-slim 12 (2024-09-09 release).
-FROM debian:bookworm-slim@sha256:27bdad58f618f8d44a5c5d9a49ddc16b3dea476e5c76a76b9c900f89d6dde3ef
+# Pinned 2026-05-14 (verified against Docker Hub).
+FROM debian:bookworm-slim@sha256:67b30a61dc87758f0caf819646104f29ecbda97d920aaf5edc834128ac8493d3
 
 # ── Build arguments ───────────────────────────────────────────────────────────
 ARG EIDOLON_NAME="unknown"
