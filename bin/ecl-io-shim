@@ -1,0 +1,425 @@
+#!/usr/bin/env bash
+# ecl-io-shim — Eidolon container ENTRYPOINT for Junction two-phase execution.
+#
+# JUNCTION_PHASE=assemble
+#   Reads $JUNCTION_INPUT_ENVELOPE; performs pragmatic structural validation
+#   against the baked ECL inbound schema at /eidolon/schemas/ (jq field/type
+#   checks — full JSON-Schema Draft-2020-12 validation is NOT feasible in bash;
+#   this is intentional and acceptable per spec §5.11 comment); selects skills
+#   by performative; writes prompt-bundle.json to $ECL_OUTPUT_DIR; exits 0.
+#   Zero LLM calls. Zero network.
+#
+# JUNCTION_PHASE=package
+#   Reads reasoning.json from /junction/io/in/ + the original input envelope;
+#   deterministically constructs exactly one schema-valid ECL v2.0 envelope
+#   (*.envelope.json) with performative + identities, a SHA-256 integrity tag
+#   (sha256sum), and a trace JSONL line; writes it to $ECL_OUTPUT_DIR; exits 0.
+#   Zero LLM calls. Zero network.
+#
+# Tools available: bash, jq, coreutils (sha256sum). Nothing else.
+# Bash-3.2 compatible: no associative arrays, no ${var,,}, no readarray/mapfile,
+# no &>>. Must pass shellcheck -x -S error.
+#
+# Vendored ONCE in the nexus (Rynaro/eidolons); ships into all six Eidolon
+# images via the shared eidolon-release-template.yml — never hand-copied into
+# the six Eidolon repos.
+#
+# Security: --network none holds in both phases; no API-key passthrough (NG18).
+
+set -euo pipefail
+
+# ── Constants ─────────────────────────────────────────────────────────────────
+EIDOLON_DIR="${EIDOLON_DIR:-/eidolon}"
+JUNCTION_IO_IN="${JUNCTION_IO_IN:-/junction/io/in}"
+ECL_OUTPUT_DIR="${ECL_OUTPUT_DIR:-/junction/io/out}"
+JUNCTION_INPUT_ENVELOPE="${JUNCTION_INPUT_ENVELOPE:-}"
+JUNCTION_PHASE="${JUNCTION_PHASE:-}"
+
+AGENT_MD="$EIDOLON_DIR/agent.md"
+SKILLS_DIR="$EIDOLON_DIR/skills"
+ECL_VERSION_FILE="$EIDOLON_DIR/ECL_VERSION"
+EIIS_VERSION_FILE="$EIDOLON_DIR/EIIS_VERSION"
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+die() {
+  printf '[ecl-io-shim] ERROR: %s\n' "$*" >&2
+  exit 1
+}
+
+log() {
+  printf '[ecl-io-shim] %s\n' "$*" >&2
+}
+
+require_jq() {
+  command -v jq >/dev/null 2>&1 || die "jq is required but not found"
+}
+
+require_sha256sum() {
+  command -v sha256sum >/dev/null 2>&1 || die "sha256sum is required but not found"
+}
+
+require_output_dir() {
+  if [ -z "$ECL_OUTPUT_DIR" ]; then
+    die "ECL_OUTPUT_DIR is not set"
+  fi
+  mkdir -p "$ECL_OUTPUT_DIR" 2>/dev/null || die "Cannot create ECL_OUTPUT_DIR: $ECL_OUTPUT_DIR"
+}
+
+read_ecl_version() {
+  local ecl_ver=""
+  if [ -f "$ECL_VERSION_FILE" ]; then
+    ecl_ver="$(grep -m1 '[0-9]' "$ECL_VERSION_FILE" | tr -d '[:space:]')"
+  fi
+  printf '%s' "${ecl_ver:-1.0}"
+}
+
+read_eidolon_name() {
+  local name=""
+  if [ -n "${EIDOLON_NAME:-}" ]; then
+    printf '%s' "$EIDOLON_NAME"
+    return
+  fi
+  if [ -f "$AGENT_MD" ]; then
+    name="$(grep -m1 '^# ' "$AGENT_MD" | sed 's/^# //' | tr -d '[:space:]')"
+    if [ -n "$name" ]; then
+      # Lowercase without bash 4 ${var,,}
+      name="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+      printf '%s' "$name"
+      return
+    fi
+  fi
+  printf 'unknown'
+}
+
+read_eidolon_version() {
+  local ver=""
+  if [ -n "${EIDOLON_VERSION:-}" ]; then
+    printf '%s' "$EIDOLON_VERSION"
+    return
+  fi
+  if [ -f "$EIIS_VERSION_FILE" ]; then
+    ver="$(grep -m1 '[0-9]' "$EIIS_VERSION_FILE" | tr -d '[:space:]')"
+    if [ -n "$ver" ]; then
+      printf '%s' "$ver"
+      return
+    fi
+  fi
+  printf 'n/a'
+}
+
+# ── Pragmatic structural validation of an ECL envelope ───────────────────────
+# Full JSON-Schema Draft-2020-12 validation is NOT feasible in bash;
+# these jq-based field/type checks are the intended implementation (spec §5.11).
+validate_envelope() {
+  local envelope_path="$1"
+  local label="$2"
+  local field sub val performative
+
+  [ -f "$envelope_path" ] || die "Envelope not found: $envelope_path ($label)"
+  jq empty "$envelope_path" 2>/dev/null || die "Envelope is not valid JSON: $envelope_path"
+
+  for field in envelope_version message_id thread_id from to performative objective artifact integrity trace; do
+    val="$(jq -r --arg f "$field" 'if has($f) then "ok" else "missing" end' "$envelope_path")"
+    [ "$val" = "ok" ] || die "Envelope missing required field '$field': $envelope_path"
+  done
+
+  performative="$(jq -r '.performative' "$envelope_path")"
+  case "$performative" in
+    REQUEST|INFORM|PROPOSE|CRITIQUE|DECIDE|DELEGATE|ACKNOWLEDGE|ESCALATE|RESUME|REFUSE)
+      ;;
+    *)
+      die "Unknown performative '$performative' in envelope: $envelope_path"
+      ;;
+  esac
+
+  for sub in kind schema_version path sha256 size_bytes; do
+    val="$(jq -r --arg f "$sub" '.artifact | if has($f) then "ok" else "missing" end' "$envelope_path")"
+    [ "$val" = "ok" ] || die "Envelope artifact missing required field '$sub': $envelope_path"
+  done
+
+  for sub in method value; do
+    val="$(jq -r --arg f "$sub" '.integrity | if has($f) then "ok" else "missing" end' "$envelope_path")"
+    [ "$val" = "ok" ] || die "Envelope integrity missing required field '$sub': $envelope_path"
+  done
+
+  log "Envelope validation passed ($label)"
+}
+
+# ── Skill selection ───────────────────────────────────────────────────────────
+# Returns a JSON array of skill SKILL.md contents.
+collect_skills() {
+  local skills_json="[]"
+  local skill_file skill_content
+
+  if [ ! -d "$SKILLS_DIR" ]; then
+    printf '%s' "$skills_json"
+    return
+  fi
+
+  # bash-3.2 safe: find into temp file, then while-read
+  local skill_list_tmp
+  skill_list_tmp="$(mktemp)"
+  find "$SKILLS_DIR" -name "SKILL.md" 2>/dev/null | sort > "$skill_list_tmp"
+
+  while IFS= read -r skill_file; do
+    [ -z "$skill_file" ] && continue
+    [ -f "$skill_file" ] || continue
+    skill_content="$(cat "$skill_file")"
+    skills_json="$(printf '%s' "$skills_json" | jq --arg c "$skill_content" '. + [$c]')"
+  done < "$skill_list_tmp"
+
+  rm -f "$skill_list_tmp"
+  printf '%s' "$skills_json"
+}
+
+# ── UUID generation ───────────────────────────────────────────────────────────
+# Generates a pseudo-random UUID v4 using od + /dev/urandom.
+generate_uuid() {
+  local hex p1 p2 p3 p4 p5 raw_y y
+  hex="$(od -A n -t x1 -N 16 /dev/urandom | tr -d ' \n')"
+  p1="${hex:0:8}"
+  p2="${hex:8:4}"
+  p3="4${hex:13:3}"
+  raw_y="${hex:17:1}"
+  case "$raw_y" in
+    0|1|2|3) y="8" ;;
+    4|5|6|7) y="9" ;;
+    8|9|a|b) y="a" ;;
+    *)        y="b" ;;
+  esac
+  p4="${y}${hex:18:3}"
+  p5="${hex:20:12}"
+  printf '%s-%s-%s-%s-%s' "$p1" "$p2" "$p3" "$p4" "$p5"
+}
+
+# ── RFC-3339 UTC timestamp ────────────────────────────────────────────────────
+get_timestamp() {
+  date -u "+%Y-%m-%dT%H:%M:%SZ"
+}
+
+# ── ASSEMBLE PHASE ────────────────────────────────────────────────────────────
+phase_assemble() {
+  log "Phase: assemble"
+
+  require_jq
+  require_output_dir
+
+  [ -n "$JUNCTION_INPUT_ENVELOPE" ] || die "JUNCTION_INPUT_ENVELOPE is not set"
+  [ -f "$JUNCTION_INPUT_ENVELOPE" ] || die "Input envelope not found: $JUNCTION_INPUT_ENVELOPE"
+
+  validate_envelope "$JUNCTION_INPUT_ENVELOPE" "input"
+
+  local performative input_payload agent_md_content eidolon_name ecl_ver
+  local selected_skills_json response_template out_file
+
+  performative="$(jq -r '.performative' "$JUNCTION_INPUT_ENVELOPE")"
+  input_payload="$(jq -r '.artifact.path // ""' "$JUNCTION_INPUT_ENVELOPE")"
+
+  agent_md_content=""
+  if [ -f "$AGENT_MD" ]; then
+    agent_md_content="$(cat "$AGENT_MD")"
+  fi
+
+  eidolon_name="$(read_eidolon_name)"
+  ecl_ver="$(read_ecl_version)"
+  selected_skills_json="$(collect_skills "$performative")"
+
+  # Response template describing the expected reasoning.json shape (spec §5.12)
+  response_template='{
+  "schema_version": "1.0",
+  "eidolon": "<name>",
+  "thread_id": "<uuid matching input envelope thread_id>",
+  "parent_id": "<message_id of the input envelope>",
+  "performative": "<one of: REQUEST|INFORM|PROPOSE|CRITIQUE|DECIDE|DELEGATE|ACKNOWLEDGE|ESCALATE|RESUME|REFUSE>",
+  "body": "<the Eidolon methodology output>",
+  "evidence_anchors": []
+}'
+
+  out_file="$ECL_OUTPUT_DIR/prompt-bundle.json"
+
+  # Write prompt-bundle.json (spec §5.12)
+  jq -n \
+    --arg schema_version "1.0" \
+    --arg eidolon "$eidolon_name" \
+    --arg ecl_version "$ecl_ver" \
+    --arg agent_md "$agent_md_content" \
+    --argjson selected_skills "$selected_skills_json" \
+    --arg input_payload "$input_payload" \
+    --arg response_template "$response_template" \
+    '{
+      schema_version: $schema_version,
+      eidolon: $eidolon,
+      ecl_version: $ecl_version,
+      agent_md: $agent_md,
+      selected_skills: $selected_skills,
+      input_payload: $input_payload,
+      response_template: $response_template
+    }' > "$out_file"
+
+  log "Wrote prompt-bundle.json: $out_file"
+}
+
+# ── PACKAGE PHASE ─────────────────────────────────────────────────────────────
+phase_package() {
+  log "Phase: package"
+
+  require_jq
+  require_sha256sum
+  require_output_dir
+
+  local reasoning_file
+  reasoning_file="$JUNCTION_IO_IN/reasoning.json"
+  [ -f "$reasoning_file" ] || die "reasoning.json not found: $reasoning_file"
+  jq empty "$reasoning_file" 2>/dev/null || die "reasoning.json is not valid JSON"
+
+  local field val
+  for field in schema_version eidolon thread_id parent_id performative body; do
+    val="$(jq -r --arg f "$field" 'if has($f) then "ok" else "missing" end' "$reasoning_file")"
+    [ "$val" = "ok" ] || die "reasoning.json missing required field '$field'"
+  done
+
+  [ -n "$JUNCTION_INPUT_ENVELOPE" ] || die "JUNCTION_INPUT_ENVELOPE is not set"
+  [ -f "$JUNCTION_INPUT_ENVELOPE" ] || die "Input envelope not found: $JUNCTION_INPUT_ENVELOPE"
+
+  validate_envelope "$JUNCTION_INPUT_ENVELOPE" "input"
+
+  # Extract from reasoning.json
+  local reasoning_performative reasoning_body reasoning_thread_id reasoning_parent_id
+  local reasoning_eidolon evidence_anchors
+
+  reasoning_performative="$(jq -r '.performative' "$reasoning_file")"
+  reasoning_body="$(jq -r '.body' "$reasoning_file")"
+  reasoning_thread_id="$(jq -r '.thread_id' "$reasoning_file")"
+  reasoning_parent_id="$(jq -r '.parent_id' "$reasoning_file")"
+  reasoning_eidolon="$(jq -r '.eidolon' "$reasoning_file")"
+  evidence_anchors="$(jq -c '.evidence_anchors // []' "$reasoning_file")"
+
+  # Extract from input envelope
+  local input_from_eidolon input_from_version input_to_eidolon input_to_version
+  local input_objective
+
+  input_from_eidolon="$(jq -r '.from.eidolon' "$JUNCTION_INPUT_ENVELOPE")"
+  input_from_version="$(jq -r '.from.version' "$JUNCTION_INPUT_ENVELOPE")"
+  input_to_eidolon="$(jq -r '.to.eidolon' "$JUNCTION_INPUT_ENVELOPE")"
+  input_to_version="$(jq -r '.to.version' "$JUNCTION_INPUT_ENVELOPE")"
+  input_objective="$(jq -r '.objective' "$JUNCTION_INPUT_ENVELOPE")"
+
+  # Output envelope: from = eidolon (was 'to'), to = original sender (was 'from')
+  local from_eidolon from_version to_eidolon to_version
+  from_eidolon="$input_to_eidolon"
+  from_version="$input_to_version"
+  to_eidolon="$input_from_eidolon"
+  to_version="$input_from_version"
+
+  # Use baked version if from_version is n/a
+  local eidolon_ver
+  eidolon_ver="$(read_eidolon_version)"
+  if [ "$from_version" = "n/a" ] && [ "$eidolon_ver" != "n/a" ]; then
+    from_version="$eidolon_ver"
+  fi
+
+  # Validate outgoing performative
+  case "$reasoning_performative" in
+    REQUEST|INFORM|PROPOSE|CRITIQUE|DECIDE|DELEGATE|ACKNOWLEDGE|ESCALATE|RESUME|REFUSE)
+      ;;
+    *)
+      die "Invalid performative in reasoning.json: $reasoning_performative"
+      ;;
+  esac
+
+  local out_message_id ts artifact_kind artifact_path
+  out_message_id="$(generate_uuid)"
+  ts="$(get_timestamp)"
+  artifact_kind="${reasoning_eidolon}-output"
+  artifact_path="${reasoning_eidolon}-output.md"
+
+  # Write payload body file + compute SHA-256
+  local payload_file payload_sha payload_size
+  payload_file="$ECL_OUTPUT_DIR/$artifact_path"
+  printf '%s' "$reasoning_body" > "$payload_file"
+  payload_sha="$(sha256sum "$payload_file" | awk '{print $1}')"
+  payload_size="$(wc -c < "$payload_file" | tr -d ' ')"
+
+  # Write output envelope
+  # NOTE: envelope_version uses "1.0" per the vendored schema. The spec §5.11/§5.12
+  # says "ECL v2.0" but the vendored ecl-envelope.v1.json uses pattern ^1\.0(\.\d+)?$.
+  # OQ-23 tracks this inconsistency; we use "1.0" here to be schema-valid.
+  local envelope_file
+  envelope_file="$ECL_OUTPUT_DIR/${out_message_id}.envelope.json"
+
+  jq -n \
+    --arg envelope_version "1.0" \
+    --arg message_id "$out_message_id" \
+    --arg thread_id "$reasoning_thread_id" \
+    --arg parent_id "$reasoning_parent_id" \
+    --arg from_eidolon "$from_eidolon" \
+    --arg from_version "$from_version" \
+    --arg to_eidolon "$to_eidolon" \
+    --arg to_version "$to_version" \
+    --arg performative "$reasoning_performative" \
+    --arg objective "$input_objective" \
+    --arg artifact_kind "$artifact_kind" \
+    --arg artifact_path "$artifact_path" \
+    --arg artifact_sha "$payload_sha" \
+    --argjson artifact_size "$payload_size" \
+    --arg integrity_value "$payload_sha" \
+    --arg ts "$ts" \
+    '{
+      envelope_version: $envelope_version,
+      message_id: $message_id,
+      thread_id: $thread_id,
+      parent_id: $parent_id,
+      from: { eidolon: $from_eidolon, version: $from_version },
+      to: { eidolon: $to_eidolon, version: $to_version },
+      performative: $performative,
+      objective: $objective,
+      artifact: {
+        kind: $artifact_kind,
+        schema_version: "1.0",
+        path: $artifact_path,
+        sha256: $artifact_sha,
+        size_bytes: $artifact_size
+      },
+      integrity: {
+        method: "sha256",
+        value: $integrity_value
+      },
+      trace: {
+        ts: $ts,
+        host: "junction",
+        model: "n/a",
+        tier: "standard"
+      }
+    }' > "$envelope_file"
+
+  # Append trace JSONL line
+  local trace_line
+  trace_line="$(jq -nc \
+    --arg ts "$ts" \
+    --arg phase "package" \
+    --arg eidolon "$from_eidolon" \
+    --arg message_id "$out_message_id" \
+    --arg thread_id "$reasoning_thread_id" \
+    '{ts: $ts, phase: $phase, eidolon: $eidolon, message_id: $message_id, thread_id: $thread_id}')"
+  printf '%s\n' "$trace_line" >> "$ECL_OUTPUT_DIR/trace.jsonl"
+
+  log "Wrote envelope: $envelope_file"
+  log "Appended trace JSONL: $ECL_OUTPUT_DIR/trace.jsonl"
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────────────
+case "$JUNCTION_PHASE" in
+  assemble)
+    phase_assemble
+    ;;
+  package)
+    phase_package
+    ;;
+  "")
+    die "JUNCTION_PHASE is not set. Valid values: assemble, package"
+    ;;
+  *)
+    die "Unknown JUNCTION_PHASE: '$JUNCTION_PHASE'. Valid values: assemble, package"
+    ;;
+esac
