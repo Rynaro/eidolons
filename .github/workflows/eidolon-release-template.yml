@@ -17,12 +17,23 @@ on:
         required: false
         type: string
         default: "1.1"
+      ecl-version:
+        description: ECL spec version baked into the image label
+        required: false
+        type: string
+        default: "1.0"
+      publish-image:
+        description: Build and push a GHCR container image satisfying §5.11
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
   id-token: write
   attestations: write
   artifact-metadata: write
+  packages: write
 
 jobs:
   release:
@@ -144,3 +155,127 @@ jobs:
           gh release create "${{ steps.meta.outputs.tag }}" dist/* \
             --title "${{ steps.meta.outputs.tag }}" \
             --notes "Automated Eidolon release with checksums and provenance."
+
+  # ── F10-S3: Eidolon container image (§5.11 contract) ──────────────────────
+  # Builds and pushes ghcr.io/rynaro/<eidolon>:<version> satisfying the Junction
+  # §5.11 image contract. Depends on the release job so the tag exists first.
+  # Vendored once in the nexus; all six Eidolons pick this up on their next release.
+  # Skip when publish-image=false (e.g. for Eidolons not yet adopting containers).
+  docker-image:
+    name: Publish Eidolon image v${{ inputs.version }}
+    runs-on: ubuntu-latest
+    if: inputs.publish-image
+    needs: release
+    steps:
+      - name: Check out Eidolon repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch ecl-io-shim from nexus
+        run: |
+          set -euo pipefail
+          mkdir -p bin
+          curl -fsSL \
+            "https://raw.githubusercontent.com/Rynaro/eidolons/main/bin/ecl-io-shim" \
+            -o bin/ecl-io-shim
+          chmod +x bin/ecl-io-shim
+
+      - name: Fetch Dockerfile.eidolon from nexus
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://raw.githubusercontent.com/Rynaro/eidolons/main/docker/Dockerfile.eidolon" \
+            -o Dockerfile.eidolon
+
+      - name: Ensure templates/ sentinel exists
+        run: |
+          set -euo pipefail
+          if [ ! -d templates ]; then
+            mkdir -p templates
+            touch templates/.keep
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive image metadata
+        id: imgmeta
+        run: |
+          set -euo pipefail
+          eidolon_name="$(echo "${GITHUB_REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]' | sed 's/-delta$//')"
+          eidolon_version="${{ inputs.version }}"
+          eidolon_repo="${GITHUB_REPOSITORY}"
+          eidolon_revision="$(git rev-parse HEAD)"
+          ecl_ver="${{ inputs.ecl-version }}"
+          eiis_ver="${{ inputs.eiis-version }}"
+          image="ghcr.io/rynaro/${eidolon_name}:${eidolon_version}"
+          echo "image=${image}" >> "$GITHUB_OUTPUT"
+          echo "eidolon_name=${eidolon_name}" >> "$GITHUB_OUTPUT"
+          echo "eidolon_version=${eidolon_version}" >> "$GITHUB_OUTPUT"
+          echo "eidolon_repo=${eidolon_repo}" >> "$GITHUB_OUTPUT"
+          echo "eidolon_revision=${eidolon_revision}" >> "$GITHUB_OUTPUT"
+          echo "ecl_ver=${ecl_ver}" >> "$GITHUB_OUTPUT"
+          echo "eiis_ver=${eiis_ver}" >> "$GITHUB_OUTPUT"
+
+      - name: Build Eidolon container image
+        run: |
+          set -euo pipefail
+          docker build \
+            --file Dockerfile.eidolon \
+            --build-arg "EIDOLON_NAME=${{ steps.imgmeta.outputs.eidolon_name }}" \
+            --build-arg "EIDOLON_VERSION=${{ steps.imgmeta.outputs.eidolon_version }}" \
+            --build-arg "EIDOLON_REPO=${{ steps.imgmeta.outputs.eidolon_repo }}" \
+            --build-arg "EIDOLON_REVISION=${{ steps.imgmeta.outputs.eidolon_revision }}" \
+            --build-arg "ECL_VERSION=${{ steps.imgmeta.outputs.ecl_ver }}" \
+            --build-arg "EIIS_VERSION=${{ steps.imgmeta.outputs.eiis_ver }}" \
+            --tag "${{ steps.imgmeta.outputs.image }}" \
+            .
+
+      - name: Verify §5.11 image contract
+        run: |
+          set -euo pipefail
+          image="${{ steps.imgmeta.outputs.image }}"
+          errors=0
+          check_label() {
+            local key="$1"
+            val="$(docker inspect --format "{{ index .Config.Labels \"${key}\" }}" "$image")"
+            if [ -z "$val" ]; then
+              echo "::error::Missing OCI label: $key"
+              errors=$((errors + 1))
+            fi
+          }
+          check_label "org.opencontainers.image.source"
+          check_label "org.opencontainers.image.version"
+          check_label "org.opencontainers.image.revision"
+          check_label "dev.eidolons.ecl-version"
+          check_label "dev.eidolons.eiis-version"
+          check_label "dev.eidolons.junction-contract"
+          check_label "dev.eidolons.phases"
+          entrypoint="$(docker inspect --format '{{ json .Config.Entrypoint }}' "$image")"
+          if [ "$entrypoint" != '["/eidolon/bin/ecl-io-shim"]' ]; then
+            echo "::error::ENTRYPOINT must be [\"/eidolon/bin/ecl-io-shim\"], got: $entrypoint"
+            errors=$((errors + 1))
+          fi
+          user="$(docker inspect --format '{{ .Config.User }}' "$image")"
+          if [ "$user" != "65532:65532" ]; then
+            echo "::error::USER must be 65532:65532, got: $user"
+            errors=$((errors + 1))
+          fi
+          if [ "$errors" -ne 0 ]; then
+            echo "::error::§5.11 image contract verification failed with $errors error(s)"
+            exit 1
+          fi
+          echo "::notice::§5.11 image contract verified"
+
+      - name: Push Eidolon container image to GHCR
+        run: |
+          set -euo pipefail
+          docker push "${{ steps.imgmeta.outputs.image }}"
+          digest="$(docker inspect --format '{{ index .RepoDigests 0 }}' "${{ steps.imgmeta.outputs.image }}" | sed 's/.*@//')"
+          echo "image_digest=${digest}" >> "$GITHUB_OUTPUT"
+        id: push
