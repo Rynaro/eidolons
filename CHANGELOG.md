@@ -8,7 +8,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-05-15
+
 ### Added
+- **F7: `eidolons harness install/up/verify/uninstall` subcommand family.** New
+  nexus CLI surface for installing, starting, verifying, and removing the
+  Junction harness binary. Resolves Friction-1/-2 from the Junction v0.1.0
+  README walk where `eidolons harness install 0.1.0` previously surfaced
+  `Unknown command: harness`. The harness binary itself ships from
+  `Rynaro/Junction` releases and is cached at
+  `~/.eidolons/cache/junction@<version>/junction`. Env vars: `JUNCTION_VERSION`,
+  `JUNCTION_REF`, `JUNCTION_ALLOW_ROOT`. Marker section
+  `<!-- eidolons:harness start/end -->` written to host environment files via
+  `eidolons sync`.
+- **F10-S2/S3: `bin/ecl-io-shim` + reusable image-publish job.** New bash shim
+  that adapts Eidolon `commands/<verb>.sh` output to ECL v1.0 envelope shape
+  (writes `envelope_version: "1.0"` and `payload.sha256`). The shim is
+  baked into every Eidolon container image via the new
+  `.github/workflows/eidolon-release-template.yml` `docker-image` job, which
+  builds and pushes `ghcr.io/rynaro/<eidolon>:<version>` images alongside
+  every `Release <Eidolon>` workflow run. Closes Junction round-6 gate G-S16.
+- **ECL v1.0.0 integration.** Teach the nexus that the Eidolons Communication
+  Layer exists. Adds `comm.envelope_version` (optional) to every roster entry
+  and the lock schema so consumers can declare which ECL envelope version each
+  Eidolon emits. `eidolons sync` now emits a `warn` when an installed Eidolon
+  ships an `ECL_VERSION` file that disagrees with the roster's declared
+  `comm.envelope_version`; absent `ECL_VERSION` is silent. Resolves the
+  `[DISPUTED]` VIGIL lateral edges in `methodology/cortex/handoff-graph.md`.
+  Adds a one-line pointer in `methodology/composition.md` directing readers
+  to `Rynaro/eidolons-ecl/contracts/`. No breaking changes; idempotency of
+  `eidolons sync` preserved.
+- **`composition-drift` CI gate.** New GitHub Actions job pinned to
+  `eidolons-ecl@v1.2.0` that fails CI if `methodology/composition.md`'s
+  hand-off table drifts from the canonical YAML contracts upstream.
+  Catches stale documentation before it ships to consumers.
 - vigil v1.1.3 published in the roster with release integrity metadata.
 - forge v1.3.3 published in the roster with release integrity metadata.
 - idg v1.2.3 published in the roster with release integrity metadata.
