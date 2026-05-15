@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "junction": {
+      "args": [
+        "mcp",
+        "serve"
+      ],
+      "command": "junction",
+      "type": "stdio"
+    }
+  }
+}
