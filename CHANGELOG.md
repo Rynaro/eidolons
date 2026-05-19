@@ -8,6 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Notes
+- **Junction v0.2.0 released 2026-05-19** at `Rynaro/Junction` (tag `v0.2.0` at
+  commit `c6537ca`,
+  [release page](https://github.com/Rynaro/Junction/releases/tag/v0.2.0); four
+  static binaries + SHA256SUMS + SLSA L3 provenance). Closes all three findings
+  from the 2026-05-19 ECL MCP battle test (nexus thread
+  `46aa005a-7b5a-4f93-8dd7-ebeb8450d555`): G1 `harness.run` now ingests
+  `plan.json` (in-process `plan.Parse` + `dispatch.ChainExecutor`,
+  `thread_id`/`trace_root` from the live plan struct, not stdout); G2 wires
+  `ReasoningStep` so `junction mcp serve` drives the container two-phase loop
+  via MCP `sampling/createMessage` — new `internal/reasoning/` package with
+  `mcp-sampling`/`canned`/`shellout`/`noop` providers selected by
+  `JUNCTION_REASONING_PROVIDER`; G3 honours `edge_origin: implicit` (terminal
+  hand-offs like `idg → human` no longer require a roster contract). No
+  nexus code change is required — `cli/src/harness.sh` already probes the
+  GitHub latest-release; running `eidolons harness install` picks up v0.2.0
+  automatically. To pin: `JUNCTION_VERSION=0.2.0 eidolons harness install`.
+
 ## [1.2.0] - 2026-05-15
 
 ### Added
