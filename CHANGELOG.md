@@ -9,6 +9,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Notes
+- **Junction test-suite perf landed 2026-05-20** at `Rynaro/Junction`
+  (PR [#27](https://github.com/Rynaro/Junction/pull/27), commit `690bdd3`,
+  unreleased on `main`). Battle-test follow-up that cuts the harness-developer
+  feedback loop: `make check` cold ~16 s → ~14 s, warm ~5.3 s → **1.3 s**;
+  `make lint-examples` 5-6 s → ~1 s; full `-race` stress
+  (`-count=20 -parallel=8`) clean with no flakes. Changes: `t.Parallel()` on
+  ~80 isolated tests + table subtests; channel-barrier replacing
+  `time.Sleep` in `fanout_test.go`; dropped redundant `go vet` (golangci-lint
+  already enables `govet`); consolidated `make lint-examples` from six
+  `docker compose run` calls to one; CI gained
+  `docker/build-push-action@v6` GitHub-Actions layer cache
+  (`scope=dev`/`scope=release`) plus `actions/cache` for
+  `.gocache`/`.gomodcache`. **Two latent production data races also fixed**
+  by the parallelism work — `internal/plan/plan.go::getPlanSchema()` and
+  `internal/envelope/validate.go::getSchema()` had unprotected lazy-init of
+  compiled JSON schemas (now `sync.Once`-guarded); the MCP sampling path
+  runs concurrent verifies and would have hit these eventually. No nexus
+  code change is required; the next Junction release ships the fixes and
+  the speedup automatically via the dynamic latest-release probe in
+  `cli/src/harness.sh`.
 - **Junction v0.2.0 released 2026-05-19** at `Rynaro/Junction` (tag `v0.2.0` at
   commit `c6537ca`,
   [release page](https://github.com/Rynaro/Junction/releases/tag/v0.2.0); four
