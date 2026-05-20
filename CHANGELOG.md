@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-20
+
 ### Added
 - **`eidolons mcp` store (nexus v1.3.0).** Unified lifecycle manager for MCP
   servers. Introduces `eidolons mcp list|show|install|refresh|uninstall|upgrade|sync|health|run`.
