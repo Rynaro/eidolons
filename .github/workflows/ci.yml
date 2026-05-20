@@ -146,23 +146,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install prerequisites (jq, yq, bats)
+      - name: Install prerequisites (jq, yq, bats, parallel)
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y jq bats
+            sudo apt-get install -y jq bats parallel
             sudo wget -qO /usr/local/bin/yq \
               https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
             sudo chmod +x /usr/local/bin/yq
           else
-            brew install jq yq bats-core
+            brew install jq yq bats-core parallel
           fi
 
       - name: Make CLI executable
         run: chmod +x cli/eidolons cli/src/*.sh cli/install.sh
 
-      - name: Run bats suite
-        run: bats cli/tests/
+      # `--jobs N` requires GNU parallel (installed above). Empirically a
+      # ~1-minute suite at -j4 on a 4-vCPU GH runner; serial would be ~1:18
+      # (post FD-leak fix). The bats tests are isolated via BATS_TEST_TMPDIR
+      # and per-test env, so parallel execution is safe — verified locally
+      # across 3× back-to-back -j4 runs, 319/319 each.
+      - name: Run bats suite (parallel)
+        run: bats --jobs 4 cli/tests/
 
   upgrade-self-roundtrip:
     name: upgrade self — round-trip (install → upgrade self --check)

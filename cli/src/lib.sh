@@ -500,6 +500,16 @@ manifest_members() {
 # Runs CMD with the given timeout. Returns CMD's exit code on completion,
 # or 124 (GNU timeout convention) when the timer fires. macOS bash 3.2
 # safe — no `wait -n`, no GNU-only `timeout` binary required.
+#
+# FD-hygiene note: the timer subshell forks a `sleep "$secs"`. If the main
+# command completes first we kill the timer (SIGTERM) and pkill its sleep
+# child explicitly. Without that, an orphaned sleep can keep bats' output
+# pipe open and the entire test runner blocks until the timeout expires —
+# observed as a ~10× slowdown in `bats cli/tests/release.bats` (S1/S10/S12
+# pass `--release-timeout=600 --intake-timeout=300` defaults, so per-test
+# orphan sleeps gated bats at 10+ minutes of wall while CPU was idle). The
+# subshell also closes its inherited FDs 3-9 before forking sleep so the
+# orphan never grabs bats' pipe in the first place — defence in depth.
 with_timeout() {
   local secs="$1"; shift
   if [[ -z "${1:-}" ]]; then
@@ -507,16 +517,29 @@ with_timeout() {
   fi
   "$@" &
   local pid=$!
-  # Timer subshell stdout/stderr → /dev/null so it does not hold an inherited
-  # command-substitution pipe open after the main command completes (the
-  # parent's $(with_timeout ...) capture would otherwise block until the
-  # timer fires regardless of the polled function returning early).
-  ( sleep "$secs" && kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 &
+  # Timer subshell:
+  #   - stdin/stdout/stderr → /dev/null so the subshell does not hold an
+  #     inherited command-substitution pipe open after the main command
+  #     completes (the parent's $(with_timeout ...) capture would otherwise
+  #     block until the timer fires regardless of the polled function
+  #     returning early).
+  #   - FDs 3..9 explicitly closed before exec, so an orphaned `sleep` does
+  #     not inherit bats' output pipe (bats reaps a test by waiting for EOF
+  #     on the read-end of that pipe; an orphan write-end blocks the reap).
+  ( exec 3>&- 4>&- 5>&- 6>&- 7>&- 8>&- 9>&- 0</dev/null
+    sleep "$secs" && kill -9 "$pid" 2>/dev/null
+  ) >/dev/null 2>&1 &
   local timer=$!
   local rc=0
   wait "$pid" 2>/dev/null || rc=$?
-  # If the timer-killer is still alive, the command completed first; reap it.
+  # If the timer-killer is still alive, the command completed first; reap
+  # both the timer subshell and any inner `sleep` it forked. The bare
+  # `kill $timer` only SIGTERMs the subshell; the sleep child is reparented
+  # to init and would keep running until $secs elapses. pkill -P targets
+  # the timer's direct children (i.e. the sleep) so we don't leave a
+  # process lying around for the duration of $RELEASE_TIMEOUT.
   if kill -0 "$timer" 2>/dev/null; then
+    pkill -P "$timer" 2>/dev/null || true
     kill "$timer" 2>/dev/null || true
     wait "$timer" 2>/dev/null || true
   else
