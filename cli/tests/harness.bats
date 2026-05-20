@@ -129,20 +129,24 @@ JSTUB
   # First install.
   run eidolons harness install
   [ "$status" -eq 0 ]
-  # Record modification time of the binary.
   local cache_dir="$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}"
   local bin="$cache_dir/junction"
-  local mtime1
-  mtime1="$(stat -f '%m' "$bin" 2>/dev/null || stat -c '%Y' "$bin" 2>/dev/null)"
+  # Capture the inode number of the binary. If install 2 re-creates the
+  # file (via rm -rf + re-fetch), the inode necessarily changes; if install
+  # 2 leaves the file alone, the inode is stable. Inode-comparison is a
+  # tighter check than mtime (which has 1-second granularity in
+  # `stat -c '%Y'` and is filesystem-dependent — observed flaky on
+  # GH ubuntu-latest under bats --jobs N with the previous mtime check).
+  local inode1
+  inode1="$(stat -f '%i' "$bin" 2>/dev/null || stat -c '%i' "$bin" 2>/dev/null)"
 
   # Second install — must be a no-op.
   run eidolons harness install
   [ "$status" -eq 0 ]
   [[ "$output" =~ "already installed" ]]
-  # Binary must not have been replaced (mtime unchanged).
-  local mtime2
-  mtime2="$(stat -f '%m' "$bin" 2>/dev/null || stat -c '%Y' "$bin" 2>/dev/null)"
-  [ "$mtime1" = "$mtime2" ]
+  local inode2
+  inode2="$(stat -f '%i' "$bin" 2>/dev/null || stat -c '%i' "$bin" 2>/dev/null)"
+  [ "$inode1" = "$inode2" ]
 }
 
 @test "harness install <bad-version>: graceful error, non-zero exit" {
