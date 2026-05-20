@@ -146,39 +146,33 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install prerequisites (jq, yq, bats, parallel)
+      - name: Install prerequisites (jq, yq, bats)
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y jq bats parallel
+            sudo apt-get install -y jq bats
             sudo wget -qO /usr/local/bin/yq \
               https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
             sudo chmod +x /usr/local/bin/yq
           else
-            brew install jq yq bats-core parallel
+            brew install jq yq bats-core
           fi
 
       - name: Make CLI executable
         run: chmod +x cli/eidolons cli/src/*.sh cli/install.sh
 
-      # Parallelism setup:
-      #   --jobs 4                       — run up to 4 test files concurrently
-      #                                    (requires GNU parallel, installed
-      #                                    above; 4-vCPU GH runners).
-      #   --no-parallelize-within-files  — keep tests within a single file
-      #                                    sequential. Several bats files
-      #                                    (notably harness.bats) seed and
-      #                                    inspect the same on-disk artefacts
-      #                                    across consecutive tests; running
-      #                                    those concurrently exposed an mtime
-      #                                    race on ubuntu-latest where the
-      #                                    idempotency assertion in
-      #                                    "harness install: second run is
-      #                                    idempotent" failed intermittently
-      #                                    (macOS APFS hid it; ext4 surfaced
-      #                                    it deterministically).
-      - name: Run bats suite (parallel across files, serial within files)
-        run: bats --jobs 4 --no-parallelize-within-files cli/tests/
+      # bats --jobs N (parallel across .bats files) was tried but exposed a
+      # latent cross-file state issue: several test files (install.bats,
+      # cache_hygiene.bats, upgrade_self.bats, verify.bats, harness.bats)
+      # exercise git operations against the shared `$EIDOLONS_ROOT`
+      # checkout. Concurrent git fetches from `file://$EIDOLONS_ROOT`
+      # collided on git's internal lockfiles in `.git/`, deterministically
+      # failing on ext4 (ubuntu-latest) while macOS APFS hid the race.
+      # Sequential execution remains the safe path; the suite already
+      # dropped from ~11 min to ~1:18 wall after the lib.sh::with_timeout
+      # FD-leak fix in this PR, which is the actual 8× speedup driver.
+      - name: Run bats suite
+        run: bats cli/tests/
 
   upgrade-self-roundtrip:
     name: upgrade self — round-trip (install → upgrade self --check)
