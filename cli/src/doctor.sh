@@ -7,7 +7,7 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
-. "$SELF_DIR/lib_mcp_atlas_aci.sh"
+. "$SELF_DIR/lib_mcp.sh"
 
 usage() {
   cat <<EOF
@@ -260,164 +260,107 @@ else
 fi
 
 # ─── Check 7: MCP servers ─────────────────────────────────────────────────
-# Scans .mcp.json in cwd (if present) and reports image health for known
-# MCP servers. Currently handles atlas-aci only; other servers are skipped.
-# jq is a hard dep elsewhere; if absent here, we degrade gracefully.
+# Iterates eidolons.mcp.lock (if present) and calls the per-MCP health driver
+# for each installed MCP. When the lockfile is absent, surfaces a hint.
+# This block replaces the legacy hard-coded atlas-aci probe.
 ui_section_out "MCP servers"
-if [[ ! -f ".mcp.json" ]]; then
-  printf "  %s·%s no .mcp.json in this project — MCP check skipped\n" \
+_mcp_lock="$(mcp_lockfile)"
+if [[ ! -f "$_mcp_lock" ]]; then
+  printf "  %s·%s no MCPs installed — run 'eidolons mcp list' to see the catalogue\n" \
     "${YELLOW:-}" "${RESET:-}"
 elif ! command -v jq >/dev/null 2>&1; then
   printf "  %s·%s jq not on PATH — MCP server check skipped\n" \
     "${YELLOW:-}" "${RESET:-}"
 else
-  mcp_server_names="$(jq -r '.mcpServers | keys[]' .mcp.json 2>/dev/null || true)"
-  if [[ -z "$mcp_server_names" ]]; then
-    printf "  %s·%s .mcp.json has no mcpServers entries\n" \
+  _mcp_lock_json="$(mcp_lock_read 2>/dev/null || echo '{}')"
+  _mcp_names="$(printf '%s' "$_mcp_lock_json" \
+    | jq -r '(.mcps // [])[] | .name' 2>/dev/null || true)"
+  if [[ -z "$_mcp_names" ]]; then
+    printf "  %s·%s eidolons.mcp.lock has no entries\n" \
       "${YELLOW:-}" "${RESET:-}"
   else
-    while IFS= read -r mcp_name; do
-      [[ -n "$mcp_name" ]] || continue
-      case "$mcp_name" in
-        atlas-aci)
-          # Extract the image ref from the args array. Accept both the legacy
-          # bare form (atlas-aci@sha256:) and the registry-prefixed form
-          # (ghcr.io/rynaro/atlas-aci@sha256:) introduced in T6.
-          mcp_image_ref="$(jq -r \
-            '.mcpServers["atlas-aci"].args[]? | select(test("^(ghcr\\.io/[^@]+|atlas-aci)@sha256:"))' \
-            .mcp.json 2>/dev/null | head -1 || true)"
-          if [[ -z "$mcp_image_ref" ]]; then
-            err "atlas-aci: cannot find image ref in .mcp.json args (expected element matching atlas-aci@sha256: or ghcr.io/rynaro/atlas-aci@sha256:)"
-          else
-            # Call lib functions with stderr suppressed — doctor summarises, not dumps.
-            # Use `|| _rc=$?` idiom (set -e safe: failure captured, not propagated).
-            _mcp_cli_rc=0; atlas_aci_check_docker_cli 2>/dev/null || _mcp_cli_rc=$?
-            if [[ "$_mcp_cli_rc" -ne 0 ]]; then
-              err "atlas-aci needs Docker but 'docker' is not on PATH"
-            else
-              _mcp_daemon_rc=0; atlas_aci_check_docker_daemon 2>/dev/null || _mcp_daemon_rc=$?
-              if [[ "$_mcp_daemon_rc" -ne 0 ]]; then
-                err "atlas-aci needs Docker daemon — start Docker Desktop / docker daemon"
-              else
-                _mcp_image_rc=0; atlas_aci_check_image "$mcp_image_ref" 2>/dev/null || _mcp_image_rc=$?
-                if [[ "$_mcp_image_rc" -ne 0 ]]; then
-                  err "atlas-aci image NOT loaded — run 'eidolons mcp atlas-aci pull'"
-                else
-                  # Extract just the digest portion for the pass message.
-                  _mcp_digest="${mcp_image_ref##*@}"
-                  pass "atlas-aci image loaded ($_mcp_digest)"
-                fi
-                # ── Memex bind-directory writability probe (T3) ──────────────
-                # Resolve the host path for /memex from .mcp.json args.
-                # The element ending in ":/memex" contains "<host-path>:/memex".
-                _memex_arg="$(jq -r \
-                  '.mcpServers["atlas-aci"].args[]? | select(endswith(":/memex"))' \
-                  .mcp.json 2>/dev/null | head -1 || true)"
-                if [[ -n "$_memex_arg" ]]; then
-                  _memex_host_path="${_memex_arg%:/memex}"
-                  if [[ ! -d "$_memex_host_path" ]]; then
-                    err "atlas-aci memex bind directory missing — run 'eidolons mcp atlas-aci' to scaffold it ($_memex_host_path)"
-                  elif [ ! -w "$_memex_host_path" ]; then
-                    err "atlas-aci memex bind directory not writable by current user ($_memex_host_path; uid=$(id -u)) — fix ownership or re-run scaffolding"
-                  else
-                    pass "atlas-aci memex writable ($_memex_host_path)"
-                  fi
-                fi
-                # ── Probe A: UID/GID pin check ────────────────────────────────
-                # Look for a "-u" "<uid>:<gid>" pair in the args array.
-                # jq emits the pinned "uid:gid" string when present, "" when absent.
-                _uid_pin="$(jq -r '
-                  .mcpServers["atlas-aci"].args as $arr
-                  | ($arr | to_entries | map(select(.value == "-u")) | .[0].key) as $i
-                  | if $i != null then ($arr[$i + 1] // "") else "" end' \
-                  .mcp.json 2>/dev/null || true)"
-                _cur_uid="$(id -u)"
-                _cur_gid="$(id -g)"
-                if [[ -z "$_uid_pin" ]]; then
-                  # No -u flag at all — warn (not err).
-                  printf "  %s!%s warn: atlas-aci .mcp.json has no -u UID:GID pin — container may run as root and clobber file ownership, or as non-root and fail to read your repo. Re-run 'eidolons atlas aci install' on this host to refresh.\n" \
-                    "${YELLOW:-}" "${RESET:-}"
-                else
-                  # -u flag present — compare to current user.
-                  _pin_uid="${_uid_pin%%:*}"
-                  _pin_gid="${_uid_pin##*:}"
-                  if [[ "$_pin_uid" != "$_cur_uid" || "$_pin_gid" != "$_cur_gid" ]]; then
-                    err "atlas-aci .mcp.json pins --user ${_uid_pin} but current user is ${_cur_uid}:${_cur_gid} — Claude's serve container will fail to read your repo. Re-run 'eidolons atlas aci install' to refresh."
-                  fi
-                  # On match: silent ok.
-                fi
-                # ── Probe B: bind-mount path readability ──────────────────────
-                # Find every "-v <host>:<container>[:opts]" pair and test host
-                # path readability. Skip relative host paths.
-                _bind_args="$(jq -r '
-                  .mcpServers["atlas-aci"].args as $arr
-                  | ($arr | to_entries | map(select(.value == "-v")) | .[].key) as $i
-                  | $arr[$i + 1] // ""' \
-                  .mcp.json 2>/dev/null || true)"
-                while IFS= read -r _bind_pair; do
-                  [[ -n "$_bind_pair" ]] || continue
-                  # Extract host path: everything before the first colon.
-                  _bind_host="${_bind_pair%%:*}"
-                  # Skip relative paths.
-                  case "$_bind_host" in
-                    /*) ;;
-                    *) continue ;;
-                  esac
-                  if [[ ! -e "$_bind_host" ]]; then
-                    err "atlas-aci .mcp.json bind '${_bind_host}' does not exist — Claude's serve container will fail."
-                  elif [ ! -r "$_bind_host" ]; then
-                    err "atlas-aci .mcp.json bind '${_bind_host}' is not readable by current user — Claude's serve container will fail."
-                  fi
-                done <<< "$_bind_args"
-              fi
-            fi
-          fi
+    while IFS= read -r _mcp_n; do
+      [[ -n "$_mcp_n" ]] || continue
+      _mcp_kind="$(printf '%s' "$_mcp_lock_json" \
+        | jq -r --arg n "$_mcp_n" '(.mcps // [])[] | select(.name == $n) | .kind' \
+        2>/dev/null || true)"
+
+      # Call the driver health hook and summarise the OVERALL line.
+      _health_output=""
+      case "$_mcp_kind" in
+        oci-image)
+          _health_output="$(mcp_driver_oci_image_health "$_mcp_n" 2>/dev/null || true)"
+          ;;
+        binary)
+          _health_output="$(mcp_driver_binary_health "$_mcp_n" 2>/dev/null || true)"
           ;;
         *)
-          # Out of scope for this cycle — ignore other server names silently.
+          _health_output="${_mcp_n}  OVERALL  degraded  unsupported kind: ${_mcp_kind}"
           ;;
       esac
-    done <<< "$mcp_server_names"
+
+      # Extract the OVERALL line and map to pass/err/warn.
+      _overall="$(printf '%s' "$_health_output" \
+        | grep 'OVERALL' | awk '{print $3}' | head -1 || true)"
+      case "$_overall" in
+        ok)
+          pass "$_mcp_n: healthy"
+          ;;
+        degraded)
+          _reason="$(printf '%s' "$_health_output" \
+            | grep 'OVERALL' | cut -d' ' -f4- | head -1 || true)"
+          printf "  %s·%s %s: degraded — %s\n" \
+            "${YELLOW:-}" "${RESET:-}" "$_mcp_n" "${_reason:-see eidolons mcp health $_mcp_n}"
+          ;;
+        missing)
+          err "$_mcp_n: missing — run 'eidolons mcp install $_mcp_n'"
+          ;;
+        not-installed)
+          printf "  %s·%s %s: not installed — run 'eidolons mcp install %s'\n" \
+            "${YELLOW:-}" "${RESET:-}" "$_mcp_n" "$_mcp_n"
+          ;;
+        *)
+          printf "  %s·%s %s: unknown health status (%s)\n" \
+            "${YELLOW:-}" "${RESET:-}" "$_mcp_n" "${_overall:-no output}"
+          ;;
+      esac
+    done <<< "$_mcp_names"
   fi
 fi
 
-# ─── Check 8: ghcr.io registry reachability probe ────────────────────────
-# Non-fatal: a registry outage or a yanked digest surfaces early (warn) but
-# does not increment ERRORS — it is informational / advisory only.
-atlas_aci_doctor_probe() {
-  if [[ ! -f ".mcp.json" ]]; then
-    return 0
+# ─── Check 8: MCP catalogue drift ─────────────────────────────────────────
+# Non-fatal: surfaces MCPs in eidolons.mcp.lock that are behind catalogue stable.
+# Does not increment ERRORS — informational / advisory only.
+ui_section_out "MCP catalogue drift"
+if [[ ! -f "$_mcp_lock" ]]; then
+  printf "  %s·%s no lockfile — drift check skipped\n" \
+    "${YELLOW:-}" "${RESET:-}"
+elif ! command -v jq >/dev/null 2>&1; then
+  printf "  %s·%s jq not on PATH — drift check skipped\n" \
+    "${YELLOW:-}" "${RESET:-}"
+else
+  _mcp_lock_json2="$(mcp_lock_read 2>/dev/null || echo '{}')"
+  _mcp_names2="$(printf '%s' "$_mcp_lock_json2" \
+    | jq -r '(.mcps // [])[] | .name' 2>/dev/null || true)"
+  _drift_found=false
+  if [[ -n "$_mcp_names2" ]]; then
+    while IFS= read -r _mcp_n2; do
+      [[ -n "$_mcp_n2" ]] || continue
+      _inst_ver="$(printf '%s' "$_mcp_lock_json2" \
+        | jq -r --arg n "$_mcp_n2" '(.mcps // [])[] | select(.name == $n) | .version' \
+        2>/dev/null || true)"
+      _stable_ver="$(mcp_catalogue_get_field "$_mcp_n2" '.versions.pins.stable' 2>/dev/null || true)"
+      if [[ -n "$_stable_ver" && "$_inst_ver" != "$_stable_ver" ]]; then
+        printf "  %s·%s  %-16s %s  →  %s  (run 'eidolons mcp upgrade %s')\n" \
+          "${YELLOW:-}" "${RESET:-}" "$_mcp_n2" "$_inst_ver" "$_stable_ver" "$_mcp_n2"
+        _drift_found=true
+      fi
+    done <<< "$_mcp_names2"
   fi
-  if ! command -v jq >/dev/null 2>&1; then
-    return 0
+  if [[ "$_drift_found" = "false" ]]; then
+    pass "All installed MCPs at catalogue stable"
   fi
-  if ! jq -e '.mcpServers["atlas-aci"]' .mcp.json >/dev/null 2>&1; then
-    return 0
-  fi
-
-  # Extract the ghcr.io-prefixed image ref from the args array.
-  local _probe_ref
-  _probe_ref="$(jq -r \
-    '.mcpServers["atlas-aci"].args[]? | select(test("^ghcr\\.io/"))' \
-    .mcp.json 2>/dev/null | head -1 || true)"
-
-  if [[ -z "$_probe_ref" ]]; then
-    # No ghcr.io ref found in args — probe is not applicable.
-    return 0
-  fi
-
-  local _probe_rc=0
-  atlas_aci_check_registry_reachable "$_probe_ref" 2>/dev/null || _probe_rc=$?
-  if [[ "$_probe_rc" -eq 0 ]]; then
-    pass "atlas-aci image reachable on ghcr.io"
-  else
-    printf "  %s!%s %s\n" "${YELLOW:-}" "${RESET:-}" \
-      "warn: atlas-aci image not reachable (offline? or pinned digest yanked? — try 'eidolons mcp atlas-aci pull --build-locally')"
-  fi
-}
-
-ui_section_out "Registry reachability"
-atlas_aci_doctor_probe
+fi
 
 # ─── Check 9: Pending upgrades ──────────────────────────────────────────
 # Informational only — does NOT increment ERRORS. Degrades gracefully when

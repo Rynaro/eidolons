@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/blob/main/schemas/mcp-lockfile.schema.json",
+  "title": "eidolons.mcp.lock",
+  "type": "object",
+  "required": ["generated_at", "eidolons_cli_version", "mcps"],
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time" },
+    "eidolons_cli_version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" },
+    "catalogue_version": { "type": "string" },
+    "mcps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "kind", "version", "source", "installed_at"],
+        "properties": {
+          "name":    { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "kind":    { "enum": ["oci-image", "binary", "script"] },
+          "version": { "type": "string" },
+          "source":  {
+            "type": "object",
+            "description": "Kind-specific source descriptor",
+            "properties": {
+              "image":    { "type": "string", "description": "oci-image: ghcr.io/foo/bar" },
+              "repo":     { "type": "string", "description": "binary: GitHub owner/repo" },
+              "url":      { "type": "string", "description": "script: download URL" }
+            }
+          },
+          "integrity": {
+            "type": "object",
+            "required": ["algo", "value"],
+            "properties": {
+              "algo":  { "enum": ["sha256", "oci-digest", "none"] },
+              "value": { "type": "string" }
+            }
+          },
+          "target": { "type": "string", "description": "On-disk install path or marker file" },
+          "hosts_wired": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Files that received marker-bounded sections (relative paths)."
+          },
+          "installed_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  }
+}

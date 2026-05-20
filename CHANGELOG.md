@@ -8,6 +8,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **`eidolons mcp` store (nexus v1.3.0).** Unified lifecycle manager for MCP
+  servers. Introduces `eidolons mcp list|show|install|refresh|uninstall|upgrade|sync|health|run`.
+  New closed catalogue at `roster/mcps.yaml` (atlas-aci + junction in v1.3).
+  New sibling lockfile `eidolons.mcp.lock` (commit to VCS).
+  Schemas at `schemas/mcp-catalogue.schema.json` and `schemas/mcp-lockfile.schema.json`.
+  Driver protocol in `cli/src/lib_mcp.sh`; sub-dispatchers in `cli/src/mcp*.sh`.
+  `eidolons doctor` MCP section rewritten to iterate `eidolons.mcp.lock`.
+  `eidolons sync` surfaces MCP lockfile presence (warn-only; never installs per NG3).
+  CI: `roster-health.yml` gains `parse-mcp-catalogue` and `mcp-catalogue-digest-reachable` jobs.
+
+### Changed
+- **`eidolons mcp atlas-aci` deprecated (removal: v3.0.0).** The verb still
+  works but emits one `DEPRECATED:` line on stderr. Use `eidolons mcp install
+  atlas-aci` instead. Suppress with `EIDOLONS_SUPPRESS_DEPRECATED=1`.
+- **`eidolons harness <sub>` deprecated (removal: v3.0.0).** All harness
+  subcommands delegate to the new `mcp_*.sh` drivers and emit a `DEPRECATED:`
+  line. Use `eidolons mcp install|health|run|uninstall junction` instead.
+- `cli/src/doctor.sh`: "MCP servers" section (Check 7) rewritten — iterates
+  `eidolons.mcp.lock` and calls per-MCP health drivers. Legacy hard-coded
+  atlas-aci probe removed and replaced by the generic driver call. New
+  "MCP catalogue drift" section (Check 8) surfaces MCPs behind `pins.stable`.
+
 ### Notes
 - **Junction test-suite perf landed 2026-05-20** at `Rynaro/Junction`
   (PR [#27](https://github.com/Rynaro/Junction/pull/27), commit `690bdd3`,

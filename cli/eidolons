@@ -70,22 +70,23 @@ Commands:
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
-  harness <sub>  Manage the Junction harness (bootstrap, healthcheck, verify, remove).
-                 Subcommands:
-                   install [<version>]   Install Junction harness into the Eidolons cache
-                   up                    Verify harness is ready (version + path report)
-                   verify [<args>]       Pass-through to 'junction verify'
-                   uninstall [--yes]     Remove Junction harness cache and marker
+  mcp <sub>      MCP server store. Subcommands:
+                   list                     List catalogue MCPs with status
+                   show <name>              Show MCP details
+                   install <name>[@<ver>]   Install an MCP (idempotent)
+                   refresh <name>           Re-fetch artefact (image/binary)
+                   uninstall <name>         Remove from this project
+                   upgrade [<name>|--all]   Upgrade to catalogue stable
+                   sync                     Reconcile eidolons.yaml mcps: block
+                   health [<name>|--all]    Run health probes
+                   run <name> [<args>]      Pass-through to runnable MCP binary
+                 Run 'eidolons mcp --help' for full usage.
+  harness <sub>  [DEPRECATED] Manage Junction. Use 'eidolons mcp <verb> junction'.
+                 Subcommands: install, up, verify, uninstall.
                  Run 'eidolons harness --help' for options.
   verify         Verify installed Eidolon release integrity
   upgrade        Upgrade pinned Eidolon versions (or 'upgrade self' to upgrade the CLI)
   release        One-touch Eidolon release + Roster Intake (maintainer-only)
-  mcp <sub>      MCP server scaffolding helpers.
-                 Subcommands:
-                   atlas-aci        Generate a per-project .mcp.json for Atlas-ACI
-                   atlas-aci pull   Fetch/load the Atlas-ACI Docker image
-                 Run 'eidolons mcp atlas-aci --help' for options.
-                 Run 'eidolons mcp atlas-aci pull --help' for pull options.
   <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
                  Each Eidolon exposes its own subcommands via
                  .eidolons/<eidolon>/commands/*.sh after install.
@@ -100,13 +101,25 @@ Options common to all commands:
   -v, --verbose        Verbose output
 
 Environment:
-  EIDOLONS_HOME        Nexus cache location (default: ~/.eidolons)
+  EIDOLONS_HOME                   Nexus cache location (default: ~/.eidolons)
+  EIDOLONS_SUPPRESS_DEPRECATED=1  Suppress DEPRECATED lines from legacy verbs
 
 Docs:       $NEXUS/docs/
 Nexus repo: https://github.com/Rynaro/eidolons
 
 Run 'eidolons <command> --help' for command-specific help.
 EOF
+}
+
+# _deprecated_alias OLD_VERB NEW_VERB
+# Emits a DEPRECATED warning to stderr unless EIDOLONS_SUPPRESS_DEPRECATED=1.
+_deprecated_alias() {
+  local old="$1" new="$2"
+  if [ "${EIDOLONS_SUPPRESS_DEPRECATED:-0}" = "1" ]; then
+    return 0
+  fi
+  printf 'DEPRECATED: %s is deprecated. Use %s instead. (Removal: v3.0.0.)\n' \
+    "$old" "$new" >&2
 }
 
 cmd="${1:-help}"
@@ -120,7 +133,44 @@ case "$cmd" in
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
-  harness)     exec bash "$CLI_SRC/harness.sh" "$@" ;;
+  harness)
+    _harness_sub="${1:-}"
+    # Emit DEPRECATED notice for all harness subcommands.
+    _deprecated_alias "eidolons harness <sub>" "eidolons mcp <verb> junction"
+    case "$_harness_sub" in
+      install)
+        shift
+        _harness_ver="${1:-}"
+        if [ -n "$_harness_ver" ] && [ "${_harness_ver#-}" = "$_harness_ver" ]; then
+          shift
+          exec bash "$CLI_SRC/mcp_install.sh" "junction@${_harness_ver}" "$@"
+        else
+          exec bash "$CLI_SRC/mcp_install.sh" "junction" "$@"
+        fi
+        ;;
+      up)
+        shift
+        exec bash "$CLI_SRC/mcp_health.sh" "junction" "$@"
+        ;;
+      verify)
+        shift
+        exec bash "$CLI_SRC/mcp_run.sh" "junction" "verify" "$@"
+        ;;
+      uninstall)
+        shift
+        exec bash "$CLI_SRC/mcp_uninstall.sh" "junction" "$@"
+        ;;
+      -h|--help|help)
+        exec bash "$CLI_SRC/harness.sh" "$@"
+        ;;
+      "")
+        exec bash "$CLI_SRC/harness.sh"
+        ;;
+      *)
+        exec bash "$CLI_SRC/harness.sh" "$@"
+        ;;
+    esac
+    ;;
   verify)      exec bash "$CLI_SRC/verify.sh"  "$@" ;;
   release)     exec bash "$CLI_SRC/release.sh"   "$@" ;;
   upgrade)
@@ -135,27 +185,34 @@ case "$cmd" in
     ;;
   mcp)
     mcp_sub="${1:-}"
-    [[ $# -gt 0 ]] && shift
+    [ $# -gt 0 ] && shift
     case "$mcp_sub" in
+      # New unified verbs — delegate to mcp.sh sub-dispatcher.
+      list|show|install|refresh|uninstall|upgrade|sync|health|run|-h|--help|help)
+        exec bash "$CLI_SRC/mcp.sh" "$mcp_sub" "$@"
+        ;;
+      # Legacy deprecated alias: 'eidolons mcp atlas-aci [pull] [...]'
       atlas-aci)
-        sub2="${1:-}"
-        case "$sub2" in
-          pull) shift; exec bash "$CLI_SRC/mcp_atlas_aci_pull.sh" "$@" ;;
-          *)    exec bash "$CLI_SRC/mcp_atlas_aci.sh" "$@" ;;
+        _sub2="${1:-}"
+        case "$_sub2" in
+          pull)
+            shift
+            _deprecated_alias "eidolons mcp atlas-aci pull" "eidolons mcp refresh atlas-aci"
+            exec bash "$CLI_SRC/mcp_refresh.sh" "atlas-aci" "$@"
+            ;;
+          *)
+            _deprecated_alias "eidolons mcp atlas-aci" "eidolons mcp install atlas-aci"
+            exec bash "$CLI_SRC/mcp_install.sh" "atlas-aci" "$@"
+            ;;
         esac
         ;;
       "")
-        echo "Usage: eidolons mcp <subcommand> [options]" >&2
-        echo "" >&2
-        echo "Available subcommands:" >&2
-        echo "  atlas-aci  Generate a per-project .mcp.json for Atlas-ACI" >&2
-        exit 2
+        exec bash "$CLI_SRC/mcp.sh"
         ;;
       *)
         echo "Unknown mcp subcommand: $mcp_sub" >&2
         echo "" >&2
-        echo "Available subcommands:" >&2
-        echo "  atlas-aci  Generate a per-project .mcp.json for Atlas-ACI" >&2
+        echo "Run 'eidolons mcp --help' for available subcommands." >&2
         exit 2
         ;;
     esac

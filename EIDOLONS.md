@@ -106,7 +106,7 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 - **I-C4** — Always-loaded section ≤ 900 tokens; deep tables in `methodology/cortex/`.
 - **I-C5** — Refusals are immutable; cortex must never request a refused capability of a target Eidolon.
 - **I-C6** — Same prompt + same context + same roster ⇒ same routing decision.
-- **I-C7** — `roster/index.yaml` is the source of truth; new Eidolons auto-appear, removed Eidolons disappear.
+- **I-C7** — `roster/index.yaml` is the source of truth; new Eidolons auto-appear, removed Eidolons disappear. `roster/mcps.yaml` is the closed MCP catalogue; `eidolons mcp list|show|install|refresh|uninstall|upgrade|sync|health|run` is the unified verb set (v1.3+).
 - **I-C8** — `[GAP]` and `[DISPUTED]` over silent merge when routing is genuinely ambiguous.
 - **I-C9** — Bash 3.2 compatibility for any CLI helper consuming a cortex artifact.
 - **I-C10** — Stderr discipline for all tooling logs; stdout reserved for captured values.
