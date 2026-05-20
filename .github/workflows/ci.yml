@@ -161,13 +161,24 @@ jobs:
       - name: Make CLI executable
         run: chmod +x cli/eidolons cli/src/*.sh cli/install.sh
 
-      # `--jobs N` requires GNU parallel (installed above). Empirically a
-      # ~1-minute suite at -j4 on a 4-vCPU GH runner; serial would be ~1:18
-      # (post FD-leak fix). The bats tests are isolated via BATS_TEST_TMPDIR
-      # and per-test env, so parallel execution is safe — verified locally
-      # across 3× back-to-back -j4 runs, 319/319 each.
-      - name: Run bats suite (parallel)
-        run: bats --jobs 4 cli/tests/
+      # Parallelism setup:
+      #   --jobs 4                       — run up to 4 test files concurrently
+      #                                    (requires GNU parallel, installed
+      #                                    above; 4-vCPU GH runners).
+      #   --no-parallelize-within-files  — keep tests within a single file
+      #                                    sequential. Several bats files
+      #                                    (notably harness.bats) seed and
+      #                                    inspect the same on-disk artefacts
+      #                                    across consecutive tests; running
+      #                                    those concurrently exposed an mtime
+      #                                    race on ubuntu-latest where the
+      #                                    idempotency assertion in
+      #                                    "harness install: second run is
+      #                                    idempotent" failed intermittently
+      #                                    (macOS APFS hid it; ext4 surfaced
+      #                                    it deterministically).
+      - name: Run bats suite (parallel across files, serial within files)
+        run: bats --jobs 4 --no-parallelize-within-files cli/tests/
 
   upgrade-self-roundtrip:
     name: upgrade self — round-trip (install → upgrade self --check)
