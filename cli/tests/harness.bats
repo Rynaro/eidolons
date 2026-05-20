@@ -131,20 +131,29 @@ JSTUB
   # First install.
   run eidolons harness install
   [ "$status" -eq 0 ]
-  # Record modification time of the binary.
   local cache_dir="$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}"
   local bin="$cache_dir/junction"
-  local mtime1
-  mtime1="$(stat -f '%m' "$bin" 2>/dev/null || stat -c '%Y' "$bin" 2>/dev/null)"
+  # Capture the binary's inode via `ls -di` (POSIX; works on both Linux and
+  # BSD/macOS without per-OS branching). Previous attempts used
+  # `stat -f '%m' || stat -c '%Y'` which silently misbehaves on Linux:
+  # `stat -f` there means "stat the filesystem" — it exits 1 (firing the
+  # fallback) but ALSO writes filesystem info (including a fluctuating
+  # "Free blocks" count) to stdout, which command-substitution merged with
+  # the fallback's output. Under bats --jobs N filesystem load, the Free
+  # count changed between the two reads and the assertion mis-failed.
+  # Inode comparison is also strictly tighter than mtime: only a
+  # delete+recreate of the file changes the inode, which is exactly the
+  # invariant the test means to check.
+  local inode1
+  inode1="$(ls -di "$bin" | awk '{print $1}')"
 
   # Second install — must be a no-op.
   run eidolons harness install
   [ "$status" -eq 0 ]
   [[ "$output" =~ "already installed" ]]
-  # Binary must not have been replaced (mtime unchanged).
-  local mtime2
-  mtime2="$(stat -f '%m' "$bin" 2>/dev/null || stat -c '%Y' "$bin" 2>/dev/null)"
-  [ "$mtime1" = "$mtime2" ]
+  local inode2
+  inode2="$(ls -di "$bin" | awk '{print $1}')"
+  [ "$inode1" = "$inode2" ]
 }
 
 @test "harness install <bad-version>: graceful error, non-zero exit" {

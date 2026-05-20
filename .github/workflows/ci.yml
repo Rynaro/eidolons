@@ -146,23 +146,40 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install prerequisites (jq, yq, bats)
+      - name: Install prerequisites (jq, yq, bats, parallel)
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y jq bats
+            sudo apt-get install -y jq bats parallel
             sudo wget -qO /usr/local/bin/yq \
               https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
             sudo chmod +x /usr/local/bin/yq
           else
-            brew install jq yq bats-core
+            brew install jq yq bats-core parallel
           fi
 
       - name: Make CLI executable
         run: chmod +x cli/eidolons cli/src/*.sh cli/install.sh
 
-      - name: Run bats suite
-        run: bats cli/tests/
+      # Parallelism configuration:
+      #   --jobs 4                        run up to 4 .bats files concurrently
+      #                                   (GH runners have ≥3 vCPUs; GNU
+      #                                   parallel is installed above).
+      #   --no-parallelize-within-files   keep tests inside a single file
+      #                                   sequential. Within-file parallelism
+      #                                   exposed contention on shared on-disk
+      #                                   artefacts (notably the harness cache
+      #                                   used by adjacent install tests).
+      #
+      # The earlier --jobs run failed deterministically on ubuntu-latest until
+      # the harness.bats "second run is idempotent" assertion was rewritten to
+      # use `ls -di` for inode comparison: the previous `stat -f '%m' || stat
+      # -c '%Y'` form silently misbehaved on Linux (`stat -f` on Linux means
+      # "stat the filesystem" — exit 1 but stdout contained fluctuating
+      # filesystem stats, which command-substitution merged into the captured
+      # value under bats --jobs N FS load).
+      - name: Run bats suite (parallel across files, serial within files)
+        run: bats --jobs 4 --no-parallelize-within-files cli/tests/
 
   upgrade-self-roundtrip:
     name: upgrade self — round-trip (install → upgrade self --check)
