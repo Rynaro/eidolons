@@ -438,6 +438,29 @@ else
   fi
 fi
 
+# ─── MCP lockfile drift (warn-only; never installs per NG3) ─────────────
+# Surfaces any MCP entries in eidolons.mcp.lock so the operator knows they
+# are present, but does NOT install, upgrade, or touch them.  MCP install
+# is always explicit via 'eidolons mcp install / sync / upgrade'.
+_mcp_lf="./eidolons.mcp.lock"
+if [[ -f "$_mcp_lf" ]] && command -v jq >/dev/null 2>&1; then
+  # Source lib_mcp to get yaml_to_json-based reader.
+  # shellcheck disable=SC1091
+  . "$SELF_DIR/lib_mcp.sh"
+  _mcp_lf_json="$(mcp_lock_read 2>/dev/null || echo '{}')"
+  _mcp_installed="$(printf '%s' "$_mcp_lf_json" \
+    | jq -r '(.mcps // [])[] | "\(.name)@\(.version)"' 2>/dev/null || true)"
+  if [[ -n "$_mcp_installed" ]]; then
+    echo ""
+    info "MCP wiring (from eidolons.mcp.lock — not modified by sync):"
+    while IFS= read -r _mcp_entry; do
+      [[ -n "$_mcp_entry" ]] || continue
+      info "  · $_mcp_entry"
+    done <<< "$_mcp_installed"
+    info "  Run 'eidolons mcp upgrade --all' to upgrade, or 'eidolons mcp health' to probe."
+  fi
+fi
+
 # ─── Final guidance ──────────────────────────────────────────────────────
 echo ""
 ok "Sync complete."

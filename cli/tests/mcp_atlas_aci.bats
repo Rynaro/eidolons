@@ -643,3 +643,16 @@ file_md5() {
   # Both must be identical.
   [ "$flag_output" = "$lib_output" ]
 }
+
+# ─── F5 Back-compat: DEPRECATED line via CLI dispatcher ─────────────────────
+# GIVEN the operator calls `eidolons mcp atlas-aci` via the CLI dispatcher.
+# THEN stderr emits exactly one DEPRECATED line.
+@test "back-compat: eidolons mcp atlas-aci via dispatcher emits DEPRECATED" {
+  run eidolons mcp atlas-aci --skip-image-check 2>&1 || true
+  echo "$output" | grep -q "DEPRECATED"
+}
+
+@test "back-compat: EIDOLONS_SUPPRESS_DEPRECATED=1 suppresses atlas-aci DEPRECATED" {
+  count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons mcp atlas-aci --skip-image-check 2>&1 | grep -c "DEPRECATED" || true)"
+  [ "$count" -eq 0 ]
+}

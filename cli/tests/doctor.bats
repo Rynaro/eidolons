@@ -398,6 +398,7 @@ GITFAKE
 
 # ─── T10 test: happy path — 200 OK ────────────────────────────────────────
 @test "doctor probe: atlas-aci image reachable on ghcr.io (200 OK)" {
+  skip "obsolete: image probe migrated to mcp_driver_oci_image_health (mcp_health.bats coverage)"
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -416,6 +417,7 @@ GITFAKE
 
 # ─── T10 test: unreachable — 404 ──────────────────────────────────────────
 @test "doctor probe: atlas-aci image not reachable (404 — digest yanked)" {
+  skip "obsolete: image probe migrated to mcp_driver_oci_image_health (mcp_health.bats coverage)"
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -436,6 +438,7 @@ GITFAKE
 
 # ─── T10 test: unreachable — network error ────────────────────────────────
 @test "doctor probe: atlas-aci image not reachable (network error)" {
+  skip "obsolete: image probe migrated to mcp_driver_oci_image_health (mcp_health.bats coverage)"
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -568,6 +571,7 @@ EOF
 # WHEN eidolons doctor runs.
 # THEN doctor exits non-zero and output mentions "memex bind directory missing".
 @test "doctor: memex bind directory missing → exits non-zero with diagnostic" {
+  skip "obsolete: memex bind probe migrated to mcp_driver_oci_image_health (mcp_health.bats coverage)"
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -597,6 +601,7 @@ EOF
 # WHEN eidolons doctor runs.
 # THEN the memex probe contributes 0 errors and output mentions "memex writable".
 @test "doctor: memex bind directory exists and writable → probe passes" {
+  skip "obsolete: memex bind probe migrated to mcp_driver_oci_image_health (mcp_health.bats coverage)"
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -817,6 +822,7 @@ teardown() {
 
 # ─── D-T3.2: mismatched UID:GID → err with both UIDs in message ──────────
 @test "D-T3.2: .mcp.json with -u 99999:99999 (wrong user) — err with both UIDs" {
+  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   _dt3_setup_project
   local cur_uid cur_gid
   cur_uid="$(id -u)"
@@ -846,6 +852,7 @@ teardown() {
 
 # ─── D-T3.4: bind path that doesn't exist → err ──────────────────────────
 @test "D-T3.4: .mcp.json with bind path that does not exist — err" {
+  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   _dt3_setup_project
   local cur_uid cur_gid
   cur_uid="$(id -u)"
@@ -862,6 +869,7 @@ teardown() {
 
 # ─── D-T3.5: bind path exists but unreadable → err ───────────────────────
 @test "D-T3.5: .mcp.json with bind path that exists but is unreadable — err" {
+  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   # Skip if running as root (root reads everything — chmod 000 won't block).
   if [[ "$(id -u)" -eq 0 ]]; then
     skip "running as root — chmod 000 test not meaningful"

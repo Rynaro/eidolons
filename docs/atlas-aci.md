@@ -1,5 +1,11 @@
 # `eidolons atlas aci` — opt-in atlas-aci MCP wiring
 
+> **Umbrella reference:** See [`docs/mcp.md`](mcp.md) for the unified
+> `eidolons mcp` store that covers atlas-aci, junction, and all future MCPs.
+> The `eidolons mcp atlas-aci` verb documented below is **deprecated** as of
+> nexus v1.3.0. Use `eidolons mcp install atlas-aci` instead.
+> Set `EIDOLONS_SUPPRESS_DEPRECATED=1` to silence the warning in CI.
+
 > **Status:** opt-in, project-local only. Not part of any preset, never
 > invoked by `eidolons init` or `eidolons sync`. See
 > [`specs/atlas-aci-artifacts/`](specs/atlas-aci-artifacts/) for

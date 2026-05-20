@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/blob/main/schemas/mcp-catalogue.schema.json",
+  "title": "roster/mcps.yaml",
+  "type": "object",
+  "required": ["catalogue_version", "updated_at", "mcps"],
+  "properties": {
+    "catalogue_version": { "type": "string" },
+    "updated_at": { "type": "string", "format": "date-time" },
+    "mcps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "display_name", "scope", "kind", "description", "source", "versions", "install", "health"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+          "display_name": { "type": "string" },
+          "scope": { "enum": ["system", "eidolon:atlas", "eidolon:spectra", "eidolon:apivr", "eidolon:idg", "eidolon:forge", "eidolon:vigil"] },
+          "kind": { "enum": ["oci-image", "binary", "script"] },
+          "description": { "type": "string" },
+          "use_cases": { "type": "array", "items": { "type": "string" } },
+          "related_eidolons": { "type": "array", "items": { "type": "string" } },
+          "source": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "enum": ["ghcr", "github_release", "url"] },
+              "image": { "type": "string" },
+              "repo": { "type": "string" },
+              "install_url": { "type": "string" },
+              "url": { "type": "string" }
+            }
+          },
+          "versions": {
+            "type": "object",
+            "required": ["latest", "pins"],
+            "properties": {
+              "latest": { "type": "string" },
+              "pins": {
+                "type": "object",
+                "required": ["stable"],
+                "properties": {
+                  "stable": { "type": "string" }
+                }
+              },
+              "releases": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "digest": { "type": "string" },
+                    "archive_sha256": { "type": "string" },
+                    "released_at": { "type": "string", "format": "date-time" }
+                  }
+                }
+              }
+            }
+          },
+          "install": {
+            "type": "object",
+            "properties": {
+              "hosts_wired": { "type": "array", "items": { "type": "string" } },
+              "template": { "type": "string" },
+              "cache_path": { "type": "string" },
+              "marker": { "type": "string" }
+            }
+          },
+          "health": {
+            "type": "object",
+            "required": ["probes"],
+            "properties": {
+              "probes": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,70 @@
+# roster/mcps.yaml — closed MCP catalogue for the Eidolons nexus.
+# Managed by the nexus; do NOT add third-party MCPs here (NG6).
+# Schema: schemas/mcp-catalogue.schema.json
+# Companion lockfile: eidolons.mcp.lock (project-level; commit to VCS).
+catalogue_version: "1.0"
+updated_at: "2026-05-19T00:00:00Z"
+mcps:
+  - name: atlas-aci
+    display_name: "Atlas-ACI"
+    scope: system
+    kind: oci-image
+    description: "Stdio MCP server exposing structural codebase intelligence (graph + symbol index)."
+    use_cases:
+      - "Cross-language symbol search inside an MCP-capable host."
+      - "ATLAS subagent's per-project codegraph backend."
+    related_eidolons: [atlas]
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atlas-aci"
+    versions:
+      latest: "0.2.2"
+      pins:
+        stable: "0.2.2"
+      releases:
+        "0.2.2":
+          digest: "sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
+          released_at: "2026-04-30T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+        - ".cursor/mcp.json"
+        - ".github/agents/*"
+        - ".codex/config.toml"
+      template: "cli/templates/mcp/atlas-aci.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+        - docker_daemon
+        - image_local
+        - registry_reachable
+
+  - name: junction
+    display_name: "Junction"
+    scope: system
+    kind: binary
+    description: "Container-isolated agent harness with ReasoningStep / plan.json dispatch."
+    use_cases:
+      - "Sandbox APIVR-Delta implementation work in a Docker container."
+      - "Run multi-stage agent pipelines with plan.json."
+    related_eidolons: []
+    source:
+      type: github_release
+      repo: "Rynaro/Junction"
+      install_url: "https://raw.githubusercontent.com/Rynaro/Junction/main/install.sh"
+    versions:
+      latest: "0.2.0"
+      pins:
+        stable: "0.2.0"
+      releases:
+        "0.2.0":
+          archive_sha256: ""
+          released_at: "2026-05-19T00:00:00Z"
+    install:
+      cache_path: "$EIDOLONS_HOME/cache/junction@<version>/"
+      marker: ".eidolons/harness/manifest.json"
+    health:
+      probes:
+        - binary_present
+        - binary_version
+        - docker_daemon_optional

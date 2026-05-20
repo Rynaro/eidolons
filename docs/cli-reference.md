@@ -345,6 +345,44 @@ bumps".
 
 ---
 
+## `eidolons mcp`
+
+Unified MCP server store. See [`docs/mcp.md`](mcp.md) for the full reference.
+
+```
+eidolons mcp list                    # browse catalogue + installed status
+eidolons mcp show <name>             # full detail for one MCP
+eidolons mcp install <name>[@<ver>]  # install at pins.stable or explicit version
+eidolons mcp refresh <name>          # re-fetch artefact (image pull / binary)
+eidolons mcp uninstall <name>        # remove from this project
+eidolons mcp upgrade [<name>|--all]  # upgrade to catalogue stable
+eidolons mcp sync                    # reconcile eidolons.yaml mcps: block
+eidolons mcp health [<name>|--all]   # run health probes; exit code always 0
+eidolons mcp run <name> [<args>]     # pass-through to binary MCP (junction only in v1.3)
+```
+
+### Environment
+
+| Variable | Purpose |
+|---|---|
+| `EIDOLONS_SUPPRESS_DEPRECATED=1` | Silence `DEPRECATED:` lines from legacy verbs |
+
+### Deprecated aliases (removed in v3.0.0)
+
+These still work but emit one `DEPRECATED:` line to stderr on every invocation.
+Set `EIDOLONS_SUPPRESS_DEPRECATED=1` to suppress.
+
+| Legacy verb | Replacement |
+|---|---|
+| `eidolons mcp atlas-aci [--force]` | `eidolons mcp install atlas-aci [--force]` |
+| `eidolons mcp atlas-aci pull [...]` | `eidolons mcp refresh atlas-aci [...]` |
+| `eidolons harness install [ver]` | `eidolons mcp install junction[@ver]` |
+| `eidolons harness up` | `eidolons mcp health junction` |
+| `eidolons harness verify [args]` | `eidolons mcp run junction verify [args]` |
+| `eidolons harness uninstall` | `eidolons mcp uninstall junction` |
+
+---
+
 ## Per-Eidolon subcommands
 
 ```

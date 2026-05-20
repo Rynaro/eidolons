@@ -186,11 +186,44 @@ Every layer has a narrow privilege:
 
 **Explicit limits.** The CLI never executes code from a consumer project's `eidolons.yaml`. It reads, resolves, and delegates — `yaml → jq query → bash exec` with no evaluation. Eidolon repos are trusted at install time (they're on your roster); untrusted sources require a manual override.
 
-**MCP-server scaffolding is a nexus responsibility, not an Eidolon.** The `eidolons mcp atlas-aci` subcommand lives in `cli/src/mcp_atlas_aci.sh` and `cli/templates/mcp/` — it is a generator that writes a per-project `.mcp.json` and pre-creates `.atlas/memex/` so the Atlas-ACI sqlite codegraph DB has a writable host-side bind-mount surface. It has no entry in `roster/index.yaml`, triggers no EIIS conformance check, and is not installed via `eidolons init`. This distinction matters: `atlas` (the Eidolon) is the scout methodology shipped from `Rynaro/ATLAS` and registered in the roster; `atlas-aci` is an external Python package that provides a Docker-based MCP code-graph server — a tool that Eidolons (and other agents) can consume, but not itself an Eidolon.
+**MCP-server scaffolding is a nexus responsibility, not an Eidolon.** The
+`eidolons mcp` store (`cli/src/mcp*.sh`, `roster/mcps.yaml`,
+`eidolons.mcp.lock`) is a unified lifecycle manager for MCP servers. MCP
+servers are **infrastructure that Eidolons consume**, not Eidolon peers. They
+have no entry in `roster/index.yaml`, trigger no EIIS conformance check, and
+are never installed by `eidolons init` or `eidolons sync` (NG3 — explicit
+install only).
 
-MCP server prerequisites (e.g. Docker images) are validated by the corresponding `eidolons mcp <server>` generator at scaffold time. The generator refuses to write configuration that would fail at runtime, emitting an actionable error that names `eidolons mcp atlas-aci pull` as the corrective step; `--skip-image-check` is the explicit escape hatch for CI environments that load the image after scaffolding. `eidolons doctor` performs the same checks post-hoc as a regression guard, surfacing MCP image health under a dedicated "MCP servers" section.
+The catalogue (`roster/mcps.yaml`) is a sibling file to the Eidolon roster.
+It lists two MCPs in v1.3: `atlas-aci` (kind `oci-image`) and `junction`
+(kind `binary`). Each entry declares its `kind`, source descriptor, version
+pins, and health probes. A per-project lockfile `eidolons.mcp.lock` records
+the installed state and is committed to VCS alongside `eidolons.lock`.
 
-ATLAS's `commands/aci.sh` reuses the image when the pinned digest is already loaded (skipping the `docker build`); the `index` `docker run` writes to a writable bind mount, distinct from the `--read-only` `serve` invocation rendered into `.mcp.json`.
+**Driver protocol.** `mcp_install.sh` dispatches on `kind` to one of three
+driver families defined in `cli/src/lib_mcp.sh`:
+
+| Kind | Artefact | Driver functions |
+|---|---|---|
+| `oci-image` | Docker image | `mcp_driver_oci_image_{install,refresh,uninstall,version,health}` |
+| `binary` | Compiled binary | `mcp_driver_binary_{install,refresh,uninstall,version,health}` |
+| `script` | Shell script | (reserved; no v1.3 members) |
+
+The `oci-image` driver wraps `cli/src/mcp_atlas_aci.sh` and
+`cli/src/mcp_atlas_aci_pull.sh` without behaviour change. The `binary` driver
+wraps `cli/src/harness.sh`'s install / up / verify / uninstall logic. Both
+legacy command families (`eidolons mcp atlas-aci` and `eidolons harness <sub>`)
+remain functional as deprecated dispatcher aliases through nexus v2.9.x.
+
+`eidolons doctor`'s "MCP servers" section iterates `eidolons.mcp.lock` and
+calls each MCP's health driver. A separate "MCP catalogue drift" section
+surfaces MCPs that are behind `pins.stable`. See `docs/mcp.md` for the full
+user-facing reference.
+
+ATLAS's `commands/aci.sh` reuses the image when the pinned digest is already
+loaded (skipping the `docker build`); the `index` `docker run` writes to a
+writable bind mount, distinct from the `--read-only` `serve` invocation
+rendered into `.mcp.json`.
 
 ---
 

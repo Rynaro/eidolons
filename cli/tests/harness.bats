@@ -114,6 +114,7 @@ JSTUB
 # ─── F7-2a: harness install ───────────────────────────────────────────────────
 
 @test "harness install: creates cache dir and junction binary" {
+  skip "obsolete: 'eidolons harness install' now routes through mcp_install (deprecation alias); install mechanics covered by mcp_install.bats"
   setup_fake_curl_and_gh
   run eidolons harness install
   [ "$status" -eq 0 ]
@@ -125,6 +126,7 @@ JSTUB
 }
 
 @test "harness install: second run is idempotent (no re-install, reports already installed)" {
+  skip "obsolete: idempotency now covered by mcp_install.bats 'S5 junction: idempotent — second install is no-op'"
   setup_fake_curl_and_gh
   # First install.
   run eidolons harness install
@@ -167,6 +169,7 @@ CURL
 }
 
 @test "harness install: JUNCTION_VERSION env var pins the version" {
+  skip "obsolete: version resolution now reads roster/mcps.yaml pins.stable; gh-API + JUNCTION_VERSION env path replaced by catalogue resolver"
   setup_fake_curl_and_gh
   JUNCTION_VERSION="0.1.0" run eidolons harness install
   [ "$status" -eq 0 ]
@@ -176,6 +179,7 @@ CURL
 # ─── F7-2b: harness up ────────────────────────────────────────────────────────
 
 @test "harness up: prints version and binary path, exits 0 when installed" {
+  skip "obsolete: 'harness up' is no longer aliased to mcp_health (different surface — health is non-fatal probe verb)"
   seed_junction_cache
   run eidolons harness up
   [ "$status" -eq 0 ]
@@ -185,6 +189,7 @@ CURL
 }
 
 @test "harness up: exits non-zero and emits clear error when not installed" {
+  skip "obsolete: 'harness up' is no longer aliased to mcp_health (different surface — health is non-fatal probe verb)"
   # No seed_junction_cache — harness absent.
   run eidolons harness up
   [ "$status" -ne 0 ]
@@ -210,6 +215,7 @@ CURL
 # ─── F7-2d: harness uninstall ─────────────────────────────────────────────────
 
 @test "harness uninstall --yes: removes cache dir" {
+  skip "obsolete: uninstall now routes through mcp_uninstall driver; coverage in mcp_uninstall.bats"
   seed_junction_cache
   [ -d "$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}" ]
   run eidolons harness uninstall --yes
@@ -218,6 +224,7 @@ CURL
 }
 
 @test "harness uninstall --yes: removes .eidolons/harness marker dir" {
+  skip "obsolete: marker-dir cleanup now lives in mcp_uninstall driver paths"
   seed_junction_cache
   # Create a fake marker dir in the project.
   mkdir -p ".eidolons/harness"
@@ -229,6 +236,7 @@ CURL
 }
 
 @test "harness uninstall --yes: idempotent (second run reports nothing to remove)" {
+  skip "obsolete: idempotency covered by mcp_uninstall.bats 'S14: idempotent — second uninstall is no-op'"
   seed_junction_cache
   run eidolons harness uninstall --yes
   [ "$status" -eq 0 ]
@@ -239,6 +247,7 @@ CURL
 }
 
 @test "harness uninstall --yes: removes all junction@* cache dirs" {
+  skip "obsolete: multi-version cleanup now driver-managed; lockfile is single source of truth for active version"
   # Seed two version dirs.
   seed_junction_cache "0.1.0"
   seed_junction_cache "0.2.0"
@@ -308,4 +317,30 @@ CURL
   [ "$status" -eq 0 ]
   # Marker dir must have been removed.
   [ ! -d ".eidolons/harness" ]
+}
+
+# ─── F5 Back-compat: DEPRECATED lines ────────────────────────────────────────
+
+@test "back-compat: eidolons harness install emits DEPRECATED" {
+  setup_fake_curl_and_gh
+  run eidolons harness install "$FAKE_JUNCTION_VERSION" 2>&1
+  echo "$output" | grep -q "DEPRECATED"
+}
+
+@test "back-compat: eidolons harness up emits DEPRECATED" {
+  seed_junction_cache
+  run eidolons harness up 2>&1 || true
+  echo "$output" | grep -q "DEPRECATED"
+}
+
+@test "back-compat: eidolons harness uninstall emits DEPRECATED" {
+  seed_junction_cache
+  run eidolons harness uninstall --yes 2>&1 || true
+  echo "$output" | grep -q "DEPRECATED"
+}
+
+@test "back-compat: EIDOLONS_SUPPRESS_DEPRECATED=1 suppresses harness DEPRECATED" {
+  setup_fake_curl_and_gh
+  count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons harness install "$FAKE_JUNCTION_VERSION" 2>&1 | grep -c "DEPRECATED" || true)"
+  [ "$count" -eq 0 ]
 }

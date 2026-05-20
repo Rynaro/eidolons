@@ -15,6 +15,7 @@ on:
       - 'roster/**'
       - 'cli/**'
       - 'schemas/**'
+      - 'eidolons.mcp.lock'
   schedule:
     # Nightly at 03:00 UTC — catches upstream Eidolon repos going bad
     - cron: '0 3 * * *'
@@ -88,6 +89,115 @@ jobs:
           done < <(yq -r '.eidolons[].name' roster/index.yaml)
           if [[ "$missing_count" -gt 0 ]]; then
             exit 1
+          fi
+
+  parse-mcp-catalogue:
+    name: Validate MCP catalogue
+    runs-on: ubuntu-latest
+    needs: validate-roster
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Parse roster/mcps.yaml
+        run: |
+          set -euo pipefail
+          yq eval '.' roster/mcps.yaml > /dev/null
+          echo "roster/mcps.yaml parses cleanly"
+
+      - name: Validate MCP catalogue schema is valid JSON
+        run: |
+          jq empty schemas/mcp-catalogue.schema.json
+          jq empty schemas/mcp-lockfile.schema.json
+          echo "MCP schemas are valid JSON"
+
+      - name: Check catalogue entries have required fields
+        run: |
+          set -euo pipefail
+          yq -o=json eval '.' roster/mcps.yaml > /tmp/mcps.json
+          for name in $(jq -r '.mcps[].name' /tmp/mcps.json); do
+            echo "Validating MCP entry: $name ..."
+            jq -e --arg n "$name" '.mcps[] | select(.name == $n) |
+              .display_name and .scope and .kind and .description and
+              .source.type and .versions.latest and .versions.pins.stable and
+              (.health.probes | length > 0)' \
+              /tmp/mcps.json > /dev/null \
+              || { echo "::error::MCP $name missing required fields"; exit 1; }
+          done
+          echo "All MCP catalogue entries valid"
+
+  mcp-catalogue-digest-reachable:
+    name: MCP catalogue digest reachability (non-fatal)
+    runs-on: ubuntu-latest
+    needs: parse-mcp-catalogue
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq curl
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Probe oci-image digests reachability on ghcr.io
+        run: |
+          set -uo pipefail
+          yq -o=json eval '.' roster/mcps.yaml > /tmp/mcps.json
+          warn_count=0
+          while IFS= read -r entry; do
+            name="$(printf '%s' "$entry" | jq -r '.name')"
+            kind="$(printf '%s' "$entry" | jq -r '.kind')"
+            if [ "$kind" != "oci-image" ]; then
+              continue
+            fi
+            image="$(printf '%s' "$entry" | jq -r '.source.image // ""')"
+            digest="$(printf '%s' "$entry" \
+              | jq -r '.versions.releases | to_entries[0].value.digest // ""')"
+            if [ -z "$image" ] || [ -z "$digest" ]; then
+              echo "::warning::$name: no image or digest in catalogue — skipping reachability probe"
+              continue
+            fi
+            full_ref="${image}@${digest}"
+            namespace="${image#ghcr.io/}"
+            repo_part="${namespace#*/}"
+            ns_part="${namespace%%/*}"
+            token_url="https://ghcr.io/token?scope=repository:${ns_part}/${repo_part}:pull"
+            token_json="$(curl -fsSL "$token_url" 2>/dev/null)" || {
+              echo "::warning::$name: could not fetch ghcr.io token (offline?)"
+              warn_count=$((warn_count + 1))
+              continue
+            }
+            token="$(printf '%s' "$token_json" | jq -r '.token // empty')"
+            if [ -z "$token" ]; then
+              echo "::warning::$name: empty token from ghcr.io"
+              warn_count=$((warn_count + 1))
+              continue
+            fi
+            manifest_url="https://ghcr.io/v2/${ns_part}/${repo_part}/manifests/${digest}"
+            http_status="$(curl -fsI \
+              -H "Authorization: Bearer ${token}" \
+              -o /dev/null \
+              -w '%{http_code}' \
+              "$manifest_url" 2>/dev/null)" || http_status=""
+            if [ "$http_status" = "200" ]; then
+              echo "$name ($full_ref): reachable"
+            else
+              echo "::warning::$name: manifest returned '${http_status:-no response}' for $full_ref"
+              warn_count=$((warn_count + 1))
+            fi
+          done < <(jq -c '.mcps[]' /tmp/mcps.json)
+          if [ "$warn_count" -gt 0 ]; then
+            echo "::warning::$warn_count MCP digest(s) unreachable (non-fatal — may be offline or yanked)"
           fi
 
   check-eidolon-repos:
