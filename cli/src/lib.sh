@@ -887,20 +887,26 @@ semver_satisfies() {
 }
 
 # ─── Marker-bounded block upsert ─────────────────────────────────────────
-# upsert_marker_block DST MARKER_NAME CONTENT
+# upsert_marker_block DST MARKER_NAME CONTENT [PREFIX]
 #
 # Owns a marker-bounded region in a composable host-doc file (CLAUDE.md,
 # AGENTS.md, .github/copilot-instructions.md). If the region already
 # exists, rewrites its body in place. Otherwise appends a new block.
 # The marker pattern is <!-- eidolon:<MARKER_NAME> start/end -->.
+#
+# Optional PREFIX is prepended to each marker line — used for file
+# formats where the bare HTML comment is not a valid line (e.g.
+# `.gitignore` needs `# ` so the marker is interpreted as a comment).
+# When unset, the marker lines are emitted verbatim (legacy behaviour).
+#
 # All arguments must be plain strings (no embedded newlines in MARKER_NAME).
 # Idempotent: calling twice with the same content leaves the file unchanged.
 # Bash 3.2 safe — no associative arrays, no ${var,,}, no mapfile.
 # All log output goes to stderr; stdout is clean for captured callers.
 upsert_marker_block() {
-  local dst="$1" marker_name="$2" content="$3"
-  local start="<!-- eidolon:${marker_name} start -->"
-  local end="<!-- eidolon:${marker_name} end -->"
+  local dst="$1" marker_name="$2" content="$3" prefix="${4:-}"
+  local start="${prefix}<!-- eidolon:${marker_name} start -->"
+  local end="${prefix}<!-- eidolon:${marker_name} end -->"
 
   mkdir -p "$(dirname "$dst")" 2>/dev/null || true
 
@@ -948,15 +954,17 @@ upsert_marker_block() {
   info "  upsert_marker_block: $mode $marker_name block in $dst"
 }
 
-# remove_marker_block DST MARKER_NAME
+# remove_marker_block DST MARKER_NAME [PREFIX]
 #
 # Removes the marker-bounded block <!-- eidolon:<MARKER_NAME> start/end -->
-# from DST. No-ops when the marker is absent or DST does not exist.
+# from DST. PREFIX is prepended to the marker lines for file formats
+# that require comment-line wrapping (e.g. `.gitignore` uses `# `).
+# No-ops when the marker is absent or DST does not exist.
 # Idempotent. Bash 3.2 safe.
 remove_marker_block() {
-  local dst="$1" marker_name="$2"
-  local start="<!-- eidolon:${marker_name} start -->"
-  local end="<!-- eidolon:${marker_name} end -->"
+  local dst="$1" marker_name="$2" prefix="${3:-}"
+  local start="${prefix}<!-- eidolon:${marker_name} start -->"
+  local end="${prefix}<!-- eidolon:${marker_name} end -->"
 
   [[ -f "$dst" ]] || return 0
   grep -qF "$start" "$dst" 2>/dev/null || return 0
@@ -1047,6 +1055,65 @@ apply_dispatch_pointers() {
       warn "$vendor exists with user content; appending dispatch-pointer block. To remove, delete <!-- eidolon:dispatch-pointer start --> ... end --> markers and re-run sync."
     fi
   done
+}
+
+# ─── .gitignore policy ───────────────────────────────────────────────────
+# apply_eidolons_gitignore
+#
+# Writes (or upserts) a marker-bounded block into the consumer project's
+# .gitignore that ignores the bulky per-Eidolon files under .eidolons/<name>/
+# while allowlisting the nexus-owned cortex/ and harness/manifest.json.
+# This lets `eidolons sync` recreate the working-set artefacts from cache
+# without committing ~24k lines of vendored content to VCS.
+#
+# Behaviour:
+#   - No-op when no `.git/` is present (info line, exit 0). The CLI never
+#     creates a .gitignore in a non-git directory.
+#   - Idempotent: marker-bounded upsert via upsert_marker_block; repeat
+#     calls produce identical .gitignore content.
+#   - One-time migration hint: if `git ls-files .eidolons/` reports any
+#     tracked file, emit a stderr `info` block with the recommended
+#     `git rm -r --cached` command. The CLI never modifies the git index.
+#
+# Output: all on stderr (so callers capturing stdout stay clean).
+# Bash 3.2 safe.
+apply_eidolons_gitignore() {
+  # Bail if not a git repo. .gitignore policy only applies under VCS.
+  if [[ ! -d ".git" ]]; then
+    info "no .git/ detected — skipping .gitignore management"
+    return 0
+  fi
+
+  # Built line-by-line to avoid a bash-3.2 parser quirk with heredocs
+  # nested inside $() that contain unmatched single quotes.
+  # `/.eidolons/*` matches the directory contents (not the directory
+  # itself), which keeps cortex/ and harness/ traversable so the
+  # allowlist re-includes below can take effect — git cannot re-include
+  # a file whose parent directory is excluded.
+  local content=""
+  content="$content# Managed by eidolons. Recreated by \`eidolons sync\`. Do not edit between markers."$'\n'
+  content="$content/.eidolons/*"$'\n'
+  content="$content!/.eidolons/cortex/"$'\n'
+  content="$content!/.eidolons/cortex/**"$'\n'
+  content="$content!/.eidolons/harness/"$'\n'
+  content="$content!/.eidolons/harness/manifest.json"
+
+  # The "# " prefix forces the HTML-comment marker lines to be parsed by
+  # git as comments. Without it, git would not always silently ignore
+  # them (the literal `<!--` line is benign today, but the prefix makes
+  # intent explicit and survives future gitignore parser changes).
+  upsert_marker_block ".gitignore" "gitignore" "$content" "# "
+
+  # Migration hint: if existing .eidolons/ files are tracked in git,
+  # tell the user how to untrack them. The CLI does not modify the
+  # consumer's git index; the hint is informational only.
+  local tracked
+  tracked="$(git ls-files .eidolons/ 2>/dev/null | head -1 || true)"
+  if [[ -n "$tracked" ]]; then
+    info "existing .eidolons/ is git-tracked. To apply the new policy run:"
+    info "    git rm -r --cached .eidolons/ && git add .eidolons/cortex/ .eidolons/harness/manifest.json"
+    info "    git commit -m 'chore: untrack regenerated eidolons artefacts'"
+  fi
 }
 
 # ─── Member upgrade status helpers ───────────────────────────────────────

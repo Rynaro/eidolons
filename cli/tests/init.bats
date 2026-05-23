@@ -529,3 +529,184 @@ FAKEGIT
   # stdout must be empty.
   [ -z "$output" ]
 }
+
+# ─── G-I1: .gitignore policy (PR-I1) ──────────────────────────────────────
+# These tests exercise the apply_eidolons_gitignore helper directly via a
+# subshell that sources lib.sh. The helper-direct approach avoids the
+# heavyweight fake-git fetch machinery (covered separately by the
+# end-to-end init tests above) while still asserting on every behavioural
+# branch of the policy: create, idempotent rewrite, migration hint,
+# no-git no-op, and remove_marker_block round-trip.
+
+# G-I1.1 — fresh consumer project (with .git/) gains the marker block.
+@test "gitignore policy: fresh project gains marker block; .eidolons/<name>/ is ignored" {
+  git init -q
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>/dev/null
+
+  [ -f .gitignore ]
+  grep -qF "# <!-- eidolon:gitignore start -->" .gitignore
+  grep -qF "# <!-- eidolon:gitignore end -->"   .gitignore
+  grep -qE "^/\.eidolons/\*$"          .gitignore
+  grep -qE "^!/\.eidolons/cortex/$"    .gitignore
+
+  # Create the canonical ignored path; git must report it as ignored.
+  mkdir -p .eidolons/atlas
+  : > .eidolons/atlas/AGENTS.md
+  run git check-ignore -v .eidolons/atlas/AGENTS.md
+  [ "$status" -eq 0 ]
+
+  # And the allowlisted cortex path must NOT be ignored.
+  mkdir -p .eidolons/cortex
+  : > .eidolons/cortex/EIDOLONS.md
+  run git check-ignore .eidolons/cortex/EIDOLONS.md
+  [ "$status" -ne 0 ]
+}
+
+# G-I1.2 — repeat calls are idempotent; no duplicate block.
+@test "gitignore policy: repeat application is byte-identical (idempotent)" {
+  git init -q
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>/dev/null
+
+  cp .gitignore .gitignore.first
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>/dev/null
+
+  # Repeat call must produce byte-identical content.
+  diff -q .gitignore.first .gitignore
+
+  # And exactly one start/end pair must exist.
+  run grep -c "eidolon:gitignore start" .gitignore
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+  run grep -c "eidolon:gitignore end"   .gitignore
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+# G-I1.3 — migration hint fires when .eidolons/ is already git-tracked;
+# the CLI never modifies the consumer's git index.
+@test "gitignore policy: migration hint emitted when .eidolons/ is tracked" {
+  git init -q
+  git -c user.email='test@example.com' -c user.name='test' commit -q --allow-empty -m bootstrap
+
+  mkdir -p .eidolons/atlas
+  : > .eidolons/atlas/AGENTS.md
+  git add .eidolons/atlas/AGENTS.md
+  git -c user.email='test@example.com' -c user.name='test' commit -q -m 'add tracked eidolons'
+
+  _stderr_file="$(mktemp)"
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>"$_stderr_file" || true
+  _hint_text="$(cat "$_stderr_file")"
+  rm -f "$_stderr_file"
+
+  [[ "$_hint_text" =~ "git rm -r --cached .eidolons/" ]]
+  [[ "$_hint_text" =~ "untrack" ]]
+
+  # Git index must still contain the previously tracked file — the CLI
+  # never modifies it; the hint is informational only.
+  run git ls-files .eidolons/atlas/AGENTS.md
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md" ]]
+}
+
+# G-I1.4 — no .git/ → no .gitignore created; skip line on stderr.
+@test "gitignore policy: no-op when consumer project is not a git repo" {
+  # No git init — pristine empty cwd.
+  _stderr_file="$(mktemp)"
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>"$_stderr_file"
+  _skip_text="$(cat "$_stderr_file")"
+  rm -f "$_stderr_file"
+
+  [ ! -f .gitignore ]
+  [[ "$_skip_text" =~ "no .git/" ]]
+}
+
+# G-I1.5 — remove_marker_block round-trip preserves user-authored entries
+# above and below the eidolons block byte-for-byte.
+@test "gitignore policy: remove_marker_block preserves surrounding user entries" {
+  git init -q
+
+  # User-authored .gitignore content (above and below where the block will land).
+  cat > .gitignore <<'USER_GITIGNORE'
+node_modules/
+*.log
+
+USER_GITIGNORE
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>/dev/null
+
+  # Now remove the block via the prefixed remove_marker_block API.
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    remove_marker_block .gitignore gitignore '# '
+  " 2>/dev/null
+
+  # User entries must remain intact.
+  grep -qE '^node_modules/$' .gitignore
+  grep -qE '^\*\.log$'       .gitignore
+
+  # And the eidolons block must be gone.
+  ! grep -qF "eidolon:gitignore start" .gitignore
+  ! grep -qF "eidolon:gitignore end"   .gitignore
+}
+
+# G-I1.6 — pre-existing block with stale content rewrites in place.
+@test "gitignore policy: existing stale block rewrites in place; surrounding lines unchanged" {
+  git init -q
+
+  # Seed a .gitignore with user entries surrounding a STALE eidolons block.
+  cat > .gitignore <<'STALE_GITIGNORE'
+*.tmp
+# <!-- eidolon:gitignore start -->
+# Stale managed content from a previous version.
+/.eidolons-OLD/
+# <!-- eidolon:gitignore end -->
+build/
+STALE_GITIGNORE
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_eidolons_gitignore
+  " 2>/dev/null
+
+  # The stale interior line must be gone; the new policy lines must be present.
+  ! grep -qF "/.eidolons-OLD/" .gitignore
+  grep -qE "^/\.eidolons/\*$"       .gitignore
+  grep -qE "^!/\.eidolons/cortex/$" .gitignore
+
+  # User entries on both sides preserved byte-for-byte.
+  grep -qE "^\*\.tmp$" .gitignore
+  grep -qE "^build/$"  .gitignore
+
+  # Exactly one start/end pair.
+  run grep -c "eidolon:gitignore start" .gitignore
+  [ "$output" = "1" ]
+}

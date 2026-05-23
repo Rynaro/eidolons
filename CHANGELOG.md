@@ -32,6 +32,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   via `EIDOLONS_NO_GEMINI=1` for projects that don't use Gemini. `eidolons
   remove <last>` cleans both the dispatch-pointer and cortex blocks across
   all four vendor surfaces. See SPEC-2026-05-23-INIT-QOL §A1.
+- **(feat) `.gitignore` policy for `.eidolons/`.** `eidolons init` now upserts a
+  marker-bounded block into the consumer project's `.gitignore` (under
+  `# <!-- eidolon:gitignore start/end -->`) that ignores the bulky per-Eidolon
+  artefacts under `.eidolons/<name>/` while allowlisting the nexus-owned
+  `cortex/` and `harness/manifest.json`. A `full`-preset install previously
+  committed ~24k LOC to VCS; the policy keeps only ~350 lines tracked. Recreatable
+  content stays in `~/.eidolons/cache/` and is re-materialised by `eidolons sync`.
+  Reuses the existing marker-block primitives — `upsert_marker_block` /
+  `remove_marker_block` gained an optional 4th argument (`PREFIX`) so the same
+  helper writes `# ` -prefixed marker lines into `.gitignore`. No-op when no
+  `.git/` is present; one-time stderr migration hint when `.eidolons/` is already
+  tracked (CLI never modifies the consumer's git index). `eidolons remove
+  <last>` cleans the block. See SPEC-2026-05-23-INIT-QOL §I1.
 
 ### Fixed
 - **(ci) `roster-health.yml` no longer fails on cross-repo `gh release download`.**
