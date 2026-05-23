@@ -926,6 +926,82 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
+# ─── Dispatch-pointer vendor docs (PR-A1) ────────────────────────────────
+# Each entry in DISPATCH_POINTER_VENDORS is a vendor-specific instruction
+# file that should hold a thin pointer to AGENTS.md (the source of truth).
+# AGENTS.md is intentionally absent — it is the target of pointers, never
+# itself a pointer.
+DISPATCH_POINTER_VENDORS="CLAUDE.md GEMINI.md .github/copilot-instructions.md"
+
+# dispatch_pointer_text_for VENDOR
+#
+# Echoes the markdown body of the dispatch-pointer block for a given
+# vendor file. Heading depth is `## Eidolons` (polite to a user's
+# existing top-level `# `). Bash 3.2 safe — uses printf line-by-line
+# (no heredocs nested in $()).
+dispatch_pointer_text_for() {
+  local vendor="$1"
+  case "$vendor" in
+    CLAUDE.md)
+      printf '%s\n' \
+        "## Eidolons" \
+        "" \
+        "This project uses [Eidolons](https://github.com/Rynaro/eidolons). The canonical agent dispatch table, methodology references, and per-Eidolon hand-off contracts live at [\`./AGENTS.md\`](./AGENTS.md). Read that file first before responding to any prompt that mentions an Eidolon or matches a TRANCE complexity signal."
+      ;;
+    GEMINI.md)
+      printf '%s\n' \
+        "## Eidolons" \
+        "" \
+        "See [\`./AGENTS.md\`](./AGENTS.md) for the Eidolons agent dispatch table and methodology references."
+      ;;
+    .github/copilot-instructions.md)
+      printf '%s\n' \
+        "This project uses Eidolons. The canonical agent instructions live in \`AGENTS.md\` at the repository root. Refer to that file before invoking any agent or methodology."
+      ;;
+    *)
+      printf '%s\n' \
+        "See \`./AGENTS.md\` for Eidolons agent dispatch and methodology."
+      ;;
+  esac
+}
+
+# apply_dispatch_pointers
+#
+# Writes the dispatch-pointer block to every vendor file in
+# DISPATCH_POINTER_VENDORS. Independent of shared-dispatch — the
+# dispatch-pointer block always lands.
+#
+# Warn-and-append protocol: when a vendor file pre-exists with non-empty,
+# non-Eidolons content AND the dispatch-pointer marker is absent, emit one
+# warn line BEFORE appending. Subsequent syncs (where the marker already
+# exists) silently rewrite the block in place — no warn fires.
+#
+# Opt-outs:
+#   EIDOLONS_NO_GEMINI=1     — skip GEMINI.md
+#
+# Bash 3.2 safe. Stdout clean; all log output to stderr (via warn/info/ok).
+apply_dispatch_pointers() {
+  local vendor ptr_text warn_append
+  for vendor in $DISPATCH_POINTER_VENDORS; do
+    if [[ "$vendor" == "GEMINI.md" ]] && [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
+      info "  EIDOLONS_NO_GEMINI=1 — skipping GEMINI.md"
+      continue
+    fi
+    ptr_text="$(dispatch_pointer_text_for "$vendor")"
+    # Detect "first append into populated content" — for the warn line.
+    warn_append=false
+    if [[ -f "$vendor" ]] \
+       && [[ -s "$vendor" ]] \
+       && ! grep -qF "<!-- eidolon:dispatch-pointer start -->" "$vendor" 2>/dev/null; then
+      warn_append=true
+    fi
+    upsert_marker_block "$vendor" "dispatch-pointer" "$ptr_text"
+    if [[ "$warn_append" == "true" ]]; then
+      warn "$vendor exists with user content; appending dispatch-pointer block. To remove, delete <!-- eidolon:dispatch-pointer start --> ... end --> markers and re-run sync."
+    fi
+  done
+}
+
 # ─── Member upgrade status helpers ───────────────────────────────────────
 # Extracted from upgrade.sh so both upgrade and doctor share the same data path.
 # (Bucket C, spec: eidolons-update-flow-2026-05-05.md)
