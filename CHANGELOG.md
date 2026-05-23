@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-23
+
 ### Added
 - **(feat) FF-style level-up UX for `eidolons init` / `eidolons sync`.** Per-member output
   becomes an "ACQUIRED" character card (reuses `cli/src/ui/card.sh` primitives + sigils);
