@@ -319,3 +319,304 @@ cortex body line 2'
   [ -f .github/copilot-instructions.md ]
   [ ! -f GEMINI.md ]
 }
+
+# ─── G-I2: host-leakage prune (PR-I2) ─────────────────────────────────────
+# Tests exercise lib_host_prune.sh directly to keep the surface small and
+# avoid coupling to the heavyweight fake-git fetch machinery. End-to-end
+# wiring through `eidolons sync --strict-hosts` is exercised by the
+# "strict hosts" test below using the existing setup_fake_git_for_upgrade
+# stub (which writes AGENTS.md + CLAUDE.md unconditionally, simulating
+# real-world host leakage).
+
+# Helper — materialise a fake .eidolons/<name>/ tree containing the
+# vendor-leakage pattern set. Used by the path-pattern + idempotency tests.
+_seed_leakage_tree() {
+  local name="${1:-atlas}"
+  mkdir -p ".eidolons/$name/hosts" ".eidolons/$name/.github"
+  : > ".eidolons/$name/hosts/cursor.md"
+  : > ".eidolons/$name/hosts/copilot.md"
+  : > ".eidolons/$name/hosts/codex.md"
+  : > ".eidolons/$name/hosts/opencode.md"
+  : > ".eidolons/$name/.github/copilot-instructions.md"
+  : > ".eidolons/$name/CLAUDE.md"
+  : > ".eidolons/$name/AGENTS.md"
+}
+
+# G-I2.1 — path-pattern prune deletes non-selected hosts' files; keeps the rest.
+@test "host prune: claude-code selection — drops cursor/copilot/codex/opencode/AGENTS, keeps CLAUDE.md" {
+  _seed_leakage_tree atlas
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns ./.eidolons/atlas claude-code
+  " 2>/dev/null
+
+  # The claude-code file survives.
+  [ -f ".eidolons/atlas/CLAUDE.md" ]
+  # Every other vendor file is gone.
+  [ ! -f ".eidolons/atlas/hosts/cursor.md" ]
+  [ ! -f ".eidolons/atlas/hosts/copilot.md" ]
+  [ ! -f ".eidolons/atlas/hosts/codex.md" ]
+  [ ! -f ".eidolons/atlas/hosts/opencode.md" ]
+  [ ! -f ".eidolons/atlas/.github/copilot-instructions.md" ]
+  # AGENTS.md is pruned because neither codex nor opencode is wired.
+  [ ! -f ".eidolons/atlas/AGENTS.md" ]
+}
+
+# G-I2.1 cont. — AGENTS.md multi-host rule: keep iff codex OR opencode selected.
+@test "host prune: AGENTS.md kept when codex is in selection (multi-host rule)" {
+  _seed_leakage_tree atlas
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns ./.eidolons/atlas claude-code,codex
+  " 2>/dev/null
+
+  # Codex consumes AGENTS.md → must survive.
+  [ -f ".eidolons/atlas/AGENTS.md" ]
+  [ -f ".eidolons/atlas/CLAUDE.md" ]
+  [ -f ".eidolons/atlas/hosts/codex.md" ]
+  # Non-selected hosts still pruned.
+  [ ! -f ".eidolons/atlas/hosts/cursor.md" ]
+  [ ! -f ".eidolons/atlas/hosts/copilot.md" ]
+  [ ! -f ".eidolons/atlas/hosts/opencode.md" ]
+}
+
+# G-I2.3 — no prune when every supported host is wired.
+@test "host prune: no prune when all hosts wired" {
+  _seed_leakage_tree atlas
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns ./.eidolons/atlas claude-code,copilot,cursor,codex,opencode
+  " 2>/dev/null
+
+  # Every seeded file must still exist.
+  [ -f ".eidolons/atlas/CLAUDE.md" ]
+  [ -f ".eidolons/atlas/AGENTS.md" ]
+  [ -f ".eidolons/atlas/hosts/cursor.md" ]
+  [ -f ".eidolons/atlas/hosts/copilot.md" ]
+  [ -f ".eidolons/atlas/hosts/codex.md" ]
+  [ -f ".eidolons/atlas/hosts/opencode.md" ]
+  [ -f ".eidolons/atlas/.github/copilot-instructions.md" ]
+}
+
+# G-I2.4 — idempotent: a second prune pass on an already-clean tree is a no-op.
+@test "host prune: idempotent — second pass produces zero deletions" {
+  _seed_leakage_tree atlas
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns ./.eidolons/atlas claude-code
+  " 2>/dev/null
+
+  # Snapshot the post-prune tree.
+  _first_state="$(find .eidolons/atlas -type f | sort)"
+
+  # Second pass should leave the same set of files.
+  _stderr_file="$(mktemp)"
+  bash -c "
+    set -e
+    EIDOLONS_VERBOSE=1 \\
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    EIDOLONS_VERBOSE=1 host_prune_path_patterns ./.eidolons/atlas claude-code
+  " 2>"$_stderr_file"
+  _verbose_out="$(cat "$_stderr_file")"
+  rm -f "$_stderr_file"
+
+  # Files unchanged.
+  _second_state="$(find .eidolons/atlas -type f | sort)"
+  [ "$_first_state" = "$_second_state" ]
+
+  # And no "pruned" lines in verbose output on the second pass.
+  ! printf '%s' "$_verbose_out" | grep -qF "pruned"
+}
+
+# G-I2.2 — strict mode: violation when a vendor-pattern file is unannotated
+# in install.manifest.json.
+@test "strict hosts: emits violation when vendor file is not annotated in manifest" {
+  mkdir -p ".eidolons/atlas/hosts"
+  : > ".eidolons/atlas/hosts/cursor.md"
+  cat > ".eidolons/atlas/install.manifest.json" <<'EOF'
+{
+  "name": "atlas",
+  "version": "1.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": []
+}
+EOF
+
+  run bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_strict_check ./.eidolons/atlas claude-code
+  "
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "hosts/cursor.md" ]]
+  [[ "$output" =~ "host unknown" ]]
+}
+
+# G-I2.2 cont. — strict mode passes when annotated.
+@test "strict hosts: no violation when vendor file is annotated in manifest" {
+  mkdir -p ".eidolons/atlas/hosts"
+  : > ".eidolons/atlas/hosts/cursor.md"
+  cat > ".eidolons/atlas/install.manifest.json" <<'EOF'
+{
+  "name": "atlas",
+  "version": "1.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": [
+    {"path": "hosts/cursor.md", "host": "cursor"}
+  ]
+}
+EOF
+
+  run bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_strict_check ./.eidolons/atlas claude-code
+  "
+  [ "$status" -eq 0 ]
+}
+
+# G-I2.2 cont. — manifest-driven prune removes annotated files for non-selected hosts.
+@test "host prune (manifest): annotated cursor.md is pruned when cursor not selected" {
+  mkdir -p ".eidolons/atlas/hosts"
+  : > ".eidolons/atlas/hosts/cursor.md"
+  cat > ".eidolons/atlas/install.manifest.json" <<'EOF'
+{
+  "name": "atlas",
+  "version": "1.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": [
+    {"path": "hosts/cursor.md", "host": "cursor"}
+  ]
+}
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_manifest_pass ./.eidolons/atlas claude-code
+  " 2>/dev/null
+
+  [ ! -f ".eidolons/atlas/hosts/cursor.md" ]
+}
+
+# Helper — same shape as setup_fake_git_for_upgrade, but the cloned stub
+# install.sh writes a richer leakage tree under $TGT (CLAUDE.md, AGENTS.md,
+# hosts/cursor.md, .github/copilot-instructions.md) so end-to-end prune
+# behaviour is observable.
+_setup_fake_git_leakage_installer() {
+  setup_fake_git_for_upgrade
+  # Patch the cloned install.sh template baked into the fake git stub.
+  # The fake git's clone op materialises an Eidolon at $dest and writes a
+  # stub install.sh. We replace it with a richer leakage stub.
+  local fake_bin="$FAKE_BIN"
+  cat > "$fake_bin/_leakage_install_stub.sh" <<'STUB'
+#!/usr/bin/env bash
+# Leakage stub for PR-I2 end-to-end tests. Writes a manifest plus the
+# vendor-leakage pattern set so the nexus prune can be observed.
+TGT=""
+HOSTS=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target) TGT="$2"; shift 2 ;;
+    --hosts)  HOSTS="$2"; shift 2 ;;
+    --shared-dispatch|--no-shared-dispatch|--non-interactive|--force) shift ;;
+    *) shift ;;
+  esac
+done
+mkdir -p "$TGT/hosts" "$TGT/.github"
+NAME="$(basename "$TGT")"
+cat > "$TGT/install.manifest.json" <<JSON
+{
+  "name": "$NAME",
+  "version": "0.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": []
+}
+JSON
+: > "$TGT/CLAUDE.md"
+: > "$TGT/AGENTS.md"
+: > "$TGT/hosts/cursor.md"
+: > "$TGT/hosts/copilot.md"
+: > "$TGT/.github/copilot-instructions.md"
+exit 0
+STUB
+  # Swap the git stub to use the leakage installer instead of the default.
+  # The default stub is baked into the heredoc inside helpers.bash's fake
+  # git; we patch the clone behaviour by overriding $FAKE_INSTALL_TEMPLATE
+  # if the helper supports it, else we post-process after the clone runs.
+  # In practice, the default stub install.sh from setup_fake_git_for_upgrade
+  # is copied to $dest/install.sh on clone. Easier approach: leave the
+  # default in place and overwrite $clone_dir/install.sh between fetch and
+  # install via a wrapper.
+  #
+  # Simpler: copy our leakage stub on top of any cache install.sh AFTER
+  # fetch_eidolon clones (which means *during* sync). The fake git's clone
+  # op honors $LEAKAGE_INSTALL_TEMPLATE if set — but the upstream fake
+  # doesn't read that. So we just patch $EIDOLONS_HOME/cache/<name>@<ver>/install.sh
+  # in this helper before sync runs. fetch_eidolon prefers cache when
+  # present and skips re-clone.
+  export EIDOLONS_LEAKAGE_STUB="$fake_bin/_leakage_install_stub.sh"
+}
+
+# Sync once with the default fake stub to populate the cache, then
+# overwrite the cached install.sh with the leakage variant, then re-sync
+# with --force so the leakage installer runs.
+_run_sync_with_leakage_installer() {
+  local extra_args="${1:-}"
+  # First sync runs the default stub (which writes only manifest).
+  run eidolons sync --yes
+  # The fake git's clone populated $EIDOLONS_HOME/cache/atlas@1.0.0/install.sh.
+  # Overwrite it with our leakage stub.
+  local cache_install_sh
+  cache_install_sh="$(ls "$EIDOLONS_HOME/cache"/atlas@*/install.sh 2>/dev/null | head -1)"
+  [[ -n "$cache_install_sh" ]] || return 1
+  cp "$EIDOLONS_LEAKAGE_STUB" "$cache_install_sh"
+  chmod +x "$cache_install_sh"
+  # Remove the existing target so the installer re-creates it.
+  rm -rf ".eidolons/atlas"
+  # Re-sync to invoke the leakage installer.
+  # shellcheck disable=SC2086
+  run eidolons sync --yes $extra_args
+}
+
+# G-I2.1 end-to-end — `eidolons sync --hosts claude-code` produces a tree
+# free of cross-host leakage.
+@test "host prune end-to-end: eidolons sync removes vendor leakage when only claude-code is wired" {
+  _setup_fake_git_leakage_installer
+  seed_manifest_with atlas=^1.0.0
+  _run_sync_with_leakage_installer
+  [ "$status" -eq 0 ]
+
+  # Leakage stub wrote CLAUDE.md, AGENTS.md, hosts/cursor.md,
+  # hosts/copilot.md, .github/copilot-instructions.md. With hosts.wire=
+  # [claude-code]: CLAUDE.md survives; the rest get pruned.
+  [ -f ".eidolons/atlas/CLAUDE.md" ]
+  [ ! -f ".eidolons/atlas/AGENTS.md" ]
+  [ ! -f ".eidolons/atlas/hosts/cursor.md" ]
+  [ ! -f ".eidolons/atlas/hosts/copilot.md" ]
+  [ ! -f ".eidolons/atlas/.github/copilot-instructions.md" ]
+}
+
+# G-I2.2 end-to-end — --strict-hosts on a manifest with empty files[] fails.
+@test "strict hosts end-to-end: --strict-hosts fails when leakage installer omits host annotations" {
+  _setup_fake_git_leakage_installer
+  seed_manifest_with atlas=^1.0.0
+  _run_sync_with_leakage_installer "--strict-hosts"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "--strict-hosts" ]]
+  [[ "$output" =~ "host unknown" ]]
+}
