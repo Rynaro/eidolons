@@ -167,3 +167,21 @@ ui_kv() {
   fi
   printf '  %s%-14s%s %s\n' "${UI_MUTED}" "$key" "${RESET}" "$val" >&2
 }
+
+# ─── Progress line ─────────────────────────────────────────────────────────
+# Single one-line progress update: [N/M] name — status
+# No spinner; writes to stderr. Verbosity-gated (suppressed under quiet).
+ui_progress_line() {
+  local n="$1" total="$2" name="$3" status_text="$4"
+  # Suppress under quiet tier.
+  [[ "${VERBOSITY:-default}" == "quiet" ]] && return 0
+  if [[ "${EIDOLONS_FANCY:-0}" != "1" ]]; then
+    printf '  [%s/%s] %s -- %s\n' "$n" "$total" "$name" "$status_text" >&2
+    return 0
+  fi
+  printf '  %s[%s/%s]%s %s%s%s %s—%s %s\n' \
+    "${UI_MUTED}" "$n" "$total" "${RESET}" \
+    "${BOLD}" "$name" "${RESET}" \
+    "${UI_MUTED}" "${RESET}" \
+    "$status_text" >&2
+}

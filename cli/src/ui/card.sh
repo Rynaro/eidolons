@@ -21,7 +21,11 @@
 # name, methodology, cycle, etc.) keep matching.
 #
 # Public API:
-#   ui_card <eidolon-name>        prints the card to stdout
+#   ui_card <eidolon-name>                          prints roster card to stdout
+#   ui_acquire_card <name> <ver> <meth> <handoff>   "ACQUIRED" level-up card to stderr
+#                   <tier> <target> <hosts>
+#   ui_party_roster <lockfile_path>                 party summary card to stderr
+#   ui_failed_card  <name> <reason>                 "FAILED" error card to stderr
 #
 # Reads roster data through roster_get (lib.sh) — never re-parses YAML.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -376,4 +380,195 @@ ui_card() {
   done
 
   _ui_card_frame "$GLYPH_D_BL" "$GLYPH_D_H" "$GLYPH_D_B" "$GLYPH_D_BR"
+}
+
+# ─── Acquire card (FF level-up moment) ───────────────────────────────────
+# Emitted to stderr once per successfully installed member.
+# Args: <name> <version> <methodology_cycle> <handoff_down> <tier> <target> <hosts>
+#
+# Verbosity: suppressed under quiet tier. Always prints under default and verbose.
+# Plain mode: ASCII box with same fields.
+ui_acquire_card() {
+  local name="$1" ver="$2" meth_cycle="$3" handoff_down="$4"
+  local tier="$5" target="$6" hosts="$7"
+  # Suppress under quiet.
+  [[ "${VERBOSITY:-default}" == "quiet" ]] && return 0
+  # All-caps display name (bash 3.2: use tr).
+  local name_upper; name_upper="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')"
+  local inner_w=$((UI_CARD_WIDTH - 4))
+  if [[ "${EIDOLONS_FANCY:-0}" != "1" ]]; then
+    # ASCII plain mode.
+    local border; border="$(_ui_repeat_card "=" "$((UI_CARD_WIDTH - 2))")"
+    printf '+%s+\n' "$border" >&2
+    printf '| %-*s |\n' "$inner_w" "$name_upper ACQUIRED  +1 PARTY" >&2
+    printf '+%s+\n' "$border" >&2
+    printf '| %-*s |\n' "$inner_w" "Methodology : $meth_cycle" >&2
+    printf '| %-*s |\n' "$inner_w" "Hand-off    : $handoff_down" >&2
+    printf '| %-*s |\n' "$inner_w" "Tier        : $tier" >&2
+    printf '| %-*s |\n' "$inner_w" "Installed   : $target" >&2
+    printf '| %-*s |\n' "$inner_w" "Hosts wired : $hosts" >&2
+    printf '+%s+\n' "$border" >&2
+    printf '\n' >&2
+    return 0
+  fi
+  # Fancy mode — reuse double-line frame helpers.
+  local title
+  title="$(printf '%s%s ACQUIRED%s  %s•%s  %s+1 PARTY%s' \
+    "${BOLD}${UI_ACCENT}" "$name_upper" "${RESET}" \
+    "${UI_MUTED}" "${RESET}" \
+    "${UI_SUCCESS}" "${RESET}")"
+  local r_meth r_handoff r_tier r_target r_hosts
+  r_meth="$(printf   '%sMethodology%s  %s' "${UI_MUTED}" "${RESET}" "$meth_cycle")"
+  r_handoff="$(printf '%sHand-off%s     %s' "${UI_MUTED}" "${RESET}" "$handoff_down")"
+  r_tier="$(printf    '%sTier%s         %s' "${UI_MUTED}" "${RESET}" "$tier")"
+  r_target="$(printf  '%sInstalled%s    %s' "${UI_MUTED}" "${RESET}" "$target")"
+  r_hosts="$(printf   '%sHosts wired%s  %s' "${UI_MUTED}" "${RESET}" "$hosts")"
+  # Load sigil rows.
+  local sigil_rows=() sigil_line
+  if ui_sigil_exists "$name"; then
+    while IFS= read -r sigil_line; do
+      sigil_rows+=("$sigil_line")
+    done < <(ui_load_sigil "$name")
+  else
+    local _si=0
+    while [[ "$_si" -lt "$UI_SIGIL_HEIGHT" ]]; do
+      sigil_rows+=("$(_ui_repeat_card " " "$UI_SIGIL_WIDTH")")
+      _si=$((_si + 1))
+    done
+  fi
+  local stat_rows=( "$r_meth" "$r_handoff" "$r_tier" "$r_target" "$r_hosts" )
+  local stat_count=${#stat_rows[@]}
+  local body_rows="$UI_SIGIL_HEIGHT"
+  [[ "$stat_count" -gt "$body_rows" ]] && body_rows="$stat_count"
+  local blank_sigil; blank_sigil="$(_ui_repeat_card " " "$UI_SIGIL_WIDTH")"
+  # Render to stderr.
+  { _ui_card_frame_solid "$GLYPH_D_TL" "$GLYPH_D_H" "$GLYPH_D_TR"; } >&2
+  { _ui_card_header_row  "$title"; } >&2
+  { _ui_card_frame       "$GLYPH_D_L" "$GLYPH_D_H" "$GLYPH_D_T" "$GLYPH_D_R"; } >&2
+  local _i=0
+  while [[ "$_i" -lt "$body_rows" ]]; do
+    local sig
+    if [[ "$_i" -lt "$UI_SIGIL_HEIGHT" ]]; then
+      sig="${sigil_rows[$_i]:-$blank_sigil}"
+    else
+      sig="$blank_sigil"
+    fi
+    local stat="${stat_rows[$_i]:-}"
+    local sig_visible; sig_visible="$(_ui_strip_ansi "$sig")"
+    if [[ "${#sig_visible}" -lt "$UI_SIGIL_WIDTH" ]]; then
+      sig="$(_ui_pad_line "$sig" "$UI_SIGIL_WIDTH")"
+    fi
+    { _ui_card_row "$sig" "$stat"; } >&2
+    _i=$((_i + 1))
+  done
+  { _ui_card_frame "$GLYPH_D_BL" "$GLYPH_D_H" "$GLYPH_D_B" "$GLYPH_D_BR"; } >&2
+  printf '\n' >&2
+}
+
+# ─── Party roster card ────────────────────────────────────────────────────
+# Emitted to stderr once at the end of sync, summarizing all installed members.
+# Reads eidolons.lock for the post-sync truth.
+# Args: <lockfile_path>
+#
+# Verbosity: suppressed under quiet only if no new members were installed.
+# Callers pass a _roster_new_count to let this function decide. To keep the
+# signature simple, callers always call it; quiet suppression is handled in
+# sync.sh.
+ui_party_roster() {
+  local lockfile="$1"
+  if [[ ! -f "$lockfile" ]]; then
+    warn "ui_party_roster: lockfile not found at $lockfile"
+    return 0
+  fi
+  # Parse members from lockfile via yq (portable, used everywhere in lib.sh).
+  local lock_json
+  lock_json="$(yaml_to_json "$lockfile" 2>/dev/null)" || {
+    warn "ui_party_roster: could not parse $lockfile"
+    return 0
+  }
+  local member_count
+  member_count="$(printf '%s' "$lock_json" | jq -r '(.members // []) | length')"
+  local inner_w=$((UI_CARD_WIDTH - 4))
+  if [[ "${EIDOLONS_FANCY:-0}" != "1" ]]; then
+    local border; border="$(_ui_repeat_card "=" "$((UI_CARD_WIDTH - 2))")"
+    printf '+%s+\n' "$border" >&2
+    printf '| %-*s |\n' "$inner_w" "PARTY ROSTER  *  $member_count MEMBERS" >&2
+    printf '+%s+\n' "$border" >&2
+    local _idx=0
+    while [[ "$_idx" -lt "$member_count" ]]; do
+      local mname mver mtarget mhosts
+      mname="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '.members[$i].name')"
+      mver="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '.members[$i].version')"
+      mtarget="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '.members[$i].target // "unknown"')"
+      mhosts="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '(.members[$i].hosts_wired // []) | join(",")')"
+      printf '| %-*s |\n' "$inner_w" "$(printf '%-10s v%-10s %s' "$mname" "$mver" "$mhosts")" >&2
+      _idx=$((_idx + 1))
+    done
+    printf '+%s+\n' "$border" >&2
+    printf '\n' >&2
+    return 0
+  fi
+  # Fancy mode.
+  local title
+  title="$(printf '%s%sPARTY ROSTER%s  %s•%s  %s%s MEMBERS%s' \
+    "${BOLD}" "${UI_ACCENT}" "${RESET}" \
+    "${UI_MUTED}" "${RESET}" \
+    "${BOLD}" "$member_count" "${RESET}")"
+  # Print top border + title.
+  { _ui_card_frame_solid "$GLYPH_D_TL" "$GLYPH_D_H" "$GLYPH_D_TR"; } >&2
+  { _ui_card_header_row "$title"; } >&2
+  # Separator.
+  { _ui_card_frame_solid "$GLYPH_D_L" "$GLYPH_D_H" "$GLYPH_D_R"; } >&2
+  # Member rows.
+  local _idx=0
+  while [[ "$_idx" -lt "$member_count" ]]; do
+    local mname mver mhosts
+    mname="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '.members[$i].name')"
+    mver="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '.members[$i].version')"
+    mhosts="$(printf '%s' "$lock_json" | jq -r --argjson i "$_idx" '(.members[$i].hosts_wired // []) | join(",")')"
+    local row_text
+    row_text="$(printf '%s%-10s%s v%-10s %s%s%s' \
+      "${UI_ACCENT}" "$mname" "${RESET}" \
+      "$mver" \
+      "${UI_MUTED}" "$mhosts" "${RESET}")"
+    # Print a full-width row (no sigil split — use header row helper).
+    { _ui_card_header_row "$row_text"; } >&2
+    _idx=$((_idx + 1))
+  done
+  # Bottom border.
+  { _ui_card_frame_solid "$GLYPH_D_BL" "$GLYPH_D_H" "$GLYPH_D_BR"; } >&2
+  printf '\n' >&2
+}
+
+# ─── Failed card ──────────────────────────────────────────────────────────
+# Emitted to stderr when a member install fails. Replaces the ACQUIRED card.
+# Args: <name> <reason>
+#
+# Always printed (not gated on verbosity — failures are always signal).
+ui_failed_card() {
+  local name="$1" reason="$2"
+  local name_upper; name_upper="$(printf '%s' "$name" | tr '[:lower:]' '[:upper:]')"
+  local inner_w=$((UI_CARD_WIDTH - 4))
+  if [[ "${EIDOLONS_FANCY:-0}" != "1" ]]; then
+    local border; border="$(_ui_repeat_card "=" "$((UI_CARD_WIDTH - 2))")"
+    printf '+%s+\n' "$border" >&2
+    printf '| %-*s |\n' "$inner_w" "$name_upper  INSTALL FAILED" >&2
+    printf '+%s+\n' "$border" >&2
+    printf '| %-*s |\n' "$inner_w" "Error: $reason" >&2
+    printf '+%s+\n' "$border" >&2
+    printf '\n' >&2
+    return 0
+  fi
+  local title
+  title="$(printf '%s%s%s  %sINSTALL FAILED%s' \
+    "${BOLD}${UI_ERROR}" "$name_upper" "${RESET}" \
+    "${UI_ERROR}" "${RESET}")"
+  { _ui_card_frame_solid "$GLYPH_D_TL" "$GLYPH_D_H" "$GLYPH_D_TR"; } >&2
+  { _ui_card_header_row "$title"; } >&2
+  { _ui_card_frame_solid "$GLYPH_D_L" "$GLYPH_D_H" "$GLYPH_D_R"; } >&2
+  local r_reason
+  r_reason="$(printf '%sError%s  %s' "${UI_ERROR}" "${RESET}" "$reason")"
+  { _ui_card_header_row "$r_reason"; } >&2
+  { _ui_card_frame_solid "$GLYPH_D_BL" "$GLYPH_D_H" "$GLYPH_D_BR"; } >&2
+  printf '\n' >&2
 }

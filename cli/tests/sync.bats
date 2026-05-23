@@ -107,7 +107,8 @@ EOF
   [[ -f "$FAKE_CLONE_LOG" ]] && clone_count_1="$(wc -l < "$FAKE_CLONE_LOG" | tr -d ' ')"
 
   # Second sync — must reuse cache; no additional clone.
-  run eidolons sync --yes
+  # Use --verbose so info-tier "Using cached" message is visible.
+  run eidolons sync --yes --verbose
   [ "$status" -eq 0 ]
   clone_count_2=0
   [[ -f "$FAKE_CLONE_LOG" ]] && clone_count_2="$(wc -l < "$FAKE_CLONE_LOG" | tr -d ' ')"
@@ -136,7 +137,8 @@ EOF
   fi
 
   # Second sync — atlas must auto-recover (re-clone) while spectra stays cached.
-  run eidolons sync --yes
+  # Use --verbose so info/warn-tier cache messages are visible.
+  run eidolons sync --yes --verbose
   [ "$status" -eq 0 ]
   # The run must have emitted both a re-clone message and a cached-use message.
   [[ "$output" =~ "cache invalid" ]] || [[ "$output" =~ "re-cloning" ]] || [[ "$output" =~ "Using cached" ]]
