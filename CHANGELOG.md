@@ -8,6 +8,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **(ci) `roster-health.yml` no longer fails on cross-repo `gh release download`.**
+  The "Verify release integrity metadata" step used `gh release download
+  --repo Rynaro/<EIDOLON>`, which the workflow's default `GITHUB_TOKEN`
+  cannot satisfy (the token is scoped to the workflow's own repo). Result:
+  every run that exercised an Eidolon with `provenance.github_attestation:
+  true` returned `HTTP 401: Bad credentials`. The 2026-05-23 nightly cron
+  on main was the first to surface it after a v1.1.3 publication; PRs
+  inherited the same failure. Now uses `curl -fsSL` against the public
+  release CDN URL, which needs no auth for public repos. The `gh
+  attestation verify` call is kept (it validates against Sigstore's
+  public transparency log and tolerates an unauthenticated token).
+
+### Changed
+- **(ci) `roster-health.yml` no longer triggers on `pull_request`.** Same-org
+  PR branches push to this repo directly and already fire the `push`
+  trigger with the canonical token. The `pull_request` trigger was firing
+  a duplicate run on every PR with a restricted token, which both wasted
+  CI minutes and surfaced `actions/checkout@v4` auth flakes (`fatal: could
+  not read Username for 'https://github.com'`). Removing it eliminates
+  the duplicate run and the flake surface. Re-add only if/when we accept
+  fork contributions and re-architect the cross-repo verifier.
+
 ## [1.3.0] - 2026-05-20
 
 ### Added
