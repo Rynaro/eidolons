@@ -26,6 +26,34 @@ mkdir -p "$CACHE_DIR"
 # shellcheck disable=SC1091
 . "$(dirname "${BASH_SOURCE[0]}")/ui/panel.sh"
 
+# ─── Verbosity tier ──────────────────────────────────────────────────────
+# VERBOSITY=quiet|default|verbose. Resolution:
+#   EIDOLONS_QUIET=1   → quiet      (env override applies everywhere)
+#   EIDOLONS_VERBOSE=1 → verbose    (env override applies everywhere)
+#   otherwise          → verbose    (legacy behaviour for non-init commands)
+#
+# init.sh and sync.sh override the default to "default" — the curated
+# stage-banner + ACQUIRED-card UX. Other commands (verify, doctor,
+# upgrade, release, mcp, etc.) inherit "verbose" so their say/info
+# progress lines stay visible.
+#
+# Tier behaviour (consumed by say/info/ok below):
+#   quiet   — only warn/die and explicit ui_* cards print.
+#   default — say/info suppressed; ok prints; ui_section banners + cards drive output.
+#   verbose — say/info/ok all print (legacy behaviour, plus new cards in init/sync).
+#
+# VERBOSITY is exported so subshells (e.g. the exec'd sync.sh) inherit it.
+if [[ -z "${VERBOSITY:-}" ]]; then
+  if [[ "${EIDOLONS_QUIET:-0}" == "1" ]]; then
+    VERBOSITY="quiet"
+  elif [[ "${EIDOLONS_VERBOSE:-0}" == "1" ]]; then
+    VERBOSITY="verbose"
+  else
+    VERBOSITY="verbose"
+  fi
+fi
+export VERBOSITY
+
 # ─── Logging ───────────────────────────────────────────────────────────────
 # All log output goes to stderr so functions whose stdout is captured by
 # the caller (e.g. fetch_eidolon, roster_preset_members) can emit progress
@@ -34,11 +62,30 @@ mkdir -p "$CACHE_DIR"
 # Icon glyphs (▸✓·⚠✗) are pinned by tests — keep them as-is. Colors are
 # now sourced from theme.sh role aliases instead of raw ANSI vars, so a
 # theme swap automatically restyles all logs.
-say()   { printf "%s%s%s %s\n" "${BOLD}"        "${GLYPH_PROGRESS}" "${RESET}" "$*" >&2; }
-ok()    { printf "%s%s%s %s\n" "${UI_SUCCESS}"  "${GLYPH_OK}"       "${RESET}" "$*" >&2; }
-info()  { printf "%s%s%s %s\n" "${UI_INFO}"     "${GLYPH_INFO}"     "${RESET}" "$*" >&2; }
-warn()  { printf "%s%s%s %s\n" "${UI_WARN}"     "${GLYPH_WARN}"     "${RESET}" "$*" >&2; }
-die()   { printf "%s%s%s %s\n" "${UI_ERROR}"    "${GLYPH_ERROR}"    "${RESET}" "$*" >&2; exit 1; }
+#
+# Verbosity gates:
+#   say  — suppressed under quiet and default (stage banners replace these).
+#   info — suppressed under quiet and default; prints under verbose only.
+#   ok   — prints under default and verbose; suppressed under quiet.
+#   warn / die — always print regardless of tier.
+#
+# Note: ok continues to print at default tier so non-init commands
+# (verify, doctor, upgrade) retain their success summaries. sync.sh
+# replaces its per-member ok lines with ui_acquire_card directly.
+say() {
+  [[ "${VERBOSITY:-default}" == "verbose" ]] || return 0
+  printf "%s%s%s %s\n" "${BOLD}" "${GLYPH_PROGRESS}" "${RESET}" "$*" >&2
+}
+ok() {
+  [[ "${VERBOSITY:-default}" == "quiet" ]] && return 0
+  printf "%s%s%s %s\n" "${UI_SUCCESS}" "${GLYPH_OK}" "${RESET}" "$*" >&2
+}
+info() {
+  [[ "${VERBOSITY:-default}" == "verbose" ]] || return 0
+  printf "%s%s%s %s\n" "${UI_INFO}" "${GLYPH_INFO}" "${RESET}" "$*" >&2
+}
+warn()  { printf "%s%s%s %s\n" "${UI_WARN}"  "${GLYPH_WARN}"  "${RESET}" "$*" >&2; }
+die()   { printf "%s%s%s %s\n" "${UI_ERROR}" "${GLYPH_ERROR}" "${RESET}" "$*" >&2; exit 1; }
 
 # ─── YAML → JSON ──────────────────────────────────────────────────────────
 # Preferred: yq (mikefarah/yq or kislyuk/yq). Fallback: python3. Last resort: die.

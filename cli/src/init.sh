@@ -16,6 +16,8 @@ HOSTS_EXPLICIT=false
 SHARED_DISPATCH=""
 NON_INTERACTIVE=false
 FORCE=false
+QUIET=false
+VERBOSE_FLAG=false
 
 usage() {
   cat <<EOF
@@ -66,10 +68,23 @@ while [[ $# -gt 0 ]]; do
     --no-shared-dispatch)   SHARED_DISPATCH="false"; shift ;;
     --force)                FORCE=true; shift ;;
     --non-interactive)      NON_INTERACTIVE=true; shift ;;
+    --quiet)                QUIET=true; shift ;;
+    --verbose)              VERBOSE_FLAG=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# ─── Verbosity tier ──────────────────────────────────────────────────────
+# Honour env vars first, then CLI flags. Flags win over env vars.
+if [[ "$VERBOSE_FLAG" == "true" ]] || [[ "${EIDOLONS_VERBOSE:-0}" == "1" ]]; then
+  VERBOSITY="verbose"
+elif [[ "$QUIET" == "true" ]] || [[ "${EIDOLONS_QUIET:-0}" == "1" ]]; then
+  VERBOSITY="quiet"
+else
+  VERBOSITY="default"
+fi
+export VERBOSITY
 
 # ─── Detect greenfield vs brownfield ──────────────────────────────────────
 PROJECT_STATE="greenfield"
@@ -231,4 +246,9 @@ ok "$PROJECT_MANIFEST written"
 # sync's pre-install preview to avoid double-prompting. Non-interactive
 # mode inherits the same behaviour.
 say "Running sync to install members"
-exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive} --yes
+# shellcheck disable=SC2046
+exec bash "$SELF_DIR/sync.sh" \
+  ${NON_INTERACTIVE:+--non-interactive} \
+  --yes \
+  $([ "$VERBOSITY" = "quiet" ] && echo --quiet) \
+  $([ "$VERBOSITY" = "verbose" ] && echo --verbose)

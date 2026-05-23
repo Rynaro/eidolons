@@ -9,6 +9,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- **(feat) FF-style level-up UX for `eidolons init` / `eidolons sync`.** Per-member output
+  becomes an "ACQUIRED" character card (reuses `cli/src/ui/card.sh` primitives + sigils);
+  six stage banners (DETECT, FETCH, INSTALL, MIRROR, LOCK, HOST-WIRE) group the formerly
+  flat log noise; a final PARTY ROSTER card summarises the post-sync state from
+  `eidolons.lock`. Failed installs emit a red `INSTALL FAILED` card and produce non-zero
+  exit. New `--quiet`/`--verbose` flags + `EIDOLONS_QUIET`/`EIDOLONS_VERBOSE` env knobs
+  on both `init` and `sync`. Idempotent reruns skip the ACQUIRED card (party roster still
+  prints). Non-init commands (verify, doctor, upgrade, release, mcp) keep their legacy
+  output — the verbosity tier defaults to `verbose` outside the init/sync paths.
+  Plain-mode (`EIDOLONS_FANCY=0`) fallback preserved. See SPEC-2026-05-23-INIT-QOL §A2.
 - **(feat) Dispatch-pointer marker block in vendor docs.** `eidolons sync` now
   upserts a `<!-- eidolon:dispatch-pointer start/end -->` block into
   `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` regardless of
