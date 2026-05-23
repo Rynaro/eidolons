@@ -241,6 +241,12 @@ say "Writing $PROJECT_MANIFEST"
 
 ok "$PROJECT_MANIFEST written"
 
+# ─── .gitignore policy ───────────────────────────────────────────────────
+# Mark the bulky per-Eidolon `.eidolons/<name>/` artefacts as recreatable
+# by sync; keep the small nexus-owned cortex + harness marker in VCS.
+# No-op when not a git repo. See lib.sh::apply_eidolons_gitignore.
+apply_eidolons_gitignore
+
 # ─── Delegate actual install to `eidolons sync` ──────────────────────────
 # init already confirmed the host + dispatch choices interactively — skip
 # sync's pre-install preview to avoid double-prompting. Non-interactive

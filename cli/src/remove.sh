@@ -32,6 +32,10 @@ if [[ "$_remaining" -eq 0 ]]; then
     rm -rf ".eidolons/cortex"
     ok "Removed .eidolons/cortex/"
   fi
+  # Remove the .gitignore policy block — last Eidolon means the project
+  # no longer needs the eidolons-managed allowlist. Idempotent no-op
+  # when the block (or .gitignore itself) is absent.
+  remove_marker_block ".gitignore" "gitignore" "# "
 else
   info "Other Eidolons remain — cortex + dispatch-pointer blocks preserved"
 fi
