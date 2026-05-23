@@ -20,9 +20,12 @@ NAME="${1:-}"
 
 _remaining="$(manifest_members 2>/dev/null | grep -v "^${NAME}$" | grep -v '^$' | wc -l | tr -d ' ')" || _remaining=0
 if [[ "$_remaining" -eq 0 ]]; then
-  say "Last Eidolon — removing cortex host-doc blocks and .eidolons/cortex/"
-  for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md"; do
+  say "Last Eidolon — removing cortex + dispatch-pointer host-doc blocks and .eidolons/cortex/"
+  # Cortex block lived in the original three; the dispatch-pointer block
+  # also lives in GEMINI.md (added by PR-A1). Iterate both surfaces.
+  for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" "GEMINI.md"; do
     remove_marker_block "$_host_doc" "cortex"
+    remove_marker_block "$_host_doc" "dispatch-pointer"
   done
   # Remove the mirrored cortex directory.
   if [[ -d ".eidolons/cortex" ]]; then
@@ -30,7 +33,7 @@ if [[ "$_remaining" -eq 0 ]]; then
     ok "Removed .eidolons/cortex/"
   fi
 else
-  info "Other Eidolons remain — cortex blocks preserved"
+  info "Other Eidolons remain — cortex + dispatch-pointer blocks preserved"
 fi
 
 # ─── Per-Eidolon removal (v1.1) ──────────────────────────────────────────

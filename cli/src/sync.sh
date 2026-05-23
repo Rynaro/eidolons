@@ -384,6 +384,25 @@ else
   info "Shared dispatch off — skipping cortex host-doc injection"
 fi
 
+# ─── Dispatch-pointer injection (PR-A1) ──────────────────────────────────
+# Make vendor-specific files (CLAUDE.md, GEMINI.md,
+# .github/copilot-instructions.md) thin pointers to AGENTS.md — the
+# source of truth. Independent of shared-dispatch: the dispatch-pointer
+# block is always injected so hosts can find their way to AGENTS.md
+# even on per-vendor-only setups.
+#
+# AGENTS.md is deliberately absent from DISPATCH_POINTER_VENDORS — it is
+# the target of pointers, never itself a pointer.
+#
+# Warn-and-append protocol fires once per vendor on first insertion into
+# populated content. EIDOLONS_NO_GEMINI=1 opts out of GEMINI.md.
+if [[ "$DRY_RUN" == "true" ]]; then
+  info "  [dry-run] would inject dispatch-pointer block into $DISPATCH_POINTER_VENDORS"
+else
+  apply_dispatch_pointers
+  ok "Dispatch-pointer block injected into vendor docs"
+fi
+
 # ─── Harness marker (F7-3 / S20b) ───────────────────────────────────────
 # If Junction is installed ($EIDOLONS_HOME/cache/junction@*/), write a
 # manifest.json marker at ./.eidolons/harness/manifest.json so consumer

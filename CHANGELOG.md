@@ -8,6 +8,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **(feat) Dispatch-pointer marker block in vendor docs.** `eidolons sync` now
+  upserts a `<!-- eidolon:dispatch-pointer start/end -->` block into
+  `CLAUDE.md`, `GEMINI.md`, and `.github/copilot-instructions.md` regardless of
+  the `hosts.shared_dispatch` setting. Each vendor file becomes a thin pointer
+  to `./AGENTS.md` (the canonical source of truth) with vendor-specific
+  phrasing — `## Eidolons` heading (polite to existing H1s) for Markdown
+  vendors, plain prose for Copilot. The dispatch-pointer block coexists with
+  the existing cortex block (different marker name, both idempotent). When a
+  vendor file pre-exists with non-Eidolons content, one stderr `warn` line
+  fires on first append; subsequent syncs rewrite in place silently. Opt-out
+  via `EIDOLONS_NO_GEMINI=1` for projects that don't use Gemini. `eidolons
+  remove <last>` cleans both the dispatch-pointer and cortex blocks across
+  all four vendor surfaces. See SPEC-2026-05-23-INIT-QOL §A1.
+
 ### Fixed
 - **(ci) `roster-health.yml` no longer fails on cross-repo `gh release download`.**
   The "Verify release integrity metadata" step used `gh release download
