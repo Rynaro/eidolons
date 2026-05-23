@@ -2,7 +2,13 @@ name: Roster Health
 
 # Runs nightly and on changes to roster/index.yaml to verify every
 # Eidolon in the roster is EIIS-conformant and reachable.
-
+#
+# Triggers (note: pull_request is intentionally omitted — same-org PR
+# branches push to this repo directly and already fire the `push` trigger
+# with the canonical workflow token. The pull_request token is scoped
+# down for forks and rejects cross-repo `gh` calls against external
+# Eidolon repos. Re-add the pull_request trigger only if/when we accept
+# fork contributions and re-architect the cross-repo verifier.)
 on:
   push:
     paths:
@@ -10,12 +16,6 @@ on:
       - 'cli/**'
       - 'schemas/**'
       - '.github/workflows/roster-health.yml'
-  pull_request:
-    paths:
-      - 'roster/**'
-      - 'cli/**'
-      - 'schemas/**'
-      - 'eidolons.mcp.lock'
   schedule:
     # Nightly at 03:00 UTC — catches upstream Eidolon repos going bad
     - cron: '0 3 * * *'
@@ -265,10 +265,22 @@ jobs:
           [[ "$actual_commit" == "$expected_commit" ]] || { echo "::error::$name commit mismatch"; exit 1; }
           [[ "$actual_tree" == "$expected_tree" ]] || { echo "::error::$name tree mismatch"; exit 1; }
           if [[ "$(echo "$meta" | jq -r '.provenance.github_attestation // false')" == "true" ]]; then
-            gh release download "v$version" \
-              --repo "${{ steps.resolve.outputs.repo }}" \
-              --pattern release-manifest.json \
-              --dir /tmp/eidolon-release
+            # Public Eidolon repos serve release-manifest.json directly via
+            # GitHub's release CDN — no auth needed. Using curl rather than
+            # `gh release download` avoids the cross-repo GITHUB_TOKEN scope
+            # problem (the default token only has access to this repo, not
+            # to Rynaro/<EIDOLON>; cross-repo gh API calls return HTTP 401).
+            mkdir -p /tmp/eidolon-release
+            release_url="https://github.com/${{ steps.resolve.outputs.repo }}/releases/download/v$version/release-manifest.json"
+            if ! curl -fsSL "$release_url" -o /tmp/eidolon-release/release-manifest.json; then
+              echo "::error::could not download release-manifest.json from $release_url"
+              exit 1
+            fi
+            # Attestation verify uses Sigstore's public transparency log; it
+            # tolerates an unauthenticated GH_TOKEN for public attestations.
+            # If this step starts failing on cross-repo scope, gate it on
+            # `github.event_name != 'pull_request'` (currently no-op since
+            # pull_request was dropped from the trigger block above).
             gh attestation verify /tmp/eidolon-release/release-manifest.json \
               --repo "${{ steps.resolve.outputs.repo }}" \
               --signer-workflow "${{ github.repository }}/.github/workflows/eidolon-release-template.yml"
