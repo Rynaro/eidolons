@@ -10,12 +10,15 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/ui/prompt.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/ui/card.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_host_prune.sh"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
 SKIP_PREVIEW=false
 QUIET=false
 VERBOSE_FLAG=false
+STRICT_HOSTS_CLI=""   # tri-state: "" (use manifest), "true" or "false" (override)
 
 usage() {
   cat <<EOF
@@ -29,6 +32,10 @@ Options:
   --yes, -y           Skip the pre-install preview confirmation (auto-approve)
   --quiet             Show only the party roster card (suppress per-member output)
   --verbose           Print all log lines plus new cards (debug tier)
+  --strict-hosts      Hard-fail if a per-Eidolon installer wrote a vendor file
+                      without a manifest `host` annotation. Overrides
+                      hosts.strict in eidolons.yaml for this run.
+  --no-strict-hosts   Disable strict mode for this run (override manifest).
   -h, --help          Show this help
 
 Behavior:
@@ -48,6 +55,8 @@ while [[ $# -gt 0 ]]; do
     --yes|-y)          SKIP_PREVIEW=true; shift ;;
     --quiet)           QUIET=true; shift ;;
     --verbose)         VERBOSE_FLAG=true; shift ;;
+    --strict-hosts)    STRICT_HOSTS_CLI=true; shift ;;
+    --no-strict-hosts) STRICT_HOSTS_CLI=false; shift ;;
     -h|--help)         usage; exit 0 ;;
     *)                 echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -71,7 +80,19 @@ MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
 # Default shared_dispatch to false when the key is absent (pre-v1.2 manifests).
 SHARED_DISPATCH="$(echo "$MANIFEST_JSON" | jq -r '.hosts.shared_dispatch // false')"
+# Default hosts.strict to false when the key is absent (pre-PR-I2 manifests).
+STRICT_HOSTS_MANIFEST="$(echo "$MANIFEST_JSON" | jq -r '.hosts.strict // false')"
+# CLI flag overrides manifest. Tri-state: "" → use manifest; "true"/"false" → override.
+if [[ -n "$STRICT_HOSTS_CLI" ]]; then
+  STRICT_HOSTS="$STRICT_HOSTS_CLI"
+else
+  STRICT_HOSTS="$STRICT_HOSTS_MANIFEST"
+fi
 MEMBERS_JSON="$(echo "$MANIFEST_JSON" | jq -c '.members[]')"
+
+# Strict-mode violations collected across all per-member loops; checked at
+# end-of-sync so the user sees every offending Eidolon at once.
+_STRICT_VIOLATIONS=0
 
 # ─── DETECT stage ────────────────────────────────────────────────────────
 [[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "DETECT  host environments"
@@ -292,6 +313,26 @@ while read -r member; do
     _sync_has_failure=true
     continue
   fi
+
+  # ─── Host-leakage prune (PR-I2) ────────────────────────────────────────
+  # Run AFTER the installer so we operate on the freshly-emitted tree.
+  # Strict check runs first so its violations reflect the installer's
+  # actual output (before either prune pass mutates the tree). The
+  # manifest pass is the cooperative path; the pattern pass is the
+  # defensive fallback.
+  if [[ "$STRICT_HOSTS" == "true" ]]; then
+    _strict_lines="$(host_prune_strict_check "$target" "$HOSTS_CSV" || true)"
+    if [[ -n "$_strict_lines" ]]; then
+      warn "--strict-hosts: $name emitted files without host annotation:"
+      while IFS= read -r _vline; do
+        [[ -z "$_vline" ]] && continue
+        warn "  $_vline"
+      done <<< "$_strict_lines"
+      _STRICT_VIOLATIONS=$((_STRICT_VIOLATIONS + 1))
+    fi
+  fi
+  host_prune_manifest_pass "$target" "$HOSTS_CSV"
+  host_prune_path_patterns "$target" "$HOSTS_CSV"
 
   # ─── claude-code safety net ────────────────────────────────────────────
   # If the host wiring asked for claude-code but the per-Eidolon installer
@@ -571,6 +612,16 @@ if [[ -f "$_mcp_lf" ]] && command -v jq >/dev/null 2>&1; then
     done <<< "$_mcp_installed"
     info "  Run 'eidolons mcp upgrade --all' to upgrade, or 'eidolons mcp health' to probe."
   fi
+fi
+
+# ─── Strict-hosts gate (PR-I2) ───────────────────────────────────────────
+# If any per-member strict check raised violations, fail the run. Errors
+# were already emitted inline as `warn` lines; this is the abort. Runs
+# before the party roster so a failed sync doesn't celebrate prematurely.
+if [[ "$_STRICT_VIOLATIONS" -gt 0 ]]; then
+  warn "--strict-hosts: $_STRICT_VIOLATIONS Eidolon(s) wrote files without manifest host annotations (details above)."
+  warn "Run without --strict-hosts to prune by path patterns instead, or upgrade the offending Eidolon(s) to a release with annotated install.manifest.json (EIIS soft dep FU-I2.1)."
+  exit 1
 fi
 
 # ─── Party roster card ───────────────────────────────────────────────────

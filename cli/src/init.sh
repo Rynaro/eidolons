@@ -18,6 +18,7 @@ NON_INTERACTIVE=false
 FORCE=false
 QUIET=false
 VERBOSE_FLAG=false
+STRICT_HOSTS=false
 
 usage() {
   cat <<EOF
@@ -43,6 +44,10 @@ Options:
   --force                  Overwrite existing eidolons.yaml without prompting.
   --non-interactive        Fail on any prompt. Requires --preset or --members and explicit
                            --hosts (no broadcast when detection finds nothing).
+  --strict-hosts           Treat per-Eidolon writes for non-selected hosts as a hard
+                           error rather than a silent path-pattern prune. Requires
+                           per-Eidolon install.manifest.json to annotate `host` per file.
+                           Persisted to eidolons.yaml under hosts.strict (default: false).
   -h, --help               Show this help
 
 Behavior:
@@ -70,6 +75,7 @@ while [[ $# -gt 0 ]]; do
     --non-interactive)      NON_INTERACTIVE=true; shift ;;
     --quiet)                QUIET=true; shift ;;
     --verbose)              VERBOSE_FLAG=true; shift ;;
+    --strict-hosts)         STRICT_HOSTS=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -222,6 +228,7 @@ say "Writing $PROJECT_MANIFEST"
   echo "hosts:"
   echo "  wire: [$(echo "$HOSTS" | sed 's/,/, /g')]"
   echo "  shared_dispatch: ${SHARED_DISPATCH}"
+  echo "  strict: ${STRICT_HOSTS}"
   echo ""
   echo "members:"
   for m in "${MEMBERS_ARR[@]}"; do
@@ -250,11 +257,15 @@ apply_eidolons_gitignore
 # ─── Delegate actual install to `eidolons sync` ──────────────────────────
 # init already confirmed the host + dispatch choices interactively — skip
 # sync's pre-install preview to avoid double-prompting. Non-interactive
-# mode inherits the same behaviour.
+# mode inherits the same behaviour. --strict-hosts is forwarded only when
+# the flag was set explicitly; otherwise sync reads it from the manifest.
+SYNC_STRICT_FLAG=""
+[[ "$STRICT_HOSTS" == "true" ]] && SYNC_STRICT_FLAG="--strict-hosts"
 say "Running sync to install members"
 # shellcheck disable=SC2046
 exec bash "$SELF_DIR/sync.sh" \
   ${NON_INTERACTIVE:+--non-interactive} \
   --yes \
+  ${SYNC_STRICT_FLAG} \
   $([ "$VERBOSITY" = "quiet" ] && echo --quiet) \
   $([ "$VERBOSITY" = "verbose" ] && echo --verbose)

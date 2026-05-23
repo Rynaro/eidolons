@@ -45,6 +45,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   `.git/` is present; one-time stderr migration hint when `.eidolons/` is already
   tracked (CLI never modifies the consumer's git index). `eidolons remove
   <last>` cleans the block. See SPEC-2026-05-23-INIT-QOL §I1.
+- **(feat) Host-leakage prune for `.eidolons/<name>/`.** Several Eidolons today
+  ignore the `--hosts` argument that `eidolons sync` forwards and write
+  vendor-specific files (`hosts/cursor.md`, `hosts/copilot.md`,
+  `.github/copilot-instructions.md`, `CLAUDE.md`, `AGENTS.md`) regardless of the
+  user's host selection. The nexus now runs a defensive prune pass after each
+  per-Eidolon installer completes, removing files for hosts that aren't in
+  `hosts.wire`. Two paths: a cooperative **manifest-driven** pass that reads
+  per-file `host` annotations from `install.manifest.json`, and a defensive
+  **path-pattern** pass that targets a fixed table of well-known vendor files.
+  AGENTS.md uses a multi-host rule (kept iff codex OR opencode is selected).
+  New `--strict-hosts` / `--no-strict-hosts` flags on `eidolons init` and
+  `eidolons sync`, persisted as `hosts.strict` in `eidolons.yaml`. When strict
+  mode is on, the sync emits violations and exits non-zero if any vendor-pattern
+  file is unannotated in `install.manifest.json` — pushes Eidolon authors toward
+  the EIIS-soft-dep (FU-I2.1) for per-file `host` fields. Verbose
+  (`EIDOLONS_VERBOSE=1`) prints one `info` line per pruned file. New module
+  `cli/src/lib_host_prune.sh`. See SPEC-2026-05-23-INIT-QOL §I2.
 
 ### Fixed
 - **(ci) `roster-health.yml` no longer fails on cross-repo `gh release download`.**
