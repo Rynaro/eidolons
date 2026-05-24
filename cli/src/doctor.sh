@@ -407,6 +407,32 @@ else
   fi
 fi
 
+# ─── Check 10: Orphaned host-vendor files ────────────────────────────────
+# Warns when a vendor file exists on disk but its corresponding host is not
+# in hosts.wire. This typically happens after upgrading from v1.4.x where
+# the CLI created GEMINI.md / copilot-instructions.md unconditionally.
+# The remedy is manual deletion — the CLI never deletes user-tracked files.
+# Warn-only; exit code unaffected (ERRORS not incremented).
+ui_section_out "Orphaned host-vendor files"
+
+DOCTOR_HOSTS_CSV="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.wire | join(",")')"
+
+_DOCTOR_VENDOR_HOST_MAP="GEMINI.md:gemini
+.github/copilot-instructions.md:copilot"
+
+while IFS=: read -r _vfile _vhost; do
+  [[ -n "$_vfile" ]] || continue
+  if [[ -f "$_vfile" ]] && [[ ",${DOCTOR_HOSTS_CSV}," != *",${_vhost},"* ]]; then
+    warn "$_vfile exists but host '$_vhost' is not in hosts.wire."
+    warn "  remedy: delete $_vfile if you no longer use the $_vhost host;"
+    warn "          OR add '$_vhost' to hosts.wire in eidolons.yaml and re-sync."
+  else
+    pass "$_vfile orphan check passed"
+  fi
+done <<EOF
+$_DOCTOR_VENDOR_HOST_MAP
+EOF
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then

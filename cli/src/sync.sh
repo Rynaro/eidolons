@@ -12,6 +12,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/ui/card.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_host_prune.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_eidolons_md.sh"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -435,6 +437,19 @@ LOCK
   fi
 done <<< "$MEMBERS_JSON"
 
+# ─── B6: Append composition block to lockfile ────────────────────────────
+# Documents the composition pass's inputs and target for traceability.
+# Additive only; no top-level schema bump required (schema_version is
+# namespaced under composition.*).
+cat >> "$LOCK_TMP" <<'COMPOSITIONBLOCK'
+composition:
+  target: EIDOLONS.md
+  hoisted_from:
+    - CLAUDE.md
+  agents_md_role: canonical-with-pointer
+  schema_version: 1
+COMPOSITIONBLOCK
+
 # ─── LOCK stage ─────────────────────────────────────────────────────────
 [[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "LOCK  eidolons.lock"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
@@ -505,36 +520,74 @@ When a free-form prompt arrives that doesn't already name an Eidolon, route it v
 
 if [[ "$DRY_RUN" == "true" ]]; then
   if [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
-    info "  [dry-run] would inject cortex block into root host docs (shared-dispatch on)"
+    info "  [dry-run] would inject cortex block into host-wired root docs (shared-dispatch on)"
   else
     info "  [dry-run] skipping cortex host-doc injection (shared-dispatch off)"
   fi
 elif [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+  # B3: Host-gate the cortex injection loop. Only inject into vendor docs
+  # whose corresponding host is in HOSTS_CSV.
+  # AGENTS.md special case (EIIS v1.1 §4.1.0): written when codex OR opencode
+  # is wired, because AGENTS.md is their primary instruction surface.
   for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md"; do
+    _host_for_doc="$(_cortex_doc_host "$_host_doc")"
+    if [[ "$_host_doc" == "AGENTS.md" ]]; then
+      if [[ ",${HOSTS_CSV}," != *",codex,"* ]] && [[ ",${HOSTS_CSV}," != *",opencode,"* ]]; then
+        info "  skipping cortex injection in AGENTS.md (codex/opencode not in hosts.wire)"
+        continue
+      fi
+    elif [[ -n "$_host_for_doc" ]] && [[ ",${HOSTS_CSV}," != *",${_host_for_doc},"* ]]; then
+      info "  skipping cortex injection in $_host_doc (host=$_host_for_doc not in hosts.wire)"
+      continue
+    fi
     upsert_marker_block "$_host_doc" "cortex" "$CORTEX_BLOCK"
   done
-  ok "Cortex pointer block injected into root host docs"
+  ok "Cortex pointer block injected into host-wired root docs"
 else
   info "Shared dispatch off — skipping cortex host-doc injection"
 fi
 
+# ─── EIDOLONS.md composition pass (B1) ──────────────────────────────────
+# Hoist per-eidolon marker blocks from ./CLAUDE.md into ./EIDOLONS.md and
+# replace source blocks with thin pointer blocks. Must run BEFORE
+# apply_dispatch_pointers so the dispatch-pointer block lands on the
+# already-reduced CLAUDE.md (which now only has <name>-pointer blocks).
+# Skipped on --dry-run; compose_eidolons_md is idempotent so re-runs are safe.
+if [[ "$DRY_RUN" == "true" ]]; then
+  info "  [dry-run] would run compose_eidolons_md pass (hoist from CLAUDE.md → EIDOLONS.md)"
+else
+  _members_space="$(echo "$MEMBERS_JSON" | jq -r '.name' | tr '\n' ' ')"
+  compose_eidolons_md "$_members_space"
+  ok "EIDOLONS.md composition pass complete"
+fi
+
 # ─── Dispatch-pointer injection (PR-A1) ──────────────────────────────────
 # Make vendor-specific files (CLAUDE.md, GEMINI.md,
-# .github/copilot-instructions.md) thin pointers to AGENTS.md — the
-# source of truth. Independent of shared-dispatch: the dispatch-pointer
-# block is always injected so hosts can find their way to AGENTS.md
-# even on per-vendor-only setups.
+# .github/copilot-instructions.md) thin pointers to EIDOLONS.md — the
+# canonical composition surface. Host-gated on HOSTS_CSV: only vendors
+# whose corresponding host is in hosts.wire are written.
 #
 # AGENTS.md is deliberately absent from DISPATCH_POINTER_VENDORS — it is
-# the target of pointers, never itself a pointer.
+# the canonical surface for codex/opencode, not a pointer target.
 #
 # Warn-and-append protocol fires once per vendor on first insertion into
-# populated content. EIDOLONS_NO_GEMINI=1 opts out of GEMINI.md.
+# populated content. EIDOLONS_NO_GEMINI=1 opts out of GEMINI.md (deprecated
+# in v1.5.0; host gating now supersedes it — will be removed in v1.6.0).
 if [[ "$DRY_RUN" == "true" ]]; then
   info "  [dry-run] would inject dispatch-pointer block into $DISPATCH_POINTER_VENDORS"
 else
-  apply_dispatch_pointers
+  apply_dispatch_pointers "$HOSTS_CSV"
   ok "Dispatch-pointer block injected into vendor docs"
+fi
+
+# ─── AGENTS.md supplementary pointer (B4) ───────────────────────────────
+# Inject a supplementary eidolons-md-pointer block into AGENTS.md, but
+# ONLY when AGENTS.md already exists (codex/opencode writer created it).
+# Never creates AGENTS.md from this pass (FINDING-005).
+if [[ "$DRY_RUN" == "true" ]]; then
+  info "  [dry-run] would inject eidolons-md-pointer block into AGENTS.md (if present)"
+else
+  apply_agents_md_pointer
 fi
 
 # ─── Harness marker (F7-3 / S20b) ───────────────────────────────────────
