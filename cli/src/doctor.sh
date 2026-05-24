@@ -433,6 +433,54 @@ done <<EOF
 $_DOCTOR_VENDOR_HOST_MAP
 EOF
 
+# ─── Check 11: AGENTS.md drift ────────────────────────────────────────────
+# Warns when AGENTS.md still contains substantive per-Eidolon content blocks
+# (i.e., <!-- eidolon:<name> start --> for any member in the lockfile) that
+# should have been hoisted into EIDOLONS.md by the compose pass. Also surfaces
+# the stale v1.5.0 `eidolons-md-pointer` block, which is no longer written by
+# sync under v1.6.0+.
+#
+# Warn-only; ERRORS unaffected. Remedy: re-run `eidolons sync`, or for the
+# v1.5.0 supplementary block, delete the marker pair manually.
+ui_section_out "AGENTS.md drift"
+
+if [[ ! -f "AGENTS.md" ]]; then
+  pass "AGENTS.md not present — drift check N/A"
+else
+  # Collect member names from the lockfile (.members[].name).
+  _doctor_members=""
+  if [[ -f "$PROJECT_LOCK" ]]; then
+    _doctor_members="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+      | jq -r '(.members // [])[].name' 2>/dev/null || true)"
+  fi
+
+  _drift_count=0
+  if [[ -n "$_doctor_members" ]]; then
+    while IFS= read -r _m; do
+      [[ -n "$_m" ]] || continue
+      # Substantive content block: <!-- eidolon:<m> start --> WITHOUT -pointer suffix.
+      # Note: a -pointer marker is <!-- eidolon:<m>-pointer start --> — the exact
+      # match on `<m> start -->` is what discriminates.
+      if grep -qF "<!-- eidolon:${_m} start -->" AGENTS.md 2>/dev/null; then
+        warn "AGENTS.md still contains <!-- eidolon:${_m} --> content block (expected: hoisted into EIDOLONS.md)."
+        warn "  remedy: run 'eidolons sync' to re-hoist."
+        _drift_count=$((_drift_count + 1))
+      fi
+    done <<< "$_doctor_members"
+  fi
+
+  # Stale v1.5.0 supplementary pointer block.
+  if grep -qF "<!-- eidolon:eidolons-md-pointer start -->" AGENTS.md 2>/dev/null; then
+    warn "AGENTS.md contains a stale <!-- eidolon:eidolons-md-pointer --> block from v1.5.0."
+    warn "  remedy: delete the marker pair (and the body lines between them) manually;"
+    warn "          the per-member <name>-pointer blocks already redirect to EIDOLONS.md."
+  fi
+
+  if [[ "$_drift_count" -eq 0 ]] && ! grep -qF "<!-- eidolon:eidolons-md-pointer start -->" AGENTS.md 2>/dev/null; then
+    pass "AGENTS.md drift check passed (only pointer blocks present)"
+  fi
+fi
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then

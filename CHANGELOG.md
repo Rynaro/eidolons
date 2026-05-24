@@ -8,6 +8,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-24
+
+### Added
+
+- **(feat) Symmetric `AGENTS.md` hoist into `EIDOLONS.md` (R2A-1).** `compose_eidolons_md`
+  now accepts a second arg `sources` (default: `./CLAUDE.md ./AGENTS.md`) and scans
+  both files symmetrically. Per-Eidolon content blocks in `AGENTS.md` are hoisted into
+  `EIDOLONS.md` and replaced with `<!-- eidolon:<name>-pointer -->` blocks, matching
+  the pointer pattern already established for `CLAUDE.md` in v1.5.0. Both source files
+  become thin pointer files; `EIDOLONS.md` is the single canonical content surface.
+  Lockfile `composition.hoisted_from` updated to `[CLAUDE.md, AGENTS.md]`;
+  `composition.agents_md_role` changed to `hoisted`. See SPEC-2026-05-24-INIT-ROUND2A §R2A-1.
+
+- **(feat) Magical init UX — captured installer stdout + compressed banners (R2A-2).**
+  New helper `run_installer_captured` in `lib.sh`: at default verbosity, each per-Eidolon
+  `install.sh` runs with stdout+stderr captured to a tmpfile. On success the tmpfile is
+  silently unlinked; on failure the last 20 lines are re-emitted to stderr prefixed
+  `  [name] ` before `ui_failed_card`. Under `--verbose`, installer output passes through
+  directly (legacy behaviour). Section banners `FETCH`, `INSTALL`, `LOCK`, `MIRROR`,
+  `HOST-WIRE` are now suppressed at default tier (visible under `--verbose` only);
+  `DETECT` and `PARTY ROSTER` remain as anchor banners at all tiers. Per-member progress
+  lines `[N/M] name@ver — fetched` and `[N/M] name@ver — installing` are emitted before
+  the ACQUIRED card. See SPEC-2026-05-24-INIT-ROUND2A §R2A-2.
+
+- **(feat) `eidolons doctor` Check 11 — AGENTS.md drift detector (R2A-3).** Warns when
+  `AGENTS.md` contains a substantive `<!-- eidolon:<name> start -->` block (without
+  `-pointer` suffix) for any member in the lockfile — this indicates the compose pass
+  has not yet run or the installer regressed. Also flags the stale
+  `<!-- eidolon:eidolons-md-pointer -->` block from v1.5.0 that is no longer written
+  by sync. Warn-only (exit code 0); remedy: `eidolons sync`. See SPEC-2026-05-24-INIT-ROUND2A §R2A-3.
+
+### Removed
+
+- **(breaking-internal) `apply_agents_md_pointer` retired.** The v1.5.0 helper that
+  injected a supplementary `<!-- eidolon:eidolons-md-pointer -->` block into `AGENTS.md`
+  is deleted. Under v1.6.0 each per-Eidolon block in `AGENTS.md` is hoisted by the
+  symmetric compose pass and replaced with a per-member `<name>-pointer` block. Existing
+  consumer projects with a leftover `eidolons-md-pointer` block are flagged by doctor
+  Check 11; the block is never auto-removed.
+
 ## [1.5.0] - 2026-05-24
 
 ### Added

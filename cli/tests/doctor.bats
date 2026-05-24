@@ -1010,3 +1010,73 @@ EOF
   # No orphan warning for GEMINI.md because gemini IS in hosts.wire.
   [[ ! "$output" =~ "GEMINI.md exists but host 'gemini' is not in hosts.wire" ]]
 }
+
+# ─── G-R2A-3: Doctor Check 11 — AGENTS.md drift ──────────────────────────
+
+# Helper: set up a passing project state for Check 11 tests.
+# (manifest + lock + install + dispatch files to satisfy checks 1-10)
+_seed_check11_base() {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+}
+
+# G-R2A-3.1 — Check 11 clean: AGENTS.md absent → N/A pass line.
+@test "Check 11 no AGENTS.md" {
+  _seed_check11_base
+  # Ensure AGENTS.md does NOT exist.
+  rm -f AGENTS.md
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md not present" ]]
+}
+
+# G-R2A-3.2 — Check 11 clean: only pointer blocks → pass line.
+@test "Check 11 clean" {
+  _seed_check11_base
+  cat > AGENTS.md <<'EOF'
+<!-- eidolon:atlas-pointer start -->
+See [`./EIDOLONS.md`](./EIDOLONS.md) §atlas — managed by `eidolons sync`. Do not edit between markers.
+<!-- eidolon:atlas-pointer end -->
+EOF
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md drift check passed" ]]
+}
+
+# G-R2A-3.3 — Check 11 drift: substantive content block detected.
+@test "Check 11 AGENTS.md drift content block" {
+  _seed_check11_base
+  cat > AGENTS.md <<'EOF'
+<!-- eidolon:atlas start -->
+Atlas methodology content block
+<!-- eidolon:atlas end -->
+EOF
+
+  run eidolons doctor
+  # Warn-only; exit code 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md still contains" ]]
+  [[ "$output" =~ "eidolon:atlas" ]]
+  [[ "$output" =~ "eidolons sync" ]]
+}
+
+# G-R2A-3.4 — Check 11 stale v1.5.0 eidolons-md-pointer block.
+@test "Check 11 AGENTS.md stale eidolons-md-pointer" {
+  _seed_check11_base
+  cat > AGENTS.md <<'EOF'
+<!-- eidolon:eidolons-md-pointer start -->
+## Additionally see
+- [`./EIDOLONS.md`](./EIDOLONS.md)
+<!-- eidolon:eidolons-md-pointer end -->
+EOF
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "stale" ]]
+  [[ "$output" =~ "eidolons-md-pointer" ]]
+}
