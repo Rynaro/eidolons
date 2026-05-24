@@ -8,7 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-## [1.6.1] - 2026-05-24
+## [1.6.0] - 2026-05-24
 
 ### Fixed
 
@@ -28,9 +28,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 - **(chore) Prune empty `.github/` directories after host-leakage path-pattern pass (R2B-6).** `host_prune_path_patterns` in `lib_host_prune.sh` now runs `find "$target" -type d -empty -delete` after the per-file prune loop. Removes empty `.eidolons/<name>/.github/` leftovers (e.g. `atlas`) that the file-only prune missed.
 
-## [1.6.0] - 2026-05-24
-
-### Added
+### Added (round 2 features — R2A)
 
 - **(feat) Symmetric `AGENTS.md` hoist into `EIDOLONS.md` (R2A-1).** `compose_eidolons_md`
   now accepts a second arg `sources` (default: `./CLAUDE.md ./AGENTS.md`) and scans
