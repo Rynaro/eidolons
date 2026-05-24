@@ -8,6 +8,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added (v1.5.0 — init sanity bundle)
+
+- **(feat) `EIDOLONS.md` as canonical content surface (Block 1).** `eidolons sync`
+  now runs a composition pass that hoists per-Eidolon `<!-- eidolon:<name> start/end -->`
+  blocks out of root `CLAUDE.md` into a new consumer-project-root `EIDOLONS.md`
+  (the canonical composition surface). The source blocks in `CLAUDE.md` are replaced
+  with thin `<!-- eidolon:<name>-pointer -->` blocks (distinct marker name, idempotency
+  key). A short preamble is written to `EIDOLONS.md` on creation. `AGENTS.md` is
+  intentionally excluded from the composition pass (Codex/opencode primary surface;
+  EIIS v1.1 §4.1.0). New helper: `cli/src/lib_eidolons_md.sh` (`compose_eidolons_md`).
+  See SPEC-2026-05-23-INIT-SANITY §B1.
+
+- **(feat) Host-gated dispatch-pointer and cortex injection passes (Blocks 2+3).**
+  `apply_dispatch_pointers` now accepts a `hosts_csv` argument and skips vendor files
+  whose corresponding host is not in `hosts.wire`. Vendor→host mapping:
+  `CLAUDE.md` → `claude-code`, `GEMINI.md` → `gemini`,
+  `.github/copilot-instructions.md` → `copilot`. All dispatch-pointer bodies now
+  redirect to `./EIDOLONS.md` instead of `./AGENTS.md`. The cortex injection loop in
+  `sync.sh` similarly filters on `HOSTS_CSV`; `AGENTS.md` cortex injection is
+  special-cased on `codex OR opencode` per EIIS v1.1 §4.1.0. `EIDOLONS_NO_GEMINI=1`
+  is deprecated (v1.5.0: honor+warn; v1.6.0: remove — gemini is now host-gated).
+  See SPEC-2026-05-23-INIT-SANITY §B2+B3.
+
+- **(feat) `AGENTS.md` supplementary pointer + `eidolons doctor` Check 10 (Blocks 4+5).**
+  `apply_agents_md_pointer` injects a `<!-- eidolon:eidolons-md-pointer -->` block into
+  `AGENTS.md` after sync (only when `AGENTS.md` already exists; never creates it).
+  New `doctor` Check 10 warns when `GEMINI.md` or `.github/copilot-instructions.md`
+  exists but its corresponding host is not in `hosts.wire` (upgrade-from-v1.4.x
+  leftover detection). Warn-only; no auto-delete.
+  See SPEC-2026-05-23-INIT-SANITY §B4+B5.
+
+- **(chore) `eidolons.lock` `composition:` block (Block 6).** `eidolons sync` now
+  appends a top-level `composition:` block to `eidolons.lock` recording the
+  composition target (`EIDOLONS.md`), hoist sources (`[CLAUDE.md]`), `AGENTS.md`
+  role (`canonical-with-pointer`), and schema version (`1`). Additive; no lockfile
+  schema version bump required. See SPEC-2026-05-23-INIT-SANITY §B6.
+
 ## [1.4.0] - 2026-05-23
 
 ### Added
