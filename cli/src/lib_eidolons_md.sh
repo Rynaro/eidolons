@@ -76,15 +76,13 @@ compose_eidolons_md() {
     local start="<!-- eidolon:${name} start -->"
     local pointer_start="<!-- eidolon:${name}-pointer start -->"
 
-    # Skip if the block is absent from source (nothing to hoist).
+    # Skip if the content block is absent from source (nothing to hoist).
+    # Note: the pointer block alone (atlas-pointer) does NOT prevent hoist —
+    # the installer may have re-appended the content block on a subsequent
+    # sync (e.g., after the pointer was written on a first pass). The
+    # idempotency key is the PRESENCE of the content block, not the pointer.
     if ! grep -qF "$start" "$src" 2>/dev/null; then
       info "  compose_eidolons_md: no $name block in $src — skipping"
-      continue
-    fi
-
-    # Skip if a pointer block already exists (already hoisted in a prior run).
-    if grep -qF "$pointer_start" "$src" 2>/dev/null; then
-      info "  compose_eidolons_md: $name already hoisted (pointer block present) — skipping"
       continue
     fi
 
@@ -103,6 +101,22 @@ compose_eidolons_md() {
 
     # Remove the original content block from CLAUDE.md.
     remove_marker_block "$src" "$name"
+
+    # upsert_marker_block's append mode prepends a blank line ('\n') before
+    # the start marker. After remove_marker_block strips the marker+content,
+    # this blank line remains as a trailing empty line. Strip ALL trailing
+    # blank lines from the source so idempotency holds on re-runs.
+    # Bash 3.2 safe: awk stores all lines, trims trailing empties.
+    local _clean_tmp
+    _clean_tmp="$(mktemp)"
+    awk '{
+      lines[NR] = $0
+    }
+    END {
+      last = NR
+      while (last > 0 && lines[last] == "") last--
+      for (i = 1; i <= last; i++) print lines[i]
+    }' "$src" > "$_clean_tmp" && mv "$_clean_tmp" "$src"
 
     # Insert a thin pointer block under <name>-pointer marker.
     ptr_text="See [\`./EIDOLONS.md\`](./EIDOLONS.md) §${name} — managed by \`eidolons sync\`. Do not edit between markers."
