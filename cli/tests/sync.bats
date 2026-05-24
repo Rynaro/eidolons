@@ -687,9 +687,9 @@ EOF
   diff -q EIDOLONS.md.first EIDOLONS.md
 }
 
-# G-B1.3 — compose_eidolons_md does NOT hoist from AGENTS.md.
-@test "compose_eidolons_md leaves AGENTS.md untouched" {
-  # Seed AGENTS.md with a per-eidolon block.
+# G-B1.3 — compose_eidolons_md hoists from AGENTS.md symmetrically with CLAUDE.md.
+@test "compose_eidolons_md hoists from AGENTS.md" {
+  # Seed AGENTS.md with a per-eidolon block (no CLAUDE.md).
   cat > AGENTS.md <<'EOF'
 <!-- eidolon:atlas start -->
 agents atlas content
@@ -700,16 +700,17 @@ EOF
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
     . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
-    compose_eidolons_md 'atlas'
+    compose_eidolons_md 'atlas' './CLAUDE.md ./AGENTS.md'
   " 2>/dev/null
 
-  # AGENTS.md must be byte-identical (composition does NOT hoist from AGENTS.md).
-  grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
-  grep -qF "agents atlas content" AGENTS.md
-  ! grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+  # EIDOLONS.md created with hoisted block.
+  [ -f "EIDOLONS.md" ]
+  grep -qF "<!-- eidolon:atlas start -->" EIDOLONS.md
+  grep -qF "agents atlas content" EIDOLONS.md
 
-  # EIDOLONS.md not created (no source content in CLAUDE.md).
-  [ ! -f "EIDOLONS.md" ]
+  # AGENTS.md now has atlas-pointer block, not the original content block.
+  grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
 }
 
 # G-B1.4 — existing preamble in EIDOLONS.md is preserved byte-for-byte.
@@ -821,67 +822,93 @@ EOF
   " 2>/dev/null
 }
 
-# ─── G-B4: AGENTS.md supplementary pointer (Block 4) ─────────────────────
+# ─── G-R2A-1: symmetric AGENTS.md hoist (R2A-1) ──────────────────────────
 
-# G-B4.1 — apply_agents_md_pointer injects eidolons-md-pointer when AGENTS.md exists.
-@test "AGENTS.md supplementary pointer" {
-  # Create AGENTS.md (simulating codex writer).
+# G-R2A-1.2 — compose_eidolons_md symmetric idempotent: both sources hoisted,
+# second run is byte-identical.
+@test "compose_eidolons_md symmetric idempotent" {
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas start -->
+claude atlas body
+<!-- eidolon:atlas end -->
+EOF
   cat > AGENTS.md <<'EOF'
 <!-- eidolon:atlas start -->
-atlas methodology
+agents atlas body
 <!-- eidolon:atlas end -->
 EOF
 
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_agents_md_pointer
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas' './CLAUDE.md ./AGENTS.md'
   " 2>/dev/null
 
-  grep -qF "<!-- eidolon:eidolons-md-pointer start -->" AGENTS.md
-  grep -qF "EIDOLONS.md" AGENTS.md
-  # Per-eidolon blocks still present (not hoisted from AGENTS.md).
-  grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
-  grep -qF "atlas methodology" AGENTS.md
-}
+  cp CLAUDE.md CLAUDE.md.first
+  cp AGENTS.md AGENTS.md.first
+  cp EIDOLONS.md EIDOLONS.md.first
 
-# G-B4.2 — apply_agents_md_pointer does NOT create AGENTS.md when absent.
-@test "AGENTS.md not created when codex absent" {
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_agents_md_pointer
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas' './CLAUDE.md ./AGENTS.md'
   " 2>/dev/null
 
-  [ ! -f "AGENTS.md" ]
+  diff -q CLAUDE.md.first CLAUDE.md
+  diff -q AGENTS.md.first AGENTS.md
+  diff -q EIDOLONS.md.first EIDOLONS.md
 }
 
-# G-B4.3 — apply_agents_md_pointer is idempotent.
-@test "AGENTS.md supplementary pointer idempotent" {
+# G-R2A-1.3 — compose_eidolons_md divergent body last-write-wins (AGENTS.md wins).
+@test "compose_eidolons_md divergent body last-write-wins" {
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas start -->
+VARIANT-A
+<!-- eidolon:atlas end -->
+EOF
   cat > AGENTS.md <<'EOF'
-atlas content
+<!-- eidolon:atlas start -->
+VARIANT-B
+<!-- eidolon:atlas end -->
 EOF
 
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_agents_md_pointer
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas' './CLAUDE.md ./AGENTS.md'
   " 2>/dev/null
 
-  cp AGENTS.md AGENTS.md.first
+  # AGENTS.md processed second; its body wins in EIDOLONS.md.
+  grep -qF "VARIANT-B" EIDOLONS.md
+  ! grep -qF "VARIANT-A" EIDOLONS.md
 
-  bash -c "
-    set -e
-    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_agents_md_pointer
-  " 2>/dev/null
-
-  diff -q AGENTS.md.first AGENTS.md
+  # Both source files end up with pointer blocks.
+  grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
+  ! grep -qF "<!-- eidolon:atlas start -->" CLAUDE.md
+  grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
 }
 
 # ─── G-B6: lockfile composition block (Block 6) ───────────────────────────
 
-# G-B6.1 — eidolons sync --dry-run produces a lockfile with a composition: block.
+# G-B6.1 — eidolons sync --dry-run produces a lockfile with updated composition block.
+@test "lockfile composition hoisted_from" {
+  seed_manifest
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  grep -qF "composition:" eidolons.lock
+  grep -qF "target: EIDOLONS.md" eidolons.lock
+  grep -qF "hoisted_from:" eidolons.lock
+  grep -q "CLAUDE.md" eidolons.lock
+  grep -q "AGENTS.md" eidolons.lock
+  grep -qF "agents_md_role: hoisted" eidolons.lock
+  grep -qF "schema_version: 1" eidolons.lock
+}
+
+# Legacy test name alias to not break existing references.
 @test "lockfile composition block" {
   seed_manifest
   run eidolons sync --dry-run
@@ -890,6 +917,39 @@ EOF
   grep -qF "target: EIDOLONS.md" eidolons.lock
   grep -qF "hoisted_from:" eidolons.lock
   grep -q "CLAUDE.md" eidolons.lock
-  grep -qF "agents_md_role: canonical-with-pointer" eidolons.lock
+  grep -qF "agents_md_role: hoisted" eidolons.lock
   grep -qF "schema_version: 1" eidolons.lock
+}
+
+# ─── G-R2A-2: run_installer_captured (R2A-2) ─────────────────────────────
+
+# G-R2A-2.3 — run_installer_captured dumps last 20 lines on failure.
+@test "run_installer_captured dumps last 20 lines on failure" {
+  # Create a fake installer that prints 25 lines then exits 1.
+  local fake_installer="$BATS_TEST_TMPDIR/fake_clone"
+  mkdir -p "$fake_installer"
+  cat > "$fake_installer/install.sh" <<'SCRIPT'
+#!/usr/bin/env bash
+for i in $(seq 1 25); do
+  echo "installer line $i"
+done
+exit 1
+SCRIPT
+  chmod +x "$fake_installer/install.sh"
+
+  # Run via helper; capture stderr.
+  local stderr_file="$BATS_TEST_TMPDIR/stderr.txt"
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    run_installer_captured 'fakemember' 'default' '$fake_installer'
+  " 2>"$stderr_file" || true
+
+  # Should contain lines 6-25 (last 20 of 25).
+  grep -qF "[fakemember] installer line 6" "$stderr_file"
+  grep -qF "[fakemember] installer line 25" "$stderr_file"
+  # Should NOT contain lines 1-5 (they fall outside tail -n 20).
+  # Use word-boundary anchors via grep -E to avoid substring false-positives
+  # (e.g. "line 10" would match "line 1" as a substring).
+  ! grep -qE "\[fakemember\] installer line [12345]$" "$stderr_file"
 }
