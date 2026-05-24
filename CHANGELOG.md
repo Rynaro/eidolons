@@ -8,7 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-### Added (v1.5.0 — init sanity bundle)
+## [1.5.0] - 2026-05-24
+
+### Added
 
 - **(feat) `EIDOLONS.md` as canonical content surface (Block 1).** `eidolons sync`
   now runs a composition pass that hoists per-Eidolon `<!-- eidolon:<name> start/end -->`
