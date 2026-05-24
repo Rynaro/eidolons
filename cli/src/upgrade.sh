@@ -417,6 +417,7 @@ upgrade_install_member() {
       tmp_m="$(mktemp)"
       if jq --arg v "$actual_ver" '.version = $v' "$target/install.manifest.json" > "$tmp_m"; then
         mv "$tmp_m" "$target/install.manifest.json"
+        chmod 0644 "$target/install.manifest.json" 2>/dev/null || true
       else
         rm -f "$tmp_m"
       fi
@@ -670,6 +671,7 @@ EOF
     fi
   done <<<"$(manifest_members)"
   mv "$LOCK_TMP" "$PROJECT_LOCK"
+  chmod 0644 "$PROJECT_LOCK" 2>/dev/null || true
   ok "Wrote $PROJECT_LOCK"
 fi
 

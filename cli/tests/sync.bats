@@ -953,3 +953,103 @@ SCRIPT
   # (e.g. "line 10" would match "line 1" as a substring).
   ! grep -qE "\[fakemember\] installer line [12345]$" "$stderr_file"
 }
+
+# ─── G-R2B-1.2: eidolons.lock stamps real version (R2B-1) ────────────────
+
+@test "eidolons.lock stamps real version" {
+  seed_manifest
+  local nexus_ver
+  nexus_ver="$(cat "$EIDOLONS_ROOT/VERSION")"
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  [ -f eidolons.lock ]
+  # eidolons_cli_version must match nexus VERSION, not the 1.0.0 fallback.
+  local lock_ver
+  lock_ver="$(grep 'eidolons_cli_version:' eidolons.lock | sed -E 's/.*"([^"]+)".*/\1/')"
+  [ "$lock_ver" = "$nexus_ver" ]
+  # Sanity: ensure it's not the old fallback unless nexus really is 1.0.0.
+  [[ "$lock_ver" != "1.0.0" ]] || [[ "$nexus_ver" == "1.0.0" ]]
+}
+
+# ─── G-R2B-3: eidolons.lock mode 0644 after sync (R2B-3) ─────────────────
+
+@test "eidolons.lock mode 0644 after sync" {
+  seed_manifest
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  [ -f eidolons.lock ]
+  local lock_mode
+  if stat -f '%Lp' eidolons.lock >/dev/null 2>&1; then
+    lock_mode="$(stat -f '%Lp' eidolons.lock)"
+  else
+    lock_mode="$(stat -c '%a' eidolons.lock)"
+  fi
+  [ "$lock_mode" = "644" ]
+}
+
+# G-R2B-3: CLAUDE.md mode 0644 after upsert_marker_block
+@test "CLAUDE.md mode 0644 after upsert" {
+  # upsert_marker_block is exercised when sync writes the dispatch pointer.
+  # Use the lib.sh function directly to verify the mode fix.
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    touch CLAUDE.md
+    upsert_marker_block CLAUDE.md 'test-block' 'test content'
+  " 2>/dev/null
+
+  [ -f CLAUDE.md ]
+  local mode
+  if stat -f '%Lp' CLAUDE.md >/dev/null 2>&1; then
+    mode="\$(stat -f '%Lp' CLAUDE.md)"
+  else
+    mode="\$(stat -c '%a' CLAUDE.md)"
+  fi
+  # Re-evaluate mode with proper expansion.
+  if stat -f '%Lp' CLAUDE.md >/dev/null 2>&1; then
+    mode="$(stat -f '%Lp' CLAUDE.md)"
+  else
+    mode="$(stat -c '%a' CLAUDE.md)"
+  fi
+  [ "$mode" = "644" ]
+}
+
+# ─── G-R2B-6: empty .github/ pruned after host-leakage prune (R2B-6) ─────
+
+@test "empty .github/ pruned after host-leakage prune" {
+  # Simulate a per-Eidolon install that left an empty .github/ inside
+  # .eidolons/atlas/ (common with atlas installer that has a .github/ in its
+  # repo but only copilot-instructions.md inside it — which gets pruned).
+  local target=".eidolons/atlas"
+  mkdir -p "$target/.github"
+  # No files inside .github/ — it's empty.
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns '$target' 'claude-code'
+  " 2>/dev/null
+
+  # The empty .github/ must have been deleted.
+  [ ! -d "$target/.github" ]
+}
+
+@test "non-empty .github/ retained after host-leakage prune" {
+  # .github/ with a file inside must NOT be deleted by the prune.
+  local target=".eidolons/atlas"
+  mkdir -p "$target/.github/instructions"
+  echo "# instructions" > "$target/.github/instructions/foo.md"
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_host_prune.sh'
+    host_prune_path_patterns '$target' 'claude-code'
+  " 2>/dev/null
+
+  # The non-empty .github/ must still be present.
+  [ -d "$target/.github/instructions" ]
+  [ -f "$target/.github/instructions/foo.md" ]
+}

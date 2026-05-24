@@ -120,7 +120,7 @@ eidolons:
       downstream: [spectra, apivr]
       lateral: [forge, vigil]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 900
       target: 3500
@@ -213,7 +213,7 @@ eidolons:
       downstream: [apivr]
       lateral: [forge, vigil]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 900
       target: 3500
@@ -295,7 +295,7 @@ eidolons:
       downstream: [idg]
       lateral: [forge, vigil]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 2000
       target: 4500
@@ -379,7 +379,7 @@ eidolons:
       downstream: []
       lateral: [forge, vigil]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 900
       target: 2200
@@ -463,7 +463,7 @@ eidolons:
       downstream: []
       lateral: [atlas, spectra, apivr, idg, vigil]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 1150
       target: 2550
@@ -544,7 +544,7 @@ eidolons:
       downstream: []
       lateral: [atlas, spectra, apivr, idg, forge]
     comm:
-      envelope_version: "1.0"
+      envelope_version: "2.0"
     working_set_tokens:
       entry: 920
       target: 3500
