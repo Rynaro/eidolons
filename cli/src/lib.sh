@@ -934,6 +934,7 @@ upsert_marker_block() {
       !in_block { print }
     ' "$dst" > "$tmp"
     mv "$tmp" "$dst"
+    chmod 0644 "$dst" 2>/dev/null || true
   elif [[ -f "$dst" ]]; then
     mode="appended"
     {
@@ -948,6 +949,7 @@ upsert_marker_block() {
       cat "$content_file"
       printf '%s\n' "$end"
     } > "$dst"
+    chmod 0644 "$dst" 2>/dev/null || true
   fi
 
   rm -f "$content_file"
@@ -978,6 +980,7 @@ remove_marker_block() {
     !in_block   { print }
   ' "$dst" > "$tmp"
   mv "$tmp" "$dst"
+  chmod 0644 "$dst" 2>/dev/null || true
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 

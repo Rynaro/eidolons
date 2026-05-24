@@ -125,7 +125,7 @@ compose_eidolons_md() {
         last = NR
         while (last > 0 && lines[last] == "") last--
         for (i = 1; i <= last; i++) print lines[i]
-      }' "$src" > "$_clean_tmp" && mv "$_clean_tmp" "$src"
+      }' "$src" > "$_clean_tmp" && mv "$_clean_tmp" "$src" && chmod 0644 "$src" 2>/dev/null || true
 
       # Insert a thin pointer block under <name>-pointer marker name.
       # Same wording for all sources (host-agnostic; the file role is implicit).
