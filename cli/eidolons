@@ -42,6 +42,7 @@ _read_nexus_version() {
 }
 
 EIDOLONS_VERSION="$(_read_nexus_version)"
+export EIDOLONS_VERSION
 
 if [[ -f "$CLI_SRC/ui/panel.sh" ]]; then
   # shellcheck disable=SC1091
@@ -70,6 +71,7 @@ Commands:
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
+  migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   mcp <sub>      MCP server store. Subcommands:
                    list                     List catalogue MCPs with status
                    show <name>              Show MCP details
@@ -132,7 +134,8 @@ case "$cmd" in
   sync)        exec bash "$CLI_SRC/sync.sh"    "$@" ;;
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
-  doctor)      exec bash "$CLI_SRC/doctor.sh"  "$@" ;;
+  doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
+  migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)
     _harness_sub="${1:-}"
     # Emit DEPRECATED notice for all harness subcommands.
