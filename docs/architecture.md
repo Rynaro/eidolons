@@ -186,6 +186,8 @@ Every layer has a narrow privilege:
 
 **Explicit limits.** The CLI never executes code from a consumer project's `eidolons.yaml`. It reads, resolves, and delegates — `yaml → jq query → bash exec` with no evaluation. Eidolon repos are trusted at install time (they're on your roster); untrusted sources require a manual override.
 
+**Per-Eidolon installer non-interactive contract.** Per-Eidolon installers invoked from `eidolons sync` MUST be non-interactive. Starting with v1.6.0, `eidolons sync` captures each installer's combined stdout+stderr in a tmpfile at default verbosity, which means the installer's TTY is effectively `/dev/null`-equivalent. Installers that read from `</dev/tty` or prompt for stdin input will hang silently. The roster's current six members are non-interactive; future Eidolons that need interactivity must coordinate via the `--non-interactive` flag conformance (EIIS §3 requires this). Under `--verbose`, stdout/stderr pass through directly, preserving TTY behaviour.
+
 **MCP-server scaffolding is a nexus responsibility, not an Eidolon.** The
 `eidolons mcp` store (`cli/src/mcp*.sh`, `roster/mcps.yaml`,
 `eidolons.mcp.lock`) is a unified lifecycle manager for MCP servers. MCP
