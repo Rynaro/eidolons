@@ -954,3 +954,59 @@ EOF
   [[ ! "$output" =~ "does not exist" ]]
   [[ ! "$output" =~ "is not readable" ]]
 }
+
+# ─── Check 10: Orphaned host-vendor files (Block 5 / B5) ──────────────────
+
+# G-B5.1 — doctor warns when GEMINI.md exists but gemini not in hosts.wire.
+@test "Check 10 orphaned vendor file" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  # Create orphaned GEMINI.md.
+  echo "# Orphaned" > GEMINI.md
+
+  run eidolons doctor
+  # Warn, not error — exit code still 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "GEMINI.md exists but host 'gemini' is not in hosts.wire" ]]
+}
+
+# G-B5.2 — doctor emits no orphan warnings when no vendor files are present.
+@test "Check 10 no orphan" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  # No GEMINI.md, no copilot-instructions.md.
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "orphan check passed" ]]
+}
+
+# G-B5.3 — no orphan warning when the vendor's host IS in hosts.wire.
+@test "Check 10 host wired no warn" {
+  # Manifest with both claude-code and gemini wired.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, gemini]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  echo "# Gemini pointer" > GEMINI.md
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  # No orphan warning for GEMINI.md because gemini IS in hosts.wire.
+  [[ ! "$output" =~ "GEMINI.md exists but host 'gemini' is not in hosts.wire" ]]
+}
