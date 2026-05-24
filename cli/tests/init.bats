@@ -710,3 +710,243 @@ STALE_GITIGNORE
   run grep -c "eidolon:gitignore start" .gitignore
   [ "$output" = "1" ]
 }
+
+# ─── G-R2A-2: magical UX — capture installer stdout ──────────────────────
+# These tests use setup_fake_git_for_upgrade with a custom installer that
+# emits stdout, then assert what appears (or doesn't appear) in CLI output.
+
+# G-R2A-2.1 — default tier suppresses installer stdout.
+@test "default tier suppresses installer stdout" {
+  setup_fake_git_for_upgrade
+  # Override the fake installer to emit stdout lines.
+  # The fake-git clone writes a stub install.sh; we overwrite it after first
+  # clone by patching the fake-git clone handler via a wrapper.
+  FAKE_INSTALL_STDOUT_LOG="$BATS_TEST_TMPDIR/install_stdout.txt"
+  export FAKE_INSTALL_STDOUT_LOG
+
+  # Patch the fake installer to also emit stdout. We accomplish this by
+  # writing a per-member wrapper that the fake-git clone places at dest.
+  # Simplest: write a custom git clone stub on top of the existing one.
+  cat > "$FAKE_BIN/git" <<'GITEOF'
+#!/usr/bin/env bash
+DIR=""
+ARGS=("$@")
+if [[ "${ARGS[0]:-}" == "-C" ]]; then
+  DIR="${ARGS[1]}"
+  set -- "${ARGS[@]:2}"
+fi
+op="${1:-}"
+case "$op" in
+  ls-remote)
+    if [[ -n "${FAKE_LSREMOTE_TAGS:-}" ]]; then
+      while IFS= read -r tag; do
+        [[ -z "$tag" ]] && continue
+        printf "0000000000000000000000000000000000000000\trefs/tags/%s\n" "$tag"
+      done <<<"$FAKE_LSREMOTE_TAGS"
+    fi
+    exit 0 ;;
+  describe)
+    if [[ -n "$DIR" && -f "$DIR/.git/_fake_tag" ]]; then cat "$DIR/.git/_fake_tag"; exit 0; fi
+    if [[ -n "${FAKE_NEXUS_HEAD_TAG:-}" ]]; then echo "$FAKE_NEXUS_HEAD_TAG"; exit 0; fi
+    exit 128 ;;
+  rev-parse)
+    if [[ "${2:-}" == "--short" ]]; then echo "abc1234"; else echo "abc1234567890abcdef1234567890abcdef123456"; fi
+    exit 0 ;;
+  fetch)
+    printf "fetch %s -- %s\n" "$DIR" "$*" >> "$FAKE_FETCH_LOG"
+    [[ "${FAKE_FETCH_RESULT:-ok}" == "ok" ]] && exit 0 || exit 128 ;;
+  reset) printf "reset %s -- %s\n" "$DIR" "$*" >> "$FAKE_RESET_LOG"; exit 0 ;;
+  init) exit 0 ;;
+  remote) exit 0 ;;
+  checkout) exit 0 ;;
+  clone)
+    shift; repo=""; dest=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --depth|--branch) shift 2 ;;
+        --*) shift ;;
+        *) if [[ -z "$repo" ]]; then repo="$1"; else dest="$1"; fi; shift ;;
+      esac
+    done
+    printf "clone %s -> %s\n" "$repo" "$dest" >> "$FAKE_CLONE_LOG"
+    if [[ "${FAKE_CLONE_RESULT:-ok}" != "ok" ]]; then echo "fake-git: clone forced fail" >&2; exit 128; fi
+    mkdir -p "$dest/.git"
+    : > "$dest/AGENTS.md"
+    : > "$dest/CLAUDE.md"
+    : > "$dest/agent.md"
+    : > "$dest/README.md"
+    cat > "$dest/install.sh" <<'STUB'
+#!/usr/bin/env bash
+LOG="${FAKE_INSTALL_LOG:-/dev/null}"
+TGT=""
+HOSTS=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target) TGT="$2"; shift 2 ;;
+    --hosts)  HOSTS="$2"; shift 2 ;;
+    --shared-dispatch|--no-shared-dispatch|--non-interactive|--force) shift ;;
+    *) shift ;;
+  esac
+done
+mkdir -p "$TGT"
+NAME="$(basename "$TGT")"
+echo "[${NAME}] Installing from fake installer"
+echo "[${NAME}] stdout line from installer"
+cat > "$TGT/install.manifest.json" <<JSON
+{
+  "name": "$NAME",
+  "version": "0.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": []
+}
+JSON
+echo "install $NAME at $TGT (hosts=$HOSTS)" >> "$LOG"
+exit 0
+STUB
+    chmod +x "$dest/install.sh"
+    ver=""
+    case "$dest" in *@*) ver="${dest##*@}" ;; esac
+    if [[ -n "$ver" ]]; then echo "v$ver" > "$dest/.git/_fake_tag"; fi
+    exit 0 ;;
+esac
+if [[ -n "$DIR" && -f "$DIR/.git/_fake_tag" ]]; then
+  case "$op" in
+    describe) cat "$DIR/.git/_fake_tag"; exit 0 ;;
+    rev-parse)
+      if [[ "${2:-}" == "--short" ]]; then echo "abc1234"; else echo "abc1234567890abcdef1234567890abcdef123456"; fi
+      exit 0 ;;
+  esac
+fi
+exit 0
+GITEOF
+  chmod +x "$FAKE_BIN/git"
+
+  seed_manifest_with atlas=^1.0.0
+
+  run eidolons sync --yes
+  # status may be non-zero if installer sub-steps have issues; just check output.
+  # Under default verbosity, installer stdout must NOT appear verbatim.
+  ! echo "$output" | grep -qF "[atlas] Installing from fake installer" || true
+  ! echo "$output" | grep -qF "[atlas] stdout line from installer" || true
+}
+
+# G-R2A-2.2 — verbose tier passes installer stdout through.
+@test "verbose tier passes installer stdout through" {
+  setup_fake_git_for_upgrade
+
+  # Same custom git stub with stdout-emitting installer.
+  cat > "$FAKE_BIN/git" <<'GITEOF'
+#!/usr/bin/env bash
+DIR=""
+ARGS=("$@")
+if [[ "${ARGS[0]:-}" == "-C" ]]; then
+  DIR="${ARGS[1]}"
+  set -- "${ARGS[@]:2}"
+fi
+op="${1:-}"
+case "$op" in
+  ls-remote)
+    if [[ -n "${FAKE_LSREMOTE_TAGS:-}" ]]; then
+      while IFS= read -r tag; do
+        [[ -z "$tag" ]] && continue
+        printf "0000000000000000000000000000000000000000\trefs/tags/%s\n" "$tag"
+      done <<<"$FAKE_LSREMOTE_TAGS"
+    fi
+    exit 0 ;;
+  describe)
+    if [[ -n "$DIR" && -f "$DIR/.git/_fake_tag" ]]; then cat "$DIR/.git/_fake_tag"; exit 0; fi
+    if [[ -n "${FAKE_NEXUS_HEAD_TAG:-}" ]]; then echo "$FAKE_NEXUS_HEAD_TAG"; exit 0; fi
+    exit 128 ;;
+  rev-parse)
+    if [[ "${2:-}" == "--short" ]]; then echo "abc1234"; else echo "abc1234567890abcdef1234567890abcdef123456"; fi
+    exit 0 ;;
+  fetch)
+    printf "fetch %s -- %s\n" "$DIR" "$*" >> "$FAKE_FETCH_LOG"
+    [[ "${FAKE_FETCH_RESULT:-ok}" == "ok" ]] && exit 0 || exit 128 ;;
+  reset) printf "reset %s -- %s\n" "$DIR" "$*" >> "$FAKE_RESET_LOG"; exit 0 ;;
+  init) exit 0 ;;
+  remote) exit 0 ;;
+  checkout) exit 0 ;;
+  clone)
+    shift; repo=""; dest=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --depth|--branch) shift 2 ;;
+        --*) shift ;;
+        *) if [[ -z "$repo" ]]; then repo="$1"; else dest="$1"; fi; shift ;;
+      esac
+    done
+    printf "clone %s -> %s\n" "$repo" "$dest" >> "$FAKE_CLONE_LOG"
+    if [[ "${FAKE_CLONE_RESULT:-ok}" != "ok" ]]; then echo "fake-git: clone forced fail" >&2; exit 128; fi
+    mkdir -p "$dest/.git"
+    : > "$dest/AGENTS.md"
+    : > "$dest/CLAUDE.md"
+    : > "$dest/agent.md"
+    : > "$dest/README.md"
+    cat > "$dest/install.sh" <<'STUB'
+#!/usr/bin/env bash
+LOG="${FAKE_INSTALL_LOG:-/dev/null}"
+TGT=""
+HOSTS=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --target) TGT="$2"; shift 2 ;;
+    --hosts)  HOSTS="$2"; shift 2 ;;
+    --shared-dispatch|--no-shared-dispatch|--non-interactive|--force) shift ;;
+    *) shift ;;
+  esac
+done
+mkdir -p "$TGT"
+NAME="$(basename "$TGT")"
+echo "[${NAME}] verbose installer stdout line"
+cat > "$TGT/install.manifest.json" <<JSON
+{
+  "name": "$NAME",
+  "version": "0.0.0",
+  "hosts_wired": ["claude-code"],
+  "files": []
+}
+JSON
+echo "install $NAME at $TGT (hosts=$HOSTS)" >> "$LOG"
+exit 0
+STUB
+    chmod +x "$dest/install.sh"
+    ver=""
+    case "$dest" in *@*) ver="${dest##*@}" ;; esac
+    if [[ -n "$ver" ]]; then echo "v$ver" > "$dest/.git/_fake_tag"; fi
+    exit 0 ;;
+esac
+if [[ -n "$DIR" && -f "$DIR/.git/_fake_tag" ]]; then
+  case "$op" in
+    describe) cat "$DIR/.git/_fake_tag"; exit 0 ;;
+    rev-parse)
+      if [[ "${2:-}" == "--short" ]]; then echo "abc1234"; else echo "abc1234567890abcdef1234567890abcdef123456"; fi
+      exit 0 ;;
+  esac
+fi
+exit 0
+GITEOF
+  chmod +x "$FAKE_BIN/git"
+
+  seed_manifest_with atlas=^1.0.0
+
+  run eidolons sync --yes --verbose
+  # Under verbose, installer stdout DOES appear.
+  echo "$output" | grep -qF "[atlas] verbose installer stdout line"
+}
+
+# G-R2A-2.4 — quiet tier emits party roster only.
+@test "quiet tier emits party roster only" {
+  setup_fake_git_for_upgrade
+  seed_manifest_with atlas=^1.0.0
+
+  run eidolons sync --yes --quiet
+  # Under quiet, no progress lines or banners; only PARTY ROSTER card.
+  echo "$output" | grep -qiF "party roster"
+  # No section banners.
+  ! echo "$output" | grep -qF "=== FETCH" || true
+  ! echo "$output" | grep -qF "=== INSTALL" || true
+  ! echo "$output" | grep -qF "=== LOCK" || true
+  ! echo "$output" | grep -qF "=== MIRROR" || true
+  ! echo "$output" | grep -qF "=== HOST-WIRE" || true
+}

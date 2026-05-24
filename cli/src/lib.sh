@@ -1102,22 +1102,55 @@ apply_dispatch_pointers() {
   done
 }
 
-# apply_agents_md_pointer
+# ─── Installer subprocess capture ───────────────────────────────────────
+# run_installer_captured <name> <verbosity> <clone_dir> [installer_args...]
 #
-# Injects a supplementary `<!-- eidolon:eidolons-md-pointer start/end -->`
-# block into AGENTS.md ONLY IF AGENTS.md already exists.
-# Never creates AGENTS.md from this pass (FINDING-005: it is codex/opencode's
-# primary instruction surface; creation is the host installer's job).
-# Idempotent via upsert_marker_block. Bash 3.2 safe.
-apply_agents_md_pointer() {
-  local dst="AGENTS.md"
-  [[ -f "$dst" ]] || return 0   # never create AGENTS.md from this pass
-  local body
-  body="$(printf '%s\n' \
-    "## Additionally see" \
-    "" \
-    "- [\`./EIDOLONS.md\`](./EIDOLONS.md) — composed view of all Eidolon per-member methodology references (managed by \`eidolons sync\`).")"
-  upsert_marker_block "$dst" "eidolons-md-pointer" "$body"
+# Invokes the per-Eidolon install.sh. Behaviour gates on verbosity:
+#   - verbose: stdout/stderr pass through directly (no capture); installer
+#     interactivity is preserved (e.g. for future interactive installers).
+#   - default | quiet: combined stdout+stderr captured to a tmpfile. On
+#     non-zero exit, the LAST 20 LINES of the tmpfile are dumped to stderr
+#     via printf '  [name] %s\n' (one re-prefixed line each), then the function
+#     returns the installer's exit code. On zero exit, the tmpfile is silently
+#     unlinked. The function NEVER emits the captured stdout on success.
+#
+# Stdout: clean (no echo to stdout). All log output to stderr.
+# Exit code: the installer's exit code (0 on success, non-zero on failure).
+# Bash 3.2 safe: no coproc, no process-substitution with exit-code dependence,
+# no readarray. Tmpfile created via mktemp; per-call cleanup (no outer trap).
+#
+# NOTE: per-Eidolon installers invoked from eidolons sync MUST be non-interactive.
+# Captured stdout/stderr means the installer's TTY is /dev/null-equivalent.
+# Installers reading </dev/tty or prompting for stdin input will hang.
+# The roster's current members are non-interactive (EIIS §3 conformant).
+run_installer_captured() {
+  local name="$1" verbosity="$2" clone_dir="$3"
+  shift 3
+  local rc=0 tmpfile=""
+
+  if [[ "$verbosity" == "verbose" ]]; then
+    # Pass-through (legacy behaviour — installer stdout visible directly).
+    bash "$clone_dir/install.sh" "$@"
+    return $?
+  fi
+
+  # Captured path (default + quiet).
+  # Bash 3.2 + set -e safe: `cmd && rc=0 || rc=$?` avoids set -e abort while
+  # still capturing the real exit code. Under set -e, a command in a &&/||
+  # chain is not subject to automatic exit on failure.
+  tmpfile="$(mktemp)"
+  bash "$clone_dir/install.sh" "$@" >"$tmpfile" 2>&1 && rc=0 || rc=$?
+
+  if [[ $rc -ne 0 ]]; then
+    # Buffered tail of the captured output on failure.
+    warn "$name install.sh failed (exit $rc). Last 20 lines of installer output:"
+    tail -n 20 "$tmpfile" | while IFS= read -r _line; do
+      printf '  [%s] %s\n' "$name" "$_line" >&2
+    done
+  fi
+
+  rm -f "$tmpfile"
+  return $rc
 }
 
 # ─── .gitignore policy ───────────────────────────────────────────────────

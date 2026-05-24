@@ -210,7 +210,7 @@ _member_new_count=0
 _sync_has_failure=false
 
 # ─── FETCH stage ─────────────────────────────────────────────────────────
-[[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "FETCH  $_member_total members"
+[[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "FETCH  $_member_total members"
 
 # ─── Per-member install ──────────────────────────────────────────────────
 while read -r member; do
@@ -254,7 +254,7 @@ while read -r member; do
   fi
 
   # ─── INSTALL stage banner (per member) ──────────────────────────────────
-  [[ "${VERBOSITY:-default}" != "quiet" ]] && \
+  [[ "${VERBOSITY:-default}" == "verbose" ]] && \
     ui_section "INSTALL  member $_member_idx of $_member_total — $name"
 
   # Detect whether this member is a fresh install vs idempotent re-run.
@@ -299,16 +299,15 @@ while read -r member; do
     fi
   fi
 
+  ui_progress_line "$_member_idx" "$_member_total" "$name@$version" "installing"
   _install_ok=true
-  (
-    cd "$(pwd)"  # ensure we stay in the consumer project
-    bash "$clone_dir/install.sh" \
-      --target "$target" \
-      --hosts "$HOSTS_CSV" \
-      "${shared_flag_args[@]}" \
-      ${NON_INTERACTIVE:+--non-interactive} \
-      --force
-  ) || { _install_ok=false; true; }
+  run_installer_captured "$name" "${VERBOSITY:-default}" "$clone_dir" \
+    --target "$target" \
+    --hosts "$HOSTS_CSV" \
+    "${shared_flag_args[@]}" \
+    ${NON_INTERACTIVE:+--non-interactive} \
+    --force \
+    || { _install_ok=false; true; }
 
   if [[ "$_install_ok" == "false" ]]; then
     ui_failed_card "$name" "install.sh returned non-zero"
@@ -446,17 +445,18 @@ composition:
   target: EIDOLONS.md
   hoisted_from:
     - CLAUDE.md
-  agents_md_role: canonical-with-pointer
+    - AGENTS.md
+  agents_md_role: hoisted
   schema_version: 1
 COMPOSITIONBLOCK
 
 # ─── LOCK stage ─────────────────────────────────────────────────────────
-[[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "LOCK  eidolons.lock"
+[[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "LOCK  eidolons.lock"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
 ok "Wrote $PROJECT_LOCK"
 
 # ─── MIRROR stage ────────────────────────────────────────────────────────
-[[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "MIRROR  cortex + deep tables"
+[[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "MIRROR  cortex + deep tables"
 
 # ─── Mirror cortex into consumer project ─────────────────────────────────
 # The cortex (EIDOLONS.md + deep tables) is a nexus-level concern, not a
@@ -501,7 +501,7 @@ else
 fi
 
 # ─── HOST-WIRE stage ─────────────────────────────────────────────────────
-[[ "${VERBOSITY:-default}" != "quiet" ]] && ui_section "HOST-WIRE  dispatch pointer"
+[[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "HOST-WIRE  dispatch pointer"
 
 # ─── Cortex host-doc injection ────────────────────────────────────────────
 # When shared-dispatch is active, inject a pointer block into each root
@@ -548,16 +548,17 @@ else
 fi
 
 # ─── EIDOLONS.md composition pass (B1) ──────────────────────────────────
-# Hoist per-eidolon marker blocks from ./CLAUDE.md into ./EIDOLONS.md and
-# replace source blocks with thin pointer blocks. Must run BEFORE
-# apply_dispatch_pointers so the dispatch-pointer block lands on the
-# already-reduced CLAUDE.md (which now only has <name>-pointer blocks).
+# Hoist per-eidolon marker blocks from CLAUDE.md + AGENTS.md into EIDOLONS.md
+# and replace source blocks with thin pointer blocks. Both sources are scanned
+# symmetrically (CLAUDE.md first, then AGENTS.md). Must run BEFORE
+# apply_dispatch_pointers so the dispatch-pointer block lands on already-reduced
+# source files (which now only have <name>-pointer blocks).
 # Skipped on --dry-run; compose_eidolons_md is idempotent so re-runs are safe.
 if [[ "$DRY_RUN" == "true" ]]; then
-  info "  [dry-run] would run compose_eidolons_md pass (hoist from CLAUDE.md → EIDOLONS.md)"
+  info "  [dry-run] would run compose_eidolons_md pass (hoist from CLAUDE.md + AGENTS.md → EIDOLONS.md)"
 else
   _members_space="$(echo "$MEMBERS_JSON" | jq -r '.name' | tr '\n' ' ')"
-  compose_eidolons_md "$_members_space"
+  compose_eidolons_md "$_members_space" "./CLAUDE.md ./AGENTS.md"
   ok "EIDOLONS.md composition pass complete"
 fi
 
@@ -580,15 +581,7 @@ else
   ok "Dispatch-pointer block injected into vendor docs"
 fi
 
-# ─── AGENTS.md supplementary pointer (B4) ───────────────────────────────
-# Inject a supplementary eidolons-md-pointer block into AGENTS.md, but
-# ONLY when AGENTS.md already exists (codex/opencode writer created it).
-# Never creates AGENTS.md from this pass (FINDING-005).
-if [[ "$DRY_RUN" == "true" ]]; then
-  info "  [dry-run] would inject eidolons-md-pointer block into AGENTS.md (if present)"
-else
-  apply_agents_md_pointer
-fi
+# AGENTS.md is now hoisted symmetrically with CLAUDE.md (see compose_eidolons_md call above).
 
 # ─── Harness marker (F7-3 / S20b) ───────────────────────────────────────
 # If Junction is installed ($EIDOLONS_HOME/cache/junction@*/), write a
