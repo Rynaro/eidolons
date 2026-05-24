@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-05-24
+
+### Fixed
+
+- **(fix) `export EIDOLONS_VERSION` in dispatcher (R2B-1).** `cli/eidolons` now exports `EIDOLONS_VERSION` after the assignment so `exec`'d subcommand scripts (`init.sh`, `sync.sh`, `upgrade.sh`) read the real nexus version instead of hitting the `${EIDOLONS_VERSION:-1.0.0}` fallback. Fresh `eidolons init` now stamps `eidolons.yaml` and `eidolons.lock` with the actual installed version.
+
+- **(fix) `chmod 0644` after every `mv "$tmp" "$dst"` site (R2B-3).** `cli/src/lib.sh::upsert_marker_block` (rewritten + created branches), `lib.sh::remove_marker_block`, `lib_eidolons_md.sh::compose_eidolons_md`, `sync.sh` LOCK_TMP path, and `sync.sh`/`upgrade.sh` `install.manifest.json` rewrite paths now restore the expected 0644 mode after the `mktemp` → `mv` pattern. `AGENTS.md` (append-only path) was already 0644; no change there.
+
+### Added
+
+- **(feat) `eidolons migrate-stamp` command (R2B-5).** New opt-in verb to rewrite stale version stamps in `eidolons.yaml` (line 2 header comment) and `eidolons.lock` (`eidolons_cli_version:` field) to match the current nexus VERSION. Idempotent; supports `--dry-run`. No git operations — user commits the result. Surfaced by Doctor Check 12.
+
+- **(feat) `eidolons doctor` Check 12 — version-stamp drift detector (R2B-2).** Warns when `eidolons.lock`'s `eidolons_cli_version` (or `eidolons.yaml`'s header comment when the lockfile is absent) does not match the current nexus VERSION. Warn-only (exit code 0); remedy text points to `eidolons migrate-stamp`. Check 12 follows Check 11 (AGENTS.md drift, R2A).
+
+### Chore
+
+- **(chore) Bump `comm.envelope_version` to `"2.0"` across all 6 shipped Eidolons in `roster/index.yaml` (R2B-4).** Eliminates 6 `ECL version mismatch` warn lines per `eidolons sync` run. ECL 2.0 ratification at `Rynaro/eidolons-ecl` is a separate, ongoing concern; this commit documents the wire reality (all 6 Eidolons already ship `ECL_VERSION=2.0`).
+
+- **(chore) Prune empty `.github/` directories after host-leakage path-pattern pass (R2B-6).** `host_prune_path_patterns` in `lib_host_prune.sh` now runs `find "$target" -type d -empty -delete` after the per-file prune loop. Removes empty `.eidolons/<name>/.github/` leftovers (e.g. `atlas`) that the file-only prune missed.
+
 ## [1.6.0] - 2026-05-24
 
 ### Added
