@@ -981,12 +981,41 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
-# ─── Dispatch-pointer vendor docs (PR-A1) ────────────────────────────────
+# ─── Dispatch-pointer vendor docs (PR-A1 / B2) ───────────────────────────
 # Each entry in DISPATCH_POINTER_VENDORS is a vendor-specific instruction
-# file that should hold a thin pointer to AGENTS.md (the source of truth).
-# AGENTS.md is intentionally absent — it is the target of pointers, never
-# itself a pointer.
+# file that holds a thin pointer to EIDOLONS.md (the canonical composition
+# surface). AGENTS.md is intentionally absent — it is the canonical surface
+# for codex/opencode, not a thin pointer.
 DISPATCH_POINTER_VENDORS="CLAUDE.md GEMINI.md .github/copilot-instructions.md"
+
+# _dispatch_vendor_host VENDOR
+#
+# Echoes the host name that corresponds to a given vendor file.
+# Bash 3.2 case-based mapping (no associative arrays).
+# Returns empty string for unknown vendors.
+_dispatch_vendor_host() {
+  case "$1" in
+    CLAUDE.md)                        echo "claude-code" ;;
+    GEMINI.md)                        echo "gemini"      ;;
+    .github/copilot-instructions.md)  echo "copilot"     ;;
+    *)                                echo ""            ;;
+  esac
+}
+
+# _cortex_doc_host DOC
+#
+# Echoes the host name that corresponds to a root host-doc for the cortex
+# injection pass. AGENTS.md returns "codex" as a sentinel; the caller
+# handles the codex-OR-opencode special case.
+# Bash 3.2 case-based mapping.
+_cortex_doc_host() {
+  case "$1" in
+    CLAUDE.md)                        echo "claude-code" ;;
+    .github/copilot-instructions.md)  echo "copilot"     ;;
+    AGENTS.md)                        echo "codex"       ;;
+    *)                                echo ""            ;;
+  esac
+}
 
 # dispatch_pointer_text_for VENDOR
 #
@@ -1001,30 +1030,31 @@ dispatch_pointer_text_for() {
       printf '%s\n' \
         "## Eidolons" \
         "" \
-        "This project uses [Eidolons](https://github.com/Rynaro/eidolons). The canonical agent dispatch table, methodology references, and per-Eidolon hand-off contracts live at [\`./AGENTS.md\`](./AGENTS.md). Read that file first before responding to any prompt that mentions an Eidolon or matches a TRANCE complexity signal."
+        "This project uses [Eidolons](https://github.com/Rynaro/eidolons). The canonical agent dispatch table, methodology references, and per-Eidolon hand-off contracts live at [\`./EIDOLONS.md\`](./EIDOLONS.md). Read that file first before responding to any prompt that mentions an Eidolon or matches a TRANCE complexity signal."
       ;;
     GEMINI.md)
       printf '%s\n' \
         "## Eidolons" \
         "" \
-        "See [\`./AGENTS.md\`](./AGENTS.md) for the Eidolons agent dispatch table and methodology references."
+        "See [\`./EIDOLONS.md\`](./EIDOLONS.md) for the Eidolons agent dispatch table and methodology references."
       ;;
     .github/copilot-instructions.md)
       printf '%s\n' \
-        "This project uses Eidolons. The canonical agent instructions live in \`AGENTS.md\` at the repository root. Refer to that file before invoking any agent or methodology."
+        "This project uses Eidolons. The canonical agent instructions live in \`EIDOLONS.md\` at the repository root. Refer to that file before invoking any agent or methodology."
       ;;
     *)
       printf '%s\n' \
-        "See \`./AGENTS.md\` for Eidolons agent dispatch and methodology."
+        "See \`./EIDOLONS.md\` for Eidolons agent dispatch and methodology."
       ;;
   esac
 }
 
-# apply_dispatch_pointers
+# apply_dispatch_pointers [<hosts_csv>]
 #
 # Writes the dispatch-pointer block to every vendor file in
-# DISPATCH_POINTER_VENDORS. Independent of shared-dispatch — the
-# dispatch-pointer block always lands.
+# DISPATCH_POINTER_VENDORS whose corresponding host is in hosts_csv.
+# When hosts_csv is empty (legacy callers), all vendors are written (back-compat).
+# Pointers redirect to ./EIDOLONS.md (the canonical composition surface).
 #
 # Warn-and-append protocol: when a vendor file pre-exists with non-empty,
 # non-Eidolons content AND the dispatch-pointer marker is absent, emit one
@@ -1032,14 +1062,29 @@ dispatch_pointer_text_for() {
 # exists) silently rewrite the block in place — no warn fires.
 #
 # Opt-outs:
-#   EIDOLONS_NO_GEMINI=1     — skip GEMINI.md
+#   EIDOLONS_NO_GEMINI=1  — deprecated; emits deprecation warn in v1.5.0.
+#                           gemini is now host-gated via hosts.wire.
+#                           Will be removed in v1.6.0.
 #
 # Bash 3.2 safe. Stdout clean; all log output to stderr (via warn/info/ok).
 apply_dispatch_pointers() {
-  local vendor ptr_text warn_append
+  local hosts_csv="${1:-}"
+  local vendor ptr_text warn_append host_for_vendor
+  # Deprecation warn for EIDOLONS_NO_GEMINI (v1.5.0: honor+warn; v1.6.0: remove).
+  if [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
+    warn "EIDOLONS_NO_GEMINI is deprecated; gemini is now host-gated via hosts.wire. Remove the env var and ensure 'gemini' is not in hosts.wire. This env var will be removed in v1.6.0."
+  fi
   for vendor in $DISPATCH_POINTER_VENDORS; do
+    host_for_vendor="$(_dispatch_vendor_host "$vendor")"
+    # Host-gated: skip the vendor if its host is not in hosts.wire.
+    # Empty hosts_csv = unrestricted (back-compat fallthrough).
+    if [[ -n "$hosts_csv" ]] && [[ ",${hosts_csv}," != *",${host_for_vendor},"* ]]; then
+      info "  skipping $vendor (host=$host_for_vendor not in hosts.wire)"
+      continue
+    fi
+    # EIDOLONS_NO_GEMINI=1 still honored (with above deprecation warn already emitted).
     if [[ "$vendor" == "GEMINI.md" ]] && [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
-      info "  EIDOLONS_NO_GEMINI=1 — skipping GEMINI.md"
+      info "  EIDOLONS_NO_GEMINI=1 — skipping GEMINI.md (deprecated opt-out)"
       continue
     fi
     ptr_text="$(dispatch_pointer_text_for "$vendor")"
@@ -1055,6 +1100,24 @@ apply_dispatch_pointers() {
       warn "$vendor exists with user content; appending dispatch-pointer block. To remove, delete <!-- eidolon:dispatch-pointer start --> ... end --> markers and re-run sync."
     fi
   done
+}
+
+# apply_agents_md_pointer
+#
+# Injects a supplementary `<!-- eidolon:eidolons-md-pointer start/end -->`
+# block into AGENTS.md ONLY IF AGENTS.md already exists.
+# Never creates AGENTS.md from this pass (FINDING-005: it is codex/opencode's
+# primary instruction surface; creation is the host installer's job).
+# Idempotent via upsert_marker_block. Bash 3.2 safe.
+apply_agents_md_pointer() {
+  local dst="AGENTS.md"
+  [[ -f "$dst" ]] || return 0   # never create AGENTS.md from this pass
+  local body
+  body="$(printf '%s\n' \
+    "## Additionally see" \
+    "" \
+    "- [\`./EIDOLONS.md\`](./EIDOLONS.md) — composed view of all Eidolon per-member methodology references (managed by \`eidolons sync\`).")"
+  upsert_marker_block "$dst" "eidolons-md-pointer" "$body"
 }
 
 # ─── .gitignore policy ───────────────────────────────────────────────────
