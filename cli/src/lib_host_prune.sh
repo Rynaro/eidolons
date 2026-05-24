@@ -94,6 +94,10 @@ host_prune_path_patterns() {
       info "  pruned $target/AGENTS.md (pattern: neither codex nor opencode selected)"
     fi
   fi
+  # Clean up empty directories left by the path-pattern prune. Common case:
+  # .github/ becomes empty after copilot-instructions.md and instructions/
+  # are removed. find ... -type d -empty -delete is shell-portable.
+  find "$target" -type d -empty -delete 2>/dev/null || true
   # Always return 0 — caller may be running under `set -e`.
   return 0
 }
