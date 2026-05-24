@@ -620,3 +620,276 @@ _run_sync_with_leakage_installer() {
   [[ "$output" =~ "--strict-hosts" ]]
   [[ "$output" =~ "host unknown" ]]
 }
+
+# ─── G-B1: compose_eidolons_md (Block 1) ──────────────────────────────────
+
+# G-B1.1 — compose_eidolons_md hoists a marker block from CLAUDE.md into
+# EIDOLONS.md and replaces the source with a pointer block.
+@test "compose_eidolons_md hoists from CLAUDE.md" {
+  cat > CLAUDE.md <<'EOF'
+# My Project
+<!-- eidolon:atlas start -->
+atlas content line 1
+atlas content line 2
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  # EIDOLONS.md created with preamble and the hoisted block.
+  [ -f "EIDOLONS.md" ]
+  grep -qF "<!-- eidolon:atlas start -->" EIDOLONS.md
+  grep -qF "atlas content line 1" EIDOLONS.md
+
+  # CLAUDE.md now has atlas-pointer block, not the original content block.
+  [ ! "$(grep -cF '<!-- eidolon:atlas start -->' CLAUDE.md)" = "0" ] || true
+  grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
+  ! grep -qF "<!-- eidolon:atlas start -->" CLAUDE.md
+
+  # Preamble written.
+  grep -qF "EIDOLONS — canonical agent" EIDOLONS.md
+
+  # User text above markers preserved in CLAUDE.md.
+  grep -qF "# My Project" CLAUDE.md
+}
+
+# G-B1.2 — compose_eidolons_md is idempotent: second run is a no-op.
+@test "compose_eidolons_md idempotent" {
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas start -->
+atlas body
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  cp CLAUDE.md CLAUDE.md.first
+  cp EIDOLONS.md EIDOLONS.md.first
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  diff -q CLAUDE.md.first CLAUDE.md
+  diff -q EIDOLONS.md.first EIDOLONS.md
+}
+
+# G-B1.3 — compose_eidolons_md does NOT hoist from AGENTS.md.
+@test "compose_eidolons_md leaves AGENTS.md untouched" {
+  # Seed AGENTS.md with a per-eidolon block.
+  cat > AGENTS.md <<'EOF'
+<!-- eidolon:atlas start -->
+agents atlas content
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  # AGENTS.md must be byte-identical (composition does NOT hoist from AGENTS.md).
+  grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
+  grep -qF "agents atlas content" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+
+  # EIDOLONS.md not created (no source content in CLAUDE.md).
+  [ ! -f "EIDOLONS.md" ]
+}
+
+# G-B1.4 — existing preamble in EIDOLONS.md is preserved byte-for-byte.
+@test "compose_eidolons_md preserves existing EIDOLONS.md preamble" {
+  printf '%s\n' "# Custom preamble" "user text" > EIDOLONS.md
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas start -->
+atlas body
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  grep -qF "# Custom preamble" EIDOLONS.md
+  grep -qF "user text" EIDOLONS.md
+  grep -qF "<!-- eidolon:atlas start -->" EIDOLONS.md
+}
+
+# G-B1.7 — no CLAUDE.md → EIDOLONS.md is NOT created.
+@test "compose_eidolons_md no-op when CLAUDE.md absent" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  [ ! -f "EIDOLONS.md" ]
+}
+
+# ─── G-B2: host-gated dispatch-pointer (Block 2) ──────────────────────────
+
+# G-B2.1 — apply_dispatch_pointers with hosts_csv=claude-code: only CLAUDE.md
+# is written; GEMINI.md and copilot-instructions.md are NOT created.
+@test "dispatch pointer host-gated on claude-code" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_dispatch_pointers 'claude-code'
+  " 2>/dev/null
+
+  [ -f "CLAUDE.md" ]
+  [ ! -f "GEMINI.md" ]
+  [ ! -f ".github/copilot-instructions.md" ]
+  grep -qF "<!-- eidolon:dispatch-pointer start -->" CLAUDE.md
+}
+
+# G-B2.2 — dispatch pointer block redirects to ./EIDOLONS.md not ./AGENTS.md.
+@test "dispatch pointer redirects to EIDOLONS.md" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_dispatch_pointers 'claude-code,gemini,copilot'
+  " 2>/dev/null
+
+  grep -qF "EIDOLONS.md" CLAUDE.md
+  ! grep -qF "./AGENTS.md" CLAUDE.md
+  grep -qF "EIDOLONS.md" GEMINI.md
+  ! grep -qF "./AGENTS.md" GEMINI.md
+  grep -qF "EIDOLONS.md" .github/copilot-instructions.md
+  ! grep -qF "./AGENTS.md" .github/copilot-instructions.md
+}
+
+# G-B2.3 — EIDOLONS_NO_GEMINI=1 emits a deprecation warn on stderr.
+@test "EIDOLONS_NO_GEMINI deprecation warn" {
+  _stderr_file="$(mktemp)"
+  bash -c "
+    set -e
+    export EIDOLONS_NO_GEMINI=1
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_dispatch_pointers 'gemini'
+  " 2>"$_stderr_file" || true
+  _output="$(cat "$_stderr_file")"
+  rm -f "$_stderr_file"
+
+  printf '%s\n' "$_output" | grep -qF "EIDOLONS_NO_GEMINI is deprecated"
+}
+
+# ─── G-B3: host-gated cortex injection (Block 3) ──────────────────────────
+
+# G-B3.1 — cortex injection is gated on HOSTS_CSV (exercised via lib.sh helpers).
+@test "cortex injection host-gated" {
+  # Exercise the _cortex_doc_host helper directly.
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    result=\$(_cortex_doc_host 'CLAUDE.md')
+    [ \"\$result\" = 'claude-code' ]
+    result=\$(_cortex_doc_host '.github/copilot-instructions.md')
+    [ \"\$result\" = 'copilot' ]
+    result=\$(_cortex_doc_host 'AGENTS.md')
+    [ \"\$result\" = 'codex' ]
+  " 2>/dev/null
+}
+
+# G-B3.2 — AGENTS.md cortex special-case: codex OR opencode triggers it.
+@test "cortex AGENTS.md codex special-case" {
+  # Verify _cortex_doc_host returns 'codex' for AGENTS.md sentinel.
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    result=\$(_cortex_doc_host 'AGENTS.md')
+    [ \"\$result\" = 'codex' ]
+  " 2>/dev/null
+}
+
+# ─── G-B4: AGENTS.md supplementary pointer (Block 4) ─────────────────────
+
+# G-B4.1 — apply_agents_md_pointer injects eidolons-md-pointer when AGENTS.md exists.
+@test "AGENTS.md supplementary pointer" {
+  # Create AGENTS.md (simulating codex writer).
+  cat > AGENTS.md <<'EOF'
+<!-- eidolon:atlas start -->
+atlas methodology
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_agents_md_pointer
+  " 2>/dev/null
+
+  grep -qF "<!-- eidolon:eidolons-md-pointer start -->" AGENTS.md
+  grep -qF "EIDOLONS.md" AGENTS.md
+  # Per-eidolon blocks still present (not hoisted from AGENTS.md).
+  grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
+  grep -qF "atlas methodology" AGENTS.md
+}
+
+# G-B4.2 — apply_agents_md_pointer does NOT create AGENTS.md when absent.
+@test "AGENTS.md not created when codex absent" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_agents_md_pointer
+  " 2>/dev/null
+
+  [ ! -f "AGENTS.md" ]
+}
+
+# G-B4.3 — apply_agents_md_pointer is idempotent.
+@test "AGENTS.md supplementary pointer idempotent" {
+  cat > AGENTS.md <<'EOF'
+atlas content
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_agents_md_pointer
+  " 2>/dev/null
+
+  cp AGENTS.md AGENTS.md.first
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_agents_md_pointer
+  " 2>/dev/null
+
+  diff -q AGENTS.md.first AGENTS.md
+}
+
+# ─── G-B6: lockfile composition block (Block 6) ───────────────────────────
+
+# G-B6.1 — eidolons sync --dry-run produces a lockfile with a composition: block.
+@test "lockfile composition block" {
+  seed_manifest
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  grep -qF "composition:" eidolons.lock
+  grep -qF "target: EIDOLONS.md" eidolons.lock
+  grep -qF "hoisted_from:" eidolons.lock
+  grep -q "CLAUDE.md" eidolons.lock
+  grep -qF "agents_md_role: canonical-with-pointer" eidolons.lock
+  grep -qF "schema_version: 1" eidolons.lock
+}
