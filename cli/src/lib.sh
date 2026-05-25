@@ -1138,7 +1138,8 @@ _cortex_doc_host() {
 dispatch_pointer_text_for() {
   local vendor="$1"
   case "$vendor" in
-    CLAUDE.md)
+    CLAUDE.md|AGENTS.md)
+      # Same wording for both — AGENTS.md is now a first-class pointer target (D6).
       printf '%s\n' \
         "## Eidolons" \
         "" \
@@ -1161,39 +1162,35 @@ dispatch_pointer_text_for() {
   esac
 }
 
-# apply_dispatch_pointers [<hosts_csv>]
+# apply_dispatch_pointers <pointer_targets_csv> [<hosts_csv>]
 #
 # Writes the dispatch-pointer block to every vendor file in
-# DISPATCH_POINTER_VENDORS whose corresponding host is in hosts_csv.
-# When hosts_csv is empty (legacy callers), all vendors are written (back-compat).
+# pointer_targets_csv. hosts_csv is optional context (for future use);
+# the pointer_targets list IS the host-gating result by construction
+# (init/sync already mapped hosts → vendors via _vendor_file_for_host).
+#
+# AGENTS.md is now a first-class target when present in pointer_targets_csv.
 # Pointers redirect to ./EIDOLONS.md (the canonical composition surface).
 #
 # Warn-and-append protocol: when a vendor file pre-exists with non-empty,
 # non-Eidolons content AND the dispatch-pointer marker is absent, emit one
-# warn line BEFORE appending. Subsequent syncs (where the marker already
-# exists) silently rewrite the block in place — no warn fires.
+# warn line BEFORE appending. Subsequent syncs silently rewrite in place.
 #
 # Opt-outs:
-#   EIDOLONS_NO_GEMINI=1  — deprecated; emits deprecation warn in v1.5.0.
-#                           gemini is now host-gated via hosts.wire.
-#                           Will be removed in v1.6.0.
+#   EIDOLONS_NO_GEMINI=1  — deprecated; honored with deprecation warn.
+#                           gemini is now host-gated via pointer_targets.
 #
 # Bash 3.2 safe. Stdout clean; all log output to stderr (via warn/info/ok).
 apply_dispatch_pointers() {
-  local hosts_csv="${1:-}"
-  local vendor ptr_text warn_append host_for_vendor
-  # Deprecation warn for EIDOLONS_NO_GEMINI (v1.5.0: honor+warn; v1.6.0: remove).
+  local pointer_targets_csv="${1:-}"
+  local hosts_csv="${2:-}"
+  local vendor ptr_text warn_append
+  # Deprecation warn for EIDOLONS_NO_GEMINI.
   if [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
-    warn "EIDOLONS_NO_GEMINI is deprecated; gemini is now host-gated via hosts.wire. Remove the env var and ensure 'gemini' is not in hosts.wire. This env var will be removed in v1.6.0."
+    warn "EIDOLONS_NO_GEMINI is deprecated; gemini is now gated via hosts.pointer_targets. Remove the env var. This env var will be removed in a future release."
   fi
-  for vendor in $DISPATCH_POINTER_VENDORS; do
-    host_for_vendor="$(_dispatch_vendor_host "$vendor")"
-    # Host-gated: skip the vendor if its host is not in hosts.wire.
-    # Empty hosts_csv = unrestricted (back-compat fallthrough).
-    if [[ -n "$hosts_csv" ]] && [[ ",${hosts_csv}," != *",${host_for_vendor},"* ]]; then
-      info "  skipping $vendor (host=$host_for_vendor not in hosts.wire)"
-      continue
-    fi
+  for vendor in $(echo "$pointer_targets_csv" | tr ',' ' '); do
+    [[ -z "$vendor" ]] && continue
     # EIDOLONS_NO_GEMINI=1 still honored (with above deprecation warn already emitted).
     if [[ "$vendor" == "GEMINI.md" ]] && [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
       info "  EIDOLONS_NO_GEMINI=1 — skipping GEMINI.md (deprecated opt-out)"
@@ -1211,6 +1208,7 @@ apply_dispatch_pointers() {
     if [[ "$warn_append" == "true" ]]; then
       warn "$vendor exists with user content; appending dispatch-pointer block. To remove, delete <!-- eidolon:dispatch-pointer start --> ... end --> markers and re-run sync."
     fi
+    collapse_consecutive_blanks "$vendor"
   done
 }
 

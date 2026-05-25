@@ -522,6 +522,34 @@ else
     "${YELLOW:-}" "${RESET:-}"
 fi
 
+# ─── Check 13: Legacy <name>-pointer stubs ────────────────────────────────
+# Warn-only: detects leftover <name>-pointer blocks from v1.6.0 installs
+# that have not yet been cleaned by eidolons sync (D10).
+ui_section_out "Legacy pointer stubs"
+
+POINTER_TARGETS_FOR_DOCTOR="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+  | jq -r '.hosts.pointer_targets // [] | join(" ")' 2>/dev/null || true)"
+
+# Fallback: scan the closed vendor file set when pointer_targets is absent.
+if [[ -z "$POINTER_TARGETS_FOR_DOCTOR" ]]; then
+  POINTER_TARGETS_FOR_DOCTOR="CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md"
+fi
+
+LEGACY_STUBS_FOUND=false
+for _vfile in $POINTER_TARGETS_FOR_DOCTOR; do
+  [[ -f "$_vfile" ]] || continue
+  if grep -qE '<!-- eidolon:[a-z][a-z0-9-]*-pointer start -->' "$_vfile" 2>/dev/null; then
+    LEGACY_STUBS_FOUND=true
+    warn "$_vfile contains legacy <name>-pointer stubs (v1.6.0 → v1.7.0 migration)"
+  fi
+done
+
+if [[ "$LEGACY_STUBS_FOUND" == "true" ]]; then
+  warn "Remedy: run \`eidolons sync\` to clean up legacy pointer stubs (v1.6.0 → v1.7.0 migration)."
+else
+  pass "no legacy <name>-pointer stubs detected"
+fi
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then
