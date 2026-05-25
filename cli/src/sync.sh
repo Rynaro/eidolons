@@ -510,19 +510,63 @@ done <<< "$MEMBERS_JSON"
   fi
 } >> "$LOCK_TMP"
 
-# ─── B6: Append composition block to lockfile ────────────────────────────
+# ─── B6: Build _compose_sources (R5-D8) + Append composition block ───────
+# _compose_sources is built here (before the lock is finalised) so that the
+# composition block in eidolons.lock reflects the ACTUAL sources the compose
+# pass will use, not a hardcoded list. The compose_eidolons_md call below
+# reuses the same variable — no redundant computation.
+#
+# Phase 1: seed from POINTER_TARGETS_CSV.
+_compose_sources=""
+for _cpt in $(echo "$POINTER_TARGETS_CSV" | tr ',' ' '); do
+  [[ -z "$_cpt" ]] && continue
+  _compose_sources="$_compose_sources ./$_cpt"
+done
+# Phase 2 (R5-D4): universal marker-guard hoist across the closed vendor set.
+# For each vendor file on disk that carries any non-dispatch-pointer Eidolon
+# content marker, add it to _compose_sources (deduped). Bash 3.2: hardcoded
+# closed-set iteration — must match the set in _validate_pointer_targets_csv
+# (lib.sh). Cross-reference: both lists must stay in sync when new vendor
+# files are added to the protocol.
+for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+  [[ -f "$_vfile" ]] || continue
+  grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null || continue
+  grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null \
+    | grep -vqE 'eidolon:dispatch-pointer' || continue
+  case " $_compose_sources " in
+    *" ./$_vfile "*) : ;;  # already present — dedupe
+    *) _compose_sources="$_compose_sources ./$_vfile" ;;
+  esac
+done
+_compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
+
 # Documents the composition pass's inputs and target for traceability.
+# hoisted_from derived from actual _compose_sources (R5-D8).
 # Additive only; no top-level schema bump required (schema_version is
 # namespaced under composition.*).
-cat >> "$LOCK_TMP" <<'COMPOSITIONBLOCK'
-composition:
-  target: EIDOLONS.md
-  hoisted_from:
-    - CLAUDE.md
-    - AGENTS.md
-  agents_md_role: hoisted
-  schema_version: 1
-COMPOSITIONBLOCK
+_hoisted_list=""
+for _src in $_compose_sources; do
+  _base="${_src#./}"
+  if [[ -z "$_hoisted_list" ]]; then
+    _hoisted_list="    - $_base"
+  else
+    _hoisted_list="$_hoisted_list
+    - $_base"
+  fi
+done
+{
+  echo "composition:"
+  echo "  target: EIDOLONS.md"
+  if [[ -n "$_hoisted_list" ]]; then
+    echo "  hoisted_from:"
+    printf '%s\n' "$_hoisted_list"
+  else
+    echo "  hoisted_from: []"
+  fi
+  echo "  agents_md_role: hoisted"
+  echo "  schema_version: 1"
+} >> "$LOCK_TMP"
+unset _hoisted_list _src _base
 
 # ─── LOCK stage ─────────────────────────────────────────────────────────
 [[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "LOCK  eidolons.lock"
@@ -635,30 +679,9 @@ fi
 if [[ "$DRY_RUN" == "true" ]]; then
   info "  [dry-run] would run compose_eidolons_md pass (sources from pointer_targets: ${POINTER_TARGETS_CSV:-(none)})"
 else
+  # _compose_sources was built above (before the lock block) so lock's
+  # composition.hoisted_from reflects the same sources used here.
   _members_space="$(echo "$MEMBERS_JSON" | jq -r '.name' | tr '\n' ' ')"
-  _compose_sources=""
-  # Phase 1: seed from POINTER_TARGETS_CSV.
-  for _cpt in $(echo "$POINTER_TARGETS_CSV" | tr ',' ' '); do
-    [[ -z "$_cpt" ]] && continue
-    _compose_sources="$_compose_sources ./$_cpt"
-  done
-  # Phase 2 (R5-D4): universal marker-guard hoist across the closed vendor set.
-  # For each vendor file on disk that carries any non-dispatch-pointer Eidolon
-  # content marker, add it to _compose_sources (deduped). Bash 3.2: hardcoded
-  # closed-set iteration — must match the set in _validate_pointer_targets_csv
-  # (lib.sh). Cross-reference: both lists must stay in sync when new vendor
-  # files are added to the protocol.
-  for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
-    [[ -f "$_vfile" ]] || continue
-    grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null || continue
-    grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null \
-      | grep -vqE 'eidolon:dispatch-pointer' || continue
-    case " $_compose_sources " in
-      *" ./$_vfile "*) : ;;  # already present — dedupe
-      *) _compose_sources="$_compose_sources ./$_vfile" ;;
-    esac
-  done
-  _compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
   if [[ -z "$_compose_sources" ]]; then
     info "  compose_eidolons_md: no pointer_targets configured and no vendor markers detected — skipping composition pass"
   else
@@ -666,6 +689,7 @@ else
     ok "EIDOLONS.md composition pass complete"
   fi
 fi
+unset _compose_sources _members_space _cpt _vfile
 
 # ─── Dispatch-pointer injection (R3 Block 4) ─────────────────────────────
 # Writes the dispatch-pointer block to every vendor file in POINTER_TARGETS_CSV.
