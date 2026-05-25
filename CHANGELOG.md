@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `eidolons init` now follows an **AGENTS-precedence** rule: if `AGENTS.md` exists on disk, `hosts.shared_dispatch=true`, or `codex ∈ hosts.wire`, `hosts.pointer_targets` is automatically set to `[AGENTS.md]`. Replaces v1.7.0's default-N exclusivity prompt with deterministic derivation. (#TBD round 4)
+- New flag `eidolons init --re-derive` — migration tool that re-runs the pointer_targets derivation against an existing manifest, preserving every other field byte-for-byte. Use to upgrade v1.7.0 projects to round-4 semantics.
+- New flag `eidolons init --pointer-targets=CSV` — explicit pointer_targets override (bypasses derivation). Warns when `AGENTS.md` exists on disk but isn't in the supplied set.
+- New flag `eidolons init --multi-pointer` (also an interactive TTY-prompt fallback, default-N) — when AGENTS-precedence triggers, additionally wires host-derived vendor files (CLAUDE.md, GEMINI.md, etc.) as pointer targets alongside AGENTS.md.
+- `eidolons sync` now emits a **sync drift warning** when `AGENTS.md` carries Eidolon content markers but isn't in the active `hosts.pointer_targets`. Remediation: `eidolons init --re-derive`.
+- New P0 invariant + bats test `cli/tests/dispatch_pointer_flatness.bats` enforcing flat dispatch-pointer chains (every vendor file points only at `./EIDOLONS.md`; no vendor-to-vendor references).
+
+### Changed
+- `compose_eidolons_md` now hoists `AGENTS.md` content whenever `AGENTS.md` carries any Eidolon content marker block (excluding the round-3 `dispatch-pointer` block), regardless of `hosts.pointer_targets` membership. This auto-cleans installer-written AGENTS.md content from `shared_dispatch=true` projects even before the manifest catches up.
+- Case-specific init messages now print when AGENTS-precedence triggers: Case A (codex wired) cites EIIS §4.1.0; Case B (non-codex precedence) explains that wired hosts read their primary file only with `--multi-pointer`.
+
+### Migration notes (v1.7.0 → v1.8.0)
+1. Run `eidolons sync` once — the marker-guard hoist auto-cleans installer-written `AGENTS.md` content into `EIDOLONS.md`. A loud `warn` line will explain the next step.
+2. Run `eidolons init --re-derive` — updates `hosts.pointer_targets` to `[AGENTS.md]` (or per the precedence rule). All other manifest fields are preserved.
+3. Run `eidolons sync` again — `AGENTS.md` becomes a thin dispatch-pointer to `./EIDOLONS.md`. The orphan dispatch-pointer block in `CLAUDE.md` (if any) is harmless and may be removed by hand.
+
+### Removed
+- The v1.7.0 default-N AGENTS-exclusivity prompt and the multi-vendor `ui_pick_vendors` path in `eidolons init`. Pointer-target selection is now deterministic via derivation + `--pointer-targets` / `--multi-pointer` flags.
+
 ## [1.7.0] - 2026-05-25
 
 ### Added

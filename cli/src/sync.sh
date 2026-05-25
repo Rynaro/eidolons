@@ -125,6 +125,33 @@ unset _valid_targets _invalid_found _pt
 
 info "Pointer targets: ${POINTER_TARGETS_CSV:-(none, derived from hosts.wire)}"
 
+# ─── Round-4 sync drift warning (R4-2) ────────────────────────────────────
+# Fires when AGENTS.md exists on disk AND has at least one Eidolon content
+# marker block (excluding the round-3 dispatch-pointer block) AND AGENTS.md
+# is NOT in the active pointer_targets set.
+# Remediation: 'eidolons init --re-derive'
+_drift_detected=false
+if [[ -f "AGENTS.md" ]]; then
+  case ",$POINTER_TARGETS_CSV," in
+    *",AGENTS.md,"*) : ;;  # AGENTS.md already targeted; no drift
+    *)
+      # Look for any eidolon:<name> start marker, excluding dispatch-pointer.
+      # Two-grep approach: first confirm any marker exists, then confirm at least
+      # one non-dispatch-pointer marker exists.
+      if grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null; then
+        if grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
+           | grep -vqE 'eidolon:dispatch-pointer'; then
+          _drift_detected=true
+        fi
+      fi
+      ;;
+  esac
+fi
+if [[ "$_drift_detected" == "true" ]]; then
+  warn "AGENTS.md exists with Eidolon markers but isn't in pointer_targets. Run 'eidolons init --re-derive' to consolidate."
+fi
+unset _drift_detected
+
 # Strict-mode violations collected across all per-member loops; checked at
 # end-of-sync so the user sees every offending Eidolon at once.
 _STRICT_VIOLATIONS=0
@@ -614,6 +641,20 @@ else
     [[ -z "$_cpt" ]] && continue
     _compose_sources="$_compose_sources ./$_cpt"
   done
+  # R4-3 marker-guard hoist: always include AGENTS.md when it exists on disk AND
+  # carries at least one Eidolon content marker (excluding the dispatch-pointer
+  # block, which is the round-3 flat-chain invariant block — see R4-4).
+  # Idempotent: AGENTS.md already in $POINTER_TARGETS_CSV is deduped by the
+  # case check below.
+  if [[ -f "AGENTS.md" ]] \
+     && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
+     && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
+        | grep -vqE 'eidolon:dispatch-pointer'; then
+    case " $_compose_sources " in
+      *" ./AGENTS.md "*) : ;;  # already present via pointer_targets — no-op
+      *) _compose_sources="$_compose_sources ./AGENTS.md" ;;
+    esac
+  fi
   _compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
   if [[ -z "$_compose_sources" ]]; then
     info "  compose_eidolons_md: no pointer_targets configured — skipping composition pass"

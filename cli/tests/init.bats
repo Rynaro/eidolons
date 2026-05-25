@@ -994,11 +994,24 @@ GITEOF
   ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
 }
 
-# R3-init-3: non-interactive init with --hosts claude-code,codex includes both.
-@test "non-interactive init --hosts claude-code,codex: pointer_targets=[CLAUDE.md, AGENTS.md] (R3)" {
+# R3-init-3 (updated R4): non-interactive init with --hosts claude-code,codex.
+# Round 4: codex triggers AGENTS-precedence → pointer_targets=[AGENTS.md].
+# Use --multi-pointer to also include CLAUDE.md.
+@test "non-interactive init --hosts claude-code,codex: pointer_targets=[AGENTS.md] via codex-precedence (R3 updated R4)" {
   setup_fake_git
 
   run eidolons init --preset minimal --hosts claude-code,codex --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "pointer_targets:" eidolons.yaml
+  # codex triggers AGENTS-precedence: AGENTS.md is canonical.
+  grep -qF "AGENTS.md" eidolons.yaml
+}
+
+# R3-init-3b: --multi-pointer with claude-code,codex → both CLAUDE.md + AGENTS.md.
+@test "non-interactive init --hosts claude-code,codex --multi-pointer: pointer_targets=[AGENTS.md, CLAUDE.md] (R4)" {
+  setup_fake_git
+
+  run eidolons init --preset minimal --hosts claude-code,codex --multi-pointer --non-interactive
   [ -f eidolons.yaml ]
   grep -qF "pointer_targets:" eidolons.yaml
   grep -qF "CLAUDE.md" eidolons.yaml
@@ -1033,4 +1046,205 @@ GITEOF
     detect_vendor_files_on_disk
   " 2>/dev/null)"
   [ -z "$result" ]
+}
+
+# ─── R4: Round-4 AGENTS-precedence + --re-derive + --pointer-targets ────────
+
+# Helper: setup fake git that blocks clone (tests only check manifest).
+_setup_fake_git_r4() {
+  FAKE_BIN_R4="$BATS_TEST_TMPDIR/fake-bin-r4"
+  mkdir -p "$FAKE_BIN_R4"
+  cat > "$FAKE_BIN_R4/git" <<'FAKEGIT'
+#!/usr/bin/env bash
+if [[ "$1" == "clone" ]]; then
+  echo "fake-git: clone blocked" >&2
+  exit 128
+fi
+exec /usr/bin/env git-real "$@" 2>/dev/null || true
+FAKEGIT
+  chmod +x "$FAKE_BIN_R4/git"
+  export PATH="$FAKE_BIN_R4:$PATH"
+}
+
+# R4-init-1: no AGENTS.md present, --hosts claude-code → pointer_targets=[CLAUDE.md]
+@test "AGENTS-precedence: no trigger — plain claude-code stays CLAUDE.md (R4)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "CLAUDE.md" eidolons.yaml
+  # AGENTS.md must NOT be in pointer_targets.
+  ! grep -E "pointer_targets:.*AGENTS" eidolons.yaml
+}
+
+# R4-init-2: AGENTS.md exists, --hosts claude-code → AGENTS-precedence → [AGENTS.md]
+@test "AGENTS-precedence triggers on AGENTS.md present (R4)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
+  run eidolons init --preset minimal --hosts claude-code --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  # CLAUDE.md must NOT be in pointer_targets.
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+  # Case B message should be in stderr (captured in output by bats).
+  [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
+}
+
+# R4-init-3: --shared-dispatch triggers precedence even without AGENTS.md on disk.
+@test "AGENTS-precedence triggers on shared_dispatch (R4)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --shared-dispatch --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+  [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
+}
+
+# R4-init-4: codex in hosts triggers precedence, Case A message.
+@test "AGENTS-precedence triggers on codex wired (R4)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts codex --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  # Case A message.
+  [[ "$output" =~ "codex detected in hosts.wire" ]]
+}
+
+# R4-init-5: AGENTS.md + --multi-pointer → [AGENTS.md, CLAUDE.md].
+@test "multi-pointer flag wires both AGENTS.md and CLAUDE.md (R4)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
+  run eidolons init --preset minimal --hosts claude-code --multi-pointer --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  grep -qF "CLAUDE.md" eidolons.yaml
+}
+
+# R4-init-6: AGENTS.md exists, --pointer-targets=CLAUDE.md → foot-gun warn.
+@test "pointer-targets explicit override warns on AGENTS.md present (R4)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
+  run eidolons init --preset minimal --hosts claude-code --pointer-targets=CLAUDE.md --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "CLAUDE.md" eidolons.yaml
+  [[ "$output" =~ "--pointer-targets does not include AGENTS.md" ]]
+}
+
+# R4-init-7: no existing eidolons.yaml → --re-derive dies.
+@test "re-derive requires existing manifest (R4)" {
+  run eidolons init --preset minimal --hosts claude-code --re-derive
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "requires an existing eidolons.yaml" ]]
+}
+
+# R4-init-8: v1.7.0 manifest with pointer_targets=[CLAUDE.md] + AGENTS.md on disk
+# → --re-derive rewrites to [AGENTS.md], other fields preserved.
+@test "re-derive preserves other manifest fields, updates pointer_targets (R4)" {
+  # Seed a v1.7.0-style manifest.
+  cat > eidolons.yaml <<'YAML'
+# eidolons.yaml — per-project manifest
+# Generated by eidolons v1.7.0 at 2026-05-20T00:00:00Z
+
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [CLAUDE.md]
+
+members:
+  - name: atlas
+    version: "^1.5.0"
+    source: github:Rynaro/ATLAS
+YAML
+
+  touch AGENTS.md
+
+  run eidolons init --re-derive
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Updated hosts.pointer_targets" ]]
+
+  # pointer_targets must now be AGENTS.md.
+  grep -qF "AGENTS.md" eidolons.yaml
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+
+  # Other fields must be preserved byte-for-byte (modulo pointer_targets line).
+  grep -q 'wire: \[claude-code\]' eidolons.yaml
+  grep -q 'shared_dispatch: true' eidolons.yaml
+  grep -q 'strict: false' eidolons.yaml
+  grep -q 'name: atlas' eidolons.yaml
+}
+
+# R4-init-9: detect_agents_precedence_trigger helper smoke.
+@test "detect_agents_precedence_trigger: AGENTS.md on disk triggers (R4)" {
+  touch AGENTS.md
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    detect_agents_precedence_trigger 'claude-code' 'false' && echo 'triggered' || echo 'not-triggered'
+  " 2>/dev/null)"
+  [ "$result" = "triggered" ]
+}
+
+@test "detect_agents_precedence_trigger: shared_dispatch=true triggers (R4)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    detect_agents_precedence_trigger 'claude-code' 'true' && echo 'triggered' || echo 'not-triggered'
+  " 2>/dev/null)"
+  [ "$result" = "triggered" ]
+}
+
+@test "detect_agents_precedence_trigger: codex in hosts triggers (R4)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    detect_agents_precedence_trigger 'claude-code,codex' 'false' && echo 'triggered' || echo 'not-triggered'
+  " 2>/dev/null)"
+  [ "$result" = "triggered" ]
+}
+
+@test "detect_agents_precedence_trigger: no trigger on plain claude-code (R4)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    detect_agents_precedence_trigger 'claude-code' 'false' && echo 'triggered' || echo 'not-triggered'
+  " 2>/dev/null)"
+  [ "$result" = "not-triggered" ]
+}
+
+# R4-init-10: _csv_union helper smoke.
+@test "_csv_union: deduplicates and preserves order (R4)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    _csv_union 'AGENTS.md' 'CLAUDE.md,AGENTS.md'
+  " 2>/dev/null)"
+  [ "$result" = "AGENTS.md,CLAUDE.md" ]
+}
+
+# R4-init-11: interactive TTY multi-pointer prompt default-n.
+@test "multi-pointer TTY prompt default-n: Enter keeps AGENTS.md only (R4)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
+  # Answer 'n' (or Enter) to the shared-dispatch prompt AND the multi-pointer prompt.
+  run eidolons init --preset minimal --hosts claude-code --shared-dispatch <<'EOF'
+n
+EOF
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  # With default-n the user chose not to add extra vendor files.
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+}
+
+# R4-init-12: Case A message NOT emitted when explicit --pointer-targets override.
+@test "Case A message suppressed with explicit --pointer-targets override (R4)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts codex --pointer-targets=AGENTS.md --non-interactive
+  [ -f eidolons.yaml ]
+  # Case A message must NOT appear (explicit override suppresses it).
+  ! [[ "$output" =~ "codex detected in hosts.wire" ]]
+}
+
+# R4-init-13: no Case A or B on plain greenfield (no AGENTS.md, no shared_dispatch, no codex).
+@test "no messages on plain greenfield (no triggers) (R4)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --non-interactive
+  [ -f eidolons.yaml ]
+  ! [[ "$output" =~ "codex detected in hosts.wire" ]]
+  ! [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
 }

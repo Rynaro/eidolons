@@ -1100,6 +1100,70 @@ detect_vendor_files_on_disk() {
   done
 }
 
+# ─── Round-4 AGENTS-precedence helpers ───────────────────────────────────────
+
+# detect_agents_precedence_trigger HOSTS_CSV SHARED_DISPATCH
+#
+# Returns 0 (success) when AGENTS-precedence applies:
+#   - AGENTS.md exists on disk, OR
+#   - SHARED_DISPATCH == "true", OR
+#   - "codex" appears in HOSTS_CSV (comma-separated host slugs).
+# Returns 1 otherwise. Stdout clean; no log output. Bash 3.2 safe.
+detect_agents_precedence_trigger() {
+  local hosts_csv="${1:-}"
+  local shared_dispatch="${2:-false}"
+  [[ -f "AGENTS.md" ]] && return 0
+  [[ "$shared_dispatch" == "true" ]] && return 0
+  case ",$hosts_csv," in
+    *",codex,"*) return 0 ;;
+  esac
+  return 1
+}
+
+# _csv_union CSV_A CSV_B
+#
+# Echoes a comma-separated union of CSV_A and CSV_B, preserving first-seen
+# order and deduplicating elements. Bash 3.2 safe — no associative arrays.
+_csv_union() {
+  local csv_a="${1:-}" csv_b="${2:-}"
+  local _out="" _seen="" _el
+  for _el in $(printf '%s\n' "$csv_a" "$csv_b" | tr ',' '\n'); do
+    [[ -z "$_el" ]] && continue
+    # Check if already seen.
+    case ",$_seen," in
+      *",$_el,"*) continue ;;
+    esac
+    _seen="$_seen,$_el"
+    if [[ -z "$_out" ]]; then _out="$_el"; else _out="$_out,$_el"; fi
+  done
+  printf '%s\n' "$_out"
+}
+
+# _validate_pointer_targets_csv CSV
+#
+# Echoes a validated comma-separated list. Unknown elements emit warn()
+# (or die() when STRICT_HOSTS=true). Known elements are passed through.
+# Bash 3.2 safe.
+_validate_pointer_targets_csv() {
+  local csv="${1:-}" _pt _out="" _strict="${STRICT_HOSTS:-false}"
+  for _pt in $(printf '%s\n' "$csv" | tr ',' '\n'); do
+    [[ -z "$_pt" ]] && continue
+    case "$_pt" in
+      CLAUDE.md|AGENTS.md|GEMINI.md|.github/copilot-instructions.md)
+        if [[ -z "$_out" ]]; then _out="$_pt"; else _out="$_out,$_pt"; fi
+        ;;
+      *)
+        if [[ "$_strict" == "true" ]]; then
+          die "Unknown pointer target '$_pt' (--strict-hosts)"
+        else
+          warn "Unknown pointer target '$_pt' — skipping (valid: CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md)"
+        fi
+        ;;
+    esac
+  done
+  printf '%s\n' "$_out"
+}
+
 # _dispatch_vendor_host VENDOR
 #
 # Echoes the host name that corresponds to a given vendor file.
