@@ -637,27 +637,30 @@ if [[ "$DRY_RUN" == "true" ]]; then
 else
   _members_space="$(echo "$MEMBERS_JSON" | jq -r '.name' | tr '\n' ' ')"
   _compose_sources=""
+  # Phase 1: seed from POINTER_TARGETS_CSV.
   for _cpt in $(echo "$POINTER_TARGETS_CSV" | tr ',' ' '); do
     [[ -z "$_cpt" ]] && continue
     _compose_sources="$_compose_sources ./$_cpt"
   done
-  # R4-3 marker-guard hoist: always include AGENTS.md when it exists on disk AND
-  # carries at least one Eidolon content marker (excluding the dispatch-pointer
-  # block, which is the round-3 flat-chain invariant block — see R4-4).
-  # Idempotent: AGENTS.md already in $POINTER_TARGETS_CSV is deduped by the
-  # case check below.
-  if [[ -f "AGENTS.md" ]] \
-     && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
-     && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
-        | grep -vqE 'eidolon:dispatch-pointer'; then
+  # Phase 2 (R5-D4): universal marker-guard hoist across the closed vendor set.
+  # For each vendor file on disk that carries any non-dispatch-pointer Eidolon
+  # content marker, add it to _compose_sources (deduped). Bash 3.2: hardcoded
+  # closed-set iteration — must match the set in _validate_pointer_targets_csv
+  # (lib.sh). Cross-reference: both lists must stay in sync when new vendor
+  # files are added to the protocol.
+  for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+    [[ -f "$_vfile" ]] || continue
+    grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null || continue
+    grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_vfile" 2>/dev/null \
+      | grep -vqE 'eidolon:dispatch-pointer' || continue
     case " $_compose_sources " in
-      *" ./AGENTS.md "*) : ;;  # already present via pointer_targets — no-op
-      *) _compose_sources="$_compose_sources ./AGENTS.md" ;;
+      *" ./$_vfile "*) : ;;  # already present — dedupe
+      *) _compose_sources="$_compose_sources ./$_vfile" ;;
     esac
-  fi
+  done
   _compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
   if [[ -z "$_compose_sources" ]]; then
-    info "  compose_eidolons_md: no pointer_targets configured — skipping composition pass"
+    info "  compose_eidolons_md: no pointer_targets configured and no vendor markers detected — skipping composition pass"
   else
     compose_eidolons_md "$_members_space" "$_compose_sources"
     ok "EIDOLONS.md composition pass complete"
