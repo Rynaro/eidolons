@@ -984,6 +984,31 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
+# collapse_consecutive_blanks FILE
+#
+# Collapses runs of ≥2 consecutive empty lines to exactly 1. Idempotent.
+# Bash 3.2 safe. No-op when FILE does not exist or is empty.
+# Stdout clean; one info line to stderr on mutation.
+collapse_consecutive_blanks() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  [[ -s "$file" ]] || return 0
+  local tmp
+  tmp="$(mktemp)"
+  awk '
+    BEGIN { blank = 0 }
+    /^$/  { if (blank < 1) print; blank++; next }
+          { print; blank = 0 }
+  ' "$file" > "$tmp"
+  if ! cmp -s "$file" "$tmp"; then
+    mv "$tmp" "$file"
+    chmod 0644 "$file" 2>/dev/null || true
+    info "  collapse_consecutive_blanks: normalised blank-line runs in $file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
 # ─── Dispatch-pointer vendor docs (PR-A1 / B2 / R3) ─────────────────────
 # Vendor → root file mapping for hosts.pointer_targets derivation.
 # Canonical table — single source of truth. Used by _vendor_file_for_host

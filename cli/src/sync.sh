@@ -92,6 +92,39 @@ else
 fi
 MEMBERS_JSON="$(echo "$MANIFEST_JSON" | jq -c '.members[]')"
 
+# ─── Resolve pointer_targets ─────────────────────────────────────────────
+# pointer_targets drives compose_eidolons_md sources, apply_dispatch_pointers,
+# and cortex injection in this sync run.
+# Priority: manifest hosts.pointer_targets → derive from hosts.wire.
+# When empty or absent, fall back to derive_pointer_targets_from_hosts.
+POINTER_TARGETS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.pointer_targets // [] | join(",")' 2>/dev/null || true)"
+if [[ -z "$POINTER_TARGETS_CSV" ]]; then
+  POINTER_TARGETS_CSV="$(derive_pointer_targets_from_hosts "$HOSTS_CSV")"
+fi
+# Validate pointer_targets against the closed set; warn or die per strict mode.
+_valid_targets=""
+_invalid_found=false
+for _pt in $(echo "$POINTER_TARGETS_CSV" | tr ',' ' '); do
+  [[ -z "$_pt" ]] && continue
+  case "$_pt" in
+    CLAUDE.md|AGENTS.md|GEMINI.md|.github/copilot-instructions.md)
+      if [[ -z "$_valid_targets" ]]; then _valid_targets="$_pt"; else _valid_targets="$_valid_targets,$_pt"; fi
+      ;;
+    *)
+      _invalid_found=true
+      if [[ "$STRICT_HOSTS" == "true" ]]; then
+        die "hosts.pointer_targets contains unknown path '$_pt' (hosts.strict=true)"
+      else
+        warn "hosts.pointer_targets contains unknown path '$_pt' — skipping"
+      fi
+      ;;
+  esac
+done
+POINTER_TARGETS_CSV="$_valid_targets"
+unset _valid_targets _invalid_found _pt
+
+info "Pointer targets: ${POINTER_TARGETS_CSV:-(none, derived from hosts.wire)}"
+
 # Strict-mode violations collected across all per-member loops; checked at
 # end-of-sync so the user sees every offending Eidolon at once.
 _STRICT_VIOLATIONS=0
@@ -437,6 +470,19 @@ LOCK
   fi
 done <<< "$MEMBERS_JSON"
 
+# ─── Append hosts block to lockfile (R3 Block 1) ─────────────────────────
+# Mirrors manifest hosts configuration at sync time for traceability.
+# pointer_targets written only when non-empty (preserves backward compat).
+{
+  echo "hosts:"
+  echo "  wire: [$(echo "$HOSTS_CSV" | sed 's/,/, /g')]"
+  echo "  shared_dispatch: $EFFECTIVE_SHARED_DISPATCH"
+  echo "  strict: $STRICT_HOSTS"
+  if [[ -n "$POINTER_TARGETS_CSV" ]]; then
+    echo "  pointer_targets: [$(echo "$POINTER_TARGETS_CSV" | sed 's/,/, /g')]"
+  fi
+} >> "$LOCK_TMP"
+
 # ─── B6: Append composition block to lockfile ────────────────────────────
 # Documents the composition pass's inputs and target for traceability.
 # Additive only; no top-level schema bump required (schema_version is
@@ -549,19 +595,29 @@ else
   info "Shared dispatch off — skipping cortex host-doc injection"
 fi
 
-# ─── EIDOLONS.md composition pass (B1) ──────────────────────────────────
-# Hoist per-eidolon marker blocks from CLAUDE.md + AGENTS.md into EIDOLONS.md
-# and replace source blocks with thin pointer blocks. Both sources are scanned
-# symmetrically (CLAUDE.md first, then AGENTS.md). Must run BEFORE
-# apply_dispatch_pointers so the dispatch-pointer block lands on already-reduced
-# source files (which now only have <name>-pointer blocks).
+# ─── EIDOLONS.md composition pass (B1 / R3 Block 2 + Block 8) ───────────
+# Hoist per-eidolon marker blocks from pointer_targets sources into EIDOLONS.md.
+# Sources are derived from POINTER_TARGETS_CSV (v1.7.0+). Legacy <name>-pointer
+# stubs are removed during this pass (idempotent migration D1).
+# Must run BEFORE apply_dispatch_pointers so dispatch-pointer lands on already-
+# reduced source files.
 # Skipped on --dry-run; compose_eidolons_md is idempotent so re-runs are safe.
 if [[ "$DRY_RUN" == "true" ]]; then
-  info "  [dry-run] would run compose_eidolons_md pass (hoist from CLAUDE.md + AGENTS.md → EIDOLONS.md)"
+  info "  [dry-run] would run compose_eidolons_md pass (sources from pointer_targets: ${POINTER_TARGETS_CSV:-(none)})"
 else
   _members_space="$(echo "$MEMBERS_JSON" | jq -r '.name' | tr '\n' ' ')"
-  compose_eidolons_md "$_members_space" "./CLAUDE.md ./AGENTS.md"
-  ok "EIDOLONS.md composition pass complete"
+  _compose_sources=""
+  for _cpt in $(echo "$POINTER_TARGETS_CSV" | tr ',' ' '); do
+    [[ -z "$_cpt" ]] && continue
+    _compose_sources="$_compose_sources ./$_cpt"
+  done
+  _compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
+  if [[ -z "$_compose_sources" ]]; then
+    info "  compose_eidolons_md: no pointer_targets configured — skipping composition pass"
+  else
+    compose_eidolons_md "$_members_space" "$_compose_sources"
+    ok "EIDOLONS.md composition pass complete"
+  fi
 fi
 
 # ─── Dispatch-pointer injection (PR-A1) ──────────────────────────────────
