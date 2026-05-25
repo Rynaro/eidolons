@@ -8,6 +8,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-05-25
+
+### Fixed
+
+- **(fix) `eidolons sync` universal marker-guard across closed vendor set.** The compose-pass marker-guard, previously hardcoded to `AGENTS.md`, now iterates the full closed vendor set (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`). Vendor files carrying substantive Eidolon content markers (excluding the round-3 `dispatch-pointer` block) are auto-added to `_compose_sources` and hoisted into `EIDOLONS.md`. Fixes the v1.8.0 regression where `CLAUDE.md` retained installer-written blocks under `pointer_targets=[AGENTS.md]` + `shared_dispatch=true` + `hosts.wire=[claude-code]`. (round 5)
+- **(fix) `eidolons.lock` `composition.hoisted_from` reflects actual compose sources.** Previously a hardcoded `[CLAUDE.md, AGENTS.md]` literal regardless of input. Now derived from the actual `_compose_sources` list after the universal marker-guard runs. Empty (`[]`) when no sources processed. (round 5)
+- **(fix) `EIDOLONS.md` preamble accuracy.** The on-disk preamble previously asserted that vendor files are pointer files. Updated wording: "Vendor files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`) may serve as dispatch-pointer surfaces; pointer mapping is governed by `hosts.pointer_targets` in `eidolons.yaml`." (round 5)
+
+### Changed
+
+- **(BREAKING-LIKE, patch-axis) `eidolons init --multi-pointer` now defaults to ON in both interactive and non-interactive modes.** The interactive TTY prompt now defaults to `[Y/n]`. Non-interactive flows that hit AGENTS-precedence (`AGENTS.md` exists, `--shared-dispatch`, or `codex ∈ hosts.wire`) now derive `pointer_targets = AGENTS.md ∪ host-derived-wired-vendor-files` by default. **To preserve v1.8.0 AGENTS-only semantics, pass the new `--no-multi-pointer` flag explicitly.** This is a default flip on a bug-fix axis: v1.8.0's default-N value was the root cause of the `CLAUDE.md` regression. CI scripts that ran `eidolons init --non-interactive --shared-dispatch` and relied on `pointer_targets=[AGENTS.md]` only must add `--no-multi-pointer` to retain the prior behaviour. (round 5)
+
+### Added
+
+- **(feat) `eidolons init --no-multi-pointer` flag.** Explicit opt-out for the default-Y multi-pointer behaviour. When passed, `pointer_targets` stays `[AGENTS.md]` (under AGENTS-precedence). Mutually exclusive with `--multi-pointer` (exit code 2 if both passed). Wired vendor files outside `pointer_targets` still get their content hoisted by the universal marker-guard, but no dispatch-pointer is written to them — they become empty. Doctor Check 14 surfaces this "noisy opt-out" state. (round 5)
+- **(feat) Doctor Check 14 — wired vendor file marker drift.** Warn-only by default; `die()` under `hosts.strict=true`. Fires when a vendor file in the closed set has non-dispatch-pointer Eidolon content markers AND its host is in `hosts.wire` AND the file is not in `hosts.pointer_targets`. Remedy text recommends `eidolons init --re-derive --multi-pointer` or `eidolons sync`. (round 5)
+
+### Migration notes (v1.8.0 → v1.8.1)
+
+1. Run `eidolons sync` once — the universal marker-guard hoists installer-written content from `CLAUDE.md`/`GEMINI.md`/`.github/copilot-instructions.md` into `EIDOLONS.md`. Vendor files outside `pointer_targets` lose their substantive markers (but do not yet get a dispatch-pointer).
+2. Run `eidolons doctor` — Doctor Check 14 warns about the drift on each affected wired vendor file.
+3. Run `eidolons init --re-derive` — updates `hosts.pointer_targets` to include wired vendor files (default-Y multi-pointer). All other manifest fields are preserved.
+4. Run `eidolons sync` again — every vendor file in `pointer_targets` now gets a dispatch-pointer block; `EIDOLONS.md` content is unchanged (idempotent).
+
+To preserve v1.8.0 AGENTS-only semantics, pass `--no-multi-pointer` on the `--re-derive` invocation. Doctor Check 14 will continue to warn (informational, not coercive); silence it by accepting the dispatch-pointer mirror or by adding the files to `pointer_targets` manually.
+
 ## [1.8.0] - 2026-05-25
 
 ### Added

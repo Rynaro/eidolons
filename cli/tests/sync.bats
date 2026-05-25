@@ -908,6 +908,9 @@ EOF
 
 # G-B6.1 — eidolons sync --dry-run produces a lockfile with updated composition block.
 @test "lockfile composition hoisted_from" {
+  # seed_manifest uses wire=[claude-code], no pointer_targets field → derived = CLAUDE.md.
+  # No AGENTS.md on disk + no vendor markers → _compose_sources=./CLAUDE.md only.
+  # R5-D8: hoisted_from is now truthful (derived from actual sources, not hardcoded).
   seed_manifest
   run eidolons sync --dry-run
   [ "$status" -eq 0 ]
@@ -915,9 +918,10 @@ EOF
   grep -qF "target: EIDOLONS.md" eidolons.lock
   grep -qF "hoisted_from:" eidolons.lock
   grep -q "CLAUDE.md" eidolons.lock
-  grep -q "AGENTS.md" eidolons.lock
   grep -qF "agents_md_role: hoisted" eidolons.lock
   grep -qF "schema_version: 1" eidolons.lock
+  # AGENTS.md must NOT be in hoisted_from when it is not a compose source.
+  ! grep -qF "    - AGENTS.md" eidolons.lock
 }
 
 # Legacy test name alias to not break existing references.
