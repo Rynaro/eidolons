@@ -209,6 +209,153 @@ _ui_hosts_csv_to_letters() {
   printf '%s' "$letters"
 }
 
+# ─── Letter-shortcut vendor picker ──────────────────────────────────────
+# ui_pick_vendors <default_csv> [candidates_csv]
+#   → echoes chosen vendor-path CSV on stdout; menu + prompt on stderr.
+#
+# Letter shortcuts (frozen in SPEC-2026-05-25-INIT-R3 §3.3):
+#   c → CLAUDE.md
+#   a → AGENTS.md
+#   g → GEMINI.md
+#   i → .github/copilot-instructions.md
+#   A → all candidates
+#
+# Input parsing (mirrors ui_pick_hosts):
+#   empty reply            → echo default_csv
+#   contains ',' or '-'   → comma-separated full paths; validate each
+#   otherwise             → letter sequence; A (uppercase) selects all
+#
+# Bash 3.2 safety: case-based mapping; A-as-all sentinel checked BEFORE
+# tr-lowering so uppercase A is never lost.
+ui_pick_vendors() {
+  local default_csv="${1:-}"
+  local candidates_csv="${2:-CLAUDE.md,AGENTS.md,GEMINI.md,.github/copilot-instructions.md}"
+  local default_letters="" hint reply prefix
+
+  default_letters="$(_ui_vendors_csv_to_letters "$default_csv")"
+  if [[ -n "$default_letters" ]]; then
+    hint="[$(printf '%s' "$default_letters" | tr '[:lower:]' '[:upper:]')]"
+  else
+    hint=""
+  fi
+
+  {
+    printf '\n'
+    printf '  %s   %s   %s   %s   %s\n' \
+      "$(_ui_vendor_label c CLAUDE.md                          "$default_csv" "$candidates_csv")" \
+      "$(_ui_vendor_label a AGENTS.md                          "$default_csv" "$candidates_csv")" \
+      "$(_ui_vendor_label g GEMINI.md                          "$default_csv" "$candidates_csv")" \
+      "$(_ui_vendor_label i .github/copilot-instructions.md    "$default_csv" "$candidates_csv")" \
+      "$(_ui_vendor_label A all                                 ""            "")"
+    printf '\n'
+  } >&2
+
+  prefix="$(_ui_prompt_prefix)"
+  if [[ -n "$hint" ]]; then
+    printf '%sPointer targets %s: ' "$prefix" "$hint" >&2
+  else
+    printf '%sPointer targets: ' "$prefix" >&2
+  fi
+  read -r reply || reply=""
+
+  # Check for A-as-all BEFORE lowercasing (uppercase A is the sentinel).
+  local had_all_sentinel=false
+  case "$reply" in *A*) had_all_sentinel=true ;; esac
+
+  if "$had_all_sentinel"; then
+    printf '%s\n' "$candidates_csv"
+    return 0
+  fi
+
+  reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+
+  if [[ -z "$reply" ]]; then
+    printf '%s\n' "$default_csv"
+    return 0
+  fi
+
+  case "$reply" in
+    *,*|*-*)
+      local token out=""
+      local IFS=','
+      # shellcheck disable=SC2086
+      set -- $reply
+      for token in "$@"; do
+        token="$(printf '%s' "$token" | tr -d '[:space:]')"
+        [[ -z "$token" ]] && continue
+        case "$token" in
+          CLAUDE.md|AGENTS.md|GEMINI.md|.github/copilot-instructions.md) ;;
+          *) die "Unknown vendor path '$token'. Valid: CLAUDE.md, AGENTS.md, GEMINI.md, .github/copilot-instructions.md (or letters c a g i A)." ;;
+        esac
+        # Check candidates restriction
+        case ",$candidates_csv," in
+          *",$token,"*) ;;
+          *) die "Vendor '$token' is not in the candidate set for this project." ;;
+        esac
+        if [[ -z "$out" ]]; then out="$token"; else out="$out,$token"; fi
+      done
+      printf '%s\n' "$out"
+      return 0
+      ;;
+  esac
+
+  # Letter-by-letter parsing.
+  local i ch vendor out=""
+  for (( i=0; i<${#reply}; i++ )); do
+    ch="${reply:$i:1}"
+    case "$ch" in
+      c) vendor="CLAUDE.md" ;;
+      a) vendor="AGENTS.md" ;;
+      g) vendor="GEMINI.md" ;;
+      i) vendor=".github/copilot-instructions.md" ;;
+      *) die "Unknown vendor letter '$ch'. Valid: c (CLAUDE.md), a (AGENTS.md), g (GEMINI.md), i (.github/copilot-instructions.md), A (all)." ;;
+    esac
+    # Check candidates restriction
+    case ",$candidates_csv," in
+      *",$vendor,"*) ;;
+      *) die "Vendor letter '$ch' ($vendor) is not in the candidate set for this project." ;;
+    esac
+    case ",$out," in
+      *",$vendor,"*) : ;;  # already picked
+      *) if [[ -z "$out" ]]; then out="$vendor"; else out="$out,$vendor"; fi ;;
+    esac
+  done
+  printf '%s\n' "$out"
+}
+
+# Render one vendor menu entry, e.g. "(C)LAUDE.md". When the vendor is in
+# the default set, the letter is uppercased; otherwise lowercased. When the
+# vendor is not in candidates_csv, dim it (lowercase + parens). Bash 3.2 safe.
+_ui_vendor_label() {
+  local letter="$1" vendor="$2" default_csv="${3:-}" candidates_csv="${4:-}"
+  local upper lower L
+  upper="$(printf '%s' "$letter" | tr '[:lower:]' '[:upper:]')"
+  lower="$(printf '%s' "$letter" | tr '[:upper:]' '[:lower:]')"
+  L="$lower"
+  case ",$default_csv," in
+    *",$vendor,"*) L="$upper" ;;
+  esac
+  case "$vendor" in
+    CLAUDE.md)                       printf '(%s)LAUDE.md'         "$L" ;;
+    AGENTS.md)                       printf '(%s)GENTS.md'         "$L" ;;
+    GEMINI.md)                       printf '(%s)EMINI.md'         "$L" ;;
+    .github/copilot-instructions.md) printf 'cop(%s)lot'           "$L" ;;
+    all)                             printf '(%s)ll'               "$upper" ;;
+  esac
+}
+
+# Map a CSV of vendor paths to shortcut letters (stable order c a g i).
+_ui_vendors_csv_to_letters() {
+  local csv="${1:-}"
+  [[ -z "$csv" ]] && { printf ''; return 0; }
+  local letters=""
+  case ",$csv," in *",CLAUDE.md,"*)                         letters="${letters}c" ;; esac
+  case ",$csv," in *",AGENTS.md,"*)                         letters="${letters}a" ;; esac
+  case ",$csv," in *",GEMINI.md,"*)                         letters="${letters}g" ;; esac
+  case ",$csv," in *",.github/copilot-instructions.md,"*)   letters="${letters}i" ;; esac
+  printf '%s' "$letters"
+}
+
 # ─── Free-text input ─────────────────────────────────────────────────────
 # Echoes the reply on stdout. Empty reply → echoes the default (or empty
 # string when no default given).
