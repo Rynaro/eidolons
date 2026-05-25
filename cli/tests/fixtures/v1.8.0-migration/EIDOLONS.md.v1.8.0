@@ -1,0 +1,23 @@
+# EIDOLONS — canonical agent dispatch & methodology surface
+
+This file is managed by `eidolons sync`. It composes the per-Eidolon
+methodology references hoisted from host-vendor files. Do not edit
+inside `<!-- eidolon:<name> start --> ... end -->` markers; manual edits
+above the first marker block or below the last are preserved.
+
+Vendor files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,
+`.github/copilot-instructions.md`) may serve as dispatch-pointer surfaces;
+pointer mapping is governed by `hosts.pointer_targets` in `eidolons.yaml`.
+`EIDOLONS.md` is the single canonical composition surface per `eidolons sync`.
+
+<!-- eidolon:atlas start -->
+## ATLAS — Exploration & Mapping
+
+ATLAS is the read-only scout. See `.eidolons/atlas/AGENTS.md` for the full methodology.
+<!-- eidolon:atlas end -->
+
+<!-- eidolon:spectra start -->
+## SPECTRA — Spec & Validation
+
+SPECTRA produces structured specs from scout reports. See `.eidolons/spectra/AGENTS.md`.
+<!-- eidolon:spectra end -->

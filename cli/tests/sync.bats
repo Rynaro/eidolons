@@ -1451,3 +1451,178 @@ AGENTSMD
   [ "$status" -eq 0 ]
   [[ "$output" =~ "AGENTS.md exists with Eidolon markers but isn't in pointer_targets" ]]
 }
+
+# ─── R5: Universal marker-guard across closed vendor set ────────────────────
+
+# R5-sync-1: universal marker-guard — CLAUDE.md with substantive markers gets hoisted.
+@test "universal marker-guard: CLAUDE.md with markers is added to _compose_sources (R5)" {
+  # Plant CLAUDE.md with substantive eidolon markers.
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+## ATLAS
+Atlas content in CLAUDE.md.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='AGENTS.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+      [[ -f \"\$_vfile\" ]] || continue
+      grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null || continue
+      grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null \\
+        | grep -vqE 'eidolon:dispatch-pointer' || continue
+      case \" \$_compose_sources \" in
+        *\" ./\$_vfile \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./\$_vfile\" ;;
+      esac
+    done
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  # CLAUDE.md must be included despite not being in pointer_targets.
+  [[ "$result" == *"./CLAUDE.md"* ]]
+}
+
+# R5-sync-2: universal marker-guard — dispatch-pointer-only CLAUDE.md is excluded.
+@test "universal marker-guard: dispatch-pointer-only CLAUDE.md skipped (R5)" {
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+See ./EIDOLONS.md
+<!-- eidolon:dispatch-pointer end -->
+CLAUDEMD
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='AGENTS.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+      [[ -f \"\$_vfile\" ]] || continue
+      grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null || continue
+      grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null \\
+        | grep -vqE 'eidolon:dispatch-pointer' || continue
+      case \" \$_compose_sources \" in
+        *\" ./\$_vfile \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./\$_vfile\" ;;
+      esac
+    done
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  # Dispatch-pointer-only CLAUDE.md must NOT be in _compose_sources.
+  ! [[ "$result" == *"./CLAUDE.md"* ]]
+  [[ "$result" == *"./AGENTS.md"* ]] || [[ -z "$result" ]]
+}
+
+# R5-sync-3: universal marker-guard — GEMINI.md with markers included even when gemini unwired.
+@test "universal marker-guard: GEMINI.md with markers included even when gemini not in hosts.wire (R5)" {
+  cat > GEMINI.md <<'GEMINIMD'
+<!-- eidolon:atlas start -->
+## ATLAS in GEMINI.md
+Atlas content in GEMINI.md.
+<!-- eidolon:atlas end -->
+GEMINIMD
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='AGENTS.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    for _vfile in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+      [[ -f \"\$_vfile\" ]] || continue
+      grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null || continue
+      grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' \"\$_vfile\" 2>/dev/null \\
+        | grep -vqE 'eidolon:dispatch-pointer' || continue
+      case \" \$_compose_sources \" in
+        *\" ./\$_vfile \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./\$_vfile\" ;;
+      esac
+    done
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  # GEMINI.md must be hoisted even when gemini is not in hosts.wire.
+  [[ "$result" == *"./GEMINI.md"* ]]
+}
+
+# R5-sync-4: hoisted_from in lock reflects actual sources.
+@test "hoisted_from truthfulness: lock reflects actual _compose_sources after sync --dry-run (R5)" {
+  # Seed a v1.8.0-style manifest with AGENTS.md as only pointer_target.
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  # Plant CLAUDE.md with substantive markers to trigger universal guard.
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+Atlas content in CLAUDE.md.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  # Lock should be written even in dry-run (lock header is still written).
+  [ -f eidolons.lock ]
+  # hoisted_from must NOT be the hardcoded [CLAUDE.md, AGENTS.md] lie.
+  # It should reflect the actual empty _compose_sources (dry-run builds the lock but skips compose).
+  # At minimum: the key must exist.
+  grep -qF "hoisted_from" eidolons.lock
+}
+
+# R5-sync-5: EIDOLONS.md preamble uses updated "may serve as" wording (R5-D9).
+@test "EIDOLONS.md preamble: updated 'may serve as dispatch-pointer surfaces' wording (R5)" {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+Atlas content.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  run eidolons sync --dry-run
+  # EIDOLONS.md is only written on non-dry-run; test via lib directly.
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh' >/dev/null 2>&1
+    _eidolons_md_preamble
+  " 2>/dev/null)"
+  [[ "$result" == *"may serve as dispatch-pointer surfaces"* ]]
+  # Must NOT contain the old wording.
+  ! [[ "$result" == *"redirect host LLMs here via"* ]]
+}

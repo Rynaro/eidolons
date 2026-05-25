@@ -1076,26 +1076,38 @@ FAKEGIT
   ! grep -E "pointer_targets:.*AGENTS" eidolons.yaml
 }
 
-# R4-init-2: AGENTS.md exists, --hosts claude-code → AGENTS-precedence → [AGENTS.md]
-@test "AGENTS-precedence triggers on AGENTS.md present (R4)" {
+# R4-init-2: AGENTS.md exists, --hosts claude-code → AGENTS-precedence (R5: default-Y includes CLAUDE.md)
+@test "AGENTS-precedence triggers on AGENTS.md present — non-interactive default-Y wires CLAUDE.md (R4/R5)" {
   _setup_fake_git_r4
   touch AGENTS.md
   run eidolons init --preset minimal --hosts claude-code --non-interactive
   [ -f eidolons.yaml ]
   grep -qF "AGENTS.md" eidolons.yaml
-  # CLAUDE.md must NOT be in pointer_targets.
-  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+  # R5-D1: non-interactive default flip — CLAUDE.md is now included by default.
+  grep -qF "CLAUDE.md" eidolons.yaml
   # Case B message should be in stderr (captured in output by bats).
   [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
 }
 
-# R4-init-3: --shared-dispatch triggers precedence even without AGENTS.md on disk.
-@test "AGENTS-precedence triggers on shared_dispatch (R4)" {
+# R4-init-2b: --no-multi-pointer preserves AGENTS.md-only semantics.
+@test "AGENTS-precedence triggers on AGENTS.md present — --no-multi-pointer keeps AGENTS.md only (R5)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
+  run eidolons init --preset minimal --hosts claude-code --no-multi-pointer --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  # --no-multi-pointer: CLAUDE.md must NOT be in pointer_targets.
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+}
+
+# R4-init-3: --shared-dispatch triggers precedence — R5 default-Y includes CLAUDE.md.
+@test "AGENTS-precedence triggers on shared_dispatch — non-interactive default-Y (R4/R5)" {
   _setup_fake_git_r4
   run eidolons init --preset minimal --hosts claude-code --shared-dispatch --non-interactive
   [ -f eidolons.yaml ]
   grep -qF "AGENTS.md" eidolons.yaml
-  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+  # R5-D1: non-interactive default-Y includes host-derived vendor files.
+  grep -qF "CLAUDE.md" eidolons.yaml
   [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
 }
 
@@ -1217,17 +1229,30 @@ YAML
   [ "$result" = "AGENTS.md,CLAUDE.md" ]
 }
 
-# R4-init-11: interactive TTY multi-pointer prompt default-n.
-@test "multi-pointer TTY prompt default-n: Enter keeps AGENTS.md only (R4)" {
+# R4-init-11: interactive TTY multi-pointer prompt default-Y (R5 default flip).
+@test "multi-pointer TTY prompt default-Y: Enter includes CLAUDE.md (R5)" {
   _setup_fake_git_r4
   touch AGENTS.md
-  # Answer 'n' (or Enter) to the shared-dispatch prompt AND the multi-pointer prompt.
+  # Press Enter at the multi-pointer prompt → default-Y → CLAUDE.md included.
+  run eidolons init --preset minimal --hosts claude-code --shared-dispatch <<'EOF'
+
+EOF
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  # R5-D1: with default-Y the user accepted → CLAUDE.md is wired.
+  grep -qF "CLAUDE.md" eidolons.yaml
+}
+
+# R4-init-11b: interactive TTY multi-pointer prompt: 'n' keeps AGENTS.md only.
+@test "multi-pointer TTY prompt: explicit 'n' keeps AGENTS.md only (R5)" {
+  _setup_fake_git_r4
+  touch AGENTS.md
   run eidolons init --preset minimal --hosts claude-code --shared-dispatch <<'EOF'
 n
 EOF
   [ -f eidolons.yaml ]
   grep -qF "AGENTS.md" eidolons.yaml
-  # With default-n the user chose not to add extra vendor files.
+  # Explicit 'n' → only AGENTS.md in pointer_targets.
   ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
 }
 
@@ -1247,4 +1272,97 @@ EOF
   [ -f eidolons.yaml ]
   ! [[ "$output" =~ "codex detected in hosts.wire" ]]
   ! [[ "$output" =~ "AGENTS.md will be the canonical pointer surface" ]]
+}
+
+# ─── R5: --multi-pointer default-Y + --no-multi-pointer opt-out ─────────────
+
+# R5-init-1: non-interactive + shared_dispatch + no flag → default-Y includes CLAUDE.md.
+@test "multi-pointer default-Y: non-interactive no flag includes CLAUDE.md (R5)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --shared-dispatch --non-interactive
+  # init writes eidolons.yaml then execs sync; sync may fail on git clone (fake-git).
+  # What matters: eidolons.yaml was written with the correct pointer_targets.
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  grep -qF "CLAUDE.md" eidolons.yaml
+}
+
+# R5-init-2: --no-multi-pointer keeps pointer_targets=[AGENTS.md] only.
+@test "multi-pointer default: --no-multi-pointer keeps AGENTS.md only (R5)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --shared-dispatch --no-multi-pointer --non-interactive
+  [ -f eidolons.yaml ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+}
+
+# R5-init-3: mutual exclusion — both flags → die exit 2.
+@test "multi-pointer mutual exclusion: --multi-pointer and --no-multi-pointer both die (R5)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --multi-pointer --no-multi-pointer --non-interactive
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "mutually exclusive" ]]
+}
+
+# R5-init-4: --re-derive with no flag → default-Y union.
+@test "re-derive default-Y: no flag → includes CLAUDE.md in pointer_targets (R5)" {
+  _setup_fake_git_r4
+  # Seed a v1.8.0-style manifest with pointer_targets=[AGENTS.md].
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.5.0"
+    source: github:Rynaro/ATLAS
+YAML
+  run eidolons init --re-derive
+  [ "$status" -eq 0 ]
+  grep -qF "CLAUDE.md" eidolons.yaml
+  grep -qF "AGENTS.md" eidolons.yaml
+}
+
+# R5-init-5: --re-derive --no-multi-pointer keeps AGENTS.md only.
+@test "re-derive --no-multi-pointer: keeps AGENTS.md only (R5)" {
+  _setup_fake_git_r4
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.5.0"
+    source: github:Rynaro/ATLAS
+YAML
+  run eidolons init --re-derive --no-multi-pointer
+  [ "$status" -eq 0 ]
+  grep -qF "AGENTS.md" eidolons.yaml
+  ! grep -E "pointer_targets:.*CLAUDE" eidolons.yaml
+}
+
+# R5-init-6: --no-multi-pointer --multi-pointer also mutual-exclusive.
+@test "mutual exclusion: --no-multi-pointer then --multi-pointer also dies (R5)" {
+  _setup_fake_git_r4
+  run eidolons init --preset minimal --hosts claude-code --no-multi-pointer --multi-pointer --non-interactive
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "mutually exclusive" ]]
+}
+
+# R5-init-7: no AGENTS-precedence trigger — flags are no-ops outside AGENTS-precedence.
+@test "flags are no-ops outside AGENTS-precedence: plain claude-code no trigger (R5)" {
+  _setup_fake_git_r4
+  # No AGENTS.md, no shared_dispatch, no codex → no AGENTS-precedence.
+  run eidolons init --preset minimal --hosts claude-code --non-interactive
+  # init writes eidolons.yaml then execs sync; sync may fail on git clone (fake-git).
+  [ -f eidolons.yaml ]
+  # status quo derivation: only CLAUDE.md from hosts.wire.
+  grep -qF "CLAUDE.md" eidolons.yaml
+  ! grep -E "pointer_targets:.*AGENTS" eidolons.yaml
 }

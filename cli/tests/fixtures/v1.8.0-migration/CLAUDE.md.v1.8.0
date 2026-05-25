@@ -1,0 +1,13 @@
+# CLAUDE.md
+
+<!-- eidolon:atlas start -->
+## ATLAS — Exploration & Mapping
+
+ATLAS is the read-only scout. See `.eidolons/atlas/AGENTS.md` for the full methodology.
+<!-- eidolon:atlas end -->
+
+<!-- eidolon:spectra start -->
+## SPECTRA — Spec & Validation
+
+SPECTRA produces structured specs from scout reports. See `.eidolons/spectra/AGENTS.md`.
+<!-- eidolon:spectra end -->

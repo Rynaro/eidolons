@@ -112,7 +112,9 @@ done
 
 # Mutual exclusion: --multi-pointer and --no-multi-pointer are mutually exclusive.
 if [[ "$_MP_YES_SEEN" == "true" ]] && [[ "$_MP_NO_SEEN" == "true" ]]; then
-  die "--multi-pointer and --no-multi-pointer are mutually exclusive."
+  printf "%s%s%s %s\n" "${UI_ERROR:-}" "${GLYPH_ERROR:-✗}" "${RESET:-}" \
+    "--multi-pointer and --no-multi-pointer are mutually exclusive." >&2
+  exit 2
 fi
 unset _MP_YES_SEEN _MP_NO_SEEN
 
