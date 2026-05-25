@@ -1096,7 +1096,7 @@ derive_pointer_targets_from_hosts() {
 detect_vendor_files_on_disk() {
   local v
   for v in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
-    [[ -f "$v" ]] && printf '%s\n' "$v"
+    if [[ -f "$v" ]]; then printf '%s\n' "$v"; fi
   done
 }
 

@@ -538,7 +538,10 @@ fi
 LEGACY_STUBS_FOUND=false
 for _vfile in $POINTER_TARGETS_FOR_DOCTOR; do
   [[ -f "$_vfile" ]] || continue
-  if grep -qE '<!-- eidolon:[a-z][a-z0-9-]*-pointer start -->' "$_vfile" 2>/dev/null; then
+  # Match <!-- eidolon:<name>-pointer start --> blocks, but exclude
+  # <!-- eidolon:dispatch-pointer start --> which is the v1.7.0 canonical form.
+  if grep -E '<!-- eidolon:[a-z][a-z0-9-]*-pointer start -->' "$_vfile" 2>/dev/null \
+       | grep -qvF '<!-- eidolon:dispatch-pointer start -->'; then
     LEGACY_STUBS_FOUND=true
     warn "$_vfile contains legacy <name>-pointer stubs (v1.6.0 → v1.7.0 migration)"
   fi

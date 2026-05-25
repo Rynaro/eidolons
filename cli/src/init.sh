@@ -251,7 +251,7 @@ else
     _in_detected=false; _in_derived=false
     case ",$_detected_vendors," in *",$_cv,"*) _in_detected=true ;; esac
     case ",$_host_derived_csv," in *",$_cv,"*) _in_derived=true ;; esac
-    if "$_in_detected" || "$_in_derived"; then
+    if [[ "$_in_detected" == "true" ]] || [[ "$_in_derived" == "true" ]]; then
       if [[ -z "$_candidates" ]]; then _candidates="$_cv"; else _candidates="$_candidates,$_cv"; fi
     fi
   done
