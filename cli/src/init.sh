@@ -19,6 +19,10 @@ FORCE=false
 QUIET=false
 VERBOSE_FLAG=false
 STRICT_HOSTS=false
+RE_DERIVE=false
+POINTER_TARGETS_ARG=""
+MULTI_POINTER=false
+MULTI_POINTER_EXPLICIT=false
 
 usage() {
   cat <<EOF
@@ -48,6 +52,19 @@ Options:
                            error rather than a silent path-pattern prune. Requires
                            per-Eidolon install.manifest.json to annotate `host` per file.
                            Persisted to eidolons.yaml under hosts.strict (default: false).
+  --re-derive              Re-derive hosts.pointer_targets in the existing
+                           eidolons.yaml using the round-4 precedence rules.
+                           Preserves all other manifest fields. Requires an
+                           existing eidolons.yaml (dies if absent). Used to
+                           migrate v1.7.0 projects to round-4 semantics.
+  --pointer-targets=CSV    Explicit pointer_targets override (comma-separated,
+                           e.g. CLAUDE.md or AGENTS.md,CLAUDE.md). Bypasses
+                           AGENTS-precedence derivation. Warns when AGENTS.md
+                           exists on disk but is not in the supplied set.
+  --multi-pointer          When AGENTS-precedence triggers, additionally
+                           wire host-derived vendor files (CLAUDE.md, GEMINI.md,
+                           .github/copilot-instructions.md). Default: AGENTS.md
+                           is the sole pointer target when precedence triggers.
   -h, --help               Show this help
 
 Behavior:
@@ -76,6 +93,10 @@ while [[ $# -gt 0 ]]; do
     --quiet)                QUIET=true; shift ;;
     --verbose)              VERBOSE_FLAG=true; shift ;;
     --strict-hosts)         STRICT_HOSTS=true; shift ;;
+    --re-derive)            RE_DERIVE=true; FORCE=true; shift ;;
+    --pointer-targets)      POINTER_TARGETS_ARG="$2"; shift 2 ;;
+    --pointer-targets=*)    POINTER_TARGETS_ARG="${1#*=}"; shift ;;
+    --multi-pointer)        MULTI_POINTER=true; MULTI_POINTER_EXPLICIT=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -91,6 +112,81 @@ else
   VERBOSITY="default"
 fi
 export VERBOSITY
+
+# ─── --re-derive: surgical pointer_targets migration (D10) ───────────────
+# This flag re-runs derivation only, preserving all other manifest fields.
+# Must execute BEFORE the normal init flow (no preset resolution, no sync).
+if [[ "$RE_DERIVE" == "true" ]]; then
+  if ! manifest_exists; then
+    die "eidolons init --re-derive requires an existing eidolons.yaml — run 'eidolons init' first."
+  fi
+
+  # Read fields we need from the existing manifest.
+  _rd_manifest_json="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null)" || \
+    die "eidolons init --re-derive: cannot parse existing eidolons.yaml"
+  _rd_hosts_csv="$(printf '%s\n' "$_rd_manifest_json" \
+    | jq -r '.hosts.wire // [] | join(",")' 2>/dev/null || true)"
+  _rd_shared_dispatch="$(printf '%s\n' "$_rd_manifest_json" \
+    | jq -r '.hosts.shared_dispatch // "false"' 2>/dev/null || true)"
+
+  # Determine new pointer_targets.
+  _rd_host_derived="$(derive_pointer_targets_from_hosts "$_rd_hosts_csv")"
+  _rd_new_pt=""
+
+  if [[ -n "$POINTER_TARGETS_ARG" ]]; then
+    # Explicit override path.
+    _rd_new_pt="$(_validate_pointer_targets_csv "$POINTER_TARGETS_ARG")"
+    case ",$_rd_new_pt," in
+      *",AGENTS.md,"*) : ;;
+      *)
+        if [[ -f "AGENTS.md" ]]; then
+          warn "--pointer-targets does not include AGENTS.md but AGENTS.md exists on disk."
+          warn "Installers may write to AGENTS.md anyway under shared_dispatch=true."
+          warn "Consider 'eidolons init --re-derive' to align with AGENTS-precedence."
+        fi
+        ;;
+    esac
+  elif detect_agents_precedence_trigger "$_rd_hosts_csv" "$_rd_shared_dispatch"; then
+    _rd_new_pt="AGENTS.md"
+    if [[ "$MULTI_POINTER" == "true" ]]; then
+      _rd_new_pt="$(_csv_union "AGENTS.md" "$_rd_host_derived")"
+    fi
+  else
+    _rd_new_pt="$_rd_host_derived"
+  fi
+
+  # Rewrite only the pointer_targets line (atomic via tmp file).
+  _rd_tmpfile="${PROJECT_MANIFEST}.re-derive.tmp"
+  if [[ -n "$_rd_new_pt" ]]; then
+    _rd_pt_yaml="  pointer_targets: [$(printf '%s\n' "$_rd_new_pt" | sed 's/,/, /g')]"
+  else
+    _rd_pt_yaml=""
+  fi
+
+  # Use awk to replace or remove the pointer_targets line.
+  awk -v new_pt="$_rd_pt_yaml" '
+    /^[[:space:]]*pointer_targets:/ {
+      if (new_pt != "") { print new_pt }
+      next
+    }
+    { print }
+  ' "$PROJECT_MANIFEST" > "$_rd_tmpfile"
+
+  # If pointer_targets line was absent and we need to add it, insert after strict: line.
+  if [[ -n "$_rd_pt_yaml" ]] && ! grep -q 'pointer_targets:' "$_rd_tmpfile"; then
+    awk -v new_pt="$_rd_pt_yaml" '
+      /^[[:space:]]*strict:/ { print; print new_pt; next }
+      { print }
+    ' "$_rd_tmpfile" > "${_rd_tmpfile}.2" && mv "${_rd_tmpfile}.2" "$_rd_tmpfile"
+  fi
+
+  mv "$_rd_tmpfile" "$PROJECT_MANIFEST"
+  unset _rd_manifest_json _rd_hosts_csv _rd_shared_dispatch _rd_host_derived _rd_new_pt _rd_tmpfile _rd_pt_yaml
+
+  ok "Updated hosts.pointer_targets in eidolons.yaml — re-run 'eidolons sync' to apply."
+  info "Orphan dispatch-pointer block(s) may remain in previously-targeted vendor files (e.g. CLAUDE.md). They correctly point to ./EIDOLONS.md and are harmless. Delete the <!-- eidolon:dispatch-pointer start --> ... end --> markers and the file body between them to remove."
+  exit 0
+fi
 
 # ─── Detect greenfield vs brownfield ──────────────────────────────────────
 PROJECT_STATE="greenfield"
@@ -217,98 +313,76 @@ if [[ -z "$SHARED_DISPATCH" ]]; then
 fi
 info "Shared dispatch: $SHARED_DISPATCH"
 
-# ─── Resolve pointer_targets ──────────────────────────────────────────────
-# Determines which vendor files receive the EIDOLONS dispatch-pointer and
-# cortex block. Prompt flow (D2, SPEC §3.3):
-#   1. If NON_INTERACTIVE → derive from hosts.wire (v1.6.0 default).
-#   2. Otherwise:
-#      a. Detect vendor files already on disk.
-#      b. AGENTS-first short-circuit: if AGENTS.md detected, offer
-#         exclusivity prompt (AGENTS.md only → skip ui_pick_vendors).
-#      c. Multi-vendor ui_pick_vendors when |candidates| > 1.
-#      d. Single candidate auto-selects.
-#
-# When re-running with --force on a manifest that already has pointer_targets,
-# the existing value becomes the preselected default (D7).
+# ─── Resolve pointer_targets (round 4 deterministic derivation) ──────────
+# D1/D4 (SPEC INIT-R4): Replace v1.7.0 exclusivity prompt with deterministic
+# AGENTS-precedence rule. Three triggers: AGENTS.md on disk, shared_dispatch=true,
+# or codex in hosts.wire → pointer_targets=[AGENTS.md].
+# Flags: --pointer-targets=CSV overrides; --multi-pointer extends with host-derived.
+# Interactive: TTY prompt for --multi-pointer when flag not explicitly passed.
 POINTER_TARGETS=""
-
-# Read existing pointer_targets from manifest as reprompt default (D7).
-_existing_pt=""
-if manifest_exists && [[ "$FORCE" == "true" ]]; then
-  _existing_pt="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
-    | jq -r '.hosts.pointer_targets // [] | join(",")' 2>/dev/null || true)"
-fi
-
 _host_derived_csv="$(derive_pointer_targets_from_hosts "$HOSTS")"
-_detected_vendors="$(detect_vendor_files_on_disk | tr '\n' ',' | sed 's/,$//')"
 
-if [[ "$NON_INTERACTIVE" == "true" ]]; then
-  POINTER_TARGETS="$_host_derived_csv"
-else
-  # Compute candidates: union of detected on-disk vendors and host-derived.
-  _candidates=""
-  for _cv in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
-    _in_detected=false; _in_derived=false
-    case ",$_detected_vendors," in *",$_cv,"*) _in_detected=true ;; esac
-    case ",$_host_derived_csv," in *",$_cv,"*) _in_derived=true ;; esac
-    if [[ "$_in_detected" == "true" ]] || [[ "$_in_derived" == "true" ]]; then
-      if [[ -z "$_candidates" ]]; then _candidates="$_cv"; else _candidates="$_candidates,$_cv"; fi
-    fi
-  done
-
-  _default_pt="${_existing_pt:-$_host_derived_csv}"
-
-  # Step (b): AGENTS-first exclusivity short-circuit.
-  _agents_exclusive=false
-  case ",$_detected_vendors," in
-    *",AGENTS.md,"*)
-      {
-        echo ""
-        echo "${BOLD}AGENTS.md is present in this project.${RESET}"
-        echo "Codex/opencode treat AGENTS.md as the canonical surface."
-        echo "Answering YES restricts eidolons to AGENTS.md only — CLAUDE.md and"
-        echo "other vendor files will not be created or modified."
-        echo ""
-      } >&2
-      if ui_confirm "AGENTS.md detected — is AGENTS.md the only canonical agent-instructions file you want eidolons to manage?" default-n; then
-        POINTER_TARGETS="AGENTS.md"
-        _agents_exclusive=true
+if [[ -n "$POINTER_TARGETS_ARG" ]]; then
+  # Explicit override path. Validate CSV and emit foot-gun warn if needed.
+  POINTER_TARGETS="$(_validate_pointer_targets_csv "$POINTER_TARGETS_ARG")"
+  case ",$POINTER_TARGETS," in
+    *",AGENTS.md,"*) : ;;
+    *)
+      if [[ -f "AGENTS.md" ]]; then
+        warn "--pointer-targets does not include AGENTS.md but AGENTS.md exists on disk."
+        warn "Installers may write to AGENTS.md anyway under shared_dispatch=true."
+        warn "Consider 'eidolons init --re-derive' to align with AGENTS-precedence."
       fi
       ;;
   esac
-
-  if [[ "$_agents_exclusive" != "true" ]]; then
-    # Count candidates (comma-count + 1).
-    _cand_count=1
-    case "$_candidates" in
-      "") _cand_count=0 ;;
-      *,*) _cand_count=2 ;;  # at least 2; exact count not needed — we just need >1
-    esac
-
-    if [[ "$_cand_count" -gt 1 ]]; then
-      {
-        echo ""
-        echo "${BOLD}Pick vendor file(s) to receive the EIDOLONS pointer + cortex block.${RESET}"
-        echo "Default is all auto-detected/host-derived files."
-        echo "Letters: c=CLAUDE.md, a=AGENTS.md, g=GEMINI.md,"
-        echo "         i=.github/copilot-instructions.md, A=all."
-        echo ""
-      } >&2
-      POINTER_TARGETS="$(ui_pick_vendors "$_default_pt" "$_candidates")"
-      POINTER_TARGETS="$(echo "$POINTER_TARGETS" | tr '\n' ',' | sed 's/,$//')"
-      if [[ -z "$POINTER_TARGETS" ]]; then
-        die "No pointer targets selected. Aborting — specify hosts.pointer_targets in eidolons.yaml or re-run."
-      fi
-    elif [[ "$_cand_count" -eq 1 ]]; then
-      POINTER_TARGETS="$_candidates"
-    else
-      # No candidates at all — fall back to host-derived (may be empty).
-      POINTER_TARGETS="$_host_derived_csv"
+  # Explicit override silences Case A and Case B messages.
+elif detect_agents_precedence_trigger "$HOSTS" "$SHARED_DISPATCH"; then
+  # AGENTS-precedence triggered.
+  POINTER_TARGETS="AGENTS.md"
+  if [[ "$MULTI_POINTER" == "true" ]]; then
+    POINTER_TARGETS="$(_csv_union "AGENTS.md" "$_host_derived_csv")"
+  elif [[ "$NON_INTERACTIVE" != "true" ]] && [[ "$MULTI_POINTER_EXPLICIT" != "true" ]]; then
+    # TTY prompt fallback (D8). Default-n. Only fires in interactive mode
+    # when --multi-pointer was NOT explicitly passed.
+    {
+      echo ""
+      echo "AGENTS.md will be the canonical pointer surface (round-4 AGENTS-precedence)."
+      echo "By default, eidolons writes the dispatch-pointer + cortex block only to AGENTS.md."
+      echo "Some hosts (e.g. Claude Code) read CLAUDE.md natively — multi-pointer writes"
+      echo "the same dispatch-pointer block to those host-native files as well."
+      echo ""
+    } >&2
+    if ui_confirm "Also wire host-derived vendor files (CLAUDE.md, etc.) in addition to AGENTS.md?" default-n; then
+      POINTER_TARGETS="$(_csv_union "AGENTS.md" "$_host_derived_csv")"
     fi
   fi
+  # Emit Case A or Case B message (R4-2) — after POINTER_TARGETS is final.
+  case ",$HOSTS," in
+    *",codex,"*)
+      {
+        echo ""
+        printf '%bcodex detected in hosts.wire%b — AGENTS.md is canonical pointer surface (EIIS §4.1.0).\n' \
+          "${BOLD}" "${RESET}"
+        echo "Use --multi-pointer to additionally wire CLAUDE.md/GEMINI.md."
+        echo ""
+      } >&2
+      ;;
+    *)
+      {
+        echo ""
+        printf '%bAGENTS.md will be the canonical pointer surface%b (AGENTS.md outranks host-specific files in modern LLM hosts).\n' \
+          "${BOLD}" "${RESET}"
+        echo "Wired hosts read their primary file only with --multi-pointer. Note: Claude reads CLAUDE.md natively."
+        echo ""
+      } >&2
+      ;;
+  esac
+else
+  # No AGENTS-precedence trigger. Greenfield / non-codex / no AGENTS.md / no shared_dispatch.
+  POINTER_TARGETS="$_host_derived_csv"
 fi
 
-unset _existing_pt _host_derived_csv _detected_vendors _candidates _default_pt _agents_exclusive _cand_count _cv _in_detected _in_derived
+unset _host_derived_csv
 
 info "Pointer targets: ${POINTER_TARGETS:-(none)}"
 
