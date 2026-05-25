@@ -18,6 +18,9 @@ _EIDOLONS_MD_PATH="${_EIDOLONS_MD_PATH:-./EIDOLONS.md}"
 #
 # Writes the canonical EIDOLONS.md preamble to stdout. Called once on file
 # creation. Bash 3.2 safe (printf line-by-line, no heredoc in $()).
+# Static-with-conditional wording (R5-D9): the preamble describes what vendor
+# pointer files MAY be, not what they ARE, since pointer_targets membership
+# is project-specific.
 _eidolons_md_preamble() {
   printf '%s\n' \
     '# EIDOLONS — canonical agent dispatch & methodology surface' \
@@ -27,10 +30,10 @@ _eidolons_md_preamble() {
     'inside `<!-- eidolon:<name> start --> ... end -->` markers; manual edits' \
     'above the first marker block or below the last are preserved.' \
     '' \
-    'Vendor pointer files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,' \
-    '`.github/copilot-instructions.md`) redirect host LLMs here via' \
-    '`<!-- eidolon:<name>-pointer -->` blocks. `EIDOLONS.md` is the single' \
-    'canonical composition surface per `eidolons sync`.'
+    'Vendor files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`,' \
+    '`.github/copilot-instructions.md`) may serve as dispatch-pointer surfaces;' \
+    'pointer mapping is governed by `hosts.pointer_targets` in `eidolons.yaml`.' \
+    '`EIDOLONS.md` is the single canonical composition surface per `eidolons sync`.'
 }
 
 # compose_eidolons_md <members_space_separated> [sources_space_separated]

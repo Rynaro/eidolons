@@ -1203,3 +1203,176 @@ EOF
   run eidolons doctor
   [[ "$output" =~ "no legacy" ]] || [[ "$output" =~ "pointer stubs detected" ]]
 }
+
+# ─── Check 14: Wired vendor file marker drift (Round 5) ─────────────────────
+
+# Helper for Check 14 tests.
+_seed_check14_base() {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+}
+
+# R5-doc-1: Check 14 warns when CLAUDE.md has substantive markers, claude-code wired, not in pointer_targets.
+@test "Check 14: CLAUDE.md with substantive markers + claude-code wired + not in pointer_targets → warn (R5)" {
+  _seed_check14_base
+  # Manifest: claude-code wired, pointer_targets absent (defaults to derived = CLAUDE.md via seed_manifest).
+  # Override to have pointer_targets=[AGENTS.md] only.
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # Plant CLAUDE.md with substantive markers.
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+## ATLAS
+Atlas content block.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  run eidolons doctor
+  # Warn-only; exit code 0 (ERRORS not incremented by warn, consistent with other doctor warns).
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "carries Eidolon content markers but is not in hosts.pointer_targets" ]]
+  [[ "$output" =~ "CLAUDE.md" ]]
+  [[ "$output" =~ "claude-code" ]]
+  [[ "$output" =~ "eidolons init --re-derive --multi-pointer" ]]
+}
+
+# R5-doc-2: Check 14 die under strict=true.
+@test "Check 14: strict=true → die (R5)" {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: true
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+Atlas content.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "--strict-hosts=true" ]] || [[ "$output" =~ "strict" ]]
+}
+
+# R5-doc-3: Check 14 does NOT fire when claude-code is not wired.
+@test "Check 14: CLAUDE.md with markers but claude-code NOT wired → no warn (R5)" {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  echo "---" > .codex/agents/atlas.md
+  # Also create AGENTS.md install manifest path.
+  mkdir -p .eidolons/atlas
+
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:atlas start -->
+Atlas content.
+<!-- eidolon:atlas end -->
+CLAUDEMD
+
+  run eidolons doctor
+  # Check 14 must NOT fire for CLAUDE.md when claude-code is unwired.
+  ! [[ "$output" =~ "CLAUDE.md carries Eidolon content markers but is not in hosts.pointer_targets" ]]
+}
+
+# R5-doc-4: Check 14 does NOT fire when CLAUDE.md has only dispatch-pointer.
+@test "Check 14: CLAUDE.md with only dispatch-pointer → no warn (R5)" {
+  _seed_check14_base
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+See EIDOLONS.md.
+<!-- eidolon:dispatch-pointer end -->
+CLAUDEMD
+
+  run eidolons doctor
+  ! [[ "$output" =~ "CLAUDE.md carries Eidolon content markers but is not in hosts.pointer_targets" ]]
+}
+
+# R5-doc-5: Check 14 passes when all wired vendor files are in pointer_targets.
+@test "Check 14: all wired files in pointer_targets → pass (R5)" {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md, CLAUDE.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # CLAUDE.md is in pointer_targets → no drift warning.
+  cat > CLAUDE.md <<'CLAUDEMD'
+<!-- eidolon:dispatch-pointer start -->
+See EIDOLONS.md.
+<!-- eidolon:dispatch-pointer end -->
+CLAUDEMD
+
+  run eidolons doctor
+  [[ "$output" =~ "no wired vendor file marker drift detected" ]]
+}
