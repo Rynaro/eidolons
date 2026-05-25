@@ -641,6 +641,20 @@ else
     [[ -z "$_cpt" ]] && continue
     _compose_sources="$_compose_sources ./$_cpt"
   done
+  # R4-3 marker-guard hoist: always include AGENTS.md when it exists on disk AND
+  # carries at least one Eidolon content marker (excluding the dispatch-pointer
+  # block, which is the round-3 flat-chain invariant block — see R4-4).
+  # Idempotent: AGENTS.md already in $POINTER_TARGETS_CSV is deduped by the
+  # case check below.
+  if [[ -f "AGENTS.md" ]] \
+     && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
+     && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "AGENTS.md" 2>/dev/null \
+        | grep -vqE 'eidolon:dispatch-pointer'; then
+    case " $_compose_sources " in
+      *" ./AGENTS.md "*) : ;;  # already present via pointer_targets — no-op
+      *) _compose_sources="$_compose_sources ./AGENTS.md" ;;
+    esac
+  fi
   _compose_sources="$(echo "$_compose_sources" | xargs 2>/dev/null || true)"
   if [[ -z "$_compose_sources" ]]; then
     info "  compose_eidolons_md: no pointer_targets configured — skipping composition pass"
