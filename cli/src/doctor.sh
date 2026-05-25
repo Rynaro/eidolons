@@ -553,6 +553,75 @@ else
   pass "no legacy <name>-pointer stubs detected"
 fi
 
+# ─── Check 14: Wired-host vendor file unhoisted markers (Round 5) ────────
+# Warns when a vendor file in the closed set carries substantive Eidolon
+# content markers (i.e., non-dispatch-pointer markers) AND its host is in
+# hosts.wire AND the file is NOT in hosts.pointer_targets. Surfaces the
+# drift introduced when --no-multi-pointer is explicit OR when v1.8.0
+# projects migrate to v1.8.1 before --re-derive runs.
+#
+# Severity: warn by default; die under hosts.strict=true (consistent with
+# Round-4 strict-host validation).
+ui_section_out "Wired vendor file marker drift"
+
+# Read manifest fields needed for the check.
+_r5_hosts_csv="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+  | jq -r '.hosts.wire // [] | join(",")' 2>/dev/null || true)"
+_r5_pt_csv="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+  | jq -r '.hosts.pointer_targets // [] | join(",")' 2>/dev/null || true)"
+_r5_strict="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+  | jq -r '.hosts.strict // "false"' 2>/dev/null || true)"
+
+_r5_drift_count=0
+# Hardcoded closed vendor set; must match _validate_pointer_targets_csv (lib.sh).
+# Cross-reference: both lists must stay in sync when new vendor files are added.
+# Format: "<file>:<host_name>" — host slug matched against hosts.wire CSV.
+_R5_VENDOR_HOST_MAP="CLAUDE.md:claude-code
+AGENTS.md:codex
+GEMINI.md:gemini
+.github/copilot-instructions.md:copilot"
+
+while IFS=: read -r _r5_vfile _r5_vhost; do
+  [[ -n "$_r5_vfile" ]] || continue
+  [[ -f "$_r5_vfile" ]] || continue
+  # AGENTS.md is wired by EITHER codex OR opencode (EIIS §4.1.0).
+  if [[ "$_r5_vfile" == "AGENTS.md" ]]; then
+    case ",$_r5_hosts_csv," in
+      *",codex,"*|*",opencode,"*) : ;;
+      *) continue ;;
+    esac
+  else
+    case ",$_r5_hosts_csv," in
+      *",${_r5_vhost},"*) : ;;
+      *) continue ;;
+    esac
+  fi
+  # File must be NOT in pointer_targets.
+  case ",$_r5_pt_csv," in
+    *",${_r5_vfile},"*) continue ;;
+  esac
+  # File must carry at least one non-dispatch-pointer Eidolon marker.
+  grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_r5_vfile" 2>/dev/null || continue
+  grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' "$_r5_vfile" 2>/dev/null \
+    | grep -vqE 'eidolon:dispatch-pointer' || continue
+
+  _r5_drift_count=$((_r5_drift_count + 1))
+  if [[ "$_r5_strict" == "true" ]]; then
+    die "$_r5_vfile carries Eidolon content markers but is not in hosts.pointer_targets (host '$_r5_vhost' wired). Run 'eidolons init --re-derive --multi-pointer' to include it, or 'eidolons sync' to hoist content into EIDOLONS.md. (--strict-hosts=true)"
+  else
+    warn "$_r5_vfile carries Eidolon content markers but is not in hosts.pointer_targets (host '$_r5_vhost' wired)."
+    warn "  remedy: 'eidolons init --re-derive --multi-pointer' to include this file in pointer_targets,"
+    warn "          or 'eidolons sync' to hoist content into EIDOLONS.md (vendor file will be emptied)."
+  fi
+done <<EOF
+$_R5_VENDOR_HOST_MAP
+EOF
+
+if [[ "$_r5_drift_count" -eq 0 ]]; then
+  pass "no wired vendor file marker drift detected"
+fi
+unset _r5_hosts_csv _r5_pt_csv _r5_strict _r5_drift_count _r5_vfile _r5_vhost _R5_VENDOR_HOST_MAP
+
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
 if (( ERRORS == 0 )); then
