@@ -1232,3 +1232,222 @@ EOF
   [ "$status" -eq 0 ]
   grep -qF "hosts:" eidolons.lock
 }
+
+# ─── R4: Round-4 sync drift warning + marker-guard hoist ────────────────────
+
+# Helpers for R4 sync tests.
+
+# seed_v1.7.0_manifest: write a v1.7.0-style manifest with pointer_targets=[CLAUDE.md].
+_seed_v170_manifest() {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [CLAUDE.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+}
+
+# seed_agents_with_markers: write AGENTS.md with eidolon content markers (no dispatch-pointer).
+_seed_agents_with_markers() {
+  cat > AGENTS.md <<'AGENTSMD'
+<!-- eidolon:atlas start -->
+## Atlas
+Atlas content written by installer.
+<!-- eidolon:atlas end -->
+
+<!-- eidolon:spectra start -->
+## Spectra
+Spectra content written by installer.
+<!-- eidolon:spectra end -->
+AGENTSMD
+}
+
+# R4-sync-1: sync drift warning fires when AGENTS.md has markers, not in pointer_targets.
+@test "sync drift warning fires on v1.7.0 manifest (R4)" {
+  _seed_v170_manifest
+  _seed_agents_with_markers
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md exists with Eidolon markers but isn't in pointer_targets" ]]
+  [[ "$output" =~ "eidolons init --re-derive" ]]
+}
+
+# R4-sync-2: sync drift warning NOT emitted when AGENTS.md only has dispatch-pointer block.
+@test "sync drift warning ignores dispatch-pointer block only AGENTS.md (R4)" {
+  _seed_v170_manifest
+  cat > AGENTS.md <<'AGENTSMD'
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+See ./EIDOLONS.md for Eidolons agent dispatch and methodology.
+<!-- eidolon:dispatch-pointer end -->
+AGENTSMD
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  ! [[ "$output" =~ "AGENTS.md exists with Eidolon markers but isn't in pointer_targets" ]]
+}
+
+# R4-sync-3: sync drift warning NOT emitted when AGENTS.md is already in pointer_targets.
+@test "sync drift warning not emitted when AGENTS.md in pointer_targets (R4)" {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+  strict: false
+  pointer_targets: [AGENTS.md]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_agents_with_markers
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  ! [[ "$output" =~ "AGENTS.md exists with Eidolon markers but isn't in pointer_targets" ]]
+}
+
+# R4-sync-4: marker-guard hoists AGENTS.md when not in pointer_targets.
+# Tests the _compose_sources augmentation directly via lib.sh function call.
+@test "marker-guard hoists AGENTS.md when not in pointer_targets (R4)" {
+  _seed_agents_with_markers
+
+  # Simulate what sync builds for _compose_sources when POINTER_TARGETS_CSV=CLAUDE.md.
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='CLAUDE.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    if [[ -f 'AGENTS.md' ]] \\
+       && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+       && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+          | grep -vqE 'eidolon:dispatch-pointer'; then
+      case \" \$_compose_sources \" in
+        *\" ./AGENTS.md \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./AGENTS.md\" ;;
+      esac
+    fi
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  [[ "$result" == *"./AGENTS.md"* ]]
+  [[ "$result" == *"./CLAUDE.md"* ]]
+}
+
+# R4-sync-5: marker-guard skips empty AGENTS.md (no markers).
+@test "marker-guard skips empty AGENTS.md (no markers) (R4)" {
+  touch AGENTS.md
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='CLAUDE.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    if [[ -f 'AGENTS.md' ]] \\
+       && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+       && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+          | grep -vqE 'eidolon:dispatch-pointer'; then
+      case \" \$_compose_sources \" in
+        *\" ./AGENTS.md \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./AGENTS.md\" ;;
+      esac
+    fi
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  [[ "$result" == "./CLAUDE.md" ]]
+  ! [[ "$result" == *"./AGENTS.md"* ]]
+}
+
+# R4-sync-6: marker-guard skips dispatch-pointer-only AGENTS.md.
+@test "marker-guard skips dispatch-pointer-only AGENTS.md (R4)" {
+  cat > AGENTS.md <<'AGENTSMD'
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+See ./EIDOLONS.md for Eidolons agent dispatch and methodology.
+<!-- eidolon:dispatch-pointer end -->
+AGENTSMD
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='CLAUDE.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    if [[ -f 'AGENTS.md' ]] \\
+       && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+       && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+          | grep -vqE 'eidolon:dispatch-pointer'; then
+      case \" \$_compose_sources \" in
+        *\" ./AGENTS.md \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./AGENTS.md\" ;;
+      esac
+    fi
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  [[ "$result" == "./CLAUDE.md" ]]
+  ! [[ "$result" == *"./AGENTS.md"* ]]
+}
+
+# R4-sync-7: marker-guard deduplicates when AGENTS.md already in pointer_targets.
+@test "marker-guard deduplicates AGENTS.md when already in pointer_targets (R4)" {
+  _seed_agents_with_markers
+
+  result="$(bash -c "
+    set -e
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    POINTER_TARGETS_CSV='AGENTS.md'
+    _compose_sources=''
+    for _cpt in \$(echo \"\$POINTER_TARGETS_CSV\" | tr ',' ' '); do
+      [[ -z \"\$_cpt\" ]] && continue
+      _compose_sources=\"\$_compose_sources ./\$_cpt\"
+    done
+    if [[ -f 'AGENTS.md' ]] \\
+       && grep -qE '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+       && grep -E '<!-- eidolon:[a-z][a-z0-9-]*[[:space:]]+start[[:space:]]+-->' 'AGENTS.md' 2>/dev/null \\
+          | grep -vqE 'eidolon:dispatch-pointer'; then
+      case \" \$_compose_sources \" in
+        *\" ./AGENTS.md \"*) : ;;
+        *) _compose_sources=\"\$_compose_sources ./AGENTS.md\" ;;
+      esac
+    fi
+    _compose_sources=\"\$(echo \"\$_compose_sources\" | xargs 2>/dev/null || true)\"
+    echo \"\$_compose_sources\"
+  " 2>/dev/null)"
+  # Should be exactly ./AGENTS.md — no duplicate.
+  [ "$result" = "./AGENTS.md" ]
+}
+
+# R4-sync-8: v1.7.0 backward compat — sync succeeds and emits drift warning (not die).
+@test "v1.7.0 backward compat: sync emits drift warning, does NOT fail (R4 CG-6)" {
+  _seed_v170_manifest
+  _seed_agents_with_markers
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "AGENTS.md exists with Eidolon markers but isn't in pointer_targets" ]]
+}

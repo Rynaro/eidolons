@@ -1,0 +1,39 @@
+# AGENTS.md — installer-written content (v1.7.0 fixture)
+# This file was written by per-Eidolon installers under shared_dispatch=true.
+# No dispatch-pointer block is present (pointer_targets=[CLAUDE.md]).
+
+<!-- eidolon:atlas start -->
+## Atlas
+
+Atlas v1.5.3 methodology content for this project.
+<!-- eidolon:atlas end -->
+
+<!-- eidolon:spectra start -->
+## Spectra
+
+Spectra v4.3.3 methodology content for this project.
+<!-- eidolon:spectra end -->
+
+<!-- eidolon:forge start -->
+## Forge
+
+Forge v1.3.3 methodology content for this project.
+<!-- eidolon:forge end -->
+
+<!-- eidolon:apivr start -->
+## APIVR-Delta
+
+APIVR-Delta v3.1.3 methodology content for this project.
+<!-- eidolon:apivr end -->
+
+<!-- eidolon:idg start -->
+## IDG
+
+IDG v1.2.3 methodology content for this project.
+<!-- eidolon:idg end -->
+
+<!-- eidolon:vigil start -->
+## Vigil
+
+Vigil v1.1.3 methodology content for this project.
+<!-- eidolon:vigil end -->
