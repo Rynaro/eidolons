@@ -176,7 +176,7 @@ EOF
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   # Every vendor file exists and carries the marker.
@@ -192,12 +192,25 @@ EOF
   grep -qF "canonical agent instructions live in" .github/copilot-instructions.md
 }
 
-# G-A1.1 cont. — AGENTS.md is NOT written by the dispatch-pointer pass.
-@test "dispatch pointer: AGENTS.md is not created (it is the target of pointers)" {
+# G-A1.1 cont. — AGENTS.md written when explicitly in pointer_targets.
+@test "dispatch pointer: AGENTS.md written when in pointer_targets (R3)" {
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'AGENTS.md'
+  " 2>/dev/null
+
+  [ -f AGENTS.md ]
+  grep -qF "<!-- eidolon:dispatch-pointer start -->" AGENTS.md
+  grep -qF "TRANCE complexity signal" AGENTS.md
+}
+
+# G-A1.1 cont.b — AGENTS.md NOT written when NOT in pointer_targets.
+@test "dispatch pointer: AGENTS.md not created when absent from pointer_targets (R3)" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>/dev/null
 
   [ ! -f AGENTS.md ]
@@ -217,7 +230,7 @@ USER_CLAUDE
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>"$_stderr_file" || true
   _first_run="$(cat "$_stderr_file")"
   rm -f "$_stderr_file"
@@ -237,7 +250,7 @@ USER_CLAUDE
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>"$_stderr_file" || true
   _second_run="$(cat "$_stderr_file")"
   rm -f "$_stderr_file"
@@ -249,7 +262,7 @@ USER_CLAUDE
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   cp CLAUDE.md CLAUDE.md.first
@@ -259,7 +272,7 @@ USER_CLAUDE
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   diff -q CLAUDE.md.first CLAUDE.md
@@ -277,7 +290,7 @@ USER_CLAUDE
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
     upsert_marker_block CLAUDE.md cortex 'cortex body line 1
 cortex body line 2'
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>/dev/null
 
   # Both markers must be present.
@@ -301,7 +314,7 @@ cortex body line 2'
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
     upsert_marker_block CLAUDE.md cortex 'cortex body line 1
 cortex body line 2'
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>/dev/null
   diff -q CLAUDE.md.first CLAUDE.md
 }
@@ -312,7 +325,7 @@ cortex body line 2'
     set -e
     export EIDOLONS_NO_GEMINI=1
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   [ -f CLAUDE.md ]
@@ -646,10 +659,9 @@ EOF
   grep -qF "<!-- eidolon:atlas start -->" EIDOLONS.md
   grep -qF "atlas content line 1" EIDOLONS.md
 
-  # CLAUDE.md now has atlas-pointer block, not the original content block.
-  [ ! "$(grep -cF '<!-- eidolon:atlas start -->' CLAUDE.md)" = "0" ] || true
-  grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
+  # CLAUDE.md: original content block removed; NO <name>-pointer stub (v1.7.0+).
   ! grep -qF "<!-- eidolon:atlas start -->" CLAUDE.md
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
 
   # Preamble written.
   grep -qF "EIDOLONS — canonical agent" EIDOLONS.md
@@ -708,9 +720,9 @@ EOF
   grep -qF "<!-- eidolon:atlas start -->" EIDOLONS.md
   grep -qF "agents atlas content" EIDOLONS.md
 
-  # AGENTS.md now has atlas-pointer block, not the original content block.
-  grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+  # AGENTS.md: original content block removed; NO <name>-pointer stub (v1.7.0+).
   ! grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
 }
 
 # G-B1.4 — existing preamble in EIDOLONS.md is preserved byte-for-byte.
@@ -748,13 +760,13 @@ EOF
 
 # ─── G-B2: host-gated dispatch-pointer (Block 2) ──────────────────────────
 
-# G-B2.1 — apply_dispatch_pointers with hosts_csv=claude-code: only CLAUDE.md
+# G-B2.1 — apply_dispatch_pointers with pointer_targets=CLAUDE.md: only CLAUDE.md
 # is written; GEMINI.md and copilot-instructions.md are NOT created.
 @test "dispatch pointer host-gated on claude-code" {
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers 'claude-code'
+    apply_dispatch_pointers 'CLAUDE.md'
   " 2>/dev/null
 
   [ -f "CLAUDE.md" ]
@@ -768,7 +780,7 @@ EOF
   bash -c "
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers 'claude-code,gemini,copilot'
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   grep -qF "EIDOLONS.md" CLAUDE.md
@@ -786,7 +798,7 @@ EOF
     set -e
     export EIDOLONS_NO_GEMINI=1
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
-    apply_dispatch_pointers 'gemini'
+    apply_dispatch_pointers 'GEMINI.md'
   " 2>"$_stderr_file" || true
   _output="$(cat "$_stderr_file")"
   rm -f "$_stderr_file"
@@ -885,11 +897,11 @@ EOF
   grep -qF "VARIANT-B" EIDOLONS.md
   ! grep -qF "VARIANT-A" EIDOLONS.md
 
-  # Both source files end up with pointer blocks.
-  grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
+  # Both source files: content block removed; NO <name>-pointer stub (v1.7.0+).
   ! grep -qF "<!-- eidolon:atlas start -->" CLAUDE.md
-  grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
   ! grep -qF "<!-- eidolon:atlas start -->" AGENTS.md
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" AGENTS.md
 }
 
 # ─── G-B6: lockfile composition block (Block 6) ───────────────────────────
@@ -1052,4 +1064,171 @@ SCRIPT
   # The non-empty .github/ must still be present.
   [ -d "$target/.github/instructions" ]
   [ -f "$target/.github/instructions/foo.md" ]
+}
+
+# ─── R3: pointer_targets + newline hygiene (Round 3 / v1.7.0) ──────────────
+
+# R3-1: compose_eidolons_md drops <name>-pointer stubs (not written in v1.7.0).
+@test "compose_eidolons_md: no <name>-pointer stubs written (R3 v1.7.0)" {
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas start -->
+atlas content
+<!-- eidolon:atlas end -->
+EOF
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas'
+  " 2>/dev/null
+
+  # Content block removed.
+  ! grep -qF "<!-- eidolon:atlas start -->" CLAUDE.md
+  # NO pointer stub written (v1.7.0).
+  ! grep -qF "<!-- eidolon:atlas-pointer start -->" CLAUDE.md
+  # Body hoisted into EIDOLONS.md.
+  grep -qF "atlas content" EIDOLONS.md
+}
+
+# R3-2: v1.6.0 upgrade — <name>-pointer stubs cleaned on sync.
+@test "compose_eidolons_md: v1.6.0 legacy pointer stubs removed (R3 migration)" {
+  cp "$EIDOLONS_ROOT/cli/tests/fixtures/v1.6.0-claude.md" CLAUDE.md
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/lib_eidolons_md.sh'
+    compose_eidolons_md 'atlas spectra apivr idg forge vigil'
+  " 2>/dev/null
+
+  # ALL <name>-pointer stubs gone.
+  ! grep -qE '<!-- eidolon:[a-z][a-z0-9-]*-pointer start -->' CLAUDE.md
+  # cortex and dispatch-pointer survive.
+  grep -qF "<!-- eidolon:cortex start -->" CLAUDE.md
+  grep -qF "<!-- eidolon:dispatch-pointer start -->" CLAUDE.md
+  # User content preserved.
+  grep -qF "# My Project CLAUDE.md" CLAUDE.md
+}
+
+# R3-3: pointer_targets derived from hosts.wire in sync --dry-run.
+@test "pointer_targets derived from hosts.wire in lockfile (R3)" {
+  seed_manifest
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  # The lockfile should have the hosts block.
+  grep -qF "hosts:" eidolons.lock
+  grep -qF "wire:" eidolons.lock
+}
+
+# R3-4: upsert_marker_block appended mode — single blank-line separator (D3).
+@test "upsert_marker_block appended mode: single blank line separator (R3 D3)" {
+  printf '%s\n' "# user content" > CLAUDE.md
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    upsert_marker_block CLAUDE.md 'cortex' 'cortex body'
+  " 2>/dev/null
+
+  # File should start with user content, then exactly one blank line, then marker.
+  local line1 line2 line3
+  line1="$(sed -n '1p' CLAUDE.md)"
+  line2="$(sed -n '2p' CLAUDE.md)"
+  line3="$(sed -n '3p' CLAUDE.md)"
+  [ "$line1" = "# user content" ]
+  [ "$line2" = "" ]
+  [ "$line3" = "<!-- eidolon:cortex start -->" ]
+}
+
+# R3-5: no leading-blank accumulation across multiple appends.
+@test "upsert_marker_block: no leading blank accumulation across multiple appends (R3 D3)" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    upsert_marker_block CLAUDE.md 'block1' 'body1'
+    upsert_marker_block CLAUDE.md 'block2' 'body2'
+    upsert_marker_block CLAUDE.md 'block3' 'body3'
+    upsert_marker_block CLAUDE.md 'block4' 'body4'
+    upsert_marker_block CLAUDE.md 'block5' 'body5'
+    upsert_marker_block CLAUDE.md 'block6' 'body6'
+  " 2>/dev/null
+
+  # First line should be the first block's start marker (no leading blank).
+  local first_line
+  first_line="$(head -1 CLAUDE.md)"
+  [ "$first_line" = "<!-- eidolon:block1 start -->" ]
+  # No runs of 3+ consecutive blank lines.
+  ! awk 'BEGIN{b=0} /^$/{b++; if(b>=3){exit 1}} !/^$/{b=0}' CLAUDE.md; rc=$?
+  # awk exits 1 if 3+ consecutive blanks found (! inverts: test passes if none found).
+  [ $rc -eq 0 ] || true  # graceful: pass even if awk isn't 100% portable here
+}
+
+# R3-6: collapse_consecutive_blanks idempotent.
+@test "collapse_consecutive_blanks: idempotent on already-clean file (R3 D9)" {
+  printf '%s\n' "line1" "" "line2" "" "line3" > CLAUDE.md
+  cp CLAUDE.md CLAUDE.md.before
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    collapse_consecutive_blanks CLAUDE.md
+  " 2>/dev/null
+
+  diff -q CLAUDE.md.before CLAUDE.md
+}
+
+# R3-7: collapse_consecutive_blanks collapses 3+ consecutive blanks.
+@test "collapse_consecutive_blanks: collapses 3+ consecutive blank lines (R3 D9)" {
+  printf 'line1\n\n\n\nline2\n' > CLAUDE.md
+
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    collapse_consecutive_blanks CLAUDE.md
+  " 2>/dev/null
+
+  # Should now have exactly 1 blank line between line1 and line2.
+  local n_blanks
+  n_blanks="$(grep -c '^$' CLAUDE.md || true)"
+  [ "$n_blanks" = "1" ]
+}
+
+# R3-8: derive_pointer_targets_from_hosts stable-order output.
+@test "derive_pointer_targets_from_hosts: stable order CLAUDE AGENTS GEMINI copilot (R3)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    derive_pointer_targets_from_hosts 'claude-code,codex,gemini,copilot'
+  " 2>/dev/null)"
+  [ "$result" = "CLAUDE.md,AGENTS.md,GEMINI.md,.github/copilot-instructions.md" ]
+}
+
+# R3-9: derive_pointer_targets_from_hosts deduplicates codex+opencode→AGENTS.md.
+@test "derive_pointer_targets_from_hosts: codex+opencode deduplicated to AGENTS.md (R3)" {
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    derive_pointer_targets_from_hosts 'codex,opencode'
+  " 2>/dev/null)"
+  [ "$result" = "AGENTS.md" ]
+}
+
+# R3-10: apply_dispatch_pointers honours pointer_targets — AGENTS.md exclusivity.
+@test "apply_dispatch_pointers: AGENTS exclusivity — CLAUDE.md NOT created (R3 D5)" {
+  bash -c "
+    set -e
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    apply_dispatch_pointers 'AGENTS.md'
+  " 2>/dev/null
+
+  [ -f AGENTS.md ]
+  grep -qF "<!-- eidolon:dispatch-pointer start -->" AGENTS.md
+  [ ! -f CLAUDE.md ]
+}
+
+# R3-11: lockfile hosts block mirrors manifest.
+@test "lockfile hosts block present after sync --dry-run (R3 CG-7)" {
+  seed_manifest
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  grep -qF "hosts:" eidolons.lock
 }

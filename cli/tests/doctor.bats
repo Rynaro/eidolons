@@ -1159,3 +1159,47 @@ YAMLEOF
   [[ ! "$output" =~ "eidolons_cli_version is" ]]
   [[ ! "$output" =~ "header comment stamps version" ]]
 }
+
+# ─── Check 13: Legacy <name>-pointer stub detection (R3 v1.7.0) ────────────
+
+# G-R3-doc-1: Check 13 warns when legacy pointer stubs present.
+@test "Check 13 warns on legacy <name>-pointer stubs (R3)" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # Plant a legacy v1.6.0 pointer stub in CLAUDE.md.
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:atlas-pointer start -->
+See ./EIDOLONS.md §atlas
+<!-- eidolon:atlas-pointer end -->
+EOF
+
+  run eidolons doctor
+  # Check 13 is warn-only — ERRORS counter not incremented.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "legacy" ]] || [[ "$output" =~ "pointer stubs" ]]
+  [[ "$output" =~ "CLAUDE.md" ]]
+}
+
+# G-R3-doc-2: Check 13 passes (green) when no legacy stubs present.
+@test "Check 13 passes when no legacy pointer stubs present (R3)" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  # CLAUDE.md without any pointer stubs (only dispatch-pointer is fine).
+  cat > CLAUDE.md <<'EOF'
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+See EIDOLONS.md
+<!-- eidolon:dispatch-pointer end -->
+EOF
+
+  run eidolons doctor
+  [[ "$output" =~ "no legacy" ]] || [[ "$output" =~ "pointer stubs detected" ]]
+}

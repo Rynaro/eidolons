@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-05-25
+
+### Added
+
+- **(feat) `hosts.pointer_targets` manifest field (R3-D4, D5, D12).** New optional array field in `eidolons.yaml` under `hosts.pointer_targets` listing the vendor files that receive the EIDOLONS `dispatch-pointer` block and cortex injection. When absent, defaults to the set derived from `hosts.wire` via the vendor→file mapping table (`claude-code→CLAUDE.md`, `codex/opencode→AGENTS.md`, `gemini→GEMINI.md`, `copilot→.github/copilot-instructions.md`, `cursor→none`). `eidolons init` in interactive mode drives this via a new AGENTS-exclusivity short-circuit + `ui_pick_vendors` multi-vendor picker. `--non-interactive` derives automatically from `hosts.wire`. Persisted to `eidolons.lock` in a new `hosts:` block.
+
+- **(feat) AGENTS-first exclusivity short-circuit + `ui_pick_vendors` (R3-D2).** `eidolons init` in interactive mode detects vendor files on disk, offers an AGENTS.md-exclusivity prompt when `AGENTS.md` is present, then falls through to `ui_pick_vendors` for multi-vendor cases. Letter shortcuts: `c=CLAUDE.md`, `a=AGENTS.md`, `g=GEMINI.md`, `i=.github/copilot-instructions.md`, `A=all`; Enter accepts the host-derived default.
+
+- **(feat) Doctor Check 13 — legacy `<name>-pointer` stub detection (R3-D10).** Warn-only scan of all pointer-target vendor files for `<!-- eidolon:<name>-pointer start -->` markers left by v1.6.0. Excludes the legitimate `dispatch-pointer` block. Remedy text: `eidolons sync`.
+
+### Fixed
+
+- **(fix) Pointer block consolidation — drop `<name>-pointer` stubs (R3-D1).** `compose_eidolons_md` no longer writes `<!-- eidolon:<name>-pointer -->` stubs back into vendor files. Instead, `remove_marker_block "${name}-pointer"` runs per Eidolon per source file during each compose pass, cleaning up v1.6.0-era stubs automatically. The `dispatch-pointer` block remains the sole `./EIDOLONS.md` reference per vendor file.
+
+- **(fix) Newline hygiene in `upsert_marker_block` append mode (R3-D3).** Replaced unconditional `printf '\n%s\n'` with a `tail -c 2 | od -An -c` tail-byte sniffer: appends `\n\n` (empty tail), `\n` (single trailing newline), or nothing (already two trailing newlines). Prevents leading-blank accumulation on repeated appends.
+
+- **(fix) One-time `awk` collapse pass cleans v1.6.0 leading-blank pollution (R3-D9).** `compose_eidolons_md` now calls `collapse_consecutive_blanks` (POSIX awk, `cmp -s` idempotency guard) after the per-member loop per source file, collapsing runs of 3+ newlines to a single blank line.
+
+- **(fix) `apply_dispatch_pointers` driven by `pointer_targets` not constant (R3-D6).** `DISPATCH_POINTER_VENDORS` constant removed; the function now takes `pointer_targets_csv` as its first argument. `sync.sh` resolves this from the manifest (or derives from `hosts.wire`) and passes it explicitly. `AGENTS.md` is a first-class target when present in `pointer_targets`.
+
 ## [1.6.0] - 2026-05-24
 
 ### Fixed

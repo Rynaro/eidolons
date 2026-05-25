@@ -9,6 +9,16 @@
     "generated_at":            { "type": "string", "format": "date-time" },
     "eidolons_cli_version":    { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+" },
     "nexus_commit":            { "type": "string" },
+    "hosts": {
+      "type": "object",
+      "description": "Mirrors the hosts configuration from eidolons.yaml at sync time for traceability.",
+      "properties": {
+        "wire":            { "type": "array", "items": { "type": "string" } },
+        "shared_dispatch": { "type": "boolean" },
+        "strict":          { "type": "boolean" },
+        "pointer_targets": { "type": "array", "items": { "type": "string" } }
+      }
+    },
     "members": {
       "type": "array",
       "items": {

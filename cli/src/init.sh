@@ -217,6 +217,101 @@ if [[ -z "$SHARED_DISPATCH" ]]; then
 fi
 info "Shared dispatch: $SHARED_DISPATCH"
 
+# ─── Resolve pointer_targets ──────────────────────────────────────────────
+# Determines which vendor files receive the EIDOLONS dispatch-pointer and
+# cortex block. Prompt flow (D2, SPEC §3.3):
+#   1. If NON_INTERACTIVE → derive from hosts.wire (v1.6.0 default).
+#   2. Otherwise:
+#      a. Detect vendor files already on disk.
+#      b. AGENTS-first short-circuit: if AGENTS.md detected, offer
+#         exclusivity prompt (AGENTS.md only → skip ui_pick_vendors).
+#      c. Multi-vendor ui_pick_vendors when |candidates| > 1.
+#      d. Single candidate auto-selects.
+#
+# When re-running with --force on a manifest that already has pointer_targets,
+# the existing value becomes the preselected default (D7).
+POINTER_TARGETS=""
+
+# Read existing pointer_targets from manifest as reprompt default (D7).
+_existing_pt=""
+if manifest_exists && [[ "$FORCE" == "true" ]]; then
+  _existing_pt="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+    | jq -r '.hosts.pointer_targets // [] | join(",")' 2>/dev/null || true)"
+fi
+
+_host_derived_csv="$(derive_pointer_targets_from_hosts "$HOSTS")"
+_detected_vendors="$(detect_vendor_files_on_disk | tr '\n' ',' | sed 's/,$//')"
+
+if [[ "$NON_INTERACTIVE" == "true" ]]; then
+  POINTER_TARGETS="$_host_derived_csv"
+else
+  # Compute candidates: union of detected on-disk vendors and host-derived.
+  _candidates=""
+  for _cv in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+    _in_detected=false; _in_derived=false
+    case ",$_detected_vendors," in *",$_cv,"*) _in_detected=true ;; esac
+    case ",$_host_derived_csv," in *",$_cv,"*) _in_derived=true ;; esac
+    if [[ "$_in_detected" == "true" ]] || [[ "$_in_derived" == "true" ]]; then
+      if [[ -z "$_candidates" ]]; then _candidates="$_cv"; else _candidates="$_candidates,$_cv"; fi
+    fi
+  done
+
+  _default_pt="${_existing_pt:-$_host_derived_csv}"
+
+  # Step (b): AGENTS-first exclusivity short-circuit.
+  _agents_exclusive=false
+  case ",$_detected_vendors," in
+    *",AGENTS.md,"*)
+      {
+        echo ""
+        echo "${BOLD}AGENTS.md is present in this project.${RESET}"
+        echo "Codex/opencode treat AGENTS.md as the canonical surface."
+        echo "Answering YES restricts eidolons to AGENTS.md only — CLAUDE.md and"
+        echo "other vendor files will not be created or modified."
+        echo ""
+      } >&2
+      if ui_confirm "AGENTS.md detected — is AGENTS.md the only canonical agent-instructions file you want eidolons to manage?" default-n; then
+        POINTER_TARGETS="AGENTS.md"
+        _agents_exclusive=true
+      fi
+      ;;
+  esac
+
+  if [[ "$_agents_exclusive" != "true" ]]; then
+    # Count candidates (comma-count + 1).
+    _cand_count=1
+    case "$_candidates" in
+      "") _cand_count=0 ;;
+      *,*) _cand_count=2 ;;  # at least 2; exact count not needed — we just need >1
+    esac
+
+    if [[ "$_cand_count" -gt 1 ]]; then
+      {
+        echo ""
+        echo "${BOLD}Pick vendor file(s) to receive the EIDOLONS pointer + cortex block.${RESET}"
+        echo "Default is all auto-detected/host-derived files."
+        echo "Letters: c=CLAUDE.md, a=AGENTS.md, g=GEMINI.md,"
+        echo "         i=.github/copilot-instructions.md, A=all."
+        echo ""
+      } >&2
+      POINTER_TARGETS="$(ui_pick_vendors "$_default_pt" "$_candidates")"
+      POINTER_TARGETS="$(echo "$POINTER_TARGETS" | tr '\n' ',' | sed 's/,$//')"
+      if [[ -z "$POINTER_TARGETS" ]]; then
+        die "No pointer targets selected. Aborting — specify hosts.pointer_targets in eidolons.yaml or re-run."
+      fi
+    elif [[ "$_cand_count" -eq 1 ]]; then
+      POINTER_TARGETS="$_candidates"
+    else
+      # No candidates at all — fall back to host-derived (may be empty).
+      POINTER_TARGETS="$_host_derived_csv"
+    fi
+  fi
+fi
+
+unset _existing_pt _host_derived_csv _detected_vendors _candidates _default_pt _agents_exclusive _cand_count _cv _in_detected _in_derived
+
+info "Pointer targets: ${POINTER_TARGETS:-(none)}"
+
 # ─── Write eidolons.yaml ─────────────────────────────────────────────────
 say "Writing $PROJECT_MANIFEST"
 {
@@ -229,6 +324,9 @@ say "Writing $PROJECT_MANIFEST"
   echo "  wire: [$(echo "$HOSTS" | sed 's/,/, /g')]"
   echo "  shared_dispatch: ${SHARED_DISPATCH}"
   echo "  strict: ${STRICT_HOSTS}"
+  if [[ -n "$POINTER_TARGETS" ]]; then
+    echo "  pointer_targets: [$(echo "$POINTER_TARGETS" | sed 's/,/, /g')]"
+  fi
   echo ""
   echo "members:"
   for m in "${MEMBERS_ARR[@]}"; do

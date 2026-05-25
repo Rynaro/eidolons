@@ -226,6 +226,69 @@ print(w)
   [[ "$output" == *"…"* ]]
 }
 
+# ─── R3: ui_pick_vendors (Round 3 / v1.7.0) ───────────────────────────────
+
+# R3-ui-1: ui_pick_vendors empty reply returns default_csv.
+@test "ui_pick_vendors: empty reply returns default_csv (R3)" {
+  result="$(printf '\n' | bash -c "
+    export EIDOLONS_ROOT='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/theme.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/glyphs.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/prompt.sh' >/dev/null 2>&1
+    ui_pick_vendors 'CLAUDE.md,AGENTS.md' 'CLAUDE.md,AGENTS.md'
+  " 2>/dev/null)"
+  [ "$result" = "CLAUDE.md,AGENTS.md" ]
+}
+
+# R3-ui-2: ui_pick_vendors letter 'c' → CLAUDE.md.
+@test "ui_pick_vendors: letter c → CLAUDE.md (R3)" {
+  result="$(printf 'c\n' | bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/theme.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/glyphs.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/prompt.sh' >/dev/null 2>&1
+    ui_pick_vendors '' 'CLAUDE.md,AGENTS.md,GEMINI.md,.github/copilot-instructions.md'
+  " 2>/dev/null)"
+  [ "$result" = "CLAUDE.md" ]
+}
+
+# R3-ui-3: ui_pick_vendors letter 'a' → AGENTS.md.
+@test "ui_pick_vendors: letter a → AGENTS.md (R3)" {
+  result="$(printf 'a\n' | bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/theme.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/glyphs.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/prompt.sh' >/dev/null 2>&1
+    ui_pick_vendors '' 'CLAUDE.md,AGENTS.md,GEMINI.md,.github/copilot-instructions.md'
+  " 2>/dev/null)"
+  [ "$result" = "AGENTS.md" ]
+}
+
+# R3-ui-4: ui_pick_vendors uppercase A → all candidates.
+@test "ui_pick_vendors: uppercase A → all candidates (R3)" {
+  result="$(printf 'A\n' | bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/theme.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/glyphs.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/prompt.sh' >/dev/null 2>&1
+    ui_pick_vendors '' 'CLAUDE.md,AGENTS.md'
+  " 2>/dev/null)"
+  [ "$result" = "CLAUDE.md,AGENTS.md" ]
+}
+
+# R3-ui-5: ui_pick_vendors multi-letter 'ca' → CLAUDE.md,AGENTS.md.
+@test "ui_pick_vendors: multi-letter ca → CLAUDE.md,AGENTS.md (R3)" {
+  result="$(printf 'ca\n' | bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/theme.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/glyphs.sh' >/dev/null 2>&1
+    . '$EIDOLONS_ROOT/cli/src/ui/prompt.sh' >/dev/null 2>&1
+    ui_pick_vendors '' 'CLAUDE.md,AGENTS.md,GEMINI.md,.github/copilot-instructions.md'
+  " 2>/dev/null)"
+  [ "$result" = "CLAUDE.md,AGENTS.md" ]
+}
+
 @test "ui: ui_card pads rows with UTF-8 arrows without stealing display columns" {
   # ATLAS' row "  ↑  upstream    —" was susceptible to the byte/col
   # miscount: arrows are 3 bytes but 1 display col, so ${#var}

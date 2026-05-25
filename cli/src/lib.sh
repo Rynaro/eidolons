@@ -937,8 +937,19 @@ upsert_marker_block() {
     chmod 0644 "$dst" 2>/dev/null || true
   elif [[ -f "$dst" ]]; then
     mode="appended"
+    # Newline-aware separator (D3). tail -c 2 + od -An -c is portable;
+    # bash 3.2 safe. _sep carries the literal chars '\n' interpreted by
+    # printf %b, ensuring the start marker is preceded by exactly one
+    # blank line (\n\n boundary) regardless of the file's current tail bytes.
+    local _tail_bytes _sep
+    _tail_bytes="$(tail -c 2 "$dst" 2>/dev/null | od -An -c 2>/dev/null | tr -d ' ' || true)"
+    case "$_tail_bytes" in
+      *\\n\\n*) _sep="" ;;        # already ends with blank line
+      *\\n*)    _sep="\\n" ;;     # ends with single newline → add one
+      *)        _sep="\\n\\n" ;;  # no trailing newline
+    esac
     {
-      printf '\n%s\n' "$start"
+      printf '%b%s\n' "$_sep" "$start"
       cat "$content_file"
       printf '%s\n' "$end"
     } >> "$dst"
@@ -984,12 +995,110 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
-# ─── Dispatch-pointer vendor docs (PR-A1 / B2) ───────────────────────────
-# Each entry in DISPATCH_POINTER_VENDORS is a vendor-specific instruction
-# file that holds a thin pointer to EIDOLONS.md (the canonical composition
-# surface). AGENTS.md is intentionally absent — it is the canonical surface
-# for codex/opencode, not a thin pointer.
-DISPATCH_POINTER_VENDORS="CLAUDE.md GEMINI.md .github/copilot-instructions.md"
+# collapse_consecutive_blanks FILE
+#
+# Collapses runs of ≥2 consecutive empty lines to exactly 1. Idempotent.
+# Bash 3.2 safe. No-op when FILE does not exist or is empty.
+# Stdout clean; one info line to stderr on mutation.
+collapse_consecutive_blanks() {
+  local file="$1"
+  [[ -f "$file" ]] || return 0
+  [[ -s "$file" ]] || return 0
+  local tmp
+  tmp="$(mktemp)"
+  awk '
+    BEGIN { blank = 0 }
+    /^$/  { if (blank < 1) print; blank++; next }
+          { print; blank = 0 }
+  ' "$file" > "$tmp"
+  if ! cmp -s "$file" "$tmp"; then
+    mv "$tmp" "$file"
+    chmod 0644 "$file" 2>/dev/null || true
+    info "  collapse_consecutive_blanks: normalised blank-line runs in $file"
+  else
+    rm -f "$tmp"
+  fi
+}
+
+# ─── Dispatch-pointer vendor docs (PR-A1 / B2 / R3) ─────────────────────
+# Vendor → root file mapping for hosts.pointer_targets derivation.
+# Canonical table — single source of truth. Used by _vendor_file_for_host
+# and derive_pointer_targets_from_hosts.
+#
+# Host          Vendor file
+# claude-code   CLAUDE.md
+# codex         AGENTS.md
+# copilot       .github/copilot-instructions.md
+# gemini        GEMINI.md
+# cursor        (none — tool-config dir, not an agent-instructions file)
+# opencode      AGENTS.md (shares with codex; deduped by caller)
+#
+# DISPATCH_POINTER_VENDORS is REMOVED in v1.7.0; apply_dispatch_pointers
+# now receives pointer_targets_csv as its first argument.
+
+# _vendor_file_for_host HOST
+#
+# Echoes the canonical vendor file for a given host slug, or empty string
+# when the host has no root vendor file (cursor). Bash 3.2 case-based.
+_vendor_file_for_host() {
+  case "$1" in
+    claude-code) echo "CLAUDE.md" ;;
+    codex)       echo "AGENTS.md" ;;
+    copilot)     echo ".github/copilot-instructions.md" ;;
+    gemini)      echo "GEMINI.md" ;;
+    opencode)    echo "AGENTS.md" ;;
+    cursor)      echo "" ;;
+    *)           echo "" ;;
+  esac
+}
+
+# derive_pointer_targets_from_hosts HOSTS_CSV
+#
+# Echoes a comma-separated, deduplicated list of vendor files derived from
+# HOSTS_CSV via the _vendor_file_for_host mapping. Preserves stable order:
+# CLAUDE.md, AGENTS.md, GEMINI.md, .github/copilot-instructions.md.
+# Empty hosts_csv → empty output. Bash 3.2 safe.
+derive_pointer_targets_from_hosts() {
+  local hosts_csv="${1:-}"
+  local _out="" _v _seen_agents=false _seen_claude=false _seen_gemini=false _seen_copilot=false
+  local _h
+  # Use stable order regardless of input order.
+  for _h in claude-code codex opencode gemini copilot cursor; do
+    case ",$hosts_csv," in
+      *",${_h},"*)
+        _v="$(_vendor_file_for_host "$_h")"
+        [[ -z "$_v" ]] && continue
+        case "$_v" in
+          CLAUDE.md)
+            [[ "$_seen_claude" == "true" ]] && continue
+            _seen_claude=true ;;
+          AGENTS.md)
+            [[ "$_seen_agents" == "true" ]] && continue
+            _seen_agents=true ;;
+          GEMINI.md)
+            [[ "$_seen_gemini" == "true" ]] && continue
+            _seen_gemini=true ;;
+          .github/copilot-instructions.md)
+            [[ "$_seen_copilot" == "true" ]] && continue
+            _seen_copilot=true ;;
+        esac
+        if [[ -z "$_out" ]]; then _out="$_v"; else _out="$_out,$_v"; fi
+        ;;
+    esac
+  done
+  printf '%s\n' "$_out"
+}
+
+# detect_vendor_files_on_disk
+#
+# Echoes (one per line) the subset of the closed vendor file set that
+# exists in the current working directory. Bash 3.2 safe.
+detect_vendor_files_on_disk() {
+  local v
+  for v in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+    if [[ -f "$v" ]]; then printf '%s\n' "$v"; fi
+  done
+}
 
 # _dispatch_vendor_host VENDOR
 #
@@ -1029,7 +1138,8 @@ _cortex_doc_host() {
 dispatch_pointer_text_for() {
   local vendor="$1"
   case "$vendor" in
-    CLAUDE.md)
+    CLAUDE.md|AGENTS.md)
+      # Same wording for both — AGENTS.md is now a first-class pointer target (D6).
       printf '%s\n' \
         "## Eidolons" \
         "" \
@@ -1052,39 +1162,35 @@ dispatch_pointer_text_for() {
   esac
 }
 
-# apply_dispatch_pointers [<hosts_csv>]
+# apply_dispatch_pointers <pointer_targets_csv> [<hosts_csv>]
 #
 # Writes the dispatch-pointer block to every vendor file in
-# DISPATCH_POINTER_VENDORS whose corresponding host is in hosts_csv.
-# When hosts_csv is empty (legacy callers), all vendors are written (back-compat).
+# pointer_targets_csv. hosts_csv is optional context (for future use);
+# the pointer_targets list IS the host-gating result by construction
+# (init/sync already mapped hosts → vendors via _vendor_file_for_host).
+#
+# AGENTS.md is now a first-class target when present in pointer_targets_csv.
 # Pointers redirect to ./EIDOLONS.md (the canonical composition surface).
 #
 # Warn-and-append protocol: when a vendor file pre-exists with non-empty,
 # non-Eidolons content AND the dispatch-pointer marker is absent, emit one
-# warn line BEFORE appending. Subsequent syncs (where the marker already
-# exists) silently rewrite the block in place — no warn fires.
+# warn line BEFORE appending. Subsequent syncs silently rewrite in place.
 #
 # Opt-outs:
-#   EIDOLONS_NO_GEMINI=1  — deprecated; emits deprecation warn in v1.5.0.
-#                           gemini is now host-gated via hosts.wire.
-#                           Will be removed in v1.6.0.
+#   EIDOLONS_NO_GEMINI=1  — deprecated; honored with deprecation warn.
+#                           gemini is now host-gated via pointer_targets.
 #
 # Bash 3.2 safe. Stdout clean; all log output to stderr (via warn/info/ok).
 apply_dispatch_pointers() {
-  local hosts_csv="${1:-}"
-  local vendor ptr_text warn_append host_for_vendor
-  # Deprecation warn for EIDOLONS_NO_GEMINI (v1.5.0: honor+warn; v1.6.0: remove).
+  local pointer_targets_csv="${1:-}"
+  local hosts_csv="${2:-}"
+  local vendor ptr_text warn_append
+  # Deprecation warn for EIDOLONS_NO_GEMINI.
   if [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
-    warn "EIDOLONS_NO_GEMINI is deprecated; gemini is now host-gated via hosts.wire. Remove the env var and ensure 'gemini' is not in hosts.wire. This env var will be removed in v1.6.0."
+    warn "EIDOLONS_NO_GEMINI is deprecated; gemini is now gated via hosts.pointer_targets. Remove the env var. This env var will be removed in a future release."
   fi
-  for vendor in $DISPATCH_POINTER_VENDORS; do
-    host_for_vendor="$(_dispatch_vendor_host "$vendor")"
-    # Host-gated: skip the vendor if its host is not in hosts.wire.
-    # Empty hosts_csv = unrestricted (back-compat fallthrough).
-    if [[ -n "$hosts_csv" ]] && [[ ",${hosts_csv}," != *",${host_for_vendor},"* ]]; then
-      info "  skipping $vendor (host=$host_for_vendor not in hosts.wire)"
-      continue
-    fi
+  for vendor in $(echo "$pointer_targets_csv" | tr ',' ' '); do
+    [[ -z "$vendor" ]] && continue
     # EIDOLONS_NO_GEMINI=1 still honored (with above deprecation warn already emitted).
     if [[ "$vendor" == "GEMINI.md" ]] && [[ "${EIDOLONS_NO_GEMINI:-0}" == "1" ]]; then
       info "  EIDOLONS_NO_GEMINI=1 — skipping GEMINI.md (deprecated opt-out)"
@@ -1102,6 +1208,7 @@ apply_dispatch_pointers() {
     if [[ "$warn_append" == "true" ]]; then
       warn "$vendor exists with user content; appending dispatch-pointer block. To remove, delete <!-- eidolon:dispatch-pointer start --> ... end --> markers and re-run sync."
     fi
+    collapse_consecutive_blanks "$vendor"
   done
 }
 

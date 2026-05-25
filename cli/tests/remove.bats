@@ -34,7 +34,7 @@ USER_CLAUDE
     set -e
     . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
     upsert_marker_block CLAUDE.md cortex 'cortex body for removal test'
-    apply_dispatch_pointers
+    apply_dispatch_pointers 'CLAUDE.md,GEMINI.md,.github/copilot-instructions.md'
   " 2>/dev/null
 
   # Confirm both blocks landed in CLAUDE.md before the remove.
