@@ -937,8 +937,19 @@ upsert_marker_block() {
     chmod 0644 "$dst" 2>/dev/null || true
   elif [[ -f "$dst" ]]; then
     mode="appended"
+    # Newline-aware separator (D3). tail -c 2 + od -An -c is portable;
+    # bash 3.2 safe. _sep carries the literal chars '\n' interpreted by
+    # printf %b, ensuring the start marker is preceded by exactly one
+    # blank line (\n\n boundary) regardless of the file's current tail bytes.
+    local _tail_bytes _sep
+    _tail_bytes="$(tail -c 2 "$dst" 2>/dev/null | od -An -c 2>/dev/null | tr -d ' ' || true)"
+    case "$_tail_bytes" in
+      *\\n\\n*) _sep="" ;;        # already ends with blank line
+      *\\n*)    _sep="\\n" ;;     # ends with single newline → add one
+      *)        _sep="\\n\\n" ;;  # no trailing newline
+    esac
     {
-      printf '\n%s\n' "$start"
+      printf '%b%s\n' "$_sep" "$start"
       cat "$content_file"
       printf '%s\n' "$end"
     } >> "$dst"
