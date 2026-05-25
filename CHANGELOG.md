@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-05-25
+
 ### Added
 - `eidolons init` now follows an **AGENTS-precedence** rule: if `AGENTS.md` exists on disk, `hosts.shared_dispatch=true`, or `codex ∈ hosts.wire`, `hosts.pointer_targets` is automatically set to `[AGENTS.md]`. Replaces v1.7.0's default-N exclusivity prompt with deterministic derivation. (#TBD round 4)
 - New flag `eidolons init --re-derive` — migration tool that re-runs the pointer_targets derivation against an existing manifest, preserving every other field byte-for-byte. Use to upgrade v1.7.0 projects to round-4 semantics.
