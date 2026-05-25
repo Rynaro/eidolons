@@ -8,6 +8,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.9.0] - 2026-05-25
+
+### Added
+
+- **(feat) Catalogue-driven MCP → Eidolon tool wiring.** Installing an MCP from `roster/mcps.yaml` now automatically grants its tool surface to the relevant installed Eidolons by patching the per-host agent files (`.claude/agents/<name>.md`, `.codex/agents/<name>.md`). Implemented in `cli/src/lib_mcp_wiring.sh` (~900 LOC, Bash 3.2). After `eidolons mcp install junction`, every installed Eidolon (including FORGE) can invoke `mcp__junction__*` tools without manual frontmatter edits. After `eidolons mcp install atlas-aci`, only ATLAS gets `mcp__atlas_aci__*`. (PR #148)
+- **(feat) `mcps.yaml` catalogue fields `grants_to_eidolons` and `exposes_tools`.** Catalogue `catalogue_version` bumps `1.0` → `1.1` (additive, back-compat). `grants_to_eidolons` accepts `all` or `[<list>]`; `exposes_tools` declares both a `glob` (e.g. `mcp__junction__*`) and an explicit tool `list`. The schema (`schemas/mcp-catalogue.schema.json`) is updated to declare both as non-required properties — older catalogues remain valid.
+- **(feat) Five lifecycle hooks for MCP wiring** — `eidolons mcp install`, `mcp uninstall`, `mcp refresh`, `mcp sync/upgrade`, and project `sync.sh`. The project-sync hook is the load-bearing one: per-Eidolon installers rewrite `.claude/agents/<name>.md` from a heredoc on every sync, so wiring re-applies *after* the member loop. `eidolons add` inherits the wiring re-application via its `exec sync.sh` tail call.
+- **(feat) Frontmatter sentinel `x-eidolons-mcp-wired: [<names sorted>]`** in patched agent files. Used for byte-identity idempotency (repeat installs produce no diff) and reversible uninstall (removing the last MCP also removes the sentinel line entirely). Tracked end-to-end via `eidolons.mcp.lock` `hosts_wired[]`.
+- **(feat) Per-host patching strategy.** Claude-code (`.claude/agents/*.md`) gets a CSV-append in the `tools:` frontmatter line, including the `tools: none` → `tools: mcp__<name>__*` replacement carve-out for FORGE. Codex (`.codex/agents/*.md`) gets a YAML block-sequence append. Opencode (`.opencode/agents/*.md` — `permission:` model) is a no-op stub for v1.9 (deferred to a follow-up). Cursor has no per-agent permission gate and is intentionally not touched.
+- **(test) `cli/tests/mcp_wiring.bats` — 21 tests (W1.1–W10.1)** covering catalogue resolution, target Eidolon enumeration, per-host patch correctness, idempotency (no byte drift on repeat runs), reversibility (unpatch returns the file to its pre-patch SHA), the `tools: none` carve-out, lockfile `hosts_wired[]` round-trip, and the sync.sh re-application invariant.
+
+### Changed
+
+- **`roster/mcps.yaml`** — `junction` declares `grants_to_eidolons: all` and `exposes_tools.{glob, list}`; `atlas-aci` declares `grants_to_eidolons: [atlas]` and `exposes_tools.{glob, list}`. `related_eidolons[]` remains as an editorial hint with distinct semantics (informational vs. machine-driven wiring).
+
 ## [1.8.1] - 2026-05-25
 
 ### Fixed

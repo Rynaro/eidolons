@@ -12,6 +12,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_wiring.sh"
 
 usage() {
   cat <<EOF
@@ -106,3 +108,9 @@ case "$kind" in
     die "Unknown kind '$kind' for MCP '$mcp_name'"
     ;;
 esac
+
+# ─── MCP-to-Eidolon tool-surface wiring (spec §10.1) ─────────────────────────
+# Apply after the per-kind driver returns success.
+# Soft failure: mcp_wiring_apply_for_mcp warns on individual file errors but
+# never aborts the parent command (see spec §10.4).
+mcp_wiring_apply_for_mcp "$mcp_name"

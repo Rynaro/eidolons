@@ -2,8 +2,9 @@
 # Managed by the nexus; do NOT add third-party MCPs here (NG6).
 # Schema: schemas/mcp-catalogue.schema.json
 # Companion lockfile: eidolons.mcp.lock (project-level; commit to VCS).
-catalogue_version: "1.0"
-updated_at: "2026-05-19T00:00:00Z"
+# catalogue_version 1.1: adds grants_to_eidolons + exposes_tools fields (additive).
+catalogue_version: "1.1"
+updated_at: "2026-05-25T00:00:00Z"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -14,6 +15,17 @@ mcps:
       - "Cross-language symbol search inside an MCP-capable host."
       - "ATLAS subagent's per-project codegraph backend."
     related_eidolons: [atlas]
+    grants_to_eidolons: [atlas]
+    exposes_tools:
+      glob: "mcp__atlas_aci__*"
+      list:
+        - mcp__atlas_aci__view_file
+        - mcp__atlas_aci__search_symbol
+        - mcp__atlas_aci__search_text
+        - mcp__atlas_aci__list_dir
+        - mcp__atlas_aci__graph_query
+        - mcp__atlas_aci__test_dry_run
+        - mcp__atlas_aci__memex_read
     source:
       type: ghcr
       image: "ghcr.io/rynaro/atlas-aci"
@@ -48,6 +60,14 @@ mcps:
       - "Sandbox APIVR-Delta implementation work in a Docker container."
       - "Run multi-stage agent pipelines with plan.json."
     related_eidolons: []
+    grants_to_eidolons: all
+    exposes_tools:
+      glob: "mcp__junction__*"
+      list:
+        - mcp__junction__harness_run
+        - mcp__junction__harness_verify
+        - mcp__junction__plan_dispatch
+        - mcp__junction__reasoning_step
     source:
       type: github_release
       repo: "Rynaro/Junction"

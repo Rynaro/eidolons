@@ -15,6 +15,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_wiring.sh"
 
 usage() {
   cat <<EOF
@@ -59,6 +61,12 @@ while [ $# -gt 0 ]; do
 done
 
 kind="$(mcp_resolve_kind "$mcp_name")"
+
+# ─── MCP-to-Eidolon tool-surface unwiring (spec §10.1) ───────────────────────
+# Run BEFORE the per-kind driver so hosts_wired[] is still in the lockfile.
+# The driver removes the lockfile entry; unapply reads it first.
+# Soft failure: warns on individual file errors but never aborts (spec §10.4).
+mcp_wiring_unapply_for_mcp "$mcp_name"
 
 case "$kind" in
   oci-image)
