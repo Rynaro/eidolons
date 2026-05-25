@@ -20,6 +20,33 @@
           "description": { "type": "string" },
           "use_cases": { "type": "array", "items": { "type": "string" } },
           "related_eidolons": { "type": "array", "items": { "type": "string" } },
+          "grants_to_eidolons": {
+            "description": "Machine-driven fanout: which installed Eidolons receive this MCP's tool surface. 'all' = every installed Eidolon; array = named subset; absent or [] = no fanout.",
+            "oneOf": [
+              { "type": "string", "enum": ["all"] },
+              { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } }
+            ]
+          },
+          "exposes_tools": {
+            "description": "Tool surface advertised by this MCP. glob is the wire form used by the wiring pass; list is the auditable enumeration for display.",
+            "type": "object",
+            "properties": {
+              "glob": {
+                "type": "string",
+                "pattern": "^mcp__[a-z][a-z0-9_]*__\\*$",
+                "description": "Glob pattern for all tools exposed by this MCP (e.g. mcp__junction__*)"
+              },
+              "list": {
+                "type": "array",
+                "items": { "type": "string", "pattern": "^mcp__[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$" },
+                "description": "Explicit enumeration of tool names (informational, shown in eidolons mcp show)"
+              }
+            },
+            "anyOf": [
+              { "required": ["glob"] },
+              { "required": ["list"] }
+            ]
+          },
           "source": {
             "type": "object",
             "required": ["type"],

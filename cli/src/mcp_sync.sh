@@ -19,6 +19,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_wiring.sh"
 
 usage() {
   cat <<EOF
@@ -108,3 +110,8 @@ if [ "$changed" -eq 0 ]; then
 else
   ok "MCP sync complete (${changed} installed)."
 fi
+
+# ─── MCP-to-Eidolon tool-surface wiring (spec §10.1) ─────────────────────────
+# Re-apply wiring for all installed MCPs after the sync loop completes.
+# This handles the case where per-Eidolon installers rewrote agent files.
+mcp_wiring_reapply_all

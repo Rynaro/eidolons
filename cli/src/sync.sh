@@ -14,6 +14,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib_host_prune.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_eidolons_md.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_wiring.sh"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -496,6 +500,17 @@ LOCK
     info "$name@$version already installed — no card emitted"
   fi
 done <<< "$MEMBERS_JSON"
+
+# ─── MCP-to-Eidolon tool-surface wiring (spec §10.1, O7) ─────────────────────
+# Per-Eidolon installers rewrite .claude/agents/<n>.md from a heredoc on every
+# sync — wiping any prior MCP wiring. Re-apply AFTER the per-member loop so
+# the wiring always lands on top of the freshly-written agent files.
+# Uses eidolons.mcp.lock as the source of truth (not the catalogue) — this
+# ensures only installed MCPs are wired, never uninstalled ones.
+# Soft failure: individual file errors warn and continue (spec §10.4).
+if [ -f "$(mcp_lockfile)" ]; then
+  mcp_wiring_reapply_all
+fi
 
 # ─── Append hosts block to lockfile (R3 Block 1) ─────────────────────────
 # Mirrors manifest hosts configuration at sync time for traceability.
