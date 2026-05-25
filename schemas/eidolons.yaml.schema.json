@@ -18,6 +18,22 @@
           "type": "array",
           "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] },
           "description": "Hosts to wire during install/sync. Auto-detected during init if omitted."
+        },
+        "shared_dispatch": {
+          "type": "boolean",
+          "description": "Whether to inject the cortex + dispatch-pointer block into root vendor docs."
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Hard-fail on missing pointer_targets paths (default: warn-only)."
+        },
+        "pointer_targets": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["CLAUDE.md", "AGENTS.md", "GEMINI.md", ".github/copilot-instructions.md"]
+          },
+          "description": "Vendor files that receive the EIDOLONS dispatch-pointer + cortex block. Optional; defaults to files derived from hosts.wire."
         }
       }
     },

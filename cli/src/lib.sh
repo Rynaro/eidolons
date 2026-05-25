@@ -984,12 +984,85 @@ remove_marker_block() {
   info "  remove_marker_block: removed $marker_name block from $dst"
 }
 
-# ─── Dispatch-pointer vendor docs (PR-A1 / B2) ───────────────────────────
-# Each entry in DISPATCH_POINTER_VENDORS is a vendor-specific instruction
-# file that holds a thin pointer to EIDOLONS.md (the canonical composition
-# surface). AGENTS.md is intentionally absent — it is the canonical surface
-# for codex/opencode, not a thin pointer.
-DISPATCH_POINTER_VENDORS="CLAUDE.md GEMINI.md .github/copilot-instructions.md"
+# ─── Dispatch-pointer vendor docs (PR-A1 / B2 / R3) ─────────────────────
+# Vendor → root file mapping for hosts.pointer_targets derivation.
+# Canonical table — single source of truth. Used by _vendor_file_for_host
+# and derive_pointer_targets_from_hosts.
+#
+# Host          Vendor file
+# claude-code   CLAUDE.md
+# codex         AGENTS.md
+# copilot       .github/copilot-instructions.md
+# gemini        GEMINI.md
+# cursor        (none — tool-config dir, not an agent-instructions file)
+# opencode      AGENTS.md (shares with codex; deduped by caller)
+#
+# DISPATCH_POINTER_VENDORS is REMOVED in v1.7.0; apply_dispatch_pointers
+# now receives pointer_targets_csv as its first argument.
+
+# _vendor_file_for_host HOST
+#
+# Echoes the canonical vendor file for a given host slug, or empty string
+# when the host has no root vendor file (cursor). Bash 3.2 case-based.
+_vendor_file_for_host() {
+  case "$1" in
+    claude-code) echo "CLAUDE.md" ;;
+    codex)       echo "AGENTS.md" ;;
+    copilot)     echo ".github/copilot-instructions.md" ;;
+    gemini)      echo "GEMINI.md" ;;
+    opencode)    echo "AGENTS.md" ;;
+    cursor)      echo "" ;;
+    *)           echo "" ;;
+  esac
+}
+
+# derive_pointer_targets_from_hosts HOSTS_CSV
+#
+# Echoes a comma-separated, deduplicated list of vendor files derived from
+# HOSTS_CSV via the _vendor_file_for_host mapping. Preserves stable order:
+# CLAUDE.md, AGENTS.md, GEMINI.md, .github/copilot-instructions.md.
+# Empty hosts_csv → empty output. Bash 3.2 safe.
+derive_pointer_targets_from_hosts() {
+  local hosts_csv="${1:-}"
+  local _out="" _v _seen_agents=false _seen_claude=false _seen_gemini=false _seen_copilot=false
+  local _h
+  # Use stable order regardless of input order.
+  for _h in claude-code codex opencode gemini copilot cursor; do
+    case ",$hosts_csv," in
+      *",${_h},"*)
+        _v="$(_vendor_file_for_host "$_h")"
+        [[ -z "$_v" ]] && continue
+        case "$_v" in
+          CLAUDE.md)
+            [[ "$_seen_claude" == "true" ]] && continue
+            _seen_claude=true ;;
+          AGENTS.md)
+            [[ "$_seen_agents" == "true" ]] && continue
+            _seen_agents=true ;;
+          GEMINI.md)
+            [[ "$_seen_gemini" == "true" ]] && continue
+            _seen_gemini=true ;;
+          .github/copilot-instructions.md)
+            [[ "$_seen_copilot" == "true" ]] && continue
+            _seen_copilot=true ;;
+        esac
+        if [[ -z "$_out" ]]; then _out="$_v"; else _out="$_out,$_v"; fi
+        ;;
+    esac
+  done
+  printf '%s\n' "$_out"
+}
+
+# detect_vendor_files_on_disk
+#
+# Echoes (one per line) the subset of the closed vendor file set that
+# exists in the current working directory. Bash 3.2 safe.
+detect_vendor_files_on_disk() {
+  local v
+  for v in CLAUDE.md AGENTS.md GEMINI.md .github/copilot-instructions.md; do
+    [[ -f "$v" ]] && printf '%s\n' "$v"
+  done
+}
 
 # _dispatch_vendor_host VENDOR
 #
