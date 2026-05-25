@@ -23,6 +23,8 @@ RE_DERIVE=false
 POINTER_TARGETS_ARG=""
 MULTI_POINTER=false
 MULTI_POINTER_EXPLICIT=false
+_MP_YES_SEEN=false
+_MP_NO_SEEN=false
 
 usage() {
   cat <<EOF
@@ -63,8 +65,13 @@ Options:
                            exists on disk but is not in the supplied set.
   --multi-pointer          When AGENTS-precedence triggers, additionally
                            wire host-derived vendor files (CLAUDE.md, GEMINI.md,
-                           .github/copilot-instructions.md). Default: AGENTS.md
-                           is the sole pointer target when precedence triggers.
+                           .github/copilot-instructions.md). Default ON; pass
+                           --no-multi-pointer to opt out.
+  --no-multi-pointer       Make AGENTS.md the sole pointer target under
+                           AGENTS-precedence. Wired vendor files (CLAUDE.md,
+                           GEMINI.md, .github/copilot-instructions.md) will
+                           be emptied of Eidolon markers during compose.
+                           Mutually exclusive with --multi-pointer.
   -h, --help               Show this help
 
 Behavior:
@@ -96,11 +103,18 @@ while [[ $# -gt 0 ]]; do
     --re-derive)            RE_DERIVE=true; FORCE=true; shift ;;
     --pointer-targets)      POINTER_TARGETS_ARG="$2"; shift 2 ;;
     --pointer-targets=*)    POINTER_TARGETS_ARG="${1#*=}"; shift ;;
-    --multi-pointer)        MULTI_POINTER=true; MULTI_POINTER_EXPLICIT=true; shift ;;
+    --multi-pointer)        MULTI_POINTER=true; MULTI_POINTER_EXPLICIT=true; _MP_YES_SEEN=true; shift ;;
+    --no-multi-pointer)     MULTI_POINTER=false; MULTI_POINTER_EXPLICIT=true; _MP_NO_SEEN=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+# Mutual exclusion: --multi-pointer and --no-multi-pointer are mutually exclusive.
+if [[ "$_MP_YES_SEEN" == "true" ]] && [[ "$_MP_NO_SEEN" == "true" ]]; then
+  die "--multi-pointer and --no-multi-pointer are mutually exclusive."
+fi
+unset _MP_YES_SEEN _MP_NO_SEEN
 
 # ─── Verbosity tier ──────────────────────────────────────────────────────
 # Honour env vars first, then CLI flags. Flags win over env vars.
@@ -148,9 +162,13 @@ if [[ "$RE_DERIVE" == "true" ]]; then
     esac
   elif detect_agents_precedence_trigger "$_rd_hosts_csv" "$_rd_shared_dispatch"; then
     _rd_new_pt="AGENTS.md"
-    if [[ "$MULTI_POINTER" == "true" ]]; then
+    # R5-D1: re-derive uses default-Y for multi-pointer unless --no-multi-pointer
+    # was explicit on this invocation. (No TTY prompt in --re-derive; it's a
+    # non-interactive migration tool by convention.)
+    if [[ "$MULTI_POINTER" == "true" ]] || [[ "$MULTI_POINTER_EXPLICIT" != "true" ]]; then
       _rd_new_pt="$(_csv_union "AGENTS.md" "$_rd_host_derived")"
     fi
+    # If --no-multi-pointer was explicit: leave _rd_new_pt=AGENTS.md only.
   else
     _rd_new_pt="$_rd_host_derived"
   fi
@@ -337,22 +355,32 @@ if [[ -n "$POINTER_TARGETS_ARG" ]]; then
   esac
   # Explicit override silences Case A and Case B messages.
 elif detect_agents_precedence_trigger "$HOSTS" "$SHARED_DISPATCH"; then
-  # AGENTS-precedence triggered.
+  # AGENTS-precedence triggered. Default behaviour (R5-D1): pointer_targets starts
+  # at AGENTS.md and is UNIONed with host-derived wired vendor files unless the
+  # user explicitly opted out via --no-multi-pointer.
   POINTER_TARGETS="AGENTS.md"
-  if [[ "$MULTI_POINTER" == "true" ]]; then
+
+  if [[ "$MULTI_POINTER_EXPLICIT" == "true" ]]; then
+    # Honour the explicit choice (either --multi-pointer or --no-multi-pointer).
+    if [[ "$MULTI_POINTER" == "true" ]]; then
+      POINTER_TARGETS="$(_csv_union "AGENTS.md" "$_host_derived_csv")"
+    fi
+    # --no-multi-pointer path: leave POINTER_TARGETS=AGENTS.md (no union).
+  elif [[ "$NON_INTERACTIVE" == "true" ]]; then
+    # Non-interactive default flip (R5-D1): union by default.
     POINTER_TARGETS="$(_csv_union "AGENTS.md" "$_host_derived_csv")"
-  elif [[ "$NON_INTERACTIVE" != "true" ]] && [[ "$MULTI_POINTER_EXPLICIT" != "true" ]]; then
-    # TTY prompt fallback (D8). Default-n. Only fires in interactive mode
-    # when --multi-pointer was NOT explicitly passed.
+  else
+    # Interactive TTY prompt fallback. Default-Y (R5-D1).
     {
       echo ""
       echo "AGENTS.md will be the canonical pointer surface (round-4 AGENTS-precedence)."
-      echo "By default, eidolons writes the dispatch-pointer + cortex block only to AGENTS.md."
-      echo "Some hosts (e.g. Claude Code) read CLAUDE.md natively — multi-pointer writes"
-      echo "the same dispatch-pointer block to those host-native files as well."
+      echo "By default, eidolons mirrors the dispatch-pointer + cortex block to all wired"
+      echo "host files (CLAUDE.md, GEMINI.md, .github/copilot-instructions.md) so every"
+      echo "wired LLM redirects to ./EIDOLONS.md. Pass --no-multi-pointer to make"
+      echo "AGENTS.md the sole pointer (other vendor files will be emptied)."
       echo ""
     } >&2
-    if ui_confirm "Also wire host-derived vendor files (CLAUDE.md, etc.) in addition to AGENTS.md?" default-n; then
+    if ui_confirm "Mirror dispatch-pointer to all wired host files? (recommended)" default-y; then
       POINTER_TARGETS="$(_csv_union "AGENTS.md" "$_host_derived_csv")"
     fi
   fi
@@ -363,7 +391,7 @@ elif detect_agents_precedence_trigger "$HOSTS" "$SHARED_DISPATCH"; then
         echo ""
         printf '%bcodex detected in hosts.wire%b — AGENTS.md is canonical pointer surface (EIIS §4.1.0).\n' \
           "${BOLD}" "${RESET}"
-        echo "Use --multi-pointer to additionally wire CLAUDE.md/GEMINI.md."
+        echo "Pass --no-multi-pointer to make AGENTS.md the sole pointer."
         echo ""
       } >&2
       ;;
@@ -372,7 +400,7 @@ elif detect_agents_precedence_trigger "$HOSTS" "$SHARED_DISPATCH"; then
         echo ""
         printf '%bAGENTS.md will be the canonical pointer surface%b (AGENTS.md outranks host-specific files in modern LLM hosts).\n' \
           "${BOLD}" "${RESET}"
-        echo "Wired hosts read their primary file only with --multi-pointer. Note: Claude reads CLAUDE.md natively."
+        echo "By default, all wired host files mirror the dispatch-pointer. Pass --no-multi-pointer to opt out."
         echo ""
       } >&2
       ;;
