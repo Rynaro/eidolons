@@ -109,16 +109,19 @@ done
 
 # ─── canary-missions.md parser helpers ────────────────────────────────────────
 
-# first_mission_id FILE → echo the ID of the first "## Mission: <id>" heading
+# first_mission_id FILE → echo the ID of the first "## Mission: <id>" heading.
+# Uses awk to avoid grep exit-code propagation under set -euo pipefail.
+# Returns empty string when no matching heading found (non-conforming format).
 first_mission_id() {
   local file="$1"
-  grep -m1 '^## Mission:' "$file" 2>/dev/null | sed 's/^## Mission:[[:space:]]*//' | tr -d '[:space:]'
+  awk '/^## Mission:/{sub(/^## Mission:[[:space:]]*/,""); gsub(/[[:space:]]/, ""); print; exit}' "$file" 2>/dev/null || true
 }
 
-# list_mission_ids FILE → echo each mission ID on its own line
+# list_mission_ids FILE → echo each mission ID on its own line.
+# Uses awk to avoid grep exit-code propagation under set -euo pipefail.
 list_mission_ids() {
   local file="$1"
-  grep '^## Mission:' "$file" 2>/dev/null | sed 's/^## Mission:[[:space:]]*//'
+  awk '/^## Mission:/{sub(/^## Mission:[[:space:]]*/,""); print}' "$file" 2>/dev/null || true
 }
 
 # extract_mission FILE MISSION_ID → echo the block from "## Mission: ID" to next
@@ -372,7 +375,8 @@ run_list_mode() {
       local ids
       ids="$(list_mission_ids "$missions_file" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
       local count
-      count="$(list_mission_ids "$missions_file" | grep -c . 2>/dev/null || echo 0)"
+      # Use awk for counting to avoid grep exit-code 1 on empty input under pipefail
+      count="$(list_mission_ids "$missions_file" | awk 'NF{n++} END{print n+0}')"
       line="  checkmark $name@$version  ($count mission(s): $ids)"
       list_lines="${list_lines}HAVE|${name}|${version}|${count}|${ids}"$'\n'
       have_count=$((have_count + 1))
@@ -432,7 +436,7 @@ run_list_mode() {
       local ids
       ids="$(list_mission_ids "$missions_file" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
       local count
-      count="$(list_mission_ids "$missions_file" | grep -c . 2>/dev/null || echo 0)"
+      count="$(list_mission_ids "$missions_file" | awk 'NF{n++} END{print n+0}')"
       printf '  \xe2\x9c\x93 %s@%s  (%d mission(s): %s)\n' "$name" "$version" "$count" "$ids"
     else
       if [[ ! -d "$cache_dir/.git" ]]; then
