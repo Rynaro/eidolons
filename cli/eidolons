@@ -89,6 +89,9 @@ Commands:
   verify         Verify installed Eidolon release integrity
   verify-release Layer 2 integrity: compare installed Eidolons against
                  fresh re-derivation from upstream-pinned release
+  canary         Layer 3 integrity: print canary prompt or validate LLM output
+                 against an Eidolon's per-version canary mission.
+                 Run 'eidolons canary --help' for modes.
   upgrade        Upgrade pinned Eidolon versions (or 'upgrade self' to upgrade the CLI)
   release        One-touch Eidolon release + Roster Intake (maintainer-only)
   <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
@@ -178,6 +181,7 @@ case "$cmd" in
     ;;
   verify)         exec bash "$CLI_SRC/verify.sh"         "$@" ;;
   verify-release) exec bash "$CLI_SRC/verify_release.sh" "$@" ;;
+  canary)         exec bash "$CLI_SRC/canary.sh"         "$@" ;;
   release)     exec bash "$CLI_SRC/release.sh"   "$@" ;;
   upgrade)
     # Peek at the first remaining arg to decide which subcommand to dispatch.
