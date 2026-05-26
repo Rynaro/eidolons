@@ -684,15 +684,35 @@ nexus_install_ref() {
   cat "$NEXUS/.install_ref" 2>/dev/null || echo "unknown"
 }
 
+# nexus_roster_ref → echoes the roster-refresh target, with fallback chain.
+# B1: separates the CLI self-pin (.install_ref) from the roster-refresh target (.roster_ref).
+# Resolution order:
+#   1. $NEXUS/.roster_ref            (v1.11.0+ canonical)
+#   2. $NEXUS/.install_ref           (back-compat for v1.10.0 installs)
+#   3. echo ""                       (caller skips refresh)
+# Bash 3.2 compatible.
+nexus_roster_ref() {
+  if [[ -f "$NEXUS/.roster_ref" ]]; then
+    tr -d '[:space:]' < "$NEXUS/.roster_ref"
+    return 0
+  fi
+  if [[ -f "$NEXUS/.install_ref" ]]; then
+    tr -d '[:space:]' < "$NEXUS/.install_ref"
+    return 0
+  fi
+  echo ""
+}
+
 # nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
-# $NEXUS/.install_ref. Intended to be called once near the start of sync/init
-# so the roster is always fresh without requiring a full `eidolons upgrade`.
+# $NEXUS/.roster_ref (v1.11.0+) or $NEXUS/.install_ref (back-compat fallback).
+# Intended to be called once near the start of sync/init/upgrade so the roster
+# is always fresh without requiring a full `eidolons upgrade`.
 #
 # Skips silently when:
 #   - EIDOLONS_NEXUS is set (local-checkout / test mode — never auto-fetch)
 #   - EIDOLONS_SKIP_REFRESH=1 (user opt-out for offline-first workflows)
 #   - $NEXUS has no .git directory (bare checkout; upgrade path handles it)
-#   - .install_ref sidecar is absent or contains "unknown"
+#   - .roster_ref and .install_ref both absent or contain "unknown"
 #
 # On network failure: emits a warn and returns 0 (non-fatal; stale cache used).
 # Bash 3.2 compatible.
@@ -709,8 +729,9 @@ nexus_refresh() {
   if [[ ! -d "$NEXUS/.git" ]]; then
     return 0
   fi
+  # B1: use nexus_roster_ref (prefers .roster_ref, falls back to .install_ref).
   local ref
-  ref="$(nexus_install_ref)"
+  ref="$(nexus_roster_ref)"
   if [[ -z "$ref" || "$ref" == "unknown" ]]; then
     return 0
   fi
