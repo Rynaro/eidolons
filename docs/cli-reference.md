@@ -287,6 +287,134 @@ eidolons add <name> --force             # one member
 
 ---
 
+## `eidolons canary`
+
+Layer 3 integrity: print an Eidolon's canary mission prompt or validate a saved LLM response against structured criteria. Human-in-the-loop: the CLI never invokes an LLM itself.
+
+```
+eidolons canary <name>                       # prompt mode
+eidolons canary <name> --validate <file>     # validate mode
+eidolons canary --list                       # list mode
+```
+
+### Modes
+
+| Mode | Invocation | What it does |
+|------|-----------|--------------|
+| **prompt** | `eidolons canary <name>` | Print mission prompt + expected output shape + validation criteria |
+| **validate** | `eidolons canary <name> --validate <file>` | Check saved LLM output against mission criteria |
+| **list** | `eidolons canary --list` | Scan cache; report which Eidolons have canary missions |
+
+### Flags
+
+| Flag | Default | Behaviour |
+|------|---------|-----------|
+| `--validate <file>` | unset | Switches to validate mode; file must exist and be readable |
+| `--list` | unset | Switches to list mode |
+| `--mission <id>` | first in file | Select a non-default mission by ID |
+| `--json` | false | Emit machine-readable JSON on stdout; suppress human output |
+| `-h, --help` | — | Print usage; exit 0 |
+
+### Exit codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Prompt printed, OR validation all PASS/INCONCLUSIVE, OR list printed |
+| `1` | Validation had ≥1 FAIL criterion |
+| `2` | Misuse: unknown name, missing file, unknown flag |
+
+### Validation DSL
+
+Each criterion in `evals/canary-missions.md` follows `- <SEVERITY> <verb>: <argument>`:
+
+| Severity | On mismatch |
+|----------|------------|
+| `MUST` | FAIL → exit 1 |
+| `SHOULD` | Downgraded to INCONCLUSIVE → never causes exit 1 |
+
+Four recognized verbs:
+
+| Verb | Argument | Check |
+|------|----------|-------|
+| `contain heading: <text>` | exact markdown heading | `grep -Fxq` against lines stripped of leading whitespace |
+| `contain phrase: <regex>` | extended regex | `grep -Eq` against full output |
+| `mention paths: <p1>, <p2>, ...` | comma-separated path tokens | ALL tokens must appear (each `grep -Fq`) |
+| `have token count between X and Y` | two integers | word-count × 4/3 ≥ X and ≤ Y |
+
+Unrecognized verbs → INCONCLUSIVE (`"unrecognized criterion"`), never FAIL.
+
+### JSON output schema
+
+All `--json` emissions share:
+
+```json
+{
+  "schema_version": "1.0",
+  "mode": "prompt|validate|list",
+  ...
+}
+```
+
+Validate mode:
+
+```json
+{
+  "schema_version": "1.0",
+  "mode": "validate",
+  "eidolon": "atlas",
+  "version": "1.7.1",
+  "mission_id": "default",
+  "summary": { "pass": 3, "fail": 0, "inconclusive": 0 },
+  "criteria": [
+    { "criterion": "- MUST contain heading: ## Mission Brief",
+      "severity": "MUST", "result": "PASS", "reason": "" }
+  ]
+}
+```
+
+### `evals/canary-missions.md` format
+
+The file lives in the per-version cache at `~/.eidolons/cache/<name>@<version>/evals/canary-missions.md`. It is not shipped to the installed project tree.
+
+```markdown
+## Mission: default
+
+### Prompt
+<verbatim prompt to feed the LLM>
+
+### Expected output shape
+<prose description — human-readable, ignored by the validator>
+
+### Validation criteria
+- MUST contain heading: ## Mission Brief
+- MUST contain phrase: FINDING-
+- MUST mention paths: skills/abstract.md, skills/locate.md
+- SHOULD have token count between 1000 and 3000
+```
+
+Multiple missions per file are supported. The first `## Mission:` heading is the default; `--mission <id>` selects others.
+
+### Workflow
+
+```
+# Step 1: print the prompt
+eidolons canary atlas
+
+# Step 2: paste into your LLM (Claude Code, claude.ai, API, ...)
+# and save the response to a file
+
+# Step 3: validate
+eidolons canary atlas --validate /path/to/response.md
+```
+
+### Notes
+
+- Missing `evals/canary-missions.md` → warn + exit 0 (soft; not every Eidolon has authored missions yet).
+- `canary --list` is a fast cache inspection; it does **not** fetch. Absent cache → `(cache not populated; run 'eidolons sync')`.
+- Requires `eidolons.lock`. Run `eidolons add <name>` first if the member is not in the lock.
+
+---
+
 ## `eidolons upgrade`
 
 Surface and apply upgrades for installed members.

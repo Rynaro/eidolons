@@ -8,8 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.13.0] - 2026-05-26
 
 ### Added
+
+- **(feat) `eidolons canary` — Layer 3 methodology integrity (behavioral smoke).** New subcommand that bridges prompt-print → manual-run → validate-from-file for human-in-the-loop behavioral verification of installed Eidolons. Three modes: **prompt** (`eidolons canary <name>`) prints the canary mission prompt + expected output shape + validation criteria from `evals/canary-missions.md` in the per-version cache; **validate** (`eidolons canary <name> --validate <file>`) checks a saved LLM response against the mission's structured criteria (PASS/FAIL/INCONCLUSIVE per criterion); **list** (`eidolons canary --list`) scans the cache and reports which Eidolons have canary missions authored. Layer 3 of the three-layer integrity guarantee (Layer 1 = `doctor --deep` D4; Layer 2 = `verify-release`; Layer 3 = `canary`).
+- **(feat) Validation DSL** — four verbs (`contain heading`, `contain phrase`, `mention paths`, `have token count between X and Y`) × two severities (`MUST` = FAIL on mismatch; `SHOULD` = INCONCLUSIVE on mismatch). Unrecognized criterion lines → INCONCLUSIVE (permissive while format settles across Eidolons). Missing `evals/canary-missions.md` → soft warn + exit 0 (not a failure).
+- **(feat) `--mission <id>`, `--json`, `--list`, `--validate <file>` flags.** `--json` emits machine-readable output with `schema_version: "1.0"` on every emission. `--mission` selects a non-default mission by ID. Exit codes: 0 = success/INCONCLUSIVE-only; 1 = ≥1 FAIL criterion; 2 = misuse.
+- **(test) `cli/tests/canary.bats` — 12 tests (CAN-1..CAN-12)** covering prompt mode, missing missions (soft), unknown name, all-PASS, MUST FAIL, SHOULD downgrade, empty file, mission selection, unknown mission ID, list mode, JSON schema, and unrecognized-criterion INCONCLUSIVE.
+
+### Changed
+
+- **`cli/eidolons` dispatcher** — adds `canary)` case after `verify-release`. One usage line added under `Commands:`.
+- **`docs/cli-reference.md`** — new `canary` section documenting all three modes, flags, validation DSL grammar, and JSON schema.
+
+### Notes
+
+- No EIIS change. No per-Eidolon repo change. `evals/canary-missions.md` is convention-only for v1.13.0; promoted to EIIS contract after multi-Eidolon convergence.
+- 5 of 6 Eidolons have authored canary missions; VIGIL missions are a follow-up (handled gracefully as soft-missing).
 - vigil v1.3.1 published in the roster with release integrity metadata.
 
 ## [1.12.0] - 2026-05-26
