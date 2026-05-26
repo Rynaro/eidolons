@@ -82,6 +82,11 @@ export VERBOSITY
 
 manifest_exists || die "No eidolons.yaml found. Run 'eidolons init' first."
 
+# Refresh the nexus cache before reading the roster so version lookups always
+# see the latest published Eidolon versions.  Skipped when EIDOLONS_NEXUS is
+# set (local-checkout / test mode) or EIDOLONS_SKIP_REFRESH=1 (offline-first).
+nexus_refresh
+
 MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
 # Default shared_dispatch to false when the key is absent (pre-v1.2 manifests).
@@ -280,10 +285,9 @@ _sync_has_failure=false
 while read -r member; do
   name="$(echo "$member" | jq -r '.name')"
   version_spec="$(echo "$member" | jq -r '.version')"
-  # Strip constraint prefix (^, ~, =) for cache key — proper resolution is a future task.
-  version="${version_spec#^}"
-  version="${version#~}"
-  version="${version#=}"
+  # Resolve the version constraint (^X.Y.Z / ~X.Y.Z / bare X.Y.Z) to a
+  # concrete version from the roster's known release set.
+  version="$(resolve_version_constraint "$name" "$version_spec")"
 
   entry="$(roster_get "$name")"
   target="./.eidolons/$name"
