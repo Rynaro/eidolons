@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.0"
-updated_at: "2026-05-26T17:21Z"
+updated_at: "2026-05-26T20:07Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -27,9 +27,9 @@ eidolons:
       repo: Rynaro/ATLAS
       default_ref: main
     versions:
-      latest: "1.7.0"
+      latest: "1.7.1"
       pins:
-        stable: "1.7.0"
+        stable: "1.7.1"
       releases:
         1.3.0:
           tag: v1.3.0
@@ -135,6 +135,15 @@ eidolons:
           commit: 2cdfff4fc637fe00c3b4ff553fa804a962ae3864
           tree: 17e4e8cf16c1c51f4dcad5ccb75ac02f572ee0d9
           archive_sha256: 75e0bc45830117d6abc36d2a5518a5a42b2e0fbc3d00d5898d1b6c313b2c7b3f
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.7.1:
+          tag: v1.7.1
+          commit: f52e28e85682739f10447791301dadf4369c4879
+          tree: 3c00515cfd892976842802bc08803e5ae8b22641
+          archive_sha256: 5d36239c9ef73474c7f411f1fa4c597512cf88bb0bc70ca5aae65dd6722d9e7c
           manifest_sha256:
           provenance:
             github_attestation: true
