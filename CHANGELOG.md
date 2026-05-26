@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- vigil v1.3.1 published in the roster with release integrity metadata.
 - spectra v4.5.1 published in the roster with release integrity metadata.
 - idg v1.4.1 published in the roster with release integrity metadata.
 - forge v1.5.1 published in the roster with release integrity metadata.
