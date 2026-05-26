@@ -16,8 +16,12 @@ eidolons doctor — health-check installed Eidolons and host wiring
 Usage: eidolons doctor [OPTIONS]
 
 Options:
-  --fix         Attempt to auto-repair simple issues (missing symlinks, lockfile drift)
-  -h, --help    Show this help
+  --fix         Attempt to auto-repair simple structural issues (lockfile drift,
+                missing host wiring). Read-only for methodology gates (D1..D6).
+  --deep        Run methodology-integrity gates (D1..D6) after the fast checks.
+                Required to catch broken outbound links, token-budget overruns,
+                and content drift vs the release manifest.
+  -h, --help    Show this help.
 
 Checks:
   - eidolons.yaml present and valid
@@ -26,13 +30,23 @@ Checks:
   - Each installed Eidolon's install.manifest.json is valid
   - Host dispatch files exist for every host listed in eidolons.yaml
   - Release-integrity status per lock entry (verified / legacy / missing)
+
+Deep checks (--deep):
+  D1   agent.md token budget                    MUST <= 1000 tokens
+  D2   agent.md outbound link resolution         all (skills|templates|schemas)/*.{md,json,y[a]ml} refs MUST resolve
+  D3   SPEC.md outbound link resolution          same as D2 against SPEC.md
+  D4   manifest_sha256 vs lock                   MUST match (WARN-skip on legacy)
+  D5   host-vendor agent body contract           MUST reference agent.md + SPEC.md, zero legacy <UPPER>.md refs
+  D6   skills/ dual-write SHA parity             MUST match between .eidolons/<n>/skills/*.md and .claude/skills/<n>-<basename>/SKILL.md
 EOF
 }
 
 FIX=false
+DEEP=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --fix)    FIX=true; shift ;;
+    --deep)   DEEP=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *)        echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -621,6 +635,99 @@ if [[ "$_r5_drift_count" -eq 0 ]]; then
   pass "no wired vendor file marker drift detected"
 fi
 unset _r5_hosts_csv _r5_pt_csv _r5_strict _r5_drift_count _r5_vfile _r5_vhost _R5_VENDOR_HOST_MAP
+
+# ─── Methodology integrity (--deep) ─────────────────────────────────────
+# D1..D6 run only when --deep is passed. The fast checks (1..14) always run
+# first. Within this section, checks do NOT short-circuit on early failures:
+# each member is iterated through all 6 gates independently so a broken
+# Eidolon does not mask drift in another.
+#
+# --fix is read-only here: methodology drift requires re-install via
+# 'eidolons sync --force' or 'eidolons add <member> --force'.
+if [[ "$DEEP" == "true" ]]; then
+  if ! manifest_exists; then
+    printf "  %s·%s 0 Eidolons to check (run eidolons init first)\n" \
+      "${YELLOW:-}" "${RESET:-}"
+  else
+    ui_section_out "Methodology integrity (--deep)"
+
+    # Read the member list from the lockfile (covers resolved versions).
+    _deep_members=""
+    if [[ -f "$PROJECT_LOCK" ]]; then
+      _deep_members="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+        | jq -r '(.members // [])[].name' 2>/dev/null || true)"
+    fi
+
+    if [[ -z "$_deep_members" ]]; then
+      printf "  %s·%s 0 Eidolons to check (eidolons.lock is empty or missing)\n" \
+        "${YELLOW:-}" "${RESET:-}"
+    else
+      # D1 — agent.md token budget
+      echo "  D1 — agent.md token budget"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d1_rc=0
+        deep_check_agent_token_budget "$_dm" || _d1_rc=$?
+        ERRORS=$((ERRORS + _d1_rc))
+      done <<< "$_deep_members"
+
+      # D2 — agent.md outbound link resolution
+      echo "  D2 — agent.md outbound links"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d2_rc=0
+        deep_check_agent_links "$_dm" || _d2_rc=$?
+        ERRORS=$((ERRORS + _d2_rc))
+      done <<< "$_deep_members"
+
+      # D3 — SPEC.md outbound link resolution
+      echo "  D3 — SPEC.md outbound links"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d3_rc=0
+        deep_check_spec_links "$_dm" || _d3_rc=$?
+        ERRORS=$((ERRORS + _d3_rc))
+      done <<< "$_deep_members"
+
+      # D4 — Content integrity vs release manifest
+      echo "  D4 — Content integrity vs lock"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d4_ver="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+          | jq -r --arg n "$_dm" '(.members // [])[] | select(.name == $n) | .version // ""' \
+          2>/dev/null || true)"
+        _d4_rc=0
+        deep_check_manifest_integrity "$_dm" "${_d4_ver:-unknown}" || _d4_rc=$?
+        ERRORS=$((ERRORS + _d4_rc))
+      done <<< "$_deep_members"
+
+      # D5 — Host-vendor agent body contract
+      echo "  D5 — Host-vendor agent bodies"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d5_rc=0
+        deep_check_host_agent_body "$_dm" || _d5_rc=$?
+        ERRORS=$((ERRORS + _d5_rc))
+      done <<< "$_deep_members"
+
+      # D6 — Skills dual-write SHA parity
+      echo "  D6 — Skills dual-write parity"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d6_rc=0
+        deep_check_skills_dual_write "$_dm" || _d6_rc=$?
+        ERRORS=$((ERRORS + _d6_rc))
+      done <<< "$_deep_members"
+    fi
+
+    # Remedy hint when methodology errors were found.
+    if (( ERRORS > 0 )); then
+      echo ""
+      echo "  Methodology issues found. Remedy: 'eidolons sync --force' or"
+      echo "  'eidolons add <member> --force' to re-install affected members."
+    fi
+  fi
+fi
 
 # ─── Summary ────────────────────────────────────────────────────────────
 echo ""
