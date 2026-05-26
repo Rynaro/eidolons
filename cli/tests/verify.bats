@@ -156,7 +156,9 @@ sha256_of() {
   add_atlas_release_metadata "1.0.0" \
     "1111111111111111111111111111111111111111" \
     "abc1234567890abcdef1234567890abcdef123456"
-  seed_manifest_with atlas=^1.0.0
+  # Use an exact pin so resolve_version_constraint returns 1.0.0 directly and
+  # the integrity check compares against the metadata we just added.
+  seed_manifest_with atlas=1.0.0
   run eidolons sync --yes
   [ "$status" -ne 0 ]
   [[ "$output" =~ "commit mismatch" ]]

@@ -129,6 +129,11 @@ else
 fi
 export VERBOSITY
 
+# Refresh the nexus cache so the roster reflects latest published Eidolon versions.
+# Skipped when EIDOLONS_NEXUS is set (local-checkout / test mode) or
+# EIDOLONS_SKIP_REFRESH=1 (offline-first).
+nexus_refresh
+
 # ─── --re-derive: surgical pointer_targets migration (D10) ───────────────
 # This flag re-runs derivation only, preserving all other manifest fields.
 # Must execute BEFORE the normal init flow (no preset resolution, no sync).

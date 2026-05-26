@@ -29,6 +29,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - atlas v1.6.0 published in the roster with release integrity metadata.
 - apivr v3.2.0 published in the roster with release integrity metadata.
 
+## [1.10.0] - 2026-05-26
+
+### Added
+
+- **(feat) `nexus_refresh` — auto-refresh nexus cache on `sync` and `init` (Fix A).** `cli/src/sync.sh` and `cli/src/init.sh` now call `nexus_refresh` before any roster reads. The helper performs a `git fetch --depth 1 origin <ref>` + `reset --hard FETCH_HEAD` against the pinned ref recorded in `$NEXUS/.install_ref`, ensuring the local nexus cache reflects the latest published Eidolon versions without requiring an explicit `eidolons upgrade`. Network failures emit a `warn` and return 0 (non-fatal; stale cache is used). Implemented in `cli/src/lib.sh`. Bash 3.2 compatible.
+- **(feat) `EIDOLONS_SKIP_REFRESH=1` opt-out.** Users who need offline-first or deterministic builds can set this env var to disable auto-refresh entirely. Useful in CI environments without outbound network access.
+- **(feat) `EIDOLONS_NEXUS=<path>` continues to skip refresh (local-checkout dev pattern preserved).** When `EIDOLONS_NEXUS` is set to a non-empty value, `nexus_refresh` is a no-op — the local checkout is used as-is, enabling test isolation without network access.
+- **(feat) Standard `^X.Y.Z` semver caret-range resolution (Fix B).** `cli/src/sync.sh` now resolves member version constraints through `resolve_version_constraint` (new helper in `cli/src/lib.sh`) instead of stripping the constraint prefix. Constraint forms: `^X.Y.Z` (>=base, <(X+1).0.0; `^0.Y.Z` locks minor per npm semantics), `~X.Y.Z` (>=base, <X.(Y+1).0), `=X.Y.Z` or bare `X.Y.Z` (exact pin). The resolver queries the roster's `versions.latest`, `versions.pins.stable`, and `versions.releases` to find the highest satisfying version. Missing roster entries fall back to stripping the operator prefix (legacy compat). Bash 3.2 compatible: no associative arrays, no mapfile.
+- **(test) `cli/tests/cache_freshness.bats` — 17 tests (RF-1..7, sync-NEXUS, SC-1..9)** covering: EIDOLONS_NEXUS skip, EIDOLONS_SKIP_REFRESH skip, no-.git skip, absent-.install_ref skip, network-failure warn+0, local-fixture fetch+reset round-trip, empty-EIDOLONS_NEXUS does-not-block, sync integration guard, and all caret/tilde/exact resolver variants including the 0.x semver special-case.
+
+### Changed
+
+- **`eidolons sync` member version resolution.** Previously used naive prefix-stripping (`${version#^}`). Now calls `resolve_version_constraint` for semantic range resolution. Exact pins (`1.0.0`, `=1.0.0`) pass through unchanged; range constraints (`^X.Y.Z`, `~X.Y.Z`) resolve to the highest satisfying version in the roster. Enables seamless rollouts: when a new Eidolon version is published to the roster, `eidolons sync` picks it up automatically on next run without any manifest changes.
+
 ## [1.9.0] - 2026-05-25
 
 ### Added

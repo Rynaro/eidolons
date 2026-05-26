@@ -684,6 +684,46 @@ nexus_install_ref() {
   cat "$NEXUS/.install_ref" 2>/dev/null || echo "unknown"
 }
 
+# nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
+# $NEXUS/.install_ref. Intended to be called once near the start of sync/init
+# so the roster is always fresh without requiring a full `eidolons upgrade`.
+#
+# Skips silently when:
+#   - EIDOLONS_NEXUS is set (local-checkout / test mode — never auto-fetch)
+#   - EIDOLONS_SKIP_REFRESH=1 (user opt-out for offline-first workflows)
+#   - $NEXUS has no .git directory (bare checkout; upgrade path handles it)
+#   - .install_ref sidecar is absent or contains "unknown"
+#
+# On network failure: emits a warn and returns 0 (non-fatal; stale cache used).
+# Bash 3.2 compatible.
+nexus_refresh() {
+  # Skip when caller explicitly pinned a local checkout.
+  if [[ -n "${EIDOLONS_NEXUS:-}" ]]; then
+    return 0
+  fi
+  # Honour opt-out flag.
+  if [[ "${EIDOLONS_SKIP_REFRESH:-0}" == "1" ]]; then
+    return 0
+  fi
+  # Only operate on git-managed nexus caches.
+  if [[ ! -d "$NEXUS/.git" ]]; then
+    return 0
+  fi
+  local ref
+  ref="$(nexus_install_ref)"
+  if [[ -z "$ref" || "$ref" == "unknown" ]]; then
+    return 0
+  fi
+  local repo
+  repo="${EIDOLONS_REPO:-https://github.com/Rynaro/eidolons}"
+  if ! git -C "$NEXUS" fetch --depth 1 origin "$ref" >/dev/null 2>&1; then
+    warn "nexus cache stale; using cached state (network unavailable or ref $ref not found)"
+    return 0
+  fi
+  git -C "$NEXUS" reset --hard FETCH_HEAD >/dev/null 2>&1 || true
+  return 0
+}
+
 # nexus_clone_to_sibling TAG DEST_DIR → shallow-clones the nexus remote at TAG
 # into DEST_DIR. Returns 0 on success, 1 on failure. stdout is the dest dir.
 # The actual swap is the caller's responsibility.
@@ -836,10 +876,14 @@ semver_lt() {
 semver_satisfies() {
   local constraint="$1" version="$2"
   local op="" base="" cmajor cminor _cpatch vmajor vminor _vpatch
+  # In bash 3.2, ${var#~} does not strip a leading tilde because ~ is
+  # treated as a tilde-expansion pattern glob. Store the operator chars in
+  # local variables so ${constraint#$_op_char} works correctly.
+  local _oc_caret="^" _oc_tilde="~" _oc_eq="="
   case "$constraint" in
-    ^*) op="^"; base="${constraint#^}" ;;
-    ~*) op="~"; base="${constraint#~}" ;;
-    =*) op="="; base="${constraint#=}" ;;
+    ^*) op="^"; base="${constraint#$_oc_caret}" ;;
+    ~*) op="~"; base="${constraint#$_oc_tilde}" ;;
+    =*) op="="; base="${constraint#$_oc_eq}" ;;
     *)  op="="; base="$constraint" ;;
   esac
 
@@ -865,15 +909,17 @@ semver_satisfies() {
     return 1
   fi
 
+  # Note: bare ~) in a case pattern is subject to tilde expansion in bash 3.2
+  # (expands to $HOME), so "~") must be quoted explicitly.
   case "$op" in
-    =)
+    "=")
       [[ "$version" == "$base" ]] && return 0 || return 1
       ;;
-    ~)
+    "~")
       # >= base, < base.major.(base.minor + 1).0
       [[ "$vmajor" == "$cmajor" && "$vminor" == "$cminor" ]] && return 0 || return 1
       ;;
-    ^)
+    "^")
       if [[ "$cmajor" == "0" ]]; then
         # ^0.Y.Z → >= base, < 0.(Y+1).0  (npm semantics)
         [[ "$vmajor" == "0" && "$vminor" == "$cminor" ]] && return 0 || return 1
@@ -884,6 +930,90 @@ semver_satisfies() {
       ;;
   esac
   return 1
+}
+
+# resolve_version_constraint NAME CONSTRAINT → echoes the best concrete version
+# that satisfies CONSTRAINT from the roster's known version set for NAME.
+#
+# Resolution order:
+#   1. Collect candidate versions from roster: .versions.latest +
+#      .versions.pins.stable + keys of .versions.releases (if present).
+#   2. Filter candidates through semver_satisfies CONSTRAINT.
+#   3. Return the highest (sort -V tail -1) passing candidate.
+#   4. If none pass: die with a helpful message listing available versions.
+#
+# For bare X.Y.Z or =X.Y.Z constraints the roster need not even contain the
+# version; the constraint itself is returned unchanged (exact-pin workflow —
+# fetch_eidolon will fail later if the tag doesn't exist).
+#
+# Bash 3.2 compatible: no associative arrays, no mapfile.
+resolve_version_constraint() {
+  local name="$1" constraint="$2"
+  # bash 3.2: store operator chars in variables so ${var#$op} strips correctly.
+  local _rc_caret="^" _rc_tilde="~" _rc_eq="="
+
+  # For exact pins (bare X.Y.Z, =X.Y.Z) skip roster scan — return literal base.
+  local _op_probe
+  case "$constraint" in
+    ^*|~*) _op_probe="range" ;;
+    =*)    _op_probe="exact"; constraint="${constraint#$_rc_eq}" ;;
+    *)     _op_probe="exact" ;;
+  esac
+  if [[ "$_op_probe" == "exact" ]]; then
+    echo "$constraint"
+    return 0
+  fi
+
+  # Collect known versions from the roster entry.
+  # Query the roster directly via jq (bypassing roster_get which calls die) so
+  # a missing entry returns empty rather than aborting via exit 1. This is
+  # Bash 3.2 + set -e safe: no subshell exit propagation from die().
+  local entry candidates best _v
+  entry="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null \
+    | jq --arg n "$name" '.eidolons[] | select(.name == $n or ((.aliases // []) | index($n) != null))' \
+    2>/dev/null || true)"
+  if [[ -z "$entry" || "$entry" == "null" ]]; then
+    # No roster entry — fall back to stripping the operator prefix.
+    local base="${constraint#$_rc_caret}"; base="${base#$_rc_tilde}"
+    echo "$base"
+    return 0
+  fi
+
+  # Build a newline-separated list of candidate versions (deduplicated via sort).
+  candidates="$(printf '%s\n' "$entry" \
+    | jq -r '
+        [
+          (.versions.latest // empty),
+          (.versions.pins.stable // empty),
+          (.versions.releases // {} | keys[])
+        ] | .[] | select(. != null and . != "")
+      ' 2>/dev/null \
+    | sort -Vu)"
+
+  # Filter through semver_satisfies and pick the highest.
+  best=""
+  while IFS= read -r _v; do
+    [[ -z "$_v" ]] && continue
+    if semver_satisfies "$constraint" "$_v"; then
+      if [[ -z "$best" ]]; then
+        best="$_v"
+      else
+        best="$(printf '%s\n%s\n' "$best" "$_v" | sort -V | tail -1)"
+      fi
+    fi
+  done <<EOF
+$candidates
+EOF
+
+  if [[ -n "$best" ]]; then
+    echo "$best"
+    return 0
+  fi
+
+  # No candidate satisfied the constraint — die with a helpful message.
+  local avail
+  avail="$(printf '%s\n' "$candidates" | tr '\n' ' ' | sed 's/ *$//')"
+  die "No version satisfies $constraint for $name; available: ${avail:-none}"
 }
 
 # ─── Marker-bounded block upsert ─────────────────────────────────────────
