@@ -44,8 +44,8 @@ Catches:
 
 Remediation:
   Drift is diagnostic only. To restore, run:
-    eidolons sync --force                       # all members
-    eidolons add <name> --force                 # one member
+    eidolons sync                               # all members
+    eidolons remove <name> && eidolons add <name>   # one member
 EOF
 }
 
@@ -299,7 +299,7 @@ while IFS= read -r name; do
       ok "$name@$version  ($file_count files, 0 drift)"
     else
       if [[ "$consumer_absent" == "true" ]]; then
-        warn "$name@$version (.eidolons/$name/ absent — run 'eidolons sync --force')"
+        warn "$name@$version (.eidolons/$name/ absent — run 'eidolons sync')"
       else
         warn "$name@$version  ($file_count files, $drift_count drift)"
       fi
@@ -351,7 +351,7 @@ if [[ "$JSON" != "true" ]]; then
     "$_total_verified" "$_total_drifted" "$_total_errors" >&2
 
   if [[ "$_any_drift" == "true" ]] || [[ "$_total_errors" -gt 0 ]]; then
-    printf 'Remediation: run '\''eidolons sync --force'\'' to restore.\n' >&2
+    printf 'Remediation: run '\''eidolons sync'\'' to restore.\n' >&2
   fi
 fi
 

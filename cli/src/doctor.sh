@@ -168,11 +168,11 @@ FRESHNESS_FILES=("AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" ".cur
 for f in "${FRESHNESS_FILES[@]}"; do
   [[ -e "$f" ]] || continue
   if [[ -L "$f" ]]; then
-    err "$f is a symlink — shared dispatch files must be real composable files. Re-run 'eidolons sync --force'."
+    err "$f is a symlink — shared dispatch files must be real composable files. Re-run 'eidolons sync'."
     continue
   fi
   if grep -Eq '@?\.?/?agents/(atlas|apivr|spectra|idg|scribe|forge)/' "$f" 2>/dev/null; then
-    err "$f contains legacy agents/<name>/ pointers (pre-v1.1 paths). Delete the Eidolon block(s) and re-run 'eidolons sync --force'."
+    err "$f contains legacy agents/<name>/ pointers (pre-v1.1 paths). Delete the Eidolon block(s) and re-run 'eidolons sync'."
     continue
   fi
   if grep -q '@?\.?/?agents/scribe\|scribe/agent\.md' "$f" 2>/dev/null; then
@@ -643,7 +643,7 @@ unset _r5_hosts_csv _r5_pt_csv _r5_strict _r5_drift_count _r5_vfile _r5_vhost _R
 # Eidolon does not mask drift in another.
 #
 # --fix is read-only here: methodology drift requires re-install via
-# 'eidolons sync --force' or 'eidolons add <member> --force'.
+# 'eidolons sync' (re-installs each member) or 'eidolons remove <member> && eidolons add <member>'.
 if [[ "$DEEP" == "true" ]]; then
   if ! manifest_exists; then
     printf "  %s·%s 0 Eidolons to check (run eidolons init first)\n" \
@@ -723,8 +723,8 @@ if [[ "$DEEP" == "true" ]]; then
     # Remedy hint when methodology errors were found.
     if (( ERRORS > 0 )); then
       echo ""
-      echo "  Methodology issues found. Remedy: 'eidolons sync --force' or"
-      echo "  'eidolons add <member> --force' to re-install affected members."
+      echo "  Methodology issues found. Remedy: 'eidolons sync' (re-installs each"
+      echo "  member) or remove + re-add: 'eidolons remove <name> && eidolons add <name>'."
     fi
   fi
 fi
