@@ -8,7 +8,7 @@
 
 registry_version: "1.0"
 updated_at: "2026-05-26T17:21Z"
-eiis_required: "1.1"
+eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
 # ─── Roster ────────────────────────────────────────────────────────────────────
