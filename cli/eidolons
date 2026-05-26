@@ -87,6 +87,8 @@ Commands:
                  Subcommands: install, up, verify, uninstall.
                  Run 'eidolons harness --help' for options.
   verify         Verify installed Eidolon release integrity
+  verify-release Layer 2 integrity: compare installed Eidolons against
+                 fresh re-derivation from upstream-pinned release
   upgrade        Upgrade pinned Eidolon versions (or 'upgrade self' to upgrade the CLI)
   release        One-touch Eidolon release + Roster Intake (maintainer-only)
   <eidolon> <sub>  Run a per-Eidolon subcommand (e.g. 'eidolons spectra fit').
@@ -174,7 +176,8 @@ case "$cmd" in
         ;;
     esac
     ;;
-  verify)      exec bash "$CLI_SRC/verify.sh"  "$@" ;;
+  verify)         exec bash "$CLI_SRC/verify.sh"         "$@" ;;
+  verify-release) exec bash "$CLI_SRC/verify_release.sh" "$@" ;;
   release)     exec bash "$CLI_SRC/release.sh"   "$@" ;;
   upgrade)
     # Peek at the first remaining arg to decide which subcommand to dispatch.

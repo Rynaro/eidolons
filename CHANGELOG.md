@@ -11,6 +11,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 - vigil v1.3.1 published in the roster with release integrity metadata.
+
+## [1.12.0] - 2026-05-26
+
+### Added
+
+- **(feat) `eidolons verify-release` — Layer 2 methodology integrity (functional re-derivation).** New subcommand that catches drift between a consumer's installed `.eidolons/<name>/` tree and what a fresh install of the pinned upstream version would produce today. For each Eidolon in `eidolons.lock`, runs its `install.sh` into a temp directory and SHA-256 diffs the trees. Reports OK / DIFFER / MISSING / EXTRA per file (`install.manifest.json` excluded — timestamp drift expected). Catches: local tampering after install, mid-install corruption that fooled `doctor --deep` D4, accidentally deleted files, and files added under `.eidolons/<name>/` that aren't part of the install. Layer 2 of the three-layer integrity guarantee (Layer 1 = `doctor --deep` D4 shipped v1.11.0; Layer 3 = `eidolons canary` scheduled v1.13.0).
+- **(feat) `--eidolon NAME` (repeatable), `--strict`, `--no-fetch`, `--json` flags.** Default invocation verifies all members in lock and exits 0 even on drift (WARN-only). `--strict` exits 1 on any drift (CI gate). `--no-fetch` uses cache only (offline). `--json` emits machine-readable report.
+- **(test) `cli/tests/verify_release.bats` — 12 tests (VR-1..VR-12)** covering OK, drift, missing, extra, single-eidolon scoping, `--strict` exit, `--no-fetch` cache miss, and `--json` schema shape.
+
+### Changed
+
+- **`cli/eidolons` dispatcher** — adds `verify-release` case alongside the existing `verify` case. The legacy `verify` subcommand (lock-vs-roster check) is unchanged.
+- **`docs/cli-reference.md`** — new section documenting `verify-release`.
+
+### Notes
+
+- No EIIS change. No per-Eidolon repo change. No release-time artifact added. Layer 2 is implemented entirely in nexus by re-running existing per-Eidolon installers.
 - spectra v4.5.1 published in the roster with release integrity metadata.
 - idg v1.4.1 published in the roster with release integrity metadata.
 - forge v1.5.1 published in the roster with release integrity metadata.

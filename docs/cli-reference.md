@@ -200,6 +200,93 @@ release metadata warn in compatibility mode.
 
 ---
 
+## `eidolons verify-release`
+
+Layer 2 methodology integrity: compare installed Eidolons against a fresh
+re-derivation from their upstream-pinned releases.
+
+```
+eidolons verify-release
+eidolons verify-release --eidolon atlas --eidolon spectra
+eidolons verify-release --strict
+eidolons verify-release --no-fetch
+eidolons verify-release --json
+```
+
+| Flag | Purpose |
+|------|---------|
+| `--eidolon NAME` | Verify only this Eidolon. Repeatable. Unknown name → error. |
+| `--strict` | Exit non-zero on any drift. Default: WARN-only (exit 0 even with drift). |
+| `--no-fetch` | Use per-version cache only; do not fetch upstream. Cache miss → error. Useful for offline CI. |
+| `--json` | Emit a machine-readable JSON report on stdout (see schema below). |
+
+**What it does.** For each Eidolon in `eidolons.lock`, `verify-release`:
+
+1. Fetches (or reuses the cache for) the pinned upstream version.
+2. Runs the per-Eidolon `install.sh` into a temp directory, honoring the same `--hosts` and `--shared-dispatch` flags as `eidolons sync`.
+3. SHA-256 diffs every file in the temp install against the consumer's on-disk `.eidolons/<name>/` tree.
+4. Reports per-file status: **OK** (matching), **DIFFER** (different SHA), **MISSING** (in upstream, not on consumer), **EXTRA** (on consumer, not in upstream).
+5. Excludes `install.manifest.json` from the diff — timestamp drift is expected.
+
+**Catches:**
+
+- Local file tampering after install.
+- Mid-install corruption that fooled `doctor --deep` D4 (lock + files matched each other but both differ from upstream).
+- Accidentally deleted files under `.eidolons/<name>/`.
+- Files added under `.eidolons/<name>/` that aren't part of the install.
+
+**Exit codes:**
+
+| Code | Condition |
+|------|-----------|
+| 0 | All checks ran; no drift — or drift detected and `--strict` not passed. |
+| 1 | `--strict` passed and at least one drift detected. |
+| 1 | Hard error (no `eidolons.lock`, unknown `--eidolon`, cache miss with `--no-fetch`, installer failure). |
+| 2 | Unknown flag. |
+
+**`--json` schema:**
+
+```json
+{
+  "cli_version": "1.12.0",
+  "checked_at": "2026-05-26T14:32:17Z",
+  "strict": false,
+  "summary": { "verified": 5, "drifted": 1, "errors": 0 },
+  "members": [
+    {
+      "name": "atlas",
+      "version": "1.7.1",
+      "status": "ok",
+      "file_count": 124,
+      "diff": []
+    },
+    {
+      "name": "spectra",
+      "version": "4.5.1",
+      "status": "drift",
+      "file_count": 98,
+      "diff": [
+        { "status": "DIFFER", "path": "skills/planning/SKILL.md",
+          "tmp_sha": "a3f5...", "consumer_sha": "9e21..." },
+        { "status": "EXTRA", "path": "skills/custom-user-skill.md",
+          "tmp_sha": null, "consumer_sha": "c0ff..." }
+      ]
+    }
+  ]
+}
+```
+
+`status` per member: `ok | drift | error`. `diff[]` entries: `status` in `DIFFER | MISSING | EXTRA`.
+
+**Remediation:** drift is diagnostic only. `verify-release` is read-only and never repairs. To restore:
+
+```
+eidolons sync --force                   # all members
+eidolons add <name> --force             # one member
+```
+
+---
+
 ## `eidolons upgrade`
 
 Surface and apply upgrades for installed members.
