@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- forge v1.4.0 published in the roster with release integrity metadata.
 - atlas v1.6.0 published in the roster with release integrity metadata.
 - apivr v3.2.0 published in the roster with release integrity metadata.
 
