@@ -34,6 +34,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - atlas v1.6.0 published in the roster with release integrity metadata.
 - apivr v3.2.0 published in the roster with release integrity metadata.
 
+## [1.11.0] - 2026-05-26
+
+### Added
+
+- **(feat) `eidolons doctor --deep` — Layer 1 methodology integrity gates (D1..D6).** The `--deep` flag appends a new "Methodology integrity" section after the existing 14 fast checks. Six gates run per installed member: D1 — agent.md token budget (≤ 1000 tokens, wc-w × 4/3 heuristic); D2 — agent.md outbound link resolution; D3 — SPEC.md outbound link resolution (the gate that would have caught the v1.4 SPEC.md broken refs); D4 — manifest_sha256 content drift vs `eidolons.lock` (WARN-skip for legacy pre-1.4 entries); D5 — host-vendor agent body contract (must reference agent.md + SPEC.md, zero legacy `<UPPER>.md` refs); D6 — `.claude/skills/<n>-<basename>/SKILL.md` dual-write SHA parity. Checks are read-only and do not mutate `.eidolons/`; methodology fixes require `eidolons sync --force`. Bash 3.2 compatible.
+- **(feat) `.roster_ref` sidecar — separate CLI self-pin from roster-refresh target (B1).** `cli/install.sh` now writes `.roster_ref` ← `${EIDOLONS_ROSTER_REF:-main}` alongside the existing `.install_ref`. `nexus_refresh()` reads `.roster_ref` via the new `nexus_roster_ref()` helper (fallback chain: `.roster_ref` → `.install_ref` → skip). This fix ensures `eidolons upgrade self` can rewrite `.install_ref` to a new version tag without corrupting the roster-refresh target.
+- **(feat) `EIDOLONS_ROSTER_REF` env var.** Optional override on bootstrap that controls which branch/tag `nexus_refresh` tracks. Common values: `main` (default), a specific branch, or a long-lived tag for offline-pinned shops. Once written to `.roster_ref`, the file is the source of truth; re-running `install.sh` with a different value overwrites.
+- **(feat) `nexus_roster_ref()` lib helper (B1 fallback).** New function in `cli/src/lib.sh` with resolution order: `$NEXUS/.roster_ref` → `$NEXUS/.install_ref` → empty string. The fallback preserves v1.10.0 behaviour for consumers who haven't re-bootstrapped through v1.11.0's `install.sh`.
+- **(feat) `eidolons upgrade` calls `nexus_refresh` before member resolution (B2).** Inserted at the top of `cli/src/upgrade.sh` (after argument parsing, before helpers). Both mutating upgrade and `--check` now report freshly visible member versions instead of stale cached roster data. Skip-gating is internal to `nexus_refresh` (`EIDOLONS_NEXUS` / `EIDOLONS_SKIP_REFRESH`), so test fixtures and offline CI remain unaffected.
+- **(test) `cli/tests/doctor_deep.bats` — 18 tests (DD-1..DD-18)** covering D1-D6 OK+FAIL paths, `--deep` flag parsing, ordering invariant (fast checks before methodology), and read-only gate (doctor does not mutate .eidolons/).
+- **(test) `cli/tests/roster_ref.bats` — 9 tests (RR-1..RR-9)** covering install `.roster_ref` write (default + override), `nexus_roster_ref` fallback chain, `upgrade_self` invariant, `nexus_refresh` reads `.roster_ref`, and B2 upgrade/--check refresh.
+- **(test) Extensions to `install.bats` (2), `upgrade_self.bats` (1), `cache_freshness.bats` (2)** for full B1 coverage.
+- **(lib) Six `deep_check_*` helpers in `cli/src/lib.sh`** (`deep_check_agent_token_budget`, `deep_check_agent_links`, `deep_check_spec_links`, `deep_check_manifest_integrity`, `deep_check_host_agent_body`, `deep_check_skills_dual_write`) plus shared `_deep_check_outbound_links`. All bash 3.2 compatible.
+
+### Changed
+
+- **`nexus_refresh()` reads `.roster_ref` via `nexus_roster_ref()` (B1).** Previously read `.install_ref` directly via `nexus_install_ref()`. Fallback chain preserves exact v1.10.0 behaviour for consumers without `.roster_ref`.
+- **`eidolons upgrade` auto-refreshes nexus cache before member resolution (B2).** Previously only `sync` and `init` called `nexus_refresh`; upgrade could report stale versions.
+- **`upgrade_self.sh` `.gitignore` sidecar list extended to include `.roster_ref`.** The `.roster_ref` file is excluded from the nexus working tree so `git status` stays clean after install/upgrade.
+
+### Fixed
+
+- **B1: `.install_ref` conflation bug.** After `eidolons upgrade self` rewrote `.install_ref` to a new CLI tag (e.g. `v1.11.0`), subsequent `nexus_refresh` calls fetched that tag instead of `main`, causing consumers to never pick up new roster intakes until another `upgrade self`. Fixed by separating `.roster_ref` from `.install_ref`.
+- **B2: `eidolons upgrade` stale-cache bug.** `eidolons upgrade --check` reported "all up-to-date" when the local cached roster was stale, even after a new Eidolon version was published. Fixed by calling `nexus_refresh` at the start of `upgrade.sh`.
+
 ## [1.10.0] - 2026-05-26
 
 ### Added
