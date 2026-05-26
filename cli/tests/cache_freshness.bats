@@ -396,3 +396,39 @@ ROSTER
   # Result must be a valid semver starting with 1.
   [[ "$output" =~ ^1\.[0-9]+\.[0-9]+$ ]]
 }
+
+# ─── nexus_roster_ref fallback chain (B1) ────────────────────────────────
+
+# RF-8: nexus_roster_ref returns .roster_ref when both files present.
+@test "nexus_roster_ref: returns .roster_ref when both .roster_ref and .install_ref exist (RF-8)" {
+  local fake_nexus="$BATS_TEST_TMPDIR/fake-nexus-rf8"
+  mkdir -p "$fake_nexus"
+  printf 'main\n' > "$fake_nexus/.roster_ref"
+  printf 'v1.10.0\n' > "$fake_nexus/.install_ref"
+
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$fake_nexus'
+    nexus_roster_ref
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "main" ]
+}
+
+# RF-9: nexus_roster_ref falls back to .install_ref when .roster_ref is absent.
+@test "nexus_roster_ref: falls back to .install_ref when .roster_ref absent (RF-9)" {
+  local fake_nexus="$BATS_TEST_TMPDIR/fake-nexus-rf9"
+  mkdir -p "$fake_nexus"
+  # No .roster_ref — only .install_ref
+  printf 'v1.10.0\n' > "$fake_nexus/.install_ref"
+
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$fake_nexus'
+    nexus_roster_ref
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "v1.10.0" ]
+}

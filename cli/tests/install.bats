@@ -82,3 +82,17 @@ EOF
   [ "$status" -eq 0 ]
   [ -L "$EIDOLONS_BIN_DIR/eidolons" ]
 }
+
+@test "install.sh: writes .roster_ref ← main by default (B1)" {
+  bash "$EIDOLONS_ROOT/cli/install.sh" >/dev/null
+  local roster_ref
+  roster_ref="$(tr -d '[:space:]' < "$EIDOLONS_HOME/nexus/.roster_ref" 2>/dev/null || echo missing)"
+  [ "$roster_ref" = "main" ]
+}
+
+@test "install.sh: writes .roster_ref ← EIDOLONS_ROSTER_REF when set (B1)" {
+  EIDOLONS_ROSTER_REF="release/2026Q3" bash "$EIDOLONS_ROOT/cli/install.sh" >/dev/null
+  local roster_ref
+  roster_ref="$(tr -d '[:space:]' < "$EIDOLONS_HOME/nexus/.roster_ref" 2>/dev/null || echo missing)"
+  [ "$roster_ref" = "release/2026Q3" ]
+}

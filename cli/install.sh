@@ -26,6 +26,11 @@ EIDOLONS_REF="${EIDOLONS_REF:-main}"
 EIDOLONS_HOME="${EIDOLONS_HOME:-$HOME/.eidolons}"
 EIDOLONS_BIN_DIR="${EIDOLONS_BIN_DIR:-$HOME/.local/bin}"
 EIDOLONS_YQ_VERSION="${EIDOLONS_YQ_VERSION:-v4.44.3}"
+# B1: optional override for the roster-refresh target (default: main).
+# Unlike EIDOLONS_REF (CLI self-pin), this governs which branch nexus_refresh
+# tracks for roster updates. Once written to .roster_ref it is the source of
+# truth; re-bootstrapping with a different value overwrites it.
+EIDOLONS_ROSTER_REF="${EIDOLONS_ROSTER_REF:-main}"
 
 # ─── Pretty output ─────────────────────────────────────────────────────────
 # install.sh runs *before* the nexus exists on disk, so it can't source the
@@ -156,10 +161,11 @@ fi
 say "Writing install metadata"
 
 # Ensure .gitignore excludes sidecar files so `git status` stays clean.
+# B1: .roster_ref is added alongside the existing sidecars.
 if [[ ! -f "$NEXUS_DIR/.gitignore" ]]; then
-  printf '.install_date\n.install_ref\n.install_commit\n' > "$NEXUS_DIR/.gitignore"
+  printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$NEXUS_DIR/.gitignore"
 else
-  for _sc in .install_date .install_ref .install_commit; do
+  for _sc in .install_date .install_ref .install_commit .roster_ref; do
     grep -qxF "$_sc" "$NEXUS_DIR/.gitignore" 2>/dev/null \
       || printf '%s\n' "$_sc" >> "$NEXUS_DIR/.gitignore"
   done
@@ -172,9 +178,16 @@ if [[ ! -f "$NEXUS_DIR/VERSION" ]]; then
   printf '%s\n' "${_ver:-0.0.0-dev}" > "$NEXUS_DIR/VERSION"
 fi
 
-# Always write the three install-time sidecars.
+# Always write the four install-time sidecars.
+# B1: .roster_ref is written separately from .install_ref:
+#   .install_ref  ← CLI self-pin (consumed by upgrade_self.sh)
+#   .roster_ref   ← roster-refresh target (consumed by nexus_refresh via nexus_roster_ref)
+# This split ensures `eidolons upgrade self` rewrites .install_ref without
+# disturbing .roster_ref, so nexus_refresh always tracks the configured
+# roster branch regardless of the installed CLI version tag.
 printf '%s\n' "$(date -u +%Y-%m-%d)" > "$NEXUS_DIR/.install_date"
 printf '%s\n' "$EIDOLONS_REF" > "$NEXUS_DIR/.install_ref"
+printf '%s\n' "$EIDOLONS_ROSTER_REF" > "$NEXUS_DIR/.roster_ref"
 printf '%s\n' "$(git -C "$NEXUS_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
   > "$NEXUS_DIR/.install_commit"
 

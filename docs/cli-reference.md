@@ -16,15 +16,19 @@ eidolons <command> [options]
 |----------|---------|---------|
 | `EIDOLONS_HOME` | `~/.eidolons` | Where nexus + cache live |
 | `EIDOLONS_REPO` | `https://github.com/Rynaro/eidolons` | Nexus repo (for bootstrap) |
-| `EIDOLONS_REF` | `main` | Nexus ref (for bootstrap) |
+| `EIDOLONS_REF` | `main` | Nexus ref for CLI self-pin (for bootstrap). Written to `.install_ref`; `eidolons upgrade self` updates this. |
+| `EIDOLONS_ROSTER_REF` | `main` | Nexus ref for roster-refresh target (for bootstrap). Written to `.roster_ref`; `nexus_refresh` reads this. Change to pin a project to a specific roster branch or tag. |
 | `EIDOLONS_BIN_DIR` | `~/.local/bin` | Where the CLI is symlinked |
 | `EIDOLONS_INTEGRITY_ENFORCEMENT` | roster setting | Override release integrity mode (`warn` or `strict`) |
+| `EIDOLONS_SKIP_REFRESH` | `0` | Set to `1` to disable auto-refresh of the nexus cache (offline-first / deterministic builds). |
 
 ### Files
 
 | Path | Scope | Purpose |
 |------|-------|---------|
 | `~/.eidolons/nexus/` | user | Cloned nexus |
+| `~/.eidolons/nexus/.install_ref` | user | CLI self-pin ref (written by `install.sh` and `upgrade self`). |
+| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. |
 | `~/.eidolons/cache/` | user | Cloned Eidolon repos (per name + version) |
 | `./eidolons.yaml` | project | Your team manifest |
 | `./eidolons.lock` | project | Resolved versions |
@@ -126,9 +130,29 @@ wiring, release-integrity status surfaced from `eidolons.lock`, and (when
 `.mcp.json` contains an `atlas-aci` entry) ghcr.io registry reachability.
 
 ```
-eidolons doctor            # report
-eidolons doctor --fix      # report + attempt auto-repair via sync
+eidolons doctor            # fast checks only (14 structural sections)
+eidolons doctor --fix      # fast checks + attempt auto-repair via sync
+eidolons doctor --deep     # fast checks + D1..D6 methodology integrity gates
+eidolons doctor --deep --fix   # same as --deep; --fix is read-only for D1..D6
 ```
+
+| Flag | Purpose |
+|------|---------|
+| `--fix` | Attempt to auto-repair simple structural issues (lockfile drift, missing host wiring). Read-only for methodology gates (D1..D6). |
+| `--deep` | Run methodology-integrity gates D1..D6 after the fast checks. Required to catch broken outbound links, token-budget overruns, and content drift vs the release manifest. |
+
+**Deep checks (--deep):**
+
+| ID | Name | Threshold |
+|----|------|-----------|
+| D1 | `agent.md` token budget | MUST ≤ 1000 tokens (`wc -w × 4/3`) |
+| D2 | `agent.md` outbound link resolution | All `(skills\|templates\|schemas)/*.{md,json,y[a]ml}` refs MUST resolve |
+| D3 | `SPEC.md` outbound link resolution | Same as D2 against `SPEC.md` (absent on legacy installs → warn) |
+| D4 | manifest_sha256 vs lock | MUST match; WARN-skip when lock has no sha (legacy / pre-1.4) |
+| D5 | Host-vendor agent body contract | MUST reference `agent.md` + `SPEC.md`; zero legacy `<UPPER>.md` refs |
+| D6 | Skills dual-write SHA parity | `.eidolons/<n>/skills/*.md` ↔ `.claude/skills/<n>-<basename>/SKILL.md` SHA MUST match |
+
+D1..D6 are read-only: they report drift but never mutate `.eidolons/`. To repair methodology issues, run `eidolons sync --force` or `eidolons add <member> --force`.
 
 The "Release integrity" section is read-only and derives entirely from the
 `verification` field of each `eidolons.lock` member. To re-check against the

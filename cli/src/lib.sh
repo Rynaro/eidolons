@@ -684,15 +684,35 @@ nexus_install_ref() {
   cat "$NEXUS/.install_ref" 2>/dev/null || echo "unknown"
 }
 
+# nexus_roster_ref → echoes the roster-refresh target, with fallback chain.
+# B1: separates the CLI self-pin (.install_ref) from the roster-refresh target (.roster_ref).
+# Resolution order:
+#   1. $NEXUS/.roster_ref            (v1.11.0+ canonical)
+#   2. $NEXUS/.install_ref           (back-compat for v1.10.0 installs)
+#   3. echo ""                       (caller skips refresh)
+# Bash 3.2 compatible.
+nexus_roster_ref() {
+  if [[ -f "$NEXUS/.roster_ref" ]]; then
+    tr -d '[:space:]' < "$NEXUS/.roster_ref"
+    return 0
+  fi
+  if [[ -f "$NEXUS/.install_ref" ]]; then
+    tr -d '[:space:]' < "$NEXUS/.install_ref"
+    return 0
+  fi
+  echo ""
+}
+
 # nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
-# $NEXUS/.install_ref. Intended to be called once near the start of sync/init
-# so the roster is always fresh without requiring a full `eidolons upgrade`.
+# $NEXUS/.roster_ref (v1.11.0+) or $NEXUS/.install_ref (back-compat fallback).
+# Intended to be called once near the start of sync/init/upgrade so the roster
+# is always fresh without requiring a full `eidolons upgrade`.
 #
 # Skips silently when:
 #   - EIDOLONS_NEXUS is set (local-checkout / test mode — never auto-fetch)
 #   - EIDOLONS_SKIP_REFRESH=1 (user opt-out for offline-first workflows)
 #   - $NEXUS has no .git directory (bare checkout; upgrade path handles it)
-#   - .install_ref sidecar is absent or contains "unknown"
+#   - .roster_ref and .install_ref both absent or contain "unknown"
 #
 # On network failure: emits a warn and returns 0 (non-fatal; stale cache used).
 # Bash 3.2 compatible.
@@ -709,8 +729,9 @@ nexus_refresh() {
   if [[ ! -d "$NEXUS/.git" ]]; then
     return 0
   fi
+  # B1: use nexus_roster_ref (prefers .roster_ref, falls back to .install_ref).
   local ref
-  ref="$(nexus_install_ref)"
+  ref="$(nexus_roster_ref)"
   if [[ -z "$ref" || "$ref" == "unknown" ]]; then
     return 0
   fi
@@ -1657,4 +1678,200 @@ lock_member_resolved() {
   yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
     | jq -r --arg n "$name" '(.members // [])[] | select(.name == $n) | .resolved // ""' \
     | head -1
+}
+
+# ─── doctor --deep helpers (D1..D6, Layer 1 methodology integrity) ─────────
+# All helpers are bash 3.2 compatible: no associative arrays, no mapfile,
+# no ${var,,}. All err/pass/warn calls write to stdout (doctor.sh convention).
+# Each helper returns the count of failures (0 = pass, >0 = fail).
+#
+# NOTE: err/pass/warn are defined in doctor.sh, not in lib.sh. These helpers
+# are designed to be called from doctor.sh after sourcing lib.sh. They use
+# the same err/pass/warn signature: simple printf wrappers writing to stdout.
+
+# _deep_check_outbound_links FILE NAME LABEL
+#
+# Shared helper for D2 (agent.md) and D3 (SPEC.md) outbound link checks.
+# Greps FILE for paths matching the pattern:
+#   (\.eidolons/[name]/)?(skills|templates|schemas)/[...].{md,json,yaml,yml}
+# For each match, normalises to .eidolons/<name>/<rest> when no prefix,
+# then verifies the file exists on disk. Returns count of broken refs.
+# Bash 3.2 compatible: uses while-read loop over grep output.
+_deep_check_outbound_links() {
+  local file="$1" name="$2" label="$3"
+  if [[ ! -f "$file" ]]; then
+    if [[ "$label" == "SPEC.md" ]]; then
+      # SPEC.md absent on legacy members (pre-v1.3) → warn, not err.
+      warn "$name: $file missing (pre-v1.3 install — run 'eidolons sync --force' to update)"
+    else
+      err "$name: $file missing (cannot check outbound links)"
+      return 1
+    fi
+    return 0
+  fi
+  local broken=0 ref normalised
+  while IFS= read -r ref; do
+    [[ -z "$ref" ]] && continue
+    case "$ref" in
+      .eidolons/*) normalised="$ref" ;;
+      *)           normalised=".eidolons/$name/$ref" ;;
+    esac
+    if [[ ! -f "$normalised" ]]; then
+      err "$name: $label → $ref (resolves to $normalised, not found)"
+      broken=$((broken + 1))
+    fi
+  done < <(grep -Eo '(\.eidolons/[a-z][a-z0-9-]*/)?(skills|templates|schemas)/[a-zA-Z0-9._/-]+\.(md|json|yaml|yml)' "$file" 2>/dev/null || true)
+  if (( broken == 0 )); then
+    pass "$name: $label outbound links resolve"
+  fi
+  return "$broken"
+}
+
+# deep_check_agent_token_budget NAME
+#
+# D1: count words in .eidolons/<n>/agent.md, multiply by 4/3, compare to 1000.
+# MUST-fail when tokens > 1000. Returns 0 on pass, 1 on fail.
+# Bash 3.2 compatible (arithmetic with $(( )) and wc -w).
+deep_check_agent_token_budget() {
+  local name="$1"
+  local path=".eidolons/$name/agent.md"
+  if [[ ! -f "$path" ]]; then
+    err "$name: $path missing (cannot check token budget)"
+    return 1
+  fi
+  local words tokens
+  words="$(wc -w < "$path" | tr -d ' ')"
+  tokens="$(( words * 4 / 3 ))"
+  if (( tokens > 1000 )); then
+    err "$name: agent.md is ~${tokens} tokens (budget: 1000) — re-install or trim"
+    return 1
+  fi
+  pass "$name: agent.md within token budget (${tokens}/1000)"
+  return 0
+}
+
+# deep_check_agent_links NAME
+#
+# D2: check outbound links in .eidolons/<n>/agent.md.
+# Delegates to _deep_check_outbound_links. Returns broken-ref count.
+deep_check_agent_links() {
+  local name="$1"
+  local path=".eidolons/$name/agent.md"
+  # If agent.md is missing, D1 already errored; skip silently here.
+  [[ -f "$path" ]] || return 0
+  local rc=0
+  _deep_check_outbound_links "$path" "$name" "agent.md" || rc=$?
+  return "$rc"
+}
+
+# deep_check_spec_links NAME
+#
+# D3: check outbound links in .eidolons/<n>/SPEC.md.
+# Delegates to _deep_check_outbound_links. SPEC.md absent → warn (not err).
+deep_check_spec_links() {
+  local name="$1"
+  local rc=0
+  _deep_check_outbound_links ".eidolons/$name/SPEC.md" "$name" "SPEC.md" || rc=$?
+  return "$rc"
+}
+
+# deep_check_manifest_integrity NAME VERSION
+#
+# D4: compare installed manifest_sha256 against eidolons.lock entry.
+# WARN-skip when lock has no manifest_sha256 (legacy/pre-1.4 installs).
+# Returns 0 on pass or WARN-skip, 1 on mismatch/error.
+deep_check_manifest_integrity() {
+  local name="$1" version="$2"
+  local lock_sha
+  lock_sha="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+    | jq -r --arg n "$name" \
+      '(.members // [])[] | select(.name == $n) | .manifest_sha256 // empty' 2>/dev/null || true)"
+  if [[ -z "$lock_sha" ]]; then
+    warn "$name@$version: no manifest_sha256 in lock (legacy / pre-1.4 release) — skip"
+    return 0
+  fi
+  local installed_sha
+  installed_sha="$(lock_manifest_sha256 ".eidolons/$name/install.manifest.json" 2>/dev/null || true)"
+  if [[ -z "$installed_sha" ]]; then
+    err "$name@$version: cannot compute installed manifest_sha256"
+    return 1
+  fi
+  if [[ "$installed_sha" != "$lock_sha" ]]; then
+    err "$name@$version: manifest drift — installed=$installed_sha lock=$lock_sha"
+    return 1
+  fi
+  pass "$name@$version: manifest integrity verified"
+  return 0
+}
+
+# deep_check_host_agent_body NAME
+#
+# D5: for each host vendor dir present (.claude/agents, .codex/agents,
+# .opencode/agents), verify the per-member agent file:
+#   - References .eidolons/<n>/agent.md  (MUST)
+#   - References .eidolons/<n>/SPEC.md   (MUST)
+#   - Does NOT reference <UPPER>.md patterns (MUST NOT — legacy)
+# Returns count of failures (0 = pass).
+# Bash 3.2 compatible: tr for upper-case, no ${var^^}.
+deep_check_host_agent_body() {
+  local name="$1"
+  local upper
+  upper="$(echo "$name" | tr 'a-z-' 'A-Z_' | tr '_' '-')"
+  local host_dir host_file rc=0
+  for host_dir in .claude/agents .codex/agents .opencode/agents; do
+    host_file="$host_dir/$name.md"
+    [[ -f "$host_file" ]] || continue
+    if ! grep -qF ".eidolons/$name/agent.md" "$host_file" 2>/dev/null; then
+      err "$name: $host_file does not reference .eidolons/$name/agent.md"
+      rc=$((rc + 1))
+    fi
+    if ! grep -qF ".eidolons/$name/SPEC.md" "$host_file" 2>/dev/null; then
+      err "$name: $host_file does not reference .eidolons/$name/SPEC.md"
+      rc=$((rc + 1))
+    fi
+    if grep -Eq "(^|[^A-Z])${upper}\.md([^A-Z]|$)" "$host_file" 2>/dev/null; then
+      err "$name: $host_file contains legacy ${upper}.md reference"
+      rc=$((rc + 1))
+    fi
+  done
+  if (( rc == 0 )); then
+    pass "$name: host-vendor agent bodies clean"
+  fi
+  return "$rc"
+}
+
+# deep_check_skills_dual_write NAME
+#
+# D6: for every .eidolons/<n>/skills/*.md, verify the dual-write copy
+# at .claude/skills/<n>-<basename>/SKILL.md exists and SHA matches.
+# Returns count of failures (0 = pass).
+# Bash 3.2 compatible: no mapfile, glob expansion in for loop.
+deep_check_skills_dual_write() {
+  local name="$1"
+  local skills_dir=".eidolons/$name/skills"
+  if [[ ! -d "$skills_dir" ]]; then
+    pass "$name: no skills/ directory (nothing to dual-write)"
+    return 0
+  fi
+  local src dst src_sha dst_sha rc=0 skill_basename
+  for src in "$skills_dir"/*.md; do
+    [[ -f "$src" ]] || continue
+    skill_basename="$(basename "$src" .md)"
+    dst=".claude/skills/${name}-${skill_basename}/SKILL.md"
+    if [[ ! -f "$dst" ]]; then
+      err "$name: skills dual-write missing — $dst"
+      rc=$((rc + 1))
+      continue
+    fi
+    src_sha="$(sha256_file "$src")"
+    dst_sha="$(sha256_file "$dst")"
+    if [[ "$src_sha" != "$dst_sha" ]]; then
+      err "$name: skills dual-write SHA drift — $src vs $dst"
+      rc=$((rc + 1))
+    fi
+  done
+  if (( rc == 0 )); then
+    pass "$name: skills dual-write parity verified"
+  fi
+  return "$rc"
 }

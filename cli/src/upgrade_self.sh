@@ -80,22 +80,31 @@ NEXUS_FAILED="$EIDOLONS_HOME/nexus.failed"
 # ─── Helpers ──────────────────────────────────────────────────────────────
 
 # Write install metadata sidecars into a nexus directory.
+# B1: do NOT touch .roster_ref here — it pins the roster-refresh target
+# separately from the CLI self-pin (.install_ref). The upgrade_self path
+# only updates the CLI version; the user's configured roster branch must
+# survive intact so nexus_refresh continues tracking the right branch.
+# .roster_ref is written exclusively by install.sh (bootstrap) and
+# nexus_roster_ref reads it via nexus_refresh in lib.sh.
 _write_install_sidecars() {
   local dir="$1" ref="$2"
   local commit
   commit="$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
   # Ensure .gitignore excludes sidecar files.
+  # B1: .roster_ref is also excluded here so it survives atomic swap + rollback.
   if [[ ! -f "$dir/.gitignore" ]]; then
-    printf '.install_date\n.install_ref\n.install_commit\n' > "$dir/.gitignore"
+    printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$dir/.gitignore"
   else
     local sc
-    for sc in .install_date .install_ref .install_commit; do
+    for sc in .install_date .install_ref .install_commit .roster_ref; do
       grep -qxF "$sc" "$dir/.gitignore" 2>/dev/null \
         || printf '%s\n' "$sc" >> "$dir/.gitignore"
     done
   fi
 
+  # Only .install_date, .install_ref, and .install_commit are written here.
+  # .roster_ref is intentionally left alone — see B1 note above.
   printf '%s\n' "$(date -u +%Y-%m-%d)" > "$dir/.install_date"
   printf '%s\n' "$ref"                 > "$dir/.install_ref"
   printf '%s\n' "$commit"             > "$dir/.install_commit"

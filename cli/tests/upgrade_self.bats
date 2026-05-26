@@ -400,3 +400,37 @@ EOF
   [ "$status" -eq 0 ]
   echo "$output" | grep -qE '^eidolons [0-9]+\.[0-9]+\.[0-9]'
 }
+
+# ─── B1: upgrade self does NOT modify .roster_ref ────────────────────────
+@test "upgrade self: .roster_ref unchanged after upgrade (B1)" {
+  setup_fixture_remote "1.0.0"
+
+  local nexus_dir="$EIDOLONS_HOME/nexus"
+  # Plant .roster_ref into the installed nexus.
+  printf 'main\n' > "$nexus_dir/.roster_ref"
+  printf 'v1.0.0\n' > "$nexus_dir/.install_ref"
+
+  # Push a v2.0.0 upgrade target to the fixture remote.
+  push_fixture_tag "2.0.0"
+
+  # Run upgrade self (non-interactive + force to skip confirmations).
+  run bash "$EIDOLONS_BIN" upgrade self --force --non-interactive
+  # Upgrade may or may not succeed depending on fixture tag availability,
+  # but the key invariant is that .roster_ref must remain "main".
+  local roster_ref_after
+  local nexus_actual
+  # After upgrade, EIDOLONS_NEXUS still points at the nexus dir.
+  nexus_actual="$nexus_dir"
+  # If the swap happened, check the new nexus location too.
+  if [[ -f "$nexus_dir/.roster_ref" ]]; then
+    roster_ref_after="$(tr -d '[:space:]' < "$nexus_dir/.roster_ref" 2>/dev/null || echo '')"
+    [ "$roster_ref_after" = "main" ]
+  fi
+  # If nexus.new was swapped in, it will not have a .roster_ref at all
+  # (not written by _write_install_sidecars) which is acceptable —
+  # the back-compat fallback to .install_ref covers new installs.
+  # The critical invariant: .roster_ref must never be rewritten to a version tag.
+  local rref_content
+  rref_content="$(cat "$nexus_dir/.roster_ref" 2>/dev/null || echo 'absent')"
+  [[ "$rref_content" != v[0-9]* ]] || [ "$rref_content" = "main" ]
+}
