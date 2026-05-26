@@ -118,6 +118,13 @@ if [[ "$CHECK" != true && "$NON_INTERACTIVE" == true && "$YES" != true ]]; then
   exit 2
 fi
 
+# B2: refresh the nexus cache up front so upgrade reads the latest roster.
+# Skip-gated internally by nexus_refresh's EIDOLONS_NEXUS / EIDOLONS_SKIP_REFRESH
+# guards, so test fixtures and offline CI are unaffected. This ensures that
+# `eidolons upgrade` (and `--check`) report freshly visible member versions
+# instead of stale data from a locally cached roster snapshot.
+nexus_refresh
+
 # ─── Helpers (file-local) ────────────────────────────────────────────────
 
 # json_string VALUE → echo the value as a JSON string literal (or "null").
