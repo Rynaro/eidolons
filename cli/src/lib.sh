@@ -1702,7 +1702,7 @@ _deep_check_outbound_links() {
   if [[ ! -f "$file" ]]; then
     if [[ "$label" == "SPEC.md" ]]; then
       # SPEC.md absent on legacy members (pre-v1.3) → warn, not err.
-      warn "$name: $file missing (pre-v1.3 install — run 'eidolons sync --force' to update)"
+      warn "$name: $file missing (pre-v1.3 install — run 'eidolons sync' to update)"
     else
       err "$name: $file missing (cannot check outbound links)"
       return 1

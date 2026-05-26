@@ -152,7 +152,7 @@ eidolons doctor --deep --fix   # same as --deep; --fix is read-only for D1..D6
 | D5 | Host-vendor agent body contract | MUST reference `agent.md` + `SPEC.md`; zero legacy `<UPPER>.md` refs |
 | D6 | Skills dual-write SHA parity | `.eidolons/<n>/skills/*.md` ↔ `.claude/skills/<n>-<basename>/SKILL.md` SHA MUST match |
 
-D1..D6 are read-only: they report drift but never mutate `.eidolons/`. To repair methodology issues, run `eidolons sync --force` or `eidolons add <member> --force`.
+D1..D6 are read-only: they report drift but never mutate `.eidolons/`. To repair methodology issues, run `eidolons sync` (re-installs each member) or `eidolons remove <member> && eidolons add <member>`.
 
 The "Release integrity" section is read-only and derives entirely from the
 `verification` field of each `eidolons.lock` member. To re-check against the
@@ -281,8 +281,8 @@ eidolons verify-release --json
 **Remediation:** drift is diagnostic only. `verify-release` is read-only and never repairs. To restore:
 
 ```
-eidolons sync --force                   # all members
-eidolons add <name> --force             # one member
+eidolons sync                                     # all members
+eidolons remove <name> && eidolons add <name>     # one member
 ```
 
 ---

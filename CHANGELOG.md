@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.13.1] - 2026-05-26
+
+### Fixed
+
+- `eidolons doctor --deep` methodology remedy message now points at real commands (was suggesting non-existent `--force` flag on `eidolons sync` and `eidolons add`). Corrected to `eidolons sync` (re-installs each member) and `eidolons remove <name> && eidolons add <name>`. Same invalid flag references scrubbed from dispatch-freshness error messages, `lib.sh` SPEC.md warning, `verify-release` help text and runtime footer, and `docs/cli-reference.md`.
+
 ## [1.13.0] - 2026-05-26
 
 ### Added
