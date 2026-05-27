@@ -599,19 +599,23 @@ with_timeout() {
   local timer=$!
   local rc=0
   wait "$pid" 2>/dev/null || rc=$?
-  # If the timer-killer is still alive, the command completed first; reap
-  # both the timer subshell and any inner `sleep` it forked. The bare
-  # `kill $timer` only SIGTERMs the subshell; the sleep child is reparented
-  # to init and would keep running until $secs elapses. pkill -P targets
-  # the timer's direct children (i.e. the sleep) so we don't leave a
-  # process lying around for the duration of $RELEASE_TIMEOUT.
-  if kill -0 "$timer" 2>/dev/null; then
-    pkill -P "$timer" 2>/dev/null || true
-    kill "$timer" 2>/dev/null || true
-    wait "$timer" 2>/dev/null || true
-  else
-    # Timer fired — command was killed.
-    wait "$timer" 2>/dev/null || true
+  # Always reap the timer subshell — whether it fired (then exits naturally)
+  # or didn't (we kill it). pkill -P targets the timer's direct children
+  # (i.e. the inner `sleep`) so a long $RELEASE_TIMEOUT doesn't leave an
+  # orphan sleep running. Both branches are idempotent.
+  pkill -P "$timer" 2>/dev/null || true
+  kill "$timer" 2>/dev/null || true
+  wait "$timer" 2>/dev/null || true
+  # Decide whether the timer fired by inspecting the polled function's exit
+  # code, not by polling the timer subshell's liveness. The previous
+  # `kill -0 "$timer"` check raced under heavy runner load: after the
+  # timer's `kill -9 "$pid"` returned, the timer subshell had not yet
+  # finished its post-kill cleanup, so `kill -0` saw it alive and we
+  # entered the "command completed first" branch even though `$pid` had
+  # been killed (rc=137, SIGKILL). Now: rc==137 ⇒ timer fired ⇒ map to 124.
+  # 143 (SIGTERM) is also mapped — the timer uses -9 today, but document
+  # both to stay correct if a future change relaxes it.
+  if [[ "$rc" -eq 137 || "$rc" -eq 143 ]]; then
     rc=124
   fi
   return "$rc"
