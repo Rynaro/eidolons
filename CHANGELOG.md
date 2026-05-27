@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.13.2] — 2026-05-27
+
+### Fixed
+
+- `eidolons canary --list` now distinguishes parseable missions (✓) from
+  legacy-format files (⚠) and no-file (·). Summary line counts all three states.
+
 ## [1.13.1] - 2026-05-26
 
 ### Fixed

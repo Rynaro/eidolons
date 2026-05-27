@@ -303,7 +303,7 @@ eidolons canary --list                       # list mode
 |------|-----------|--------------|
 | **prompt** | `eidolons canary <name>` | Print mission prompt + expected output shape + validation criteria |
 | **validate** | `eidolons canary <name> --validate <file>` | Check saved LLM output against mission criteria |
-| **list** | `eidolons canary --list` | Scan cache; report which Eidolons have canary missions |
+| **list** | `eidolons canary --list` | Scan cache; report mission status per Eidolon (three states) |
 
 ### Flags
 
@@ -411,6 +411,8 @@ eidolons canary atlas --validate /path/to/response.md
 
 - Missing `evals/canary-missions.md` → warn + exit 0 (soft; not every Eidolon has authored missions yet).
 - `canary --list` is a fast cache inspection; it does **not** fetch. Absent cache → `(cache not populated; run 'eidolons sync')`.
+- `canary --list` uses three display states: `✓` (file exists AND ≥1 `## Mission: <id>` heading parses), `⚠` (file exists but 0 DSL missions found — legacy format), `·` (no `evals/canary-missions.md` at all). Summary line reports all three counts: `N with parseable missions, N with file-only (legacy format), N with no file`.
+- `--json` list output uses `schema_version: "1.1"` and per-member `status` field (`"parsed"` / `"legacy"` / `"missing"`). Summary fields are `parsed`, `legacy`, `missing`.
 - Requires `eidolons.lock`. Run `eidolons add <name>` first if the member is not in the lock.
 
 ---
