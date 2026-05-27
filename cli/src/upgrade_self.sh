@@ -77,6 +77,14 @@ NEXUS_PREV="$EIDOLONS_HOME/nexus.prev"
 NEXUS_NEW="$EIDOLONS_HOME/nexus.new"
 NEXUS_FAILED="$EIDOLONS_HOME/nexus.failed"
 
+# Defense-in-depth: backfill .roster_ref for pre-v1.11.0 installs so that
+# nexus_refresh tracks main even when upgrade self runs before any sync/init
+# call that would otherwise trigger the backfill via nexus_refresh.
+# nexus_ensure_roster_ref is a no-op when .roster_ref already exists.
+if [[ -d "$NEXUS/.git" ]]; then
+  nexus_ensure_roster_ref
+fi
+
 # ─── Helpers ──────────────────────────────────────────────────────────────
 
 # Write install metadata sidecars into a nexus directory.

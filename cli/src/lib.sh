@@ -703,6 +703,28 @@ nexus_roster_ref() {
   echo ""
 }
 
+# nexus_ensure_roster_ref → auto-backfill $NEXUS/.roster_ref for installs that
+# pre-date v1.11.0 (when the .install_ref / .roster_ref split was introduced).
+#
+# If $NEXUS/.roster_ref does not exist, write the default value:
+#   $EIDOLONS_ROSTER_REF  if that env var is set and non-empty
+#   otherwise: "main"
+#
+# Emits one info line to stderr when backfilling so users can see what happened.
+# Idempotent: once the file exists this is a no-op.
+# Bash 3.2 compatible.
+nexus_ensure_roster_ref() {
+  [[ -f "$NEXUS/.roster_ref" ]] && return 0
+  local _default_ref
+  if [[ -n "${EIDOLONS_ROSTER_REF:-}" ]]; then
+    _default_ref="$EIDOLONS_ROSTER_REF"
+  else
+    _default_ref="main"
+  fi
+  printf '%s\n' "$_default_ref" > "$NEXUS/.roster_ref"
+  info "Backfilled $NEXUS/.roster_ref = $_default_ref (pre-v1.11.0 install — see CHANGELOG [1.13.3])"
+}
+
 # nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
 # $NEXUS/.roster_ref (v1.11.0+) or $NEXUS/.install_ref (back-compat fallback).
 # Intended to be called once near the start of sync/init/upgrade so the roster
@@ -729,6 +751,8 @@ nexus_refresh() {
   if [[ ! -d "$NEXUS/.git" ]]; then
     return 0
   fi
+  # Auto-backfill .roster_ref for pre-v1.11.0 installs (v1.13.3).
+  nexus_ensure_roster_ref
   # B1: use nexus_roster_ref (prefers .roster_ref, falls back to .install_ref).
   local ref
   ref="$(nexus_roster_ref)"
