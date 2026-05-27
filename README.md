@@ -10,7 +10,8 @@ Most AI coding tools ship a single generalist that tries to plan, scout, build, 
 <a href="https://github.com/Rynaro/eidolons/actions/workflows/roster-health.yml"><img src="https://github.com/Rynaro/eidolons/actions/workflows/roster-health.yml/badge.svg" alt="Roster Health"></a>
 <a href="https://github.com/Rynaro/eidolons/actions/workflows/ci.yml"><img src="https://github.com/Rynaro/eidolons/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
 <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="Apache-2.0"></a>
-<img src="https://img.shields.io/badge/EIIS-v1.1-blue" alt="EIIS v1.1">
+<img src="https://img.shields.io/badge/nexus-v1.13.4-blue" alt="nexus v1.13.4">
+<img src="https://img.shields.io/badge/EIIS-v1.4-blue" alt="EIIS v1.4">
 <img src="https://img.shields.io/badge/integrity-strict-success" alt="Integrity: strict">
 </p>
 
@@ -34,12 +35,12 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. For the full install fl
 
 | Eidolon | What it does for you | When to reach for it | Repo | Latest |
 |---------|---------------------|----------------------|------|--------|
-| **ATLAS**<br><sub>A→T→L→A→S</sub> | Maps an unfamiliar codebase without writing a single line. Evidence-anchored findings, read-only by construction. | Auditing a new repo, onboarding, before any change. | [Rynaro/ATLAS](https://github.com/Rynaro/ATLAS) | 1.2.2 |
-| **SPECTRA**<br><sub>S→P→E→C→T→R→A</sub> | Turns a scout report or rough idea into a decision-ready spec — scoring rubrics, validation gates, GIVEN/WHEN/THEN stories. | Planning a feature before you build it. | [Rynaro/SPECTRA](https://github.com/Rynaro/SPECTRA) | 4.2.10 |
-| **APIVR-Δ**<br><sub>A→P→I→V→Δ/R</sub> | Implements features in brownfield code — pattern-first, test-anchored, bounded failure-recovery loop. | Shipping the change SPECTRA planned. | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | 3.0.5 |
-| **IDG**<br><sub>I→D→G</sub> | Synthesizes documentation from sessions, specs, and deltas — provenance-first, with `[GAP]` / `[DISPUTED]` markers. | Chronicling what you (or the team) just built. | [Rynaro/IDG](https://github.com/Rynaro/IDG) | 1.1.5 |
-| **FORGE**<br><sub>F→O→R→G→E</sub> | Deliberates on ambiguous trade-offs and novel problems. Names alternatives, surfaces assumptions, returns verdict + confidence. | Two patterns apply and the choice isn't obvious. | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | 1.2.1 |
-| **VIGIL**<br><sub>V→I→G→I→L</sub> | Forensic debugger for failures resistant to normal repair. Reproduction-gated, counterfactual-verified, dependency-graph-ranked. | Flaky test, heisenbug, or a regression you can't explain. | [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL) | 1.0.3 |
+| **ATLAS**<br><sub>A→T→L→A→S</sub> | Maps an unfamiliar codebase without writing a single line. Evidence-anchored findings, read-only by construction. | Auditing a new repo, onboarding, before any change. | [Rynaro/ATLAS](https://github.com/Rynaro/ATLAS) | 1.7.2 |
+| **SPECTRA**<br><sub>S→P→E→C→T→R→A</sub> | Turns a scout report or rough idea into a decision-ready spec — scoring rubrics, validation gates, GIVEN/WHEN/THEN stories. | Planning a feature before you build it. | [Rynaro/SPECTRA](https://github.com/Rynaro/SPECTRA) | 4.5.2 |
+| **APIVR-Δ**<br><sub>A→P→I→V→Δ/R</sub> | Implements features in brownfield code — pattern-first, test-anchored, bounded failure-recovery loop. | Shipping the change SPECTRA planned. | [Rynaro/APIVR-Delta](https://github.com/Rynaro/APIVR-Delta) | 3.3.1 |
+| **IDG**<br><sub>I→D→G</sub> | Synthesizes documentation from sessions, specs, and deltas — provenance-first, with `[GAP]` / `[DISPUTED]` markers. | Chronicling what you (or the team) just built. | [Rynaro/IDG](https://github.com/Rynaro/IDG) | 1.4.2 |
+| **FORGE**<br><sub>F→O→R→G→E</sub> | Deliberates on ambiguous trade-offs and novel problems. Names alternatives, surfaces assumptions, returns verdict + confidence. | Two patterns apply and the choice isn't obvious. | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | 1.5.2 |
+| **VIGIL**<br><sub>V→I→G→I→L</sub> | Forensic debugger for failures resistant to normal repair. Reproduction-gated, counterfactual-verified, dependency-graph-ranked. | Flaky test, heisenbug, or a regression you can't explain. | [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL) | 1.3.2 |
 
 Versions and detailed handoff contracts live in [`roster/index.yaml`](roster/index.yaml) — the machine-readable source of truth.
 
@@ -159,11 +160,13 @@ Each Eidolon remains a first-class repo. This nexus is a coordinator, not an own
 <!-- Curated highlights from CHANGELOG.md "Unreleased". Refresh on every release. -->
 ## Recently shipped
 
-- **Nexus CLI self-versioning + `eidolons upgrade self`** — the nexus now carries a real `VERSION` file and release process. `eidolons --version` reports version + commit SHA + install date + source ref. `eidolons upgrade self` replaces the re-curl flow with an atomic, integrity-verified, rollback-safe upgrade. See [CHANGELOG.md](CHANGELOG.md).
-- **Ecosystem normalized — supply-chain integrity end-to-end.** All six shipped Eidolons (ATLAS, SPECTRA, APIVR-Δ, IDG, FORGE, VIGIL) now publish attestation-backed releases via the canonical [`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml). Every `versions.releases.<v>` block in [`roster/index.yaml`](roster/index.yaml) carries `commit`, `tree`, `archive_sha256`, and a GitHub-signed provenance attestation, ingested via [`Roster Intake`](.github/workflows/roster-intake.yml). `integrity.enforcement` is `strict` by default — any consumer install with a checksum mismatch aborts with exit 1. See [`docs/release-integrity.md`](docs/release-integrity.md).
-- **ATLAS v1.3.0** — registry-prefixed canonical body for `eidolons atlas aci --container`; container-runtime security hardening. See [CHANGELOG.md](CHANGELOG.md).
-- **`eidolons upgrade` is fully implemented** — `--check` for read-only diffs, applies member upgrades within `eidolons.yaml` SemVer constraints, idempotent on repeat runs. See [CHANGELOG.md](CHANGELOG.md).
-- **EIIS bumped to v1.1** with an external standalone conformance checker. See [Rynaro/eidolons-eiis](https://github.com/Rynaro/eidolons-eiis).
+- **Three-layer methodology integrity guarantee (v1.11.0–v1.13.4).** Layer 1: `eidolons doctor --deep` performs six static gates (D1–D6) over installed members' manifests. Layer 2: `eidolons verify-release` re-derives each Eidolon's install tree and SHA-256 diffs against the cached version to catch tampering or drift. Layer 3: `eidolons canary` prints a behavioral mission prompt and validates saved LLM responses against a small DSL (`MUST`/`SHOULD`, structural assertions). See [`docs/cli-reference.md`](docs/cli-reference.md) and [`CHANGELOG.md`](CHANGELOG.md).
+- **Unified MCP store — catalogue-driven tool wiring (v1.9.0).** `eidolons mcp {list,show,install,refresh,uninstall,upgrade,health}` replaces divergent subcommands. New `roster/mcps.yaml` catalogue + `eidolons.mcp.lock` lockfile. Installing an MCP grants its tool surface to relevant Eidolons automatically (e.g. `eidolons mcp install junction` enables `mcp__junction__*` tools for all members). See [`docs/mcp.md`](docs/mcp.md) and [`CHANGELOG.md`](CHANGELOG.md).
+- **Install-layout normalization v1.4 across EIIS + all six Eidolons.** Strict canonical inventory whitelist; host-vendor agent ref contract; `ECL_VERSION` universal MUST. EIIS v1.4.0 + ATLAS/SPECTRA/APIVR-Δ/IDG/FORGE/VIGIL all on v1.4 releases. Closes 13 cross-cutting gaps surfaced by install-normalization rounds. See [`CHANGELOG.md`](CHANGELOG.md) and [`Rynaro/eidolons-eiis`](https://github.com/Rynaro/eidolons-eiis).
+- **`eidolons init` AGENTS-precedence + multi-pointer dispatch (v1.7.0–v1.8.1).** Vendor-file pointer derivation is now deterministic; init detects `AGENTS.md`, `shared_dispatch=true`, or `codex` in wired hosts and routes the dispatch-pointer accordingly. Universal marker-guard hoists installer-written vendor content into `EIDOLONS.md`. `--multi-pointer` defaults ON (v1.8.1); Doctor Check 14 surfaces drift. See [`docs/cli-reference.md`](docs/cli-reference.md).
+- **Auto-refresh nexus cache + standard semver caret ranges (v1.10.0).** `eidolons sync` now calls `nexus_refresh()` before reading the roster, and resolves `^X.Y.Z` constraints via standard semver ranges (was: naive prefix-strip). New Eidolon versions land in consumer projects on the next `sync` with no manifest edit. See [`CHANGELOG.md`](CHANGELOG.md).
+- **Junction harness v0.2.0 shipped — two-phase orchestration.** Host-as-planner / harness-as-executor model with ECL envelopes, sidecar trace, ten closed performatives. MCP-sampling-based ReasoningStep for FORGE integration. Tooling via `eidolons mcp install junction`. See [`Rynaro/Junction`](https://github.com/Rynaro/Junction).
+- **Nexus CLI self-versioning + atomic rollback (legacy evergreen).** `eidolons --version` reports version, commit SHA, install date, and source ref. `eidolons upgrade self` is atomic and rollback-safe: verifies integrity, runs a smoke test, renames atomically. Fallback to `eidolons upgrade self --rollback` to revert. See [`docs/getting-started.md`](docs/getting-started.md).
 
 ---
 
