@@ -89,24 +89,44 @@ die()   { printf "%s%s%s %s\n" "${UI_ERROR}" "${GLYPH_ERROR}" "${RESET}" "$*" >&
 
 # ─── YAML → JSON ──────────────────────────────────────────────────────────
 # Preferred: yq (mikefarah/yq or kislyuk/yq). Fallback: python3. Last resort: die.
-yaml_to_json() {
-  local file="$1"
+#
+# Backend detection is memoised in `_YAML_TO_JSON_BACKEND` for the lifetime
+# of the process. A single `eidolons init` previously paid the cold-start
+# cost of ~14 yq invocations — half of them just probing `--version`.
+# The backend never changes mid-run, so resolve it once at source time;
+# exporting it survives `$(yaml_to_json …)` subshells (otherwise the
+# cache would die with each subshell).
+_resolve_yaml_to_json_backend() {
   if command -v yq >/dev/null 2>&1; then
-    # Handle both mikefarah/yq (Go) and kislyuk/yq (Python wrapper)
     if yq --version 2>&1 | grep -qi "mikefarah"; then
-      yq -o=json eval '.' "$file"
+      _YAML_TO_JSON_BACKEND="yq-mikefarah"
     else
-      yq . "$file"
+      _YAML_TO_JSON_BACKEND="yq-kislyuk"
     fi
   elif command -v python3 >/dev/null 2>&1 && python3 -c "import yaml" >/dev/null 2>&1; then
-    python3 -c "import sys, json, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))" "$file"
+    _YAML_TO_JSON_BACKEND="python3"
   else
-    die "Cannot parse YAML: neither yq nor python3+PyYAML is available.
+    _YAML_TO_JSON_BACKEND="none"
+  fi
+  export _YAML_TO_JSON_BACKEND
+}
+[[ -z "${_YAML_TO_JSON_BACKEND:-}" ]] && _resolve_yaml_to_json_backend
+yaml_to_json() {
+  local file="$1"
+  case "$_YAML_TO_JSON_BACKEND" in
+    yq-mikefarah) yq -o=json eval '.' "$file" ;;
+    yq-kislyuk)   yq . "$file" ;;
+    python3)
+      python3 -c "import sys, json, yaml; print(json.dumps(yaml.safe_load(open(sys.argv[1]))))" "$file"
+      ;;
+    none|*)
+      die "Cannot parse YAML: neither yq nor python3+PyYAML is available.
   Fix (recommended): rerun the bootstrap installer to auto-install yq:
       curl -sSL https://raw.githubusercontent.com/Rynaro/eidolons/main/cli/install.sh | bash
   Or install yq manually: https://github.com/mikefarah/yq/releases
   Or install PyYAML:      pip install --user pyyaml"
-  fi
+      ;;
+  esac
 }
 
 # ─── Roster queries ───────────────────────────────────────────────────────
