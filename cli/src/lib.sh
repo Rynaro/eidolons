@@ -703,6 +703,31 @@ nexus_roster_ref() {
   echo ""
 }
 
+# nexus_ensure_gitignore_sidecar FILE
+#
+# Ensures that FILE (a basename relative to $NEXUS) appears as a line in
+# $NEXUS/.gitignore. If $NEXUS/.gitignore does not exist it is created.
+# If it already contains FILE (exact-line match, no leading/trailing space)
+# the function is a no-op. Bash 3.2 compatible. All log output to stderr.
+#
+# This is the canonical repair path for pre-v1.11.0 installs where
+# cli/install.sh did not yet list certain sidecar files in .gitignore,
+# causing them to show as untracked and tripping the dirty-tree guard in
+# `eidolons upgrade self`.
+nexus_ensure_gitignore_sidecar() {
+  local _sidecar="$1"
+  local _gi="$NEXUS/.gitignore"
+  if [[ -f "$_gi" ]]; then
+    grep -qxF "$_sidecar" "$_gi" 2>/dev/null && return 0
+    printf '%s\n' "$_sidecar" >> "$_gi"
+    info "nexus_ensure_gitignore_sidecar: added $_sidecar to $_gi (pre-v1.11.0 heal)"
+  else
+    printf '%s\n' "$_sidecar" > "$_gi"
+    info "nexus_ensure_gitignore_sidecar: created $_gi with $_sidecar"
+  fi
+  return 0
+}
+
 # nexus_ensure_roster_ref → auto-backfill $NEXUS/.roster_ref for installs that
 # pre-date v1.11.0 (when the .install_ref / .roster_ref split was introduced).
 #
@@ -710,19 +735,38 @@ nexus_roster_ref() {
 #   $EIDOLONS_ROSTER_REF  if that env var is set and non-empty
 #   otherwise: "main"
 #
+# After writing the file, ensures it AND all other known sidecar files are
+# listed in $NEXUS/.gitignore so they do not appear as untracked in `git
+# status`. Pre-v1.11.0 installs lack the .roster_ref entry; older pre-1.11
+# installs may also be missing .install_date / .install_ref / .install_commit.
+# nexus_ensure_gitignore_sidecar is idempotent, so calling it for files that
+# are already listed is a no-op.
+#
 # Emits one info line to stderr when backfilling so users can see what happened.
-# Idempotent: once the file exists this is a no-op.
+# Idempotent: once the file exists the write is a no-op (gitignore heal still runs).
 # Bash 3.2 compatible.
 nexus_ensure_roster_ref() {
-  [[ -f "$NEXUS/.roster_ref" ]] && return 0
-  local _default_ref
-  if [[ -n "${EIDOLONS_ROSTER_REF:-}" ]]; then
-    _default_ref="$EIDOLONS_ROSTER_REF"
-  else
-    _default_ref="main"
+  local _wrote=0
+  if [[ ! -f "$NEXUS/.roster_ref" ]]; then
+    local _default_ref
+    if [[ -n "${EIDOLONS_ROSTER_REF:-}" ]]; then
+      _default_ref="$EIDOLONS_ROSTER_REF"
+    else
+      _default_ref="main"
+    fi
+    printf '%s\n' "$_default_ref" > "$NEXUS/.roster_ref"
+    _wrote=1
+    info "Backfilled $NEXUS/.roster_ref = $_default_ref (pre-v1.11.0 install — see CHANGELOG [1.13.4])"
   fi
-  printf '%s\n' "$_default_ref" > "$NEXUS/.roster_ref"
-  info "Backfilled $NEXUS/.roster_ref = $_default_ref (pre-v1.11.0 install — see CHANGELOG [1.13.3])"
+  # Always heal the .gitignore sidecar entries for all known sidecars.
+  # This is safe on every install: nexus_ensure_gitignore_sidecar is
+  # idempotent and only appends when the entry is genuinely missing.
+  if [[ -d "$NEXUS/.git" || -f "$NEXUS/.gitignore" ]]; then
+    local _sc
+    for _sc in .install_date .install_ref .install_commit .roster_ref; do
+      nexus_ensure_gitignore_sidecar "$_sc"
+    done
+  fi
 }
 
 # nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
