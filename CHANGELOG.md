@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- forge v1.5.2 published in the roster with release integrity metadata.
 - idg v1.4.2 published in the roster with release integrity metadata.
 - apivr v3.3.1 published in the roster with release integrity metadata.
 - spectra v4.5.2 published in the roster with release integrity metadata.
