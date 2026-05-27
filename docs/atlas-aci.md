@@ -48,8 +48,10 @@ a valid `install.manifest.json`. If ATLAS is absent the command exits
 ## Usage
 
 ```bash
-eidolons atlas aci                          # --install (default)
-eidolons atlas aci --install                # verify prereqs + index + write MCP config
+eidolons atlas aci                          # wire (default)
+eidolons atlas aci wire                     # verify prereqs + index + write MCP config
+eidolons atlas aci wire docker              # container mode with docker runtime
+eidolons atlas aci wire podman              # container mode with podman runtime
 eidolons atlas aci --dry-run                # list every path that would change
 eidolons atlas aci --remove                 # remove atlas-aci entries from MCP config
 eidolons atlas aci --host cursor            # restrict to one host (repeatable)
@@ -57,7 +59,7 @@ eidolons atlas aci --non-interactive        # fail on any prompt (for CI)
 eidolons atlas aci --help                   # full help
 ```
 
-### What `--install` does (in order)
+### What `wire` does (in order)
 
 1. Verify prereqs (`uv`, `rg`, Python ≥ 3.11, `atlas-aci` on PATH).
 2. Confirm ATLAS is installed in the project (exit `3` if not).
@@ -106,7 +108,7 @@ All of these are locked by the spec and are intentional:
 ## How the command reaches `aci.sh`
 
 ```
-eidolons atlas aci --install
+eidolons atlas aci wire
    │
    ▼
 cli/eidolons (catch-all: 'atlas' matches roster_list_names)
@@ -118,7 +120,7 @@ cli/src/dispatch_eidolon.sh
    │    2. ~/.eidolons/cache/atlas@<ver>/commands/aci.sh   (cache fallback)
    │
    ▼
-bash aci.sh --install     (cwd = consumer project root)
+bash aci.sh wire     (cwd = consumer project root)
 ```
 
 Nothing in the nexus's dispatcher is specific to atlas-aci — the same
@@ -152,9 +154,9 @@ ships.
 | `.gitignore` | line match on `.atlas/` | append-if-absent | no-op (removal leaves it) |
 | `.atlas/` index | presence of `.atlas/manifest.yaml` | skip re-index if present | no-op (user data) |
 
-Running `--install` twice produces a byte-identical result; running
-`--install` → `--remove` → `--install` produces the same state as a
-single `--install`.
+Running `wire` twice produces a byte-identical result; running
+`wire` → `--remove` → `wire` produces the same state as a
+single `wire`.
 
 ---
 

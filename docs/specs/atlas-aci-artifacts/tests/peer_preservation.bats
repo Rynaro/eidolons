@@ -13,7 +13,7 @@ load helpers
   seed_claude_host
   seed_mcp_json_with_peer ./.mcp.json
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
 
   # atlas-aci sibling present
@@ -29,7 +29,7 @@ load helpers
   seed_cursor_host
   seed_mcp_json_with_peer ./.cursor/mcp.json
 
-  run_aci --install --host cursor --non-interactive
+  run_aci wire --host cursor --non-interactive
   [ "$status" -eq 0 ]
 
   assert_mcp_json_contains .cursor/mcp.json "atlas-aci"
@@ -42,7 +42,7 @@ load helpers
   setup_stubs
   seed_copilot_agent_with_peer
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
 
   assert_agent_md_has_atlas_aci ./.github/agents/example.agent.md
@@ -60,7 +60,7 @@ load helpers
   seed_claude_host
   seed_mcp_json_with_peer ./.mcp.json
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   assert_mcp_json_contains .mcp.json "atlas-aci"
 
@@ -78,7 +78,7 @@ load helpers
   seed_cursor_host
   seed_mcp_json_with_peer ./.cursor/mcp.json
 
-  run_aci --install --host cursor --non-interactive
+  run_aci wire --host cursor --non-interactive
   [ "$status" -eq 0 ]
   run_aci --remove --host cursor --non-interactive
   [ "$status" -eq 0 ]
@@ -93,7 +93,7 @@ load helpers
   setup_stubs
   seed_copilot_agent_with_peer
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
   run_aci --remove --host copilot --non-interactive
   [ "$status" -eq 0 ]

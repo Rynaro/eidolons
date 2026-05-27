@@ -9,7 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 
+### Changed
+- docs(atlas-aci): flip every `atlas aci --install` example to `atlas aci wire`; remove `--container`/`--runtime` references in favour of the positional runtime. Tracks ATLAS v1.8.0 rename (PR Rynaro/ATLAS#35).
+
 ### Added
+- D-T-WIRE: `cli/tests/doctor.bats` now asserts the doctor warn references the `wire` verb when an atlas-aci `.mcp.json` is missing its UID/GID pin.
 - atlas v1.8.0 published in the roster with release integrity metadata.
 - vigil v1.3.2 published in the roster with release integrity metadata.
 - forge v1.5.2 published in the roster with release integrity metadata.

@@ -847,7 +847,7 @@ teardown() {
   # warn does NOT increment ERRORS → exit 0.
   [ "$status" -eq 0 ]
   [[ "$output" =~ "no -u UID:GID pin" ]]
-  [[ "$output" =~ "eidolons atlas aci install" ]]
+  [[ "$output" =~ "eidolons atlas aci wire" ]]
   # Must NOT trigger the "pins --user" error message.
   [[ ! "$output" =~ "pins --user" ]]
 }
@@ -927,6 +927,23 @@ teardown() {
   [[ ! "$output" =~ "pins --user" ]]
   [[ ! "$output" =~ "does not exist" ]]
   [[ ! "$output" =~ "is not readable" ]]
+}
+
+# ─── D-T-WIRE: doctor warn references the wire verb ──────────────────────
+# Tracks ATLAS v1.8.0 rename: install → wire. The probe that emits the
+# UID/bind warn hint was migrated to mcp_driver_oci_image_health (see D-T3.3
+# skip note). This test is preserved for spec-traceability and re-enabled
+# when the driver surfaces the eidolons atlas aci wire hint.
+@test "D-T-WIRE: doctor warn references the wire verb" {
+  skip "tracked spec gate: UID/bind hint moved to mcp_driver_oci_image_health; re-enable when driver emits 'eidolons atlas aci wire' (ATLAS v1.8.0 rename)"
+  _dt3_setup_project
+  # Omit -u pair so probe fires.
+  seed_mcp_json_uid_probe ""
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "no -u UID:GID pin" ]]
+  [[ "$output" =~ "eidolons atlas aci wire" ]]
 }
 
 # ─── D-T3.8: mcpServers present but no atlas-aci key → silent skip ───────

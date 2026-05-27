@@ -17,7 +17,7 @@ load helpers
   *) : ;;
 esac'
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 6 ]
   # atlas-aci error should have been forwarded on stderr.
   [[ "$output" == *"atlas-aci: index failed"* ]] || \
@@ -38,7 +38,7 @@ esac'
   # Clear the atlas-aci log so we can assert 0 invocations.
   : > "$BATS_TEST_TMPDIR/atlas-aci.log"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
 
   local count

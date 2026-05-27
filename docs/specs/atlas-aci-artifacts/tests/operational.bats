@@ -19,7 +19,7 @@ load helpers
   local before
   before="$(snapshot_mtimes "$TEST_PROJECT")"
 
-  run_aci --install --host claude-code --dry-run --non-interactive
+  run_aci wire --host claude-code --dry-run --non-interactive
   [ "$status" -eq 0 ]
   # Stdout must list one CREATE or MODIFY or INDEX line per affected path.
   [[ "$output" == *"CREATE "*".mcp.json"* ]] || [[ "$output" == *"MODIFY "*".mcp.json"* ]]
@@ -47,7 +47,7 @@ load helpers
   setup_stubs
   # No seed_*_host calls → cwd has no host markers.
 
-  run_aci --install --non-interactive
+  run_aci wire --non-interactive
   [ "$status" -eq 4 ]
   [[ "$output" == *"No MCP-capable host"* ]] || [[ "$output" == *"no MCP-capable host"* ]]
 }
@@ -69,8 +69,8 @@ load helpers
 
 # ─── T28 ─────────────────────────────────────────────────────────────────
 
-# Anchors: Spec §5.2 T28 (stdout empty on --install success; stderr has log)
-@test "T28: --install success writes only to stderr (stdout is empty)" {
+# Anchors: Spec §5.2 T28 (stdout empty on wire success; stderr has log)
+@test "T28: wire success writes only to stderr (stdout is empty)" {
   setup_fresh_project
   setup_stubs
   seed_claude_host
@@ -78,11 +78,11 @@ load helpers
   # bats' `run` collapses stderr+stdout into $output. Split them.
   local stdout_file="$BATS_TEST_TMPDIR/aci.stdout"
   local stderr_file="$BATS_TEST_TMPDIR/aci.stderr"
-  bash "$ACI_SCRIPT" --install --host claude-code --non-interactive \
+  bash "$ACI_SCRIPT" wire --host claude-code --non-interactive \
     > "$stdout_file" 2> "$stderr_file"
   local rc=$?
   [ "$rc" -eq 0 ]
-  # Stdout MUST be empty on --install success.
+  # Stdout MUST be empty on wire success.
   [ ! -s "$stdout_file" ]
   # Stderr MUST contain progress log markers.
   run grep -E '▸|✓|·' "$stderr_file"
@@ -109,7 +109,7 @@ load helpers
   [ "$home_before" = "0" ]
   [ "$xdg_before"  = "0" ]
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   run_aci --remove --host claude-code --non-interactive
   [ "$status" -eq 0 ]
@@ -127,4 +127,19 @@ load helpers
     find "$FAKE_XDG" -type f
     return 1
   }
+}
+
+# ─── T-NX-WIRE-RT: positional runtime flows through helper ───────────────
+
+# Anchors: Spec §6.2 T-NX-WIRE-RT (ATLAS v1.8.0 positional runtime)
+# Verifies that run_aci wire docker --dry-run emits a BUILD line referencing
+# the expected container image path. Guards the positional-runtime dispatch.
+@test "T-NX-WIRE-RT: positional runtime flows through helper" {
+  setup_fresh_project
+  setup_stubs
+  seed_claude_host
+
+  run_aci wire docker --dry-run --non-interactive --host claude-code
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "BUILD ghcr.io/rynaro/atlas-aci@sha256:" ]]
 }

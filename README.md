@@ -109,7 +109,7 @@ To upgrade installed Eidolons (ATLAS, SPECTRA, etc.), use `eidolons upgrade` (no
 eidolons mcp atlas-aci [--force] [--image-digest <sha256>]
 ```
 
-If the image isn't on your host yet, run `eidolons mcp atlas-aci pull` first; the generator refuses to write `.mcp.json` until the image is loadable. Use `--skip-image-check` only in CI where the image is loaded after scaffolding. If `eidolons atlas aci --install` ever fails with the in-container index error, run `eidolons doctor` to diagnose; the most common cause is a missing or unwritable `.atlas/memex/` directory.
+If the image isn't on your host yet, run `eidolons mcp atlas-aci pull` first; the generator refuses to write `.mcp.json` until the image is loadable. Use `--skip-image-check` only in CI where the image is loaded after scaffolding. If `eidolons atlas aci wire` ever fails with the in-container index error, run `eidolons doctor` to diagnose; the most common cause is a missing or unwritable `.atlas/memex/` directory.
 
 Note that `atlas-aci` is an external Python MCP package (a tool Eidolons consume); it is not an Eidolon and does not appear in `roster/index.yaml`. The `atlas` Eidolon (scout methodology) and the `atlas-aci` MCP server are distinct — see [`docs/architecture.md`](docs/architecture.md) for the boundary.
 

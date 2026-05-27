@@ -12,7 +12,7 @@ load helpers
   setup_stubs
   seed_copilot_host_empty   # .github/ exists, .github/agents/ does not
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
   # stdout is empty on success (T28). Stderr carries the info note.
   [ -z "$(echo "$output" | grep -v '^$')" ] || true
@@ -38,7 +38,7 @@ load helpers
     capture { print }
   ' ./.github/agents/example.agent.md)"
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
   assert_agent_md_body_preserved ./.github/agents/example.agent.md "$original_body"
 }
@@ -55,7 +55,7 @@ load helpers
     capture { print }
   ' ./.github/agents/example.agent.md)"
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
   run_aci --remove --host copilot --non-interactive
   [ "$status" -eq 0 ]

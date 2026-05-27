@@ -20,7 +20,7 @@ seed_all_hosts() {
   setup_stubs
   seed_all_hosts
 
-  run_aci --install --host cursor --non-interactive
+  run_aci wire --host cursor --non-interactive
   [ "$status" -eq 0 ]
 
   [ -f .cursor/mcp.json ]
@@ -37,7 +37,7 @@ seed_all_hosts() {
   setup_stubs
   seed_all_hosts
 
-  run_aci --install --host copilot --non-interactive
+  run_aci wire --host copilot --non-interactive
   [ "$status" -eq 0 ]
 
   [ ! -f .mcp.json ]
@@ -51,7 +51,7 @@ seed_all_hosts() {
   setup_stubs
   seed_all_hosts
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
 
   [ -f .mcp.json ]
