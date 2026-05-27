@@ -28,7 +28,7 @@ eidolons <command> [options]
 |------|-------|---------|
 | `~/.eidolons/nexus/` | user | Cloned nexus |
 | `~/.eidolons/nexus/.install_ref` | user | CLI self-pin ref (written by `install.sh` and `upgrade self`). |
-| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. Installs predating v1.11.0 that lack this file are auto-healed by `nexus_refresh()` and `upgrade self`: the file is backfilled with `$EIDOLONS_ROSTER_REF` when set, otherwise `main` (see CHANGELOG [1.13.3]). |
+| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. Installs predating v1.11.0 that lack this file are auto-healed by `nexus_refresh()` and `upgrade self`: the file is backfilled with `$EIDOLONS_ROSTER_REF` when set, otherwise `main`. As part of the backfill (v1.13.4), `nexus_ensure_roster_ref` also ensures `.roster_ref` and all other sidecar files (`.install_date`, `.install_ref`, `.install_commit`) are listed in `~/.eidolons/nexus/.gitignore` so they are not reported as untracked by `git status`. Without this heal, a freshly-backfilled `.roster_ref` caused `eidolons upgrade self`'s dirty-tree check to refuse the upgrade until `--force` was passed. |
 | `~/.eidolons/cache/` | user | Cloned Eidolon repos (per name + version) |
 | `./eidolons.yaml` | project | Your team manifest |
 | `./eidolons.lock` | project | Resolved versions |

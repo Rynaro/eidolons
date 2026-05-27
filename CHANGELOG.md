@@ -17,6 +17,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - spectra v4.5.2 published in the roster with release integrity metadata.
 - atlas v1.7.2 published in the roster with release integrity metadata.
 
+## [1.13.4] — 2026-05-27
+
+### Fixed
+
+- Backfill helper now also adds `.roster_ref` (and other sidecar files) to
+  `.gitignore`. Pre-v1.11.0 installs no longer trip `eidolons upgrade
+  self`'s dirty-tree check after backfill (was: needed --force; now: clean).
+  `nexus_ensure_roster_ref` calls the new `nexus_ensure_gitignore_sidecar`
+  helper for all four sidecars (`.install_date`, `.install_ref`,
+  `.install_commit`, `.roster_ref`) — idempotent, no-op when entries
+  already present.
+
 ## [1.13.3] — 2026-05-27
 
 ### Fixed
