@@ -875,6 +875,11 @@ nexus:
         tree: c299919b57b5be4680943c889252407eaa07c707
         archive_sha256: 7f1ae97feec4d3e74c904f48194e65fb5251785b05a7b5a6bb33a520fde2d129
         released_at: "2026-05-26T22:11:33Z"
+      1.13.2:
+        commit: 727212915ed133fe963ac6025557428c2ca5e9d0
+        tree: 424e01e4cf8e21e3a51773551e911d30bf33dd39
+        archive_sha256: 19d2ae760717775700ce4516b436ff1b1eceeb39b65ae711045fd47b629adb94
+        released_at: "2026-05-27T10:14:37Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:
