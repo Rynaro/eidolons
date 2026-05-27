@@ -11,12 +11,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ### Changed
 
 - **(docs) `atlas aci install` → `atlas aci wire` across every nexus-side consumer surface (ATLAS v1.8.0 rollout).** Flips `README.md`, `docs/atlas-aci.md`, `docs/cli-reference.md`, the frozen spec-traceability artefact under `docs/specs/atlas-aci-artifacts/`, and the 33 `run_aci --install` invocations across its bats helper suite. The `--container` and `--runtime` flag forms are replaced with the positional runtime (`atlas aci wire [docker|podman]`; absent = host mode). Decision rubrics and GIVEN/WHEN/THEN stories: `.spectra/plans/2026-05-27-atlas-aci-ux-fixes-spec.md` §5.1, §5.2. PR #199 (downstream of upstream `Rynaro/ATLAS#35`).
-- **(test) `cli/tests/doctor.bats` D-T3.3 pinned-string assertion flipped to `wire`.** Sister test `D-T-WIRE` added in the same PR but ships `skip`-ped pending the UID/bind probe being re-introduced to `mcp_driver_oci_image_health` — those probes were lifted out of `doctor.sh` during the MCP-store migration and have not yet been re-implemented in the driver. Tracking marker for the follow-up.
+- **(test) `cli/tests/doctor.bats` D-T3.1–D-T3.5 + D-T-WIRE active.** PR #199 flipped D-T3.3's pinned-string assertion from `install` to `wire` and seeded `D-T-WIRE` as a skip-pending tracking marker. PR #201 re-introduced the UID/GID + bind-path probes (see Added below) and removed every skip in the family — the wire hint is now emitted live by the no-`-u` warn.
 
 ### Added
 
 - **atlas v1.8.0 in `roster/index.yaml` with full release-integrity metadata** (commit `c8ee194`, tree `8da807f`, archive `dbc353fb…`, github-attestation verified). Intaked via PR #198 from the `Release ATLAS v1.8.0` workflow_dispatch — no hand-tagging, no hand-edited integrity fields. Upstream diff: 19 files, +947/-263 (`commands/aci.sh` rewrite, four new bats files, mechanical sweep of nine existing test files).
 - **`docs/specs/atlas-aci-artifacts/commands/aci.sh` wholesale-replaced with the merged ATLAS v1.8.0 source** so the frozen spec artefact tracks the live upstream. New `T-NX-WIRE-RT` test in `docs/specs/atlas-aci-artifacts/tests/operational.bats` asserts the positional runtime flows through the helper. PR #199.
+- **`_mcp_driver_oci_uid_bind_probes` in `cli/src/lib_mcp.sh`** — UID/GID + bind-path probes that were lifted out of `doctor.sh` during the MCP-store migration. The no-`-u` warn line includes the `eidolons atlas aci wire` hint (ATLAS v1.8.0 rename). Reused by both `mcp_driver_oci_image_health` (via the MCP lockfile path) and the new doctor Check 7b. PR #201.
+- **Doctor Check 7b** (`cli/src/doctor.sh`) — reads `.mcp.json` directly (independent of `eidolons.mcp.lock`) so probe coverage is reachable even when atlas-aci isn't tracked in the lockfile. `err`-level probe lines increment ERRORS (non-zero exit); `warn`-level lines print a yellow advisory without affecting exit code. PR #201.
+- **`cli/tests/mcp_health.bats`** — five new tests cover the UID/bind probe surface end-to-end via `eidolons mcp health atlas-aci` (matching UID, mismatch, no-flag, missing bind path, absent `.mcp.json`). PR #201.
 - vigil v1.3.2 published in the roster with release integrity metadata.
 - forge v1.5.2 published in the roster with release integrity metadata.
 - idg v1.4.2 published in the roster with release integrity metadata.

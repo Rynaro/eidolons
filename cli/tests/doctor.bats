@@ -823,7 +823,6 @@ teardown() {
 
 # ─── D-T3.2: mismatched UID:GID → err with both UIDs in message ──────────
 @test "D-T3.2: .mcp.json with -u 99999:99999 (wrong user) — err with both UIDs" {
-  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   _dt3_setup_project
   local cur_uid cur_gid
   cur_uid="$(id -u)"
@@ -838,7 +837,6 @@ teardown() {
 
 # ─── D-T3.3: no -u flag at all → warn (not err) with re-run hint ─────────
 @test "D-T3.3: .mcp.json without -u flag — warn (not err) with re-run hint" {
-  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health (mcp_health.bats coverage); ubuntu CI surfaced the asymmetry that passed vacuously on darwin"
   _dt3_setup_project
   # Pass empty string so seed_mcp_json_uid_probe omits the -u pair.
   seed_mcp_json_uid_probe ""
@@ -854,7 +852,6 @@ teardown() {
 
 # ─── D-T3.4: bind path that doesn't exist → err ──────────────────────────
 @test "D-T3.4: .mcp.json with bind path that does not exist — err" {
-  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   _dt3_setup_project
   local cur_uid cur_gid
   cur_uid="$(id -u)"
@@ -871,7 +868,6 @@ teardown() {
 
 # ─── D-T3.5: bind path exists but unreadable → err ───────────────────────
 @test "D-T3.5: .mcp.json with bind path that exists but is unreadable — err" {
-  skip "obsolete: UID/bind probes migrated to mcp_driver_oci_image_health"
   # Skip if running as root (root reads everything — chmod 000 won't block).
   if [[ "$(id -u)" -eq 0 ]]; then
     skip "running as root — chmod 000 test not meaningful"
@@ -935,7 +931,6 @@ teardown() {
 # skip note). This test is preserved for spec-traceability and re-enabled
 # when the driver surfaces the eidolons atlas aci wire hint.
 @test "D-T-WIRE: doctor warn references the wire verb" {
-  skip "tracked spec gate: UID/bind hint moved to mcp_driver_oci_image_health; re-enable when driver emits 'eidolons atlas aci wire' (ATLAS v1.8.0 rename)"
   _dt3_setup_project
   # Omit -u pair so probe fires.
   seed_mcp_json_uid_probe ""

@@ -342,6 +342,35 @@ else
   fi
 fi
 
+# ─── Check 7b: atlas-aci .mcp.json UID/GID + bind-path sanity ─────────────
+# Reads .mcp.json directly (not via eidolons.mcp.lock) to surface UID/GID pin
+# and bind-path issues even when atlas-aci is wired as an MCP but the lockfile
+# entry is absent. Requires jq. Silently skips when .mcp.json is absent,
+# malformed, or carries no atlas-aci key (D-T3.6/3.7/3.8 semantics).
+#
+# err probe lines → increment ERRORS (exit non-zero per D-T3.2/3.4/3.5).
+# warn probe lines → print yellow warning without incrementing ERRORS (D-T3.3).
+if command -v jq >/dev/null 2>&1 && [ -f ".mcp.json" ]; then
+  _dt3_probe_output="$(_mcp_driver_oci_uid_bind_probes "atlas-aci" 2>/dev/null || true)"
+  if [ -n "$_dt3_probe_output" ]; then
+    while IFS= read -r _dt3_line; do
+      [ -n "$_dt3_line" ] || continue
+      # Extract the status word (3rd whitespace-separated field).
+      _dt3_status="$(printf '%s' "$_dt3_line" | awk '{print $3}')"
+      # Extract the reason (everything after the first 3 fields).
+      _dt3_reason="$(printf '%s' "$_dt3_line" | awk '{$1=$2=$3=""; sub(/^[[:space:]]+/,""); print}')"
+      case "$_dt3_status" in
+        err)
+          err "atlas-aci: ${_dt3_reason}"
+          ;;
+        warn)
+          printf "  %s·%s atlas-aci: %s\n" "${YELLOW:-}" "${RESET:-}" "$_dt3_reason"
+          ;;
+      esac
+    done <<< "$_dt3_probe_output"
+  fi
+fi
+
 # ─── Check 8: MCP catalogue drift ─────────────────────────────────────────
 # Non-fatal: surfaces MCPs in eidolons.mcp.lock that are behind catalogue stable.
 # Does not increment ERRORS — informational / advisory only.
