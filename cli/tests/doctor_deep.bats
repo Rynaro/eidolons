@@ -375,9 +375,12 @@ EOF
   write_spec_md atlas
   write_host_agent_correct atlas
 
-  local mtime_before
-  mtime_before="$(stat -f '%m' ".eidolons/atlas/agent.md" 2>/dev/null \
-    || stat -c '%Y' ".eidolons/atlas/agent.md" 2>/dev/null || echo 0)"
+  # Hash-based invariance check — strictly tighter than mtime and immune to
+  # the `stat -f '%m' || stat -c '%Y'` trap that misbehaves on Linux under
+  # bats --jobs N (see the long comment in harness.bats around line 138).
+  # Helper picks shasum (macOS) or sha256sum (linux) automatically.
+  local sha_before
+  sha_before="$(_dd18_sha ".eidolons/atlas/agent.md")"
 
   # Run with just --deep (no --fix) so only the doctor's own read-only checks run.
   # The D1 error should be reported but agent.md must remain untouched.
@@ -385,10 +388,17 @@ EOF
   # D1 error must appear.
   [[ "$output" =~ "token" ]]
 
-  local mtime_after
-  mtime_after="$(stat -f '%m' ".eidolons/atlas/agent.md" 2>/dev/null \
-    || stat -c '%Y' ".eidolons/atlas/agent.md" 2>/dev/null || echo 0)"
+  local sha_after
+  sha_after="$(_dd18_sha ".eidolons/atlas/agent.md")"
 
   # agent.md must not have been modified by the doctor --deep run.
-  [ "$mtime_before" = "$mtime_after" ]
+  [ "$sha_before" = "$sha_after" ]
+}
+
+_dd18_sha() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
 }

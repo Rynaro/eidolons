@@ -16,22 +16,24 @@ The four-layer model is load-bearing — changes stay inside a layer whenever po
 ## Common commands
 
 ```bash
-# Tests (bats)
-bats cli/tests/                   # full suite
-bats cli/tests/init.bats          # single file
-bats cli/tests/init.bats -f "preset pipeline"   # single test by name pattern
+# Tests (bats) — prefer the Makefile, which parallelises across files
+make test                            # full suite, JOBS=8 default (~40s on a 10-core mac)
+make test JOBS=4                     # tune parallelism (CI uses 4)
+make test-file F=cli/tests/init.bats                       # single file
+make test-file F=cli/tests/init.bats P="preset pipeline"   # single test by name pattern
+bats cli/tests/                      # sequential fallback (~2m30s; only to debug parallel flakes)
 
 # Lint
-find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
-shellcheck -x -S error cli/eidolons
+make lint                            # or: find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
 
 # Schema + roster structural checks (what CI runs)
-jq empty schemas/*.json
-yq eval '.' roster/index.yaml     # parse check
+make schema                          # jq empty schemas/*.json + yq eval roster/index.yaml
 
 # Run the CLI against this checkout without global install
 EIDOLONS_NEXUS="$(pwd)" bash cli/eidolons list
 ```
+
+`make test` runs `bats --jobs $(JOBS) --no-parallelize-within-files` — files run concurrently, tests inside a file stay sequential to match CI's contention profile (harness install + cache fixtures share state within a file). If a test fails only under parallelism, re-run it with `make test-file F=...` to confirm before editing.
 
 Bats tests set `EIDOLONS_NEXUS=$EIDOLONS_ROOT` (see `cli/tests/helpers.bash`) so the CLI resolves the roster from the checkout rather than `~/.eidolons/nexus`. When debugging a test interactively, export that same variable.
 
