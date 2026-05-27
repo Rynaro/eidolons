@@ -13,7 +13,7 @@ load helpers
   seed_claude_host
   uninstall_stub "uv"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 5 ]
   [[ "$output" == *"uv"* ]]
   [[ "$output" == *"astral.sh/uv/install.sh"* ]]
@@ -28,7 +28,7 @@ load helpers
   seed_claude_host
   uninstall_stub "rg"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 5 ]
   [[ "$output" == *"ripgrep"* ]] || [[ "$output" == *"'rg'"* ]]
   [ ! -f .mcp.json ]
@@ -44,7 +44,7 @@ load helpers
   --version) echo "Python 3.10.12"; exit 0 ;;
 esac'
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 5 ]
   [[ "$output" == *"3.11"* ]]
   [ ! -f .mcp.json ]
@@ -57,7 +57,7 @@ esac'
   seed_claude_host
   uninstall_stub "atlas-aci"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 5 ]
   [[ "$output" == *"atlas-aci"* ]]
   [[ "$output" == *"git clone"* ]]
@@ -76,7 +76,7 @@ esac'
   rm -f "$STUBS_DIR/atlas-aci"
   : > "$BATS_TEST_TMPDIR/atlas-aci.log"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 5 ]
 
   local count

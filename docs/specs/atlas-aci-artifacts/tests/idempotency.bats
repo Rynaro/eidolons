@@ -13,14 +13,14 @@ load helpers
   setup_stubs
   seed_claude_host
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   [ -f .mcp.json ]
   local first_mcp first_gi
   first_mcp="$(normalise_json .mcp.json)"
   first_gi="$(cat .gitignore)"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   local second_mcp second_gi
   second_mcp="$(normalise_json .mcp.json)"
@@ -39,13 +39,13 @@ load helpers
   setup_stubs
   seed_cursor_host
 
-  run_aci --install --host cursor --non-interactive
+  run_aci wire --host cursor --non-interactive
   [ "$status" -eq 0 ]
   [ -f .cursor/mcp.json ]
   local first
   first="$(normalise_json .cursor/mcp.json)"
 
-  run_aci --install --host cursor --non-interactive
+  run_aci wire --host cursor --non-interactive
   [ "$status" -eq 0 ]
   local second
   second="$(normalise_json .cursor/mcp.json)"
@@ -59,7 +59,7 @@ load helpers
   setup_stubs
   seed_claude_host
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   local baseline
   baseline="$(normalise_json .mcp.json)"
@@ -69,7 +69,7 @@ load helpers
   # After remove, mcpServers.atlas-aci is absent.
   assert_mcp_json_missing .mcp.json "atlas-aci"
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   local rebuilt
   rebuilt="$(normalise_json .mcp.json)"

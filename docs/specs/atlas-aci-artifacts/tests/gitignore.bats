@@ -9,9 +9,9 @@ load helpers
   setup_stubs
   seed_claude_host
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
 
   local count
@@ -27,7 +27,7 @@ load helpers
   # Pre-existing .gitignore with the entry wrapped in whitespace.
   printf "# user content\nnode_modules/\n  .atlas/  \nvendor/\n" > .gitignore
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
 
   # Pattern in aci.sh tolerates leading/trailing whitespace; no dup added.
@@ -42,7 +42,7 @@ load helpers
   seed_claude_host
   printf "node_modules/\n.atlas\nvendor/\n" > .gitignore
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   # Either the original '.atlas' or a new '.atlas/' entry — but not both.
   local total
@@ -57,7 +57,7 @@ load helpers
   seed_claude_host
   [ ! -f .gitignore ]
 
-  run_aci --install --host claude-code --non-interactive
+  run_aci wire --host claude-code --non-interactive
   [ "$status" -eq 0 ]
   [ -f .gitignore ]
   # Exactly ".atlas/\n" content.
