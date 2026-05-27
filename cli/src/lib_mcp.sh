@@ -473,8 +473,113 @@ mcp_driver_oci_image_version() {
   mcp_lock_entry "$name" | jq -r '.version // empty'
 }
 
+# _mcp_driver_oci_uid_bind_probes NAME → UID/GID and bind-path probe lines to stdout.
+#
+# Reads .mcp.json in CWD. If absent, malformed, or missing the atlas-aci key,
+# this function silently no-ops (zero output, exit 0). This preserves the
+# D-T3.6/D-T3.7/D-T3.8 semantics.
+#
+# When the atlas-aci entry is found, three probe classes run:
+#
+#   mcp_uid_pin  ok    — -u UID:GID present and matches id -u:id -g
+#   mcp_uid_pin  err   — -u UID:GID present but mismatches current user
+#   mcp_uid_pin  warn  — no -u flag at all (includes the 'eidolons atlas aci wire' hint)
+#
+#   mcp_bind_path_exists     err — a -v host:container arg's host path does not exist
+#   mcp_bind_path_readable   err — host path exists but is not readable
+#
+# Output format per probe: "<name>  <probe>  ok|err|warn  [reason]"
+# Callers that increment error counters should filter on status word "err";
+# callers that surface warnings should filter on "warn".
+#
+# Bash 3.2 compatible: no declare -A, no ${var,,}, no readarray/mapfile.
+_mcp_driver_oci_uid_bind_probes() {
+  local name="$1"
+
+  # Require jq; if absent caller can't parse JSON anyway.
+  if ! command -v jq >/dev/null 2>&1; then
+    return 0
+  fi
+
+  # .mcp.json must exist in CWD.
+  if [ ! -f ".mcp.json" ]; then
+    return 0
+  fi
+
+  # Check that atlas-aci key exists and has an args array.
+  # jq -e exits non-zero when the value is null/false/missing.
+  if ! jq -e '.mcpServers["atlas-aci"].args | arrays' .mcp.json >/dev/null 2>&1; then
+    # Malformed JSON, no mcpServers, or no atlas-aci key — silent skip.
+    return 0
+  fi
+
+  # ── probe: mcp_uid_pin ──────────────────────────────────────────────────
+  # Find the value following "-u" in the args array.
+  # Strategy: to_entries on the args array, select entries whose value is "-u",
+  # then return $arr at (key+1) — that's the UID:GID value.
+  local _pinned_uid_gid
+  _pinned_uid_gid="$(jq -r '
+    .mcpServers["atlas-aci"].args as $arr
+    | $arr | to_entries
+    | map(select(.value == "-u") | .key + 1)
+    | map($arr[.])
+    | .[0] // empty
+  ' .mcp.json 2>/dev/null || true)"
+
+  local _cur_uid _cur_gid _cur_uidgid
+  _cur_uid="$(id -u)"
+  _cur_gid="$(id -g)"
+  _cur_uidgid="${_cur_uid}:${_cur_gid}"
+
+  if [ -z "$_pinned_uid_gid" ]; then
+    # No -u flag at all.
+    printf '%s  mcp_uid_pin       warn      no -u UID:GID pin in .mcp.json — re-run '"'"'eidolons atlas aci wire'"'"' to rebuild with current UID:GID\n' "$name"
+  elif [ "$_pinned_uid_gid" = "$_cur_uidgid" ]; then
+    printf '%s  mcp_uid_pin       ok\n' "$name"
+  else
+    printf '%s  mcp_uid_pin       err       pins --user %s but current user is %s\n' \
+      "$name" "$_pinned_uid_gid" "$_cur_uidgid"
+  fi
+
+  # ── probe: mcp_bind_path_exists / mcp_bind_path_readable ───────────────
+  # Collect host paths from all -v <host>:<container> args.
+  # Strategy: to_entries on args, select entries whose value is "-v",
+  # return $arr at (key+1) — that's the host:container bind spec.
+  local _bind_specs _bspec _host_path
+  _bind_specs="$(jq -r '
+    .mcpServers["atlas-aci"].args as $arr
+    | $arr | to_entries
+    | map(select(.value == "-v") | .key + 1)
+    | map($arr[.])
+    | .[]
+  ' .mcp.json 2>/dev/null || true)"
+
+  if [ -n "$_bind_specs" ]; then
+    while IFS= read -r _bspec; do
+      [ -n "$_bspec" ] || continue
+      # host_path is everything before the first colon.
+      _host_path="${_bspec%%:*}"
+      [ -n "$_host_path" ] || continue
+
+      if [ ! -e "$_host_path" ]; then
+        printf '%s  mcp_bind_path_exists      err   %s does not exist\n' \
+          "$name" "$_host_path"
+      elif [ ! -r "$_host_path" ]; then
+        printf '%s  mcp_bind_path_readable    err   %s is not readable by current user\n' \
+          "$name" "$_host_path"
+      fi
+    done <<< "$_bind_specs"
+  fi
+
+  return 0
+}
+
 # mcp_driver_oci_image_health NAME → probe status lines to stdout; exit 0 always.
 # Output format per line: "<name>  <probe>  ok|degraded|missing  [reason]"
+# New UID/GID and bind-path probes (mcp_uid_pin, mcp_bind_path_exists,
+# mcp_bind_path_readable) use err|warn|ok status words and run when .mcp.json
+# exists with an atlas-aci key. They fire after image_local and before
+# registry_reachable. Callers should scan per-probe lines for err/warn.
 mcp_driver_oci_image_health() {
   local name="$1"
   local overall="ok"
@@ -521,6 +626,11 @@ mcp_driver_oci_image_health() {
         printf '%s  image_local      missing   no lockfile entry\n' "$name"
         overall="missing"
       fi
+
+      # probes: mcp_uid_pin, mcp_bind_path_exists, mcp_bind_path_readable
+      # Reads .mcp.json in CWD; silently no-ops if absent/malformed/no atlas-aci key.
+      # The probe lines use err|warn|ok status words (separate from ok|degraded|missing).
+      _mcp_driver_oci_uid_bind_probes "$name"
 
       # probe: registry_reachable (soft; if full_ref available)
       if [ -n "${full_ref:-}" ]; then
