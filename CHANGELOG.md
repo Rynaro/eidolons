@@ -8,13 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-
 ### Changed
-- docs(atlas-aci): flip every `atlas aci --install` example to `atlas aci wire`; remove `--container`/`--runtime` references in favour of the positional runtime. Tracks ATLAS v1.8.0 rename (PR Rynaro/ATLAS#35).
+
+- **(docs) `atlas aci install` → `atlas aci wire` across every nexus-side consumer surface (ATLAS v1.8.0 rollout).** Flips `README.md`, `docs/atlas-aci.md`, `docs/cli-reference.md`, the frozen spec-traceability artefact under `docs/specs/atlas-aci-artifacts/`, and the 33 `run_aci --install` invocations across its bats helper suite. The `--container` and `--runtime` flag forms are replaced with the positional runtime (`atlas aci wire [docker|podman]`; absent = host mode). Decision rubrics and GIVEN/WHEN/THEN stories: `.spectra/plans/2026-05-27-atlas-aci-ux-fixes-spec.md` §5.1, §5.2. PR #199 (downstream of upstream `Rynaro/ATLAS#35`).
+- **(test) `cli/tests/doctor.bats` D-T3.3 pinned-string assertion flipped to `wire`.** Sister test `D-T-WIRE` added in the same PR but ships `skip`-ped pending the UID/bind probe being re-introduced to `mcp_driver_oci_image_health` — those probes were lifted out of `doctor.sh` during the MCP-store migration and have not yet been re-implemented in the driver. Tracking marker for the follow-up.
 
 ### Added
-- D-T-WIRE: `cli/tests/doctor.bats` now asserts the doctor warn references the `wire` verb when an atlas-aci `.mcp.json` is missing its UID/GID pin.
-- atlas v1.8.0 published in the roster with release integrity metadata.
+
+- **atlas v1.8.0 in `roster/index.yaml` with full release-integrity metadata** (commit `c8ee194`, tree `8da807f`, archive `dbc353fb…`, github-attestation verified). Intaked via PR #198 from the `Release ATLAS v1.8.0` workflow_dispatch — no hand-tagging, no hand-edited integrity fields. Upstream diff: 19 files, +947/-263 (`commands/aci.sh` rewrite, four new bats files, mechanical sweep of nine existing test files).
+- **`docs/specs/atlas-aci-artifacts/commands/aci.sh` wholesale-replaced with the merged ATLAS v1.8.0 source** so the frozen spec artefact tracks the live upstream. New `T-NX-WIRE-RT` test in `docs/specs/atlas-aci-artifacts/tests/operational.bats` asserts the positional runtime flows through the helper. PR #199.
 - vigil v1.3.2 published in the roster with release integrity metadata.
 - forge v1.5.2 published in the roster with release integrity metadata.
 - idg v1.4.2 published in the roster with release integrity metadata.
