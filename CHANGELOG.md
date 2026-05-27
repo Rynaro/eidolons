@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- atlas v1.7.2 published in the roster with release integrity metadata.
+
 ## [1.13.2] — 2026-05-27
 
 ### Fixed
