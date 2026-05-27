@@ -302,9 +302,9 @@ RESPONSE
   [[ "$output" =~ "atlas@1.7.1" ]]
   # vigil should show as missing (dot = UTF-8 U+00B7 = c2 b7)
   [[ "$output" =~ "vigil@1.1.0" ]]
-  # Summary line
-  [[ "$output" =~ "with missions" ]]
-  [[ "$output" =~ "without" ]]
+  # Summary line — three-state format
+  [[ "$output" =~ "with parseable missions" ]]
+  [[ "$output" =~ "with no file" ]]
 }
 
 # CAN-11: --json validation output is valid parseable JSON
@@ -350,4 +350,55 @@ RESPONSE
   [[ "$output" =~ "unrecognized criterion" ]]
   # The MUST contain phrase: FINDING- should still PASS
   [[ "$output" =~ "[PASS]" ]]
+}
+
+# ─── Legacy-format fixture ────────────────────────────────────────────────────
+
+# Materialise a fake atlas cache with a canary-missions.md that has NO v1.13.0
+# DSL headings (legacy/non-DSL format — file exists but 0 missions parse).
+seed_atlas_cache_legacy_format() {
+  local cache_dir="$EIDOLONS_HOME/cache/atlas@1.7.1"
+  mkdir -p "$cache_dir/.git" "$cache_dir/evals"
+  cat > "$cache_dir/evals/canary-missions.md" <<'EOF'
+# Canary Missions (legacy)
+
+This file is present but does not use the v1.13.0 DSL format.
+There are no "## Mission: <id>" headings here.
+
+Some legacy test descriptions that the old format used.
+EOF
+}
+
+# CAN-13: list mode shows ⚠ when file exists but 0 DSL missions parse
+@test "CAN-13: --list shows warning symbol when file exists but 0 DSL missions parse" {
+  seed_canary_lock_atlas_only
+  seed_atlas_cache_legacy_format
+
+  run eidolons canary --list
+  [ "$status" -eq 0 ]
+  # Must contain the atlas entry
+  [[ "$output" =~ "atlas@1.7.1" ]]
+  # Must show the warning message for legacy format (no ✓, no ·)
+  [[ "$output" =~ "file present, 0 missions in v1.13.0 DSL format" ]]
+  # Must NOT show the parseable-missions message
+  [[ ! "$output" =~ "mission(s):" ]]
+}
+
+# CAN-14: list mode summary line reflects three counts (parseable / legacy / missing)
+@test "CAN-14: --list summary line reflects three counts" {
+  # Lock has atlas@1.7.1 (legacy format) and vigil@1.1.0 (no file)
+  seed_canary_lock
+  seed_atlas_cache_legacy_format
+  seed_vigil_cache_no_missions
+
+  run eidolons canary --list
+  [ "$status" -eq 0 ]
+  # Summary must show all three state labels
+  [[ "$output" =~ "with parseable missions" ]]
+  [[ "$output" =~ "with file-only (legacy format)" ]]
+  [[ "$output" =~ "with no file" ]]
+  # 0 parseable, 1 legacy, 1 missing
+  [[ "$output" =~ "0 with parseable missions" ]]
+  [[ "$output" =~ "1 with file-only (legacy format)" ]]
+  [[ "$output" =~ "1 with no file" ]]
 }

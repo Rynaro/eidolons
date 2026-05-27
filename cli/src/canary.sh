@@ -351,7 +351,8 @@ run_list_mode() {
     exit 0
   fi
 
-  local have_count=0
+  local parsed_count=0
+  local legacy_count=0
   local miss_count=0
   local list_lines=""
 
@@ -370,22 +371,23 @@ run_list_mode() {
     local cache_dir="$CACHE_DIR/$name@$version"
     local missions_file="$cache_dir/evals/canary-missions.md"
 
-    local line
     if [[ -f "$missions_file" ]]; then
       local ids
       ids="$(list_mission_ids "$missions_file" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
       local count
       # Use awk for counting to avoid grep exit-code 1 on empty input under pipefail
       count="$(list_mission_ids "$missions_file" | awk 'NF{n++} END{print n+0}')"
-      line="  checkmark $name@$version  ($count mission(s): $ids)"
-      list_lines="${list_lines}HAVE|${name}|${version}|${count}|${ids}"$'\n'
-      have_count=$((have_count + 1))
+      if [[ "$count" -gt 0 ]]; then
+        list_lines="${list_lines}PARSED|${name}|${version}|${count}|${ids}"$'\n'
+        parsed_count=$((parsed_count + 1))
+      else
+        list_lines="${list_lines}LEGACY|${name}|${version}|0|"$'\n'
+        legacy_count=$((legacy_count + 1))
+      fi
     else
       if [[ ! -d "$cache_dir/.git" ]]; then
-        line="  dot $name@$version  (cache not populated; run 'eidolons sync')"
-        list_lines="${list_lines}MISS|${name}|${version}|0|"$'\n'
+        list_lines="${list_lines}NOCACHE|${name}|${version}|0|"$'\n'
       else
-        line="  dot $name@$version  (no canary missions authored)"
         list_lines="${list_lines}MISS|${name}|${version}|0|"$'\n'
       fi
       miss_count=$((miss_count + 1))
@@ -396,15 +398,19 @@ run_list_mode() {
     # Build JSON output
     local json_entries=""
     local first=true
-    while IFS='|' read -r status jname jver jcount jids; do
-      [[ -z "$status" ]] && continue
-      local has_missions="false"
-      [[ "$status" == "HAVE" ]] && has_missions="true"
+    while IFS='|' read -r jstate jname jver jcount jids; do
+      [[ -z "$jstate" ]] && continue
+      local jstatus
+      case "$jstate" in
+        PARSED)  jstatus="parsed" ;;
+        LEGACY)  jstatus="legacy" ;;
+        *)       jstatus="missing" ;;
+      esac
       local entry
-      entry="$(printf '{"name":%s,"version":%s,"has_missions":%s,"mission_count":%s,"mission_ids":%s}' \
+      entry="$(printf '{"name":%s,"version":%s,"status":%s,"mission_count":%s,"mission_ids":%s}' \
         "$(_json_string "$jname")" \
         "$(_json_string "$jver")" \
-        "$has_missions" \
+        "$(_json_string "$jstatus")" \
         "$jcount" \
         "$(_json_string "$jids")")"
       if [[ "$first" == "true" ]]; then
@@ -414,8 +420,8 @@ run_list_mode() {
         json_entries="$json_entries,$entry"
       fi
     done <<< "$list_lines"
-    printf '{"schema_version":"1.0","mode":"list","summary":{"with_missions":%d,"without_missions":%d},"members":[%s]}\n' \
-      "$have_count" "$miss_count" "$json_entries"
+    printf '{"schema_version":"1.1","mode":"list","summary":{"parsed":%d,"legacy":%d,"missing":%d},"members":[%s]}\n' \
+      "$parsed_count" "$legacy_count" "$miss_count" "$json_entries"
     return 0
   fi
 
@@ -437,17 +443,26 @@ run_list_mode() {
       ids="$(list_mission_ids "$missions_file" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
       local count
       count="$(list_mission_ids "$missions_file" | awk 'NF{n++} END{print n+0}')"
-      printf '  \xe2\x9c\x93 %s@%s  (%d mission(s): %s)\n' "$name" "$version" "$count" "$ids"
+      if [[ "$count" -gt 0 ]]; then
+        # ✓ U+2713 = \xe2\x9c\x93
+        printf '  \xe2\x9c\x93 %s@%s  (%d mission(s): %s)\n' "$name" "$version" "$count" "$ids"
+      else
+        # ⚠ U+26A0 = \xe2\x9a\xa0
+        printf '  \xe2\x9a\xa0 %s@%s  (file present, 0 missions in v1.13.0 DSL format)\n' "$name" "$version"
+      fi
     else
       if [[ ! -d "$cache_dir/.git" ]]; then
+        # · U+00B7 = \xc2\xb7
         printf '  \xc2\xb7 %s@%s  (cache not populated; run '"'"'eidolons sync'"'"')\n' "$name" "$version"
       else
+        # · U+00B7 = \xc2\xb7
         printf '  \xc2\xb7 %s@%s  (no canary missions authored)\n' "$name" "$version"
       fi
     fi
   done <<< "$members"
 
-  printf '\n%d with missions, %d without\n' "$have_count" "$miss_count"
+  printf '\n%d with parseable missions, %d with file-only (legacy format), %d with no file\n' \
+    "$parsed_count" "$legacy_count" "$miss_count"
 }
 
 # ─── MODE: prompt ─────────────────────────────────────────────────────────────
