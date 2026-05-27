@@ -28,7 +28,7 @@ eidolons <command> [options]
 |------|-------|---------|
 | `~/.eidolons/nexus/` | user | Cloned nexus |
 | `~/.eidolons/nexus/.install_ref` | user | CLI self-pin ref (written by `install.sh` and `upgrade self`). |
-| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. |
+| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. Installs predating v1.11.0 that lack this file are auto-healed by `nexus_refresh()` and `upgrade self`: the file is backfilled with `$EIDOLONS_ROSTER_REF` when set, otherwise `main` (see CHANGELOG [1.13.3]). |
 | `~/.eidolons/cache/` | user | Cloned Eidolon repos (per name + version) |
 | `./eidolons.yaml` | project | Your team manifest |
 | `./eidolons.lock` | project | Resolved versions |

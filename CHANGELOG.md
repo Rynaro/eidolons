@@ -17,6 +17,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - spectra v4.5.2 published in the roster with release integrity metadata.
 - atlas v1.7.2 published in the roster with release integrity metadata.
 
+## [1.13.3] — 2026-05-27
+
+### Fixed
+
+- Auto-backfill `.roster_ref` for installs predating v1.11.0. Users who
+  upgraded into v1.11.0+ from older nexus (or ran `upgrade self` before
+  v1.11.0 existed) didn't have the file on disk; `nexus_refresh()` fell
+  back to `.install_ref` (the install tag) and the cache never tracked
+  main. Now `nexus_refresh()` and `upgrade self` both ensure the file
+  exists, defaulting to `main` (or `$EIDOLONS_ROSTER_REF` if set).
+
 ## [1.13.2] — 2026-05-27
 
 ### Fixed
