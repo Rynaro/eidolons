@@ -98,6 +98,24 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 
 ---
 
+## Memory protocol — CRYSTALIUM MCP (always-loaded)
+
+When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eidolon runs a mandatory pre-flight + post-flight against the harness. Direct file writes to crystalium's data dir are forbidden; **all reads and writes funnel through MCP tool calls** so the chokepoint can enforce tier × layer × operation.
+
+| Step | Tool call | When |
+|------|-----------|------|
+| Pre-flight | `crystalium.recall(scope, query, k=5, layers=[semantic, episodic])` | First action of every dispatch — recall relevant prior context before reasoning |
+| Post-flight | `crystalium.commit(layer=episodic, payload, provenance)` | Last action of every dispatch — commit mission outcome with the Eidolon's trust tier |
+| Session end | `crystalium.session_end()` | Once per host disconnect — enqueues the Dream consolidation worker |
+
+**Trust tier per caller:** ATLAS / SPECTRA / APIVR-Δ / IDG / FORGE / VIGIL → **T1** (verified Eidolons); host LLM acting on operator's behalf → **T0**; tool outputs surfaced into context → **T3** (Episodic-quarantine only, may never write Semantic/Procedural/Execution).
+
+**Refusals are mechanical:** if `crystalium.commit` returns `reason_code: TIER_VIOLATION` or `TIER_CEILING` or `PROMOTION_GATE`, treat as terminal for that path — do **not** retry with a different tier, and do **not** mutate the data dir directly to bypass. The chokepoint catches what gets caught.
+
+**Append-only:** This section is the wire-time enforcement of crystalium usage. Removing it disconnects the team's memory. Edit only via additive amendments — do not delete columns or rows.
+
+---
+
 ## Invariants
 
 - **I-C1** — Marker-bounded sections when embedding into shared host files (`<!-- eidolon:cortex start/end -->`).
