@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "crystalium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "crystalium-__PROJECT_SLUG__",
+        "--label",
+        "eidolons.project=__PROJECT_SLUG__",
+        "-v",
+        "__HOME__/.crystalium/__PROJECT_SLUG__:/root/.crystalium/__PROJECT_SLUG__",
+        "-e",
+        "CRYSTALIUM_DATA_DIR=/root/.crystalium/__PROJECT_SLUG__",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/crystalium@__IMAGE_DIGEST__",
+        "python",
+        "-m",
+        "crystalium",
+        "serve"
+      ]
+    }
+  }
+}
