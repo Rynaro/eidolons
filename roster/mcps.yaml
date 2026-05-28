@@ -4,7 +4,7 @@
 # Companion lockfile: eidolons.mcp.lock (project-level; commit to VCS).
 # catalogue_version 1.1: adds grants_to_eidolons + exposes_tools fields (additive).
 catalogue_version: "1.1"
-updated_at: "2026-05-25T00:00:00Z"
+updated_at: "2026-05-28T00:00:00Z"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -88,3 +88,50 @@ mcps:
         - binary_present
         - binary_version
         - docker_daemon_optional
+
+  - name: crystalium
+    display_name: "CRYSTALIUM"
+    scope: system
+    kind: oci-image
+    description: "Portable memory harness — four-layer crystal lattice (Episodic/Semantic/Procedural/Execution) with gated writes, hybrid retrieval, and async consolidation."
+    use_cases:
+      - "Cross-session memory recall (mission history, project conventions, verified skills)."
+      - "Gated semantic promotion (≥k corroboration or human-confirm)."
+      - "Verifier-sandboxed procedural skill admission."
+      - "Bi-temporal updates (invalidate-old + write-new; never hard-delete)."
+    related_eidolons: []
+    grants_to_eidolons: all
+    exposes_tools:
+      glob: "mcp__crystalium__*"
+      list:
+        - mcp__crystalium__recall
+        - mcp__crystalium__commit
+        - mcp__crystalium__update
+        - mcp__crystalium__skill_invoke
+        - mcp__crystalium__plan_checkpoint
+        - mcp__crystalium__plan_replan
+        - mcp__crystalium__session_end
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/crystalium"
+    versions:
+      latest: "0.1.0"
+      pins:
+        stable: "0.1.0"
+      releases:
+        "0.1.0":
+          digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
+          released_at: "2026-05-28T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+        - ".cursor/mcp.json"
+        - ".github/agents/*"
+        - ".codex/config.toml"
+      template: "cli/templates/mcp/crystalium.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+        - docker_daemon
+        - image_local
+        - registry_reachable
