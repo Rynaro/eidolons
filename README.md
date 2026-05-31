@@ -4,7 +4,7 @@
 
 > A personal, portable team of AI agents. Each is a named specialist with its own methodology, identity, and boundaries. They work alone when the task is sharp; they work in harmony when the task is big; they travel together, from project to project, codebase to codebase, host to host.
 
-Most AI coding tools ship a single generalist that tries to plan, scout, build, and document all at once — a ceiling that arrives fast. Eidolons is a different shape: six independently-versioned specialists, one CLI, drop into any project. You get sharp boundaries instead of one confused generalist — plan, build, document, debug, and reason with the right specialist for each phase. They travel with you across projects and hosts (Claude Code, Copilot, Cursor, OpenCode, Codex).
+Most AI coding tools ship a single generalist that tries to plan, scout, build, and document all at once — a ceiling that arrives fast. Eidolons is a different shape: seven independently-versioned specialists, one CLI, drop into any project. You get sharp boundaries instead of one confused generalist — plan, build, document, debug, and reason with the right specialist for each phase, over a shared memory substrate that remembers across them. They travel with you across projects and hosts (Claude Code, Copilot, Cursor, OpenCode, Codex).
 
 <p align="center">
 <a href="https://github.com/Rynaro/eidolons/actions/workflows/roster-health.yml"><img src="https://github.com/Rynaro/eidolons/actions/workflows/roster-health.yml/badge.svg" alt="Roster Health"></a>
@@ -41,14 +41,15 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. For the full install fl
 | **IDG**<br><sub>I→D→G</sub> | Synthesizes documentation from sessions, specs, and deltas — provenance-first, with `[GAP]` / `[DISPUTED]` markers. | Chronicling what you (or the team) just built. | [Rynaro/IDG](https://github.com/Rynaro/IDG) | 1.4.2 |
 | **FORGE**<br><sub>F→O→R→G→E</sub> | Deliberates on ambiguous trade-offs and novel problems. Names alternatives, surfaces assumptions, returns verdict + confidence. | Two patterns apply and the choice isn't obvious. | [Rynaro/FORGE](https://github.com/Rynaro/FORGE) | 1.5.2 |
 | **VIGIL**<br><sub>V→I→G→I→L</sub> | Forensic debugger for failures resistant to normal repair. Reproduction-gated, counterfactual-verified, dependency-graph-ranked. | Flaky test, heisenbug, or a regression you can't explain. | [Rynaro/VIGIL](https://github.com/Rynaro/VIGIL) | 1.3.2 |
+| **CRYSTALIUM**<br><sub>recall→commit→consolidate→forget</sub> | Shared four-layer memory substrate (episodic / semantic / procedural / execution) every member writes to and recalls from. Tier-gated writes through one enforcement chokepoint, hybrid recall, Dream consolidation, principled forgetting. | Carrying context, decisions, and learned patterns across sessions and between members. | [Rynaro/CRYSTALIUM](https://github.com/Rynaro/CRYSTALIUM) | 1.0.0 |
 
-Versions and detailed handoff contracts live in [`roster/index.yaml`](roster/index.yaml) — the machine-readable source of truth.
+The first six are agent specialists; **CRYSTALIUM** is a different capability class — `memory`, the shared substrate underneath the roster rather than a pipeline stage. Versions and detailed handoff contracts live in [`roster/index.yaml`](roster/index.yaml) — the machine-readable source of truth.
 
 ---
 
 ## How they compose
 
-The team has a default shape: ATLAS scouts, SPECTRA plans, APIVR-Δ builds, IDG chronicles. FORGE and VIGIL are lateral specialists — consultable at any stage, not always in-line. Partial teams are first-class; bring just ATLAS to an audit, the full pipeline to a greenfield, or any slice that fits your project. See [`methodology/composition.md#partial-team-deployment`](methodology/composition.md#partial-team-deployment) for the full matrix and common configurations.
+The team has a default shape: ATLAS scouts, SPECTRA plans, APIVR-Δ builds, IDG chronicles. FORGE and VIGIL are lateral specialists — consultable at any stage, not always in-line. CRYSTALIUM sits underneath all of them — the shared memory substrate every member writes handoff artifacts into and recalls from, bidirectionally; not a pipeline stage. Partial teams are first-class; bring just ATLAS to an audit, the full pipeline to a greenfield, or any slice that fits your project. See [`methodology/composition.md#partial-team-deployment`](methodology/composition.md#partial-team-deployment) for the full matrix and common configurations.
 
 <details>
 <summary>Canonical pipeline</summary>
@@ -61,6 +62,10 @@ ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
            FORGE ◀─── (ambiguity, trade-offs, novel problems)
                             │ │
                           VIGIL ◀─── (failure resisted repair; forensic attribution)
+
+  ╞══════════════════ CRYSTALIUM ══════════════════╡
+   shared memory substrate — every member commits handoff
+   artifacts and recalls them (bidirectional, not a stage)
 ```
 
 </details>
@@ -149,9 +154,9 @@ Each Eidolon is independently installable and independently versioned — that's
 
 1. **Discovery.** Without a roster, nobody knows which Eidolons exist or how they relate.
 2. **Composition.** The team is more than the sum of its members. Handoff contracts, pipeline conventions, and partial-team deployment patterns live here, not in any individual Eidolon's repo.
-3. **Research.** The scientific backing for the whole program — papers, production precedents, evidence-to-design mappings — is a shared asset. Duplicating it across five repos is wasteful and drifts.
+3. **Research.** The scientific backing for the whole program — papers, production precedents, evidence-to-design mappings — is a shared asset. Duplicating it across seven repos is wasteful and drifts.
 4. **Installation orchestration.** A single `eidolons add atlas,spectra,apivr` is worth fifty lines of documentation explaining how to clone three repos and run three installers.
-5. **Supply-chain integrity.** The release-integrity contract is a *shared* asset: one canonical signing workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) every Eidolon adopts, one ingestion path ([`Roster Intake`](.github/workflows/roster-intake.yml)) that verifies attestations, one consumer-side gate (`eidolons verify`) that enforces them. Six independent repos with six independent signing schemes would defeat the trust model.
+5. **Supply-chain integrity.** The release-integrity contract is a *shared* asset: one canonical signing workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) every Eidolon adopts, one ingestion path ([`Roster Intake`](.github/workflows/roster-intake.yml)) that verifies attestations, one consumer-side gate (`eidolons verify`) that enforces them. Seven independent repos with seven independent signing schemes would defeat the trust model.
 
 Each Eidolon remains a first-class repo. This nexus is a coordinator, not an owner. The four-layer architecture (install standard → Eidolon repos → this nexus → consumer project) is documented in [`docs/architecture.md`](docs/architecture.md).
 
