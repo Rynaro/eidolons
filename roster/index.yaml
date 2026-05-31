@@ -6,8 +6,8 @@
 # Schema: ../schemas/roster-entry.schema.json
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
-registry_version: "1.0"
-updated_at: "2026-05-27T21:52Z"
+registry_version: "1.1"
+updated_at: "2026-05-31T18:00Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -827,6 +827,43 @@ eidolons:
       - "research/papers/graphtracer.md"
       - "research/papers/agentracer.md"
       - "research/papers/lifecycle-of-failures.md"
+  - name: crystalium
+    display_name: CRYSTALIUM
+    capability_class: memory
+    status: shipped
+    methodology:
+      name: CRYSTALIUM
+      version: "1.0"
+      cycle: "recall→commit→consolidate→forget"
+      summary: "Shared four-layer memory substrate (episodic/semantic/procedural/execution). Tier-gated writes through one enforcement chokepoint, hybrid recall, Dream consolidation, principled forgetting; ingests roster ECL handoffs preserving provenance + MIN trust tier."
+    source:
+      type: github
+      repo: Rynaro/CRYSTALIUM
+      default_ref: main
+    versions:
+      latest: "1.0.0"
+      pins:
+        stable: "1.0.0"
+      releases:
+        1.0.0:
+          tag: v1.0.0
+          commit: 459d2228fb0dfd8b74efa1ec629307487a73ed67
+          tree: 77acbeb9b35d1ff9207e8f55c92854676d3f80e0
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+    install:
+      target_default: "./.eidolons/crystalium"
+      standalone: true
+    handoffs:
+      # Bidirectional shared substrate: every roster Eidolon both writes handoff
+      # artifacts into CRYSTALIUM and recalls them from it.
+      upstream: [atlas, spectra, apivr, idg, forge, vigil]
+      downstream: [atlas, spectra, apivr, idg, forge, vigil]
+    working_set_tokens:
+      entry: 944
+      target: 3500
 # ─── Nexus ─────────────────────────────────────────────────────────────────────
 # Self-describing metadata for the nexus CLI. Not an Eidolon — not listed in
 # eidolons[] and not subject to roster-intake. The release workflow
