@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- crystalium v1.2.0 published in the roster with release integrity metadata.
+
 ## [1.14.0] — 2026-06-01
 
 ### Changed

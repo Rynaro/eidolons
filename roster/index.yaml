@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-05-31T18:00Z"
+updated_at: "2026-06-01T23:43Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -862,8 +862,9 @@ eidolons:
             workflow: .github/workflows/release.yml
         1.2.0:
           tag: v1.2.0
-          commit:
-          tree:
+          commit: bfcdf7fba5a3c2398d8678712c0fc5a573ceec1c
+          tree: f2724306423505ec828b605401573a05eae2aef2
+          archive_sha256: d82d351bf1d74f66e930032f8d34543a955bd61c9f1071955dde01211deee2c8
           manifest_sha256:
           provenance:
             github_attestation: true
