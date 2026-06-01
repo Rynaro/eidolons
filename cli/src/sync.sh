@@ -650,9 +650,9 @@ fi
 # dispatch to. Mirrors the per-Eidolon upsert pattern via upsert_marker_block.
 CORTEX_BLOCK="## Eidolons Routing Cortex
 
-When a free-form prompt arrives that doesn't already name an Eidolon, route it via the cortex.
+**Default operating mode:** route all non-trivial work through the Eidolons pipeline — this is the default, not an opt-in. The orchestrator delegates to Eidolon roles via the cortex and does not implement, spec, or scout directly. Answer directly only when a prompt is trivial, conversational, or a single-fact lookup.
 
-**Read:** \`.eidolons/cortex/EIDOLONS.md\` — always-loaded descriptor table + dispatch protocol. It tells you which Eidolon (or chain) handles the prompt, at what tier (\`standard\` or \`TRANCE\`), and what hand-off contract to use.
+**Read:** \`.eidolons/cortex/EIDOLONS.md\` — always-loaded descriptor table + dispatch protocol. It tells you which Eidolon (or chain) handles the prompt, at what tier (\`standard\` is the default; \`TRANCE\` is gated, never default), and what hand-off contract to use.
 
 **Deep tables** (load on demand): \`.eidolons/cortex/trance-matrix.md\`, \`.eidolons/cortex/handoff-graph.md\`, \`.eidolons/cortex/validation-gates.md\`."
 
