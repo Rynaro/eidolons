@@ -104,15 +104,29 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 
 When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eidolon runs a mandatory pre-flight + post-flight against the harness. Direct file writes to crystalium's data dir are forbidden; **all reads and writes funnel through MCP tool calls** so the chokepoint can enforce tier × layer × operation.
 
+**Wiring:** crystalium is `wiring_mode: allowlist/direct` — `mcp__crystalium__*` tools ARE injected into each Eidolon's agent `tools:` allowlist (same as atlas-aci; opposite of junction's transport-only wiring).
+
 | Step | Tool call | When |
 |------|-----------|------|
-| Pre-flight | `crystalium.recall(scope, query, k=5, layers=[semantic, episodic])` | First action of every dispatch — recall relevant prior context before reasoning |
-| Post-flight | `crystalium.commit(layer=episodic, payload, provenance)` | Last action of every dispatch — commit mission outcome with the Eidolon's trust tier |
-| Session end | `crystalium.session_end()` | Once per host disconnect — enqueues the Dream consolidation worker |
+| Pre-flight | `mcp__crystalium__recall(scope, query, k=5, layers=[semantic, episodic])` | First action of every dispatch — recall relevant prior context before reasoning |
+| Write spine | `mcp__crystalium__ingest(ecl_envelope)` | Primary persist path — ingest the ECL hand-off envelope; derives T1 identity from `from.eidolon`, preserves provenance + MIN-trust |
+| Raw notes | `mcp__crystalium__commit(layer=episodic, payload, provenance)` | Direct episodic write — mission notes, intermediate findings |
+| Plan gate | `mcp__crystalium__plan_checkpoint / plan_replan` | APIVR-Δ and FORGE execution-layer checkpoints (T0/T1 only) |
+| Session end | `mcp__crystalium__session_end()` | Once per host disconnect — enqueues the Dream consolidation worker |
 
-**Trust tier per caller:** ATLAS / SPECTRA / APIVR-Δ / IDG / FORGE / VIGIL → **T1** (verified Eidolons); host LLM acting on operator's behalf → **T0**; tool outputs surfaced into context → **T3** (Episodic-quarantine only, may never write Semantic/Procedural/Execution).
+**Trust-tier map:**
 
-**Refusals are mechanical:** if `crystalium.commit` returns `reason_code: TIER_VIOLATION` or `TIER_CEILING` or `PROMOTION_GATE`, treat as terminal for that path — do **not** retry with a different tier, and do **not** mutate the data dir directly to bypass. The chokepoint catches what gets caught.
+| Tier | Callers | Permitted layers |
+|------|---------|-----------------|
+| T0 | Host / operator (CLI-only: forget, force_promote, review) | All four layers |
+| T1 | ATLAS / SPECTRA / APIVR-Δ / IDG / FORGE / VIGIL | episodic, semantic, procedural, execution |
+| T3 | Tool-origin artefacts (enter via `ingest` only) | episodic (quarantined); may never write semantic/procedural/execution |
+
+**ECL → ingest mapping:** when a hand-off envelope is available, `ingest(ecl_envelope)` is the primary commit path. The field `from.eidolon` determines tier (T1 for all six Eidolons). `thread_id` scopes to the current chain run. SHA-256 provenance is preserved verbatim from the envelope's `integrity.value`.
+
+**Refusals are mechanical:** if any crystalium tool returns `reason_code: TIER_VIOLATION`, `TIER_CEILING`, or `PROMOTION_GATE`, treat as terminal for that path — do **not** retry with a different tier, and do **not** mutate the data dir directly to bypass. The chokepoint catches what gets caught.
+
+**Deep table:** `methodology/cortex/memory-protocol.md` — full 8-tool surface, layer × tier × operation matrix, Dream consolidation knobs, skill_invoke sandboxing, bi-temporal update rules.
 
 **Append-only:** This section is the wire-time enforcement of crystalium usage. Removing it disconnects the team's memory. Edit only via additive amendments — do not delete columns or rows.
 

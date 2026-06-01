@@ -107,6 +107,30 @@ reliable fallback when atlas-aci is absent.
 
 ---
 
+## CRYSTALIUM — Allowlist/Direct Wiring (all Eidolons)
+
+`crystalium` follows the same **allowlist/direct** wiring model as `atlas-aci` —
+**not** junction's transport-only model. When installed, `mcp__crystalium__*` tools
+are injected into every Eidolon's `tools:` allowlist (`grants_to_eidolons: all`
+means allowlist-injection for all six Eidolons, not transport-eligibility).
+
+| Wiring dimension | junction | atlas-aci | crystalium |
+|---|---|---|---|
+| `wiring_mode` | `transport` | `allowlist` (default) | `allowlist` (default) |
+| Agent `tools:` injection | Never | ATLAS only | All six Eidolons |
+| `.mcp.json` server entry | Yes | Yes | Yes |
+| Rationale | Bus; parent dispatches | In-agent structural reads | Shared memory; every Eidolon recalls/commits |
+
+The distinction is load-bearing: `mcp_wiring_grant_targets` short-circuits to zero
+targets only for `wiring_mode: transport`. Crystalium has no `wiring_mode` field in
+the catalogue, so it defaults to allowlist/direct and all six Eidolons receive
+`mcp__crystalium__*` in their `tools:` line.
+
+For the full memory protocol (8-tool surface, layer × tier matrix, Dream consolidation),
+see `memory-protocol.md`.
+
+---
+
 ## Open Questions Carried Forward
 
 | ID | Assumption | Mitigation |

@@ -229,6 +229,29 @@ rendered into `.mcp.json`.
 
 ---
 
+## Memory substrate — CRYSTALIUM
+
+CRYSTALIUM (`Rynaro/crystalium`, kind `oci-image`) is the shared-memory MCP for the Eidolon team. It is wired **allowlist/direct** — unlike junction (transport-only), `mcp__crystalium__*` tools are injected into every Eidolon's `tools:` allowlist. When installed, every Eidolon can recall prior context and commit mission outcomes without parent orchestration.
+
+**Four layers (Crystal Lattice):**
+
+| Layer | Purpose | Write access |
+|-------|---------|-------------|
+| **Episodic** | Raw mission notes, intermediate findings, tool artefacts | T0, T1, T3 (quarantined for T3) |
+| **Semantic** | Promoted facts, project conventions, corroborated knowledge | T0, T1 only |
+| **Procedural** | Verified skills; executed via `skill_invoke` sandbox | T0, T1 only |
+| **Execution** | Plan checkpoints, replan branches, pipeline state | T0, T1 only |
+
+**Bidirectional flow:** Eidolons read from all layers (recall) and write back in the same dispatch turn (commit/ingest). The write spine for hand-offs is `ingest(ecl_envelope)`, which derives tier from the ECL envelope's `from.eidolon` field and preserves provenance.
+
+**Trust-tier gating:** T0 = host/operator (has `forget`, `force_promote`); T1 = the six Eidolons; T3 = tool-origin artefacts (episodic quarantine only). Operations that violate tier constraints return `reason_code: TIER_CEILING` and must be treated as terminal.
+
+**Dream consolidation:** async episodic→semantic promotion triggered by `session_end` or an idle-poll (default 60s gap). Candidates are grouped by topic and must reach ≥ 2 corroborating independent sources before auto-promotion. Promoted entries inherit MIN-trust across the corroboration set. See `methodology/cortex/memory-protocol.md` for all knobs.
+
+**Security:** crystalium's data dir is bind-mounted per project (`~/.crystalium/<project-slug>/`). Direct filesystem writes are forbidden; all access funnels through MCP tool calls enforced by the server. The server runs under `--cap-drop ALL --security-opt no-new-privileges`.
+
+---
+
 ## Versioning
 
 | Artifact | Versioning scheme | Breaking-change policy |

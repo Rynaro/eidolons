@@ -44,5 +44,6 @@ lint:
 schema:
 	@jq empty schemas/*.json
 	@yq eval '.' roster/index.yaml >/dev/null
+	@bash cli/src/check_roster_mcp_skew.sh
 
 check: lint schema test

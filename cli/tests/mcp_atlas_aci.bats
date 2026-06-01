@@ -656,3 +656,69 @@ file_md5() {
   count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons mcp atlas-aci --skip-image-check 2>&1 | grep -c "DEPRECATED" || true)"
   [ "$count" -eq 0 ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# OCI merge coexistence — atlas-aci + crystalium in the same .mcp.json
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Asserts that installing atlas-aci then rendering+merging the crystalium
+# template into the SAME .mcp.json file preserves BOTH mcpServers entries,
+# expands __HOME__, and carries CRYSTALIUM_CALLER_TIER=T1.
+#
+# Uses _mcp_oci_render_and_merge (the generalized OCI driver helper from
+# lib_mcp.sh) directly so no running Docker daemon is needed for crystalium.
+# atlas-aci is installed via run_generator (which already uses the fake-docker
+# shim set up by setup()).
+
+@test "OCI merge: atlas-aci + crystalium coexist in .mcp.json — both entries survive, __HOME__ expanded, T1 present" {
+  local project="$BATS_TEST_TMPDIR/coexist-project"
+  mkdir -p "$project"
+
+  # Step 1: install atlas-aci first (uses run_generator which injects fake docker).
+  run_generator --project-root "$project"
+  [ "$status" -eq 0 ]
+  [ -f "$project/.mcp.json" ]
+
+  # Confirm atlas-aci entry is present before merge.
+  run bash -c "jq -e '.mcpServers[\"atlas-aci\"]' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # Step 2: render+merge crystalium template via _mcp_oci_render_and_merge.
+  # We source lib_mcp.sh directly (no Docker needed — we bypass the OCI driver's
+  # pre-flight and call the merge helper). A synthetic digest is used.
+  local crystalium_digest="sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  local crystalium_tmpl="cli/templates/mcp/crystalium.mcp.json.tmpl"
+
+  run bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    . '$EIDOLONS_ROOT/cli/src/lib_mcp.sh'
+    _mcp_oci_render_and_merge crystalium '$project' '$crystalium_digest' '$crystalium_tmpl'
+  "
+  [ "$status" -eq 0 ]
+
+  # Both entries must survive in the merged .mcp.json.
+  run bash -c "jq -e '.mcpServers[\"atlas-aci\"]' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcpServers[\"crystalium\"]' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # __HOME__ must be fully expanded — no literal __HOME__ anywhere.
+  run bash -c "grep -q '__HOME__' '$project/.mcp.json'"
+  [ "$status" -ne 0 ]
+
+  # CRYSTALIUM_CALLER_TIER=T1 must be present in the crystalium args.
+  run bash -c "jq -e 'any(.mcpServers.crystalium.args[]; . == \"CRYSTALIUM_CALLER_TIER=T1\")' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # .mcp.json must still be valid JSON after the merge.
+  run bash -c "jq empty '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # md5 sanity: the file must be non-empty (real content written).
+  local hash
+  hash="$(file_md5 "$project/.mcp.json")"
+  [ -n "$hash" ]
+}

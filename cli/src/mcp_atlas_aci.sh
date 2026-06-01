@@ -218,27 +218,81 @@ else
   info "$GITKEEP already present — skipping"
 fi
 
-# ─── Idempotency guard ────────────────────────────────────────────────────
+# ─── Render template + jq-merge ──────────────────────────────────────────
+# Render the atlas-aci template by substituting all placeholders (sed, no eval).
+# Then jq-merge the rendered entry into any existing .mcp.json so that sibling
+# MCP server entries (e.g. crystalium) are preserved rather than overwritten.
+#
+# Merge semantics (idempotent — re-running with the same digest = no diff):
+#   - Missing .mcp.json → write fresh file (normalised through jq).
+#   - Present valid JSON → jq-merge: .mcpServers["atlas-aci"] added/updated,
+#     all other keys preserved.
+#   - Present invalid JSON AND --force=false → die (data-loss guard).
+#   - Present invalid JSON AND --force=true → overwrite with fresh file.
 MCP_JSON="$PROJECT_ROOT/.mcp.json"
 
-if [[ -f "$MCP_JSON" ]] && [[ "$FORCE" != "true" ]]; then
-  die "$MCP_JSON already exists.
-  Re-run with --force to overwrite it, or merge manually.
-  Note: --force never deletes .atlas/memex/codegraph.db."
-fi
-
-# ─── Render template ──────────────────────────────────────────────────────
 say "Rendering template: $TEMPLATE_FILE"
 
 # Use | as the sed delimiter so absolute paths (which contain /) are safe.
-# Three substitution passes: PROJECT_ROOT, PROJECT_SLUG, IMAGE_DIGEST.
-sed \
+# Four substitution passes: PROJECT_ROOT, PROJECT_SLUG, IMAGE_DIGEST, HOME.
+_RENDERED="$(sed \
   -e "s|__PROJECT_ROOT__|${PROJECT_ROOT}|g" \
   -e "s|__PROJECT_SLUG__|${PROJECT_SLUG}|g" \
   -e "s|__IMAGE_DIGEST__|${IMAGE_DIGEST}|g" \
-  "$TEMPLATE_FILE" > "$MCP_JSON"
+  -e "s|__HOME__|${HOME}|g" \
+  "$TEMPLATE_FILE")"
 
-ok "Written: $MCP_JSON"
+_MCP_TMP="$(mktemp)"
+
+if [ ! -f "$MCP_JSON" ]; then
+  # Fresh write — normalise through jq for canonical form (atomic).
+  if printf '%s\n' "$_RENDERED" | jq '.' > "$_MCP_TMP" 2>/dev/null; then
+    mv "$_MCP_TMP" "$MCP_JSON"
+    ok "Written: $MCP_JSON"
+  else
+    rm -f "$_MCP_TMP"
+    die "jq failed to normalise atlas-aci template — aborting .mcp.json write"
+  fi
+elif jq empty "$MCP_JSON" 2>/dev/null; then
+  # Existing valid JSON. Two cases:
+  #   - Our atlas-aci entry is already present AND --force not set → refuse
+  #     (data-loss guard: protects a user-edited atlas-aci entry). The file is
+  #     left byte-for-byte unchanged. Sibling entries are irrelevant here.
+  #   - Our entry is absent (e.g. only sibling MCPs like crystalium present), or
+  #     --force is set → jq-merge: add/update atlas-aci, preserve all siblings.
+  if [ "$FORCE" != "true" ] \
+     && [ -n "$(jq -r '.mcpServers["atlas-aci"] // empty' "$MCP_JSON" 2>/dev/null)" ]; then
+    rm -f "$_MCP_TMP"
+    die "$MCP_JSON already has an atlas-aci entry.
+  Re-run with --force to regenerate it (sibling MCP entries are preserved).
+  Note: --force never deletes .atlas/memex/codegraph.db."
+  fi
+  if printf '%s\n' "$_RENDERED" \
+    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
+        - "$MCP_JSON" \
+    > "$_MCP_TMP" 2>/dev/null; then
+    mv "$_MCP_TMP" "$MCP_JSON"
+    ok "Merged: $MCP_JSON (atlas-aci entry added/updated; sibling entries preserved)"
+  else
+    rm -f "$_MCP_TMP"
+    die "jq merge failed — aborting .mcp.json write"
+  fi
+else
+  # Existing file is not valid JSON.
+  rm -f "$_MCP_TMP"
+  if [[ "$FORCE" == "true" ]]; then
+    warn "$MCP_JSON is not valid JSON — overwriting with fresh atlas-aci entry (--force)"
+    if printf '%s\n' "$_RENDERED" | jq '.' > "$MCP_JSON" 2>/dev/null; then
+      ok "Written: $MCP_JSON"
+    else
+      die "jq failed to normalise atlas-aci template — aborting .mcp.json write"
+    fi
+  else
+    die "$MCP_JSON is not valid JSON.
+  Re-run with --force to overwrite it, or fix the JSON manually.
+  Note: --force never deletes .atlas/memex/codegraph.db."
+  fi
+fi
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 info "Atlas-ACI MCP scaffold complete."

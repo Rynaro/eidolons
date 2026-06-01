@@ -975,3 +975,222 @@ EOF
   ! grep -q 'mcp__junction__' .claude/agents/atlas.md
   ! grep -q 'mcp__junction__' .claude/agents/forge.md
 }
+
+# ─── Fixture: mcps catalogue that includes crystalium (allowlist/direct) ─────
+#
+# crystalium has grants_to_eidolons: all and NO wiring_mode field (so it
+# defaults to allowlist/direct). Contrast with junction which has
+# wiring_mode: transport and is therefore never injected into agent files.
+
+seed_mcps_catalogue_with_crystalium() {
+  local nexus_override="${1:-$EIDOLONS_ROOT}"
+  mkdir -p "$nexus_override/roster"
+  cat > "$nexus_override/roster/mcps.yaml" <<'EOF'
+catalogue_version: "1.2"
+updated_at: "2026-06-01T00:00:00Z"
+mcps:
+  - name: junction
+    display_name: "Junction"
+    scope: system
+    kind: binary
+    description: "Container-isolated agent harness."
+    use_cases:
+      - "Sandbox APIVR-Delta implementation work."
+    related_eidolons: []
+    grants_to_eidolons: all
+    wiring_mode: transport
+    exposes_tools:
+      glob: "mcp__junction__*"
+      list:
+        - mcp__junction__harness_run
+        - mcp__junction__harness_verify
+    source:
+      type: github_release
+      repo: "Rynaro/Junction"
+      install_url: "https://example.com/junction/install.sh"
+    versions:
+      latest: "0.2.0"
+      pins:
+        stable: "0.2.0"
+      releases:
+        "0.2.0":
+          archive_sha256: ""
+          released_at: "2026-05-19T00:00:00Z"
+    install:
+      cache_path: "$EIDOLONS_HOME/cache/junction@<version>/"
+      marker: ".eidolons/harness/manifest.json"
+    health:
+      probes:
+        - binary_present
+
+  - name: atlas-aci
+    display_name: "Atlas-ACI"
+    scope: system
+    kind: oci-image
+    description: "Stdio MCP server exposing structural codebase intelligence."
+    use_cases:
+      - "Cross-language symbol search."
+    related_eidolons: [atlas]
+    grants_to_eidolons:
+      - atlas
+    exposes_tools:
+      glob: "mcp__atlas_aci__*"
+      list:
+        - mcp__atlas_aci__view_file
+        - mcp__atlas_aci__search_symbol
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atlas-aci"
+    versions:
+      latest: "0.2.2"
+      pins:
+        stable: "0.2.2"
+      releases:
+        "0.2.2":
+          digest: "sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
+          released_at: "2026-04-30T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+      template: "cli/templates/mcp/atlas-aci.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+
+  - name: crystalium
+    display_name: "CRYSTALIUM"
+    scope: system
+    kind: oci-image
+    description: "Portable memory harness — four-layer crystal lattice."
+    use_cases:
+      - "Cross-session memory recall."
+    related_eidolons: []
+    grants_to_eidolons: all
+    exposes_tools:
+      glob: "mcp__crystalium__*"
+      list:
+        - mcp__crystalium__recall
+        - mcp__crystalium__commit
+        - mcp__crystalium__ingest
+        - mcp__crystalium__update
+        - mcp__crystalium__skill_invoke
+        - mcp__crystalium__plan_checkpoint
+        - mcp__crystalium__plan_replan
+        - mcp__crystalium__session_end
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/crystalium"
+    versions:
+      latest: "1.2.0"
+      pins:
+        stable: "1.2.0"
+      releases:
+        "1.2.0":
+          digest: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          released_at: "2026-06-01T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+      template: "cli/templates/mcp/crystalium.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+EOF
+}
+
+# ─── W11.x — crystalium is allowlist/direct: injected into all agent files ───
+#
+# KEYSTONE: crystalium has grants_to_eidolons: all and no wiring_mode field
+# (defaults to allowlist/direct). mcp_wiring_apply_for_mcp crystalium MUST
+# inject mcp__crystalium__* into every eligible Eidolon's tools: line.
+# This is the OPPOSITE of the junction transport tests (W1.1-W1.3).
+
+@test "W11.1: crystalium is allowlist/direct — mcp_wiring_apply_for_mcp crystalium DOES inject mcp__crystalium__* into atlas.md" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas" "Read, Grep, Glob"
+  seed_claude_agent_none "forge"
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  "
+  [ "$status" -eq 0 ]
+  # KEYSTONE: crystalium is allowlist/direct — atlas.md MUST have mcp__crystalium__*.
+  grep -q 'mcp__crystalium__\*' .claude/agents/atlas.md
+  # sentinel must record crystalium wiring.
+  grep -q 'x-eidolons-mcp-wired:.*crystalium' .claude/agents/atlas.md
+}
+
+@test "W11.2: crystalium is allowlist/direct — mcp__crystalium__* injected into all eligible agent files (grants_to_eidolons: all)" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+
+  # Manifest with three agents.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.5.0"
+    source: github:Rynaro/ATLAS
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+  - name: apivr
+    version: "^3.0.0"
+    source: github:Rynaro/APIVR-Delta
+EOF
+
+  seed_claude_agent "atlas" "Read, Grep, Glob"
+  seed_claude_agent "spectra" "Read, Grep"
+  seed_claude_agent "apivr" "Read, Edit, Write"
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  "
+  [ "$status" -eq 0 ]
+  # All three agent files MUST have crystalium injected (grants_to_eidolons: all).
+  grep -q 'mcp__crystalium__\*' .claude/agents/atlas.md
+  grep -q 'mcp__crystalium__\*' .claude/agents/spectra.md
+  grep -q 'mcp__crystalium__\*' .claude/agents/apivr.md
+  # No junction injection anywhere (junction is still transport-only).
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  ! grep -q 'mcp__junction__' .claude/agents/spectra.md
+  ! grep -q 'mcp__junction__' .claude/agents/apivr.md
+}
+
+@test "W11.3: crystalium wiring is idempotent — second apply_for_mcp crystalium produces no diff (G-IDEMP)" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas" "Read, Grep, Glob"
+
+  # First apply.
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  "
+  [ "$status" -eq 0 ]
+  cp .claude/agents/atlas.md .claude/agents/atlas.md.snap
+
+  # Second apply — must produce byte-identical output.
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  "
+  [ "$status" -eq 0 ]
+  diff .claude/agents/atlas.md.snap .claude/agents/atlas.md
+}

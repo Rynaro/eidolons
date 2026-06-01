@@ -278,9 +278,113 @@ mcp_lock_remove() {
 
 # ─── oci-image driver ─────────────────────────────────────────────────────────
 
+# _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH
+# Internal helper: renders a template with placeholder substitution and
+# jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
+#
+# Placeholder substitution (all safe for bash 3.2; uses sed, no eval):
+#   __HOME__          → $HOME
+#   __PROJECT_ROOT__  → resolved absolute project root path
+#   __PROJECT_SLUG__  → slug derived from basename($PROJECT_ROOT)
+#   __IMAGE_DIGEST__  → OCI digest from catalogue (e.g. sha256:...)
+#
+# Merge semantics (idempotent by construction — see INV-1 in _mcp_binary_merge_mcp_json):
+#   - Missing .mcp.json → write fresh file (normalised through jq for canonical form).
+#   - Present valid JSON → jq-merge new server entry; all sibling keys preserved.
+#   - Present invalid JSON → warn + skip (soft-fail; no data loss).
+#
+# All log output goes to stderr per the lib.sh invariant; only paths are emitted
+# to stdout by callers that capture them.
+# Bash 3.2 compatible: no declare -A, no ${var,,}, no readarray/mapfile, no &>>.
+_mcp_oci_render_and_merge() {
+  local name="$1"
+  local project_root="$2"
+  local digest="$3"
+  local tmpl_rel="$4"
+
+  # Resolve template path: tmpl_rel is relative to NEXUS root (as stored in catalogue).
+  local tmpl
+  tmpl="${NEXUS}/${tmpl_rel}"
+  if [ ! -f "$tmpl" ]; then
+    warn "_mcp_oci_render_and_merge: template not found at ${tmpl} — skipping .mcp.json write"
+    return 0
+  fi
+
+  # Compute project slug: lowercase, replace non-alnum with '-', collapse + trim edges.
+  # 'tr' is bash 3.2 safe (no ${var,,}).
+  local _basename _project_slug
+  _basename="$(basename "$project_root")"
+  _project_slug="$(printf '%s' "$_basename" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -cs 'a-z0-9' '-' \
+    | sed -e 's|^-||' -e 's|-$||')"
+
+  # Render: substitute all known placeholders via sed (| delimiter — safe for paths).
+  # Order: longest/most-specific first to avoid partial matches.
+  local rendered
+  rendered="$(sed \
+    -e "s|__PROJECT_ROOT__|${project_root}|g" \
+    -e "s|__PROJECT_SLUG__|${_project_slug}|g" \
+    -e "s|__IMAGE_DIGEST__|${digest}|g" \
+    -e "s|__HOME__|${HOME}|g" \
+    "$tmpl")"
+
+  local mcp_json tmp
+  mcp_json="${project_root}/.mcp.json"
+  tmp="$(mktemp)"
+
+  if [ ! -f "$mcp_json" ]; then
+    # Fresh file — normalise through jq for canonical form (atomic write, INV-1).
+    if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$mcp_json"
+      ok "${name} .mcp.json entry written at ${mcp_json}"
+    else
+      rm -f "$tmp"
+      warn "jq failed to normalise ${name} template — skipping .mcp.json write"
+    fi
+    return 0
+  fi
+
+  # Pre-existing file — validate JSON before touching (soft-fail, no data loss).
+  if ! jq empty "$mcp_json" 2>/dev/null; then
+    rm -f "$tmp"
+    warn ".mcp.json at ${mcp_json} is not valid JSON — skipping ${name} server registration (manual merge required)"
+    return 0
+  fi
+
+  # jq-merge: keep all existing mcpServers; add/update the new entry.
+  # .[0] = rendered template (new entry), .[1] = existing file.
+  # The + operator merges objects: existing keys preserved, new entry added/updated.
+  if printf '%s\n' "$rendered" \
+    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
+        - "$mcp_json" \
+    > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$mcp_json"
+    ok "${name} .mcp.json entry merged into ${mcp_json}"
+  else
+    rm -f "$tmp"
+    warn "jq merge failed for ${mcp_json} — skipping ${name} server registration"
+  fi
+}
+
 # mcp_driver_oci_image_install NAME VERSION [--force] [--project-root PATH]
-# Wraps mcp_atlas_aci.sh logic (resolves digest, runs docker pre-flight, renders
-# .mcp.json from template, upserts lockfile entry).
+# Generalized OCI image install driver. Supports all oci-image catalogue entries
+# (atlas-aci, crystalium, and any future additions).
+#
+# For atlas-aci: delegates to mcp_atlas_aci.sh for Docker pre-flight + memex
+# directory setup. mcp_atlas_aci.sh now performs a jq-merge (not sed-overwrite),
+# so sibling entries in .mcp.json (e.g. crystalium) are always preserved.
+# For all other oci-image MCPs (e.g. crystalium): runs Docker pre-flight directly
+# via lib_mcp_atlas_aci.sh helpers, then calls _mcp_oci_render_and_merge.
+#
+# Placeholder substitution (bash 3.2 safe, sed-only, no eval):
+#   __HOME__          → $HOME
+#   __PROJECT_ROOT__  → absolute project root
+#   __PROJECT_SLUG__  → slug from basename(project root)
+#   __IMAGE_DIGEST__  → OCI digest from catalogue
+#
+# Idempotency: re-running install with the same version/digest produces an
+# identical .mcp.json (jq-merge of the same entry = no diff).
 mcp_driver_oci_image_install() {
   local name="$1"
   local version="$2"
@@ -298,32 +402,49 @@ mcp_driver_oci_image_install() {
 
   project_root="${project_root:-$(pwd)}"
 
-  # Build mcp_atlas_aci.sh args.
-  local aci_args=""
-  if [ "$force" = "true" ]; then
-    aci_args="--force"
-  fi
+  # Resolve to absolute path.
+  project_root="$(cd "$project_root" 2>/dev/null && pwd)" \
+    || { warn "mcp_driver_oci_image_install: project root does not exist: ${project_root}"; return 1; }
 
   # Get the digest for the requested version from catalogue.
   local digest
   digest="$(mcp_catalogue_get "$name" \
     | jq -r --arg v "$version" '.versions.releases[$v].digest // empty')"
 
-  local extra_args=""
-  if [ -n "$digest" ]; then
-    extra_args="--image-digest $digest"
+  # Get the install template path from catalogue.
+  local tmpl_rel
+  tmpl_rel="$(mcp_catalogue_get_field "$name" '.install.template')"
+
+  if [ "$name" = "atlas-aci" ]; then
+    # atlas-aci: delegate to the dedicated script which handles Docker pre-flight,
+    # memex dir creation, bootstrap-placeholder guard, slug computation, and now
+    # jq-merge into .mcp.json (sibling entries are preserved, not clobbered).
+    local aci_args="--project-root ${project_root}"
+    if [ "$force" = "true" ]; then
+      aci_args="${aci_args} --force"
+    fi
+    if [ -n "$digest" ]; then
+      aci_args="${aci_args} --image-digest ${digest}"
+    fi
+    # shellcheck disable=SC2086
+    bash "$_LIB_MCP_DIR/mcp_atlas_aci.sh" $aci_args || return $?
+  else
+    # Generic oci-image path (e.g. crystalium): Docker pre-flight + render + merge.
+    if ! atlas_aci_check_docker_cli; then return 1; fi
+    if ! atlas_aci_check_docker_daemon; then return 1; fi
+    if [ -n "$digest" ]; then
+      local source_image_check
+      source_image_check="$(mcp_catalogue_get_field "$name" '.source.image')"
+      if ! atlas_aci_check_image "${source_image_check}@${digest}"; then
+        return 1
+      fi
+    fi
+    _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
   fi
 
-  # Invoke the existing atlas-aci generator.
-  # shellcheck disable=SC1091
-  bash "$_LIB_MCP_DIR/mcp_atlas_aci.sh" \
-    --project-root "$project_root" \
-    ${aci_args:+$aci_args} \
-    ${extra_args:+$extra_args} || return $?
-
-  # Build lockfile entry.
-  local source_image installed_at hosts_wired
-  source_image="$(mcp_catalogue_get_field "$name" '.source.image')"
+  # Build and upsert lockfile entry.
+  local source_image_lf installed_at hosts_wired
+  source_image_lf="$(mcp_catalogue_get_field "$name" '.source.image')"
   installed_at="$(_mcp_now)"
   hosts_wired='[".mcp.json",".cursor/mcp.json",".github/agents/*",".codex/config.toml"]'
 
@@ -332,7 +453,7 @@ mcp_driver_oci_image_install() {
     --arg nm "$name" \
     --arg kd "oci-image" \
     --arg ver "$version" \
-    --arg img "$source_image" \
+    --arg img "$source_image_lf" \
     --arg algo "oci-digest" \
     --arg digv "${digest:-}" \
     --arg tgt ".mcp.json" \
