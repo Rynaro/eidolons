@@ -54,10 +54,24 @@ jobs:
           else
             is_first_shipped="false"
           fi
+          # Signer-workflow trust anchor. Source-installed Eidolons release via
+          # the nexus reusable template (eidolon-release-template.yml), so that
+          # is the default signer. OCI-distributed members (e.g. crystalium) ship
+          # their own canonical release pipeline and declare it via
+          # .release.signer_workflow — a workflow path within their own
+          # source.repo. Either way the attestation must come from a known,
+          # canonical workflow; this is not a relaxation, only a second anchor.
+          signer_rel="$(yq -r ".eidolons[] | select(.name == \"$name\") | .release.signer_workflow // \"\"" roster/index.yaml)"
+          if [[ -n "$signer_rel" && "$signer_rel" != "null" ]]; then
+            signer_workflow="${repo}/${signer_rel}"
+          else
+            signer_workflow="${{ github.repository }}/.github/workflows/eidolon-release-template.yml"
+          fi
           echo "repo=$repo" >> "$GITHUB_OUTPUT"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
           echo "current_status=$current_status" >> "$GITHUB_OUTPUT"
           echo "is_first_shipped=$is_first_shipped" >> "$GITHUB_OUTPUT"
+          echo "signer_workflow=$signer_workflow" >> "$GITHUB_OUTPUT"
 
       - name: Download release metadata
         env:
@@ -76,15 +90,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          # The release was produced by the nexus's reusable workflow
-          # (eidolon-release-template.yml). Reusable workflows sign with
-          # the called workflow's identity, not the caller's, so we must
-          # require the signer to be Rynaro/eidolons rather than the
-          # upstream Eidolon repo. This also enforces that only signatures
-          # from the canonical nexus release template are accepted.
+          # Require the attestation to come from the member's canonical release
+          # workflow (resolved in "Resolve roster source"):
+          #   - source-installed Eidolons → the nexus reusable template
+          #     (Rynaro/eidolons/.github/workflows/eidolon-release-template.yml),
+          #     since reusable workflows sign with the called workflow's identity;
+          #   - OCI-distributed members → their own .release.signer_workflow in
+          #     source.repo (e.g. Rynaro/CRYSTALIUM/.github/workflows/release.yml).
+          # Only signatures from a known canonical workflow are accepted.
           gh attestation verify /tmp/eidolon-release/release-manifest.json \
             --repo "${{ steps.resolve.outputs.repo }}" \
-            --signer-workflow "${{ github.repository }}/.github/workflows/eidolon-release-template.yml"
+            --signer-workflow "${{ steps.resolve.outputs.signer_workflow }}"
 
       - name: Validate release manifest
         run: |

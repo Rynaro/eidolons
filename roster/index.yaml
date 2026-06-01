@@ -840,6 +840,13 @@ eidolons:
       type: github
       repo: Rynaro/CRYSTALIUM
       default_ref: main
+    release:
+      # OCI-distributed member: it ships its own canonical release pipeline
+      # rather than calling the nexus reusable template, so Roster Intake
+      # verifies the release attestation against this workflow in source.repo
+      # (Rynaro/CRYSTALIUM/.github/workflows/release.yml) instead of the
+      # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
+      signer_workflow: .github/workflows/release.yml
     versions:
       latest: "1.2.0"
       pins:
