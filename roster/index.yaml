@@ -838,13 +838,13 @@ eidolons:
       summary: "Shared four-layer memory substrate (episodic/semantic/procedural/execution). Tier-gated writes through one enforcement chokepoint, hybrid recall, Dream consolidation, principled forgetting; ingests roster ECL handoffs preserving provenance + MIN trust tier."
     source:
       type: github
-      repo: Rynaro/CRYSTALIUM
+      repo: Rynaro/crystalium
       default_ref: main
     release:
       # OCI-distributed member: it ships its own canonical release pipeline
       # rather than calling the nexus reusable template, so Roster Intake
       # verifies the release attestation against this workflow in source.repo
-      # (Rynaro/CRYSTALIUM/.github/workflows/release.yml) instead of the
+      # (Rynaro/crystalium/.github/workflows/release.yml) instead of the
       # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
       signer_workflow: .github/workflows/release.yml
     versions:
