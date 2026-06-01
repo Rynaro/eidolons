@@ -96,7 +96,7 @@ jobs:
           #     (Rynaro/eidolons/.github/workflows/eidolon-release-template.yml),
           #     since reusable workflows sign with the called workflow's identity;
           #   - OCI-distributed members → their own .release.signer_workflow in
-          #     source.repo (e.g. Rynaro/CRYSTALIUM/.github/workflows/release.yml).
+          #     source.repo (e.g. Rynaro/crystalium/.github/workflows/release.yml).
           # Only signatures from a known canonical workflow are accepted.
           gh attestation verify /tmp/eidolon-release/release-manifest.json \
             --repo "${{ steps.resolve.outputs.repo }}" \
