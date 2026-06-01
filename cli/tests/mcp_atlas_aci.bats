@@ -719,6 +719,6 @@ file_md5() {
 
   # md5 sanity: the file must be non-empty (real content written).
   local hash
-  hash="$(file_md5 '$project/.mcp.json')"
+  hash="$(file_md5 "$project/.mcp.json")"
   [ -n "$hash" ]
 }
