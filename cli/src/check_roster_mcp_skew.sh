@@ -19,6 +19,11 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEXUS_ROOT="${1:-"$(cd "$SELF_DIR/../.." && pwd)"}"
 
+# Reuse the canonical yaml_to_json helper (handles mikefarah/kislyuk yq + the
+# python3 fallback). yq eval '.' alone emits YAML, not JSON, which jq cannot parse.
+# shellcheck source=cli/src/lib.sh
+. "$SELF_DIR/lib.sh"
+
 INDEX_YAML="${NEXUS_ROOT}/roster/index.yaml"
 MCPS_YAML="${NEXUS_ROOT}/roster/mcps.yaml"
 
@@ -32,14 +37,12 @@ if [ ! -f "$MCPS_YAML" ]; then
   exit 1
 fi
 
-# Extract crystalium versions.latest from each file using yq + jq.
-# yq converts YAML to JSON; jq queries the JSON.
-# We rely on yq (mikefarah) being on PATH — same hard dependency as the rest of the CLI.
-
-_index_ver="$(yq eval '.' "$INDEX_YAML" \
+# Extract crystalium versions.latest from each file. yaml_to_json emits JSON on
+# stdout (yq/python under the hood); jq then queries it.
+_index_ver="$(yaml_to_json "$INDEX_YAML" \
   | jq -r '.eidolons[] | select(.name == "crystalium") | .versions.latest // empty')"
 
-_mcps_ver="$(yq eval '.' "$MCPS_YAML" \
+_mcps_ver="$(yaml_to_json "$MCPS_YAML" \
   | jq -r '.mcps[] | select(.name == "crystalium") | .versions.latest // empty')"
 
 if [ -z "$_index_ver" ]; then

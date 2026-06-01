@@ -254,7 +254,19 @@ if [ ! -f "$MCP_JSON" ]; then
     die "jq failed to normalise atlas-aci template — aborting .mcp.json write"
   fi
 elif jq empty "$MCP_JSON" 2>/dev/null; then
-  # Existing valid JSON — jq-merge to preserve sibling entries.
+  # Existing valid JSON. Two cases:
+  #   - Our atlas-aci entry is already present AND --force not set → refuse
+  #     (data-loss guard: protects a user-edited atlas-aci entry). The file is
+  #     left byte-for-byte unchanged. Sibling entries are irrelevant here.
+  #   - Our entry is absent (e.g. only sibling MCPs like crystalium present), or
+  #     --force is set → jq-merge: add/update atlas-aci, preserve all siblings.
+  if [ "$FORCE" != "true" ] \
+     && [ -n "$(jq -r '.mcpServers["atlas-aci"] // empty' "$MCP_JSON" 2>/dev/null)" ]; then
+    rm -f "$_MCP_TMP"
+    die "$MCP_JSON already has an atlas-aci entry.
+  Re-run with --force to regenerate it (sibling MCP entries are preserved).
+  Note: --force never deletes .atlas/memex/codegraph.db."
+  fi
   if printf '%s\n' "$_RENDERED" \
     | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
         - "$MCP_JSON" \
