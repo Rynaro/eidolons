@@ -626,6 +626,15 @@ mcp_wiring_grant_targets() {
     return 0
   fi
 
+  # Transport-only MCPs (e.g. junction, a project-level bus) are registered in
+  # .mcp.json but never injected into any agent's tools: allowlist. Their grant
+  # is transport-eligibility, not allowlist-injection.
+  local wiring_mode
+  wiring_mode="$(printf '%s' "$cat_entry" | jq -r '.wiring_mode // "allowlist"' 2>/dev/null || echo allowlist)"
+  if [ "$wiring_mode" = "transport" ]; then
+    return 0   # zero agent-file targets — bus registration handled by the driver
+  fi
+
   # Get grants_to_eidolons field.
   local grants
   grants="$(printf '%s' "$cat_entry" | jq -r '.grants_to_eidolons // empty' 2>/dev/null || true)"

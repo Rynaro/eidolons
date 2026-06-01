@@ -27,6 +27,10 @@
               { "type": "array", "items": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" } }
             ]
           },
+          "wiring_mode": {
+            "description": "How this MCP's tool surface is delivered. 'allowlist' (default): exposes_tools.glob is injected into granted Eidolons' tools: lines. 'transport': the MCP is a project-level bus registered in .mcp.json only; its tools are NEVER injected into agent allowlists — the orchestration layer dispatches over it.",
+            "enum": ["allowlist", "transport"]
+          },
           "exposes_tools": {
             "description": "Tool surface advertised by this MCP. glob is the wire form used by the wiring pass; list is the auditable enumeration for display.",
             "type": "object",

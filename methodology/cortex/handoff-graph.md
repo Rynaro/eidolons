@@ -59,6 +59,54 @@ edges previously marked `[DISPUTED]` (OQ-3) are now confirmed roster-declared.
 
 ---
 
+## Hand-off Transport Policy
+
+When composing a multi-Eidolon chain, the physical transport for ECL envelopes
+depends on whether junction is present in the project:
+
+| Condition | Transport mechanism |
+|---|---|
+| `junction` installed + `.mcp.json` registered | Parent/orchestration layer dispatches ECL envelopes over the junction bus via `mcp__junction__*` tools |
+| `junction` absent | ECL-on-disk sidecar (`ecl-envelope.json` adjacent to the artefact) is the fallback |
+
+**Keystone rule:** junction's `grants_to_eidolons: all` in `roster/mcps.yaml` is
+**transport-eligibility**, NOT allowlist-injection. Concretely:
+
+- `mcp__junction__*` tools are registered in the project `.mcp.json` (a project-wide
+  transport surface reachable by all hosts — claude-code, cursor, opencode).
+- `mcp__junction__*` tools **never** appear in any agent's `tools:` allowlist line.
+  They are not wired into ATLAS, SPECTRA, APIVR-Δ, IDG, FORGE, or VIGIL tool lists.
+- `wiring_mode: transport` in the catalogue encodes this distinction explicitly.
+  The `mcp_wiring_grant_targets` function short-circuits on this field, producing
+  zero agent-file targets.
+
+The parent (orchestration layer) reads the project `.mcp.json` to discover the
+junction bus endpoint; individual Eidolons do not interact with junction directly.
+
+---
+
+## ATLAS MCP-first When atlas-aci Present
+
+When `atlas-aci` is installed in the target project (i.e. `mcp__atlas_aci__*`
+tools are wired into ATLAS's `tools:` allowlist), ATLAS applies MCP-first
+precedence for structural reads:
+
+| Structural task | Preferred | Fallback |
+|---|---|---|
+| View a file | `mcp__atlas_aci__view_file` | `Read` |
+| Search symbol | `mcp__atlas_aci__search_symbol` | `Grep` / `rg` |
+| Search text | `mcp__atlas_aci__search_text` | `Grep` / `rg` |
+| List directory | `mcp__atlas_aci__list_dir` | `Glob` |
+| Graph query | `mcp__atlas_aci__graph_query` | — (no native equivalent) |
+
+This is the opposite of junction's transport model: `atlas-aci` is a genuine
+**in-agent capability** that is injected into ATLAS's allowlist (the only Eidolon
+it grants to, per `grants_to_eidolons: [atlas]`). MCP-first preference maximises
+the structural intelligence of the graph backend while keeping native tools as a
+reliable fallback when atlas-aci is absent.
+
+---
+
 ## Open Questions Carried Forward
 
 | ID | Assumption | Mitigation |

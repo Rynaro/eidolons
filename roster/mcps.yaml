@@ -3,7 +3,10 @@
 # Schema: schemas/mcp-catalogue.schema.json
 # Companion lockfile: eidolons.mcp.lock (project-level; commit to VCS).
 # catalogue_version 1.1: adds grants_to_eidolons + exposes_tools fields (additive).
-catalogue_version: "1.1"
+# catalogue_version 1.2: adds wiring_mode field (optional, default "allowlist").
+#   wiring_mode: transport — MCP registered in .mcp.json only; never injected
+#   into agent tools: allowlists (e.g. junction, a project-level bus).
+catalogue_version: "1.2"
 updated_at: "2026-05-28T00:00:00Z"
 mcps:
   - name: atlas-aci
@@ -61,6 +64,7 @@ mcps:
       - "Run multi-stage agent pipelines with plan.json."
     related_eidolons: []
     grants_to_eidolons: all
+    wiring_mode: transport
     exposes_tools:
       glob: "mcp__junction__*"
       list:
