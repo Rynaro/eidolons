@@ -25,6 +25,8 @@
 
 ## Dispatch Protocol (always-loaded)
 
+**Default operating mode — delegate by default.** When this cortex is wired into a host, routing through the Eidolons pipeline is the **default**, not an opt-in. Every non-trivial request runs through Steps 1–5 below; the orchestrator delegates to the Eidolon role(s) and does **not** implement, spec, or scout directly. Answer directly **only** when the prompt is trivial, purely conversational, or a single-fact lookup. This makes *delegation* the default — the **tier** default is still `standard`; TRANCE remains gated (see Step 4), never automatic.
+
 **Step 1 — Classify.** Extract verbs from the prompt. Match against trigger columns above. Score each Eidolon 0–1.
 
 **Step 2 — Gate.**
