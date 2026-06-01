@@ -57,6 +57,9 @@ jobs:
               /tmp/roster.json > /dev/null || { echo "::error::$name missing required fields"; exit 1; }
           done
 
+      - name: Check roster/mcps.yaml and roster/index.yaml crystalium version parity
+        run: bash cli/src/check_roster_mcp_skew.sh
+
   install-e2e:
     name: Install — ${{ matrix.os }} / yq=${{ matrix.yq }}
     runs-on: ${{ matrix.os }}

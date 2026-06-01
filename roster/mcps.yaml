@@ -111,6 +111,7 @@ mcps:
         - mcp__crystalium__recall
         - mcp__crystalium__commit
         - mcp__crystalium__update
+        - mcp__crystalium__ingest
         - mcp__crystalium__skill_invoke
         - mcp__crystalium__plan_checkpoint
         - mcp__crystalium__plan_replan
@@ -119,13 +120,16 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "0.1.0"
+      latest: "1.2.0"
       pins:
-        stable: "0.1.0"
+        stable: "1.2.0"
       releases:
         "0.1.0":
           digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
           released_at: "2026-05-28T00:00:00Z"
+        "1.2.0":
+          digest: "__PENDING_1_2_0_DIGEST__"
+          released_at: "2026-06-01T00:00:00Z"
     install:
       hosts_wired:
         - ".mcp.json"
