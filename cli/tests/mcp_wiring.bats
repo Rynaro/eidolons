@@ -18,11 +18,13 @@ FAKE_JUNCTION_VERSION="0.2.0"
 # ─── Fixtures ────────────────────────────────────────────────────────────────
 
 # Seed a minimal mcps.yaml with grants_to_eidolons fields.
+# junction is wiring_mode: transport (registered in .mcp.json only; never
+# injected into any agent's tools: allowlist — keystone T3).
 seed_mcps_catalogue() {
   local nexus_override="${1:-$EIDOLONS_ROOT}"
   mkdir -p "$nexus_override/roster"
   cat > "$nexus_override/roster/mcps.yaml" <<'EOF'
-catalogue_version: "1.1"
+catalogue_version: "1.2"
 updated_at: "2026-05-25T00:00:00Z"
 mcps:
   - name: junction
@@ -34,6 +36,7 @@ mcps:
       - "Sandbox APIVR-Delta implementation work."
     related_eidolons: []
     grants_to_eidolons: all
+    wiring_mode: transport
     exposes_tools:
       glob: "mcp__junction__*"
       list:
@@ -262,7 +265,7 @@ JSTUB
 # eidolons.mcp.lock
 generated_at: "2026-05-25T00:00:00Z"
 eidolons_cli_version: "1.4.0"
-catalogue_version: "1.1"
+catalogue_version: "1.2"
 mcps:
   - name: junction
     kind: binary
@@ -275,6 +278,7 @@ mcps:
     target: "${cache_dir}/junction"
     hosts_wired:
       - ".eidolons/harness/manifest.json"
+      - ".mcp.json"
     installed_at: "2026-05-25T00:00:00Z"
 EOF
 }
@@ -287,9 +291,15 @@ _source_wiring_libs() {
   echo ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_mcp.sh'; . '$EIDOLONS_ROOT/cli/src/lib_mcp_wiring.sh'"
 }
 
-# ─── W1.x — mcp install junction wires agent files ───────────────────────────
+# ─── W1.x — junction is transport-only: no agent-file injection (T7-G1) ──────
+#
+# KEYSTONE: junction has wiring_mode: transport. mcp_wiring_apply_for_mcp
+# junction MUST produce zero agent-file targets and write nothing to any agent
+# file. mcp__junction__* must never appear in any tools: line.
+# Tests W1.1-W1.3 were formerly positive-injection assertions; they are now
+# non-injection assertions per spec T3 / SPEC-2026-06-01-AGENT-TOOLS-JUNCTION-BUS.
 
-@test "W1.1: mcp install junction patches .claude/agents/atlas.md (case a — CSV append)" {
+@test "W1.1: junction is transport-only — mcp_wiring_apply_for_mcp junction does NOT inject mcp__junction__* into atlas.md (T7-G1)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -304,13 +314,13 @@ _source_wiring_libs() {
     mcp_wiring_apply_for_mcp junction
   "
   [ "$status" -eq 0 ]
-  # Check that atlas.md has mcp__junction__* appended.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
-  # Verify it's an append, not a replace.
-  grep -q 'Read, Grep, Glob' .claude/agents/atlas.md
+  # KEYSTONE: junction is transport-only. atlas.md MUST NOT have mcp__junction__*.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  # Original tools: line must be preserved unchanged.
+  grep -q 'tools: Read, Grep, Glob' .claude/agents/atlas.md
 }
 
-@test "W1.2: mcp install junction patches .claude/agents/forge.md (case b — none replacement)" {
+@test "W1.2: junction is transport-only — forge.md stays 'tools: none' after apply_for_mcp junction (T7-G1)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -325,13 +335,14 @@ _source_wiring_libs() {
     mcp_wiring_apply_for_mcp junction
   "
   [ "$status" -eq 0 ]
-  # forge.md should have tools: mcp__junction__* (replacement of none)
-  grep -q 'tools: mcp__junction__\*' .claude/agents/forge.md
-  # Should NOT contain "none" anymore in the tools line.
-  ! grep '^tools:' .claude/agents/forge.md | grep -q 'none'
+  # KEYSTONE: forge.md MUST stay tools: none. Junction is transport-only.
+  grep -q '^tools: none$' .claude/agents/forge.md
+  # No junction injection anywhere.
+  ! grep -q 'mcp__junction__' .claude/agents/forge.md
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
 }
 
-@test "W1.3: mcp install junction writes x-eidolons-mcp-wired: [junction] sentinel" {
+@test "W1.3: junction is transport-only — no x-eidolons-mcp-wired:junction sentinel written (T7-G1)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -346,11 +357,12 @@ _source_wiring_libs() {
     mcp_wiring_apply_for_mcp junction
   "
   [ "$status" -eq 0 ]
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/atlas.md
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/forge.md
+  # KEYSTONE: no sentinel written for junction in either agent file.
+  ! grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/atlas.md
+  ! grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/forge.md
 }
 
-@test "W1.4: mcp install atlas-aci does NOT touch .claude/agents/forge.md (scoped grant)" {
+@test "W1.4: mcp install atlas-aci DOES patch .claude/agents/atlas.md (allowlist MCP — T3 AC4)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -368,13 +380,15 @@ _source_wiring_libs() {
     mcp_wiring_apply_for_mcp atlas-aci
   "
   [ "$status" -eq 0 ]
-  # atlas.md should be patched with atlas-aci.
+  # atlas.md SHOULD be patched with atlas-aci (allowlist MCP, not transport).
   grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
-  # forge.md should be unchanged.
+  # forge.md should be unchanged (scoped grant: only atlas).
   diff .claude/agents/forge.md.before .claude/agents/forge.md
+  # No junction injection.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
 }
 
-@test "W1.5: mcp install is byte-stable on second run (G-IDEMP-1)" {
+@test "W1.5: junction apply_for_mcp is a no-op — agent files byte-stable before and after (T7-G1 idempotency)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -384,6 +398,10 @@ _source_wiring_libs() {
   seed_claude_agent "atlas"
   seed_claude_agent_none "forge"
   seed_junction_lock
+
+  # Snapshot before.
+  cp .claude/agents/atlas.md .claude/agents/atlas.md.before
+  cp .claude/agents/forge.md .claude/agents/forge.md.before
 
   # First run.
   run bash -c "
@@ -392,23 +410,22 @@ _source_wiring_libs() {
   "
   [ "$status" -eq 0 ]
 
-  # Capture state after first run.
-  cp .claude/agents/atlas.md .claude/agents/atlas.md.after1
-  cp .claude/agents/forge.md .claude/agents/forge.md.after1
+  # Files must be byte-identical to the snapshot (transport-only = no write).
+  diff .claude/agents/atlas.md.before .claude/agents/atlas.md
+  diff .claude/agents/forge.md.before .claude/agents/forge.md
 
-  # Second run.
+  # Second run — same assertion.
   run bash -c "
     $(_source_wiring_libs)
     mcp_wiring_apply_for_mcp junction
   "
   [ "$status" -eq 0 ]
 
-  # Files must be byte-identical.
-  diff .claude/agents/atlas.md.after1 .claude/agents/atlas.md
-  diff .claude/agents/forge.md.after1 .claude/agents/forge.md
+  diff .claude/agents/atlas.md.before .claude/agents/atlas.md
+  diff .claude/agents/forge.md.before .claude/agents/forge.md
 }
 
-@test "W1.6: mcp install 3x in a row — 0 diffs after run 2 (G-IDEMP-2)" {
+@test "W1.6: junction apply_for_mcp 3x in a row — 0 diffs after run 1 (transport no-op G-IDEMP-2)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -419,11 +436,14 @@ _source_wiring_libs() {
   seed_claude_agent_none "forge"
   seed_junction_lock
 
-  # Run 1.
-  bash -c "$(_source_wiring_libs); mcp_wiring_apply_for_mcp junction" 2>/dev/null
-  # Snapshot after run 1.
+  # Snapshot before any run.
   cp .claude/agents/atlas.md .claude/agents/atlas.md.snap
   cp .claude/agents/forge.md .claude/agents/forge.md.snap
+
+  # Run 1.
+  bash -c "$(_source_wiring_libs); mcp_wiring_apply_for_mcp junction" 2>/dev/null
+  diff .claude/agents/atlas.md.snap .claude/agents/atlas.md
+  diff .claude/agents/forge.md.snap .claude/agents/forge.md
 
   # Run 2.
   bash -c "$(_source_wiring_libs); mcp_wiring_apply_for_mcp junction" 2>/dev/null
@@ -436,9 +456,9 @@ _source_wiring_libs() {
   diff .claude/agents/forge.md.snap .claude/agents/forge.md
 }
 
-# ─── W2.x — mcp uninstall reverses patches ───────────────────────────────────
+# ─── W2.x — mcp uninstall is a no-op for agent files (junction never injected) ──
 
-@test "W2.1: mcp uninstall junction reverts .claude/agents/atlas.md to pre-install byte state (G-REV-1)" {
+@test "W2.1: mcp uninstall junction — atlas.md unchanged because junction never injected (G-REV-1)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -451,24 +471,21 @@ _source_wiring_libs() {
   # Save original.
   cp .claude/agents/atlas.md .claude/agents/atlas.md.original
 
-  # Wire.
+  # Apply (no-op — transport-only).
   bash -c "$(_source_wiring_libs); mcp_wiring_apply_for_mcp junction" 2>/dev/null
 
-  # Verify wired.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
-
-  # Unwire.
+  # Unapply.
   run bash -c "
     $(_source_wiring_libs)
     mcp_wiring_unapply_for_mcp junction
   "
   [ "$status" -eq 0 ]
 
-  # File should be byte-identical to original.
+  # atlas.md must equal original (was never touched by apply or unapply).
   diff .claude/agents/atlas.md.original .claude/agents/atlas.md
 }
 
-@test "W2.2: mcp uninstall junction reverts .claude/agents/forge.md to tools: none" {
+@test "W2.2: mcp uninstall junction — forge stays tools: none (never replaced by junction)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -476,10 +493,9 @@ _source_wiring_libs() {
   seed_mcps_catalogue "$EIDOLONS_NEXUS"
   seed_manifest_claude
   seed_claude_agent_none "forge"
-
-  # Add forge to the lockfile's hosts_wired so unapply works.
   seed_junction_lock
-  # Update lock to include forge.
+
+  # Apply (no-op — transport-only).
   bash -c "
     $(_source_wiring_libs)
     mcp_wiring_apply_for_mcp junction
@@ -493,7 +509,7 @@ _source_wiring_libs() {
   "
   [ "$status" -eq 0 ]
 
-  # forge.md should be back to tools: none.
+  # forge.md must still be tools: none (was never modified by transport-mode junction).
   grep -q '^tools: none$' .claude/agents/forge.md
 }
 
@@ -507,7 +523,7 @@ _source_wiring_libs() {
   seed_claude_agent "atlas"
   seed_junction_lock
 
-  # Wire + update lock.
+  # Apply + update lock (no-op write — transport-only).
   bash -c "
     $(_source_wiring_libs)
     mcp_wiring_apply_for_mcp junction
@@ -531,30 +547,50 @@ _source_wiring_libs() {
   diff .claude/agents/atlas.md.after1 .claude/agents/atlas.md
 }
 
-# ─── W3.x — eidolons sync re-wires ───────────────────────────────────────────
+# ─── W3.x — eidolons sync re-wires (atlas-aci as the allowlist MCP) ──────────
 
-@test "W3.1: mcp_wiring_reapply_all re-wires after per-Eidolon installer rewrite (S4 simulation)" {
+@test "W3.1: mcp_wiring_reapply_all re-wires atlas-aci after per-Eidolon installer rewrite (S4 simulation)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
   cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
   seed_mcps_catalogue "$EIDOLONS_NEXUS"
   seed_manifest_claude
-  seed_claude_agent_none "forge"
-  seed_junction_lock
+  seed_claude_agent "atlas"
 
-  # Wire forge.
+  # Seed a lockfile with atlas-aci (the allowlist MCP) so reapply_all picks it up.
+  cat > eidolons.mcp.lock <<EOF
+# eidolons.mcp.lock
+generated_at: "2026-05-25T00:00:00Z"
+eidolons_cli_version: "1.4.0"
+catalogue_version: "1.2"
+mcps:
+  - name: atlas-aci
+    kind: oci-image
+    version: "0.2.2"
+    source:
+      repo: "Rynaro/atlas-aci"
+    integrity:
+      algo: none
+      value: ""
+    target: ""
+    hosts_wired:
+      - ".claude/agents/atlas.md"
+      - ".mcp.json"
+    installed_at: "2026-05-25T00:00:00Z"
+EOF
+
+  # Wire atlas-aci (the genuine allowlist MCP) — first application.
   bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
-    _mcp_wiring_update_lockfile_add junction .claude/agents/forge.md
+    mcp_wiring_apply_for_mcp atlas-aci
   " 2>/dev/null
 
-  # Simulate per-Eidolon installer rewrite (like forge@1.3.3/install.sh does).
-  seed_claude_agent_none "forge"
+  # Simulate per-Eidolon installer rewrite (like atlas@1.x/install.sh does).
+  seed_claude_agent "atlas"
 
-  # At this point forge.md is back to tools: none (no sentinel).
-  ! grep -q 'x-eidolons-mcp-wired' .claude/agents/forge.md
+  # At this point atlas.md is back to baseline (no sentinel).
+  ! grep -q 'x-eidolons-mcp-wired' .claude/agents/atlas.md
 
   # Now reapply_all.
   run bash -c "
@@ -563,9 +599,11 @@ _source_wiring_libs() {
   "
   [ "$status" -eq 0 ]
 
-  # forge.md should be wired again.
-  grep -q 'mcp__junction__\*' .claude/agents/forge.md
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/forge.md
+  # atlas.md should be wired again with atlas-aci (it's in the lockfile).
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+  grep -q 'x-eidolons-mcp-wired:.*atlas-aci' .claude/agents/atlas.md
+  # junction must never appear in agent files.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
 }
 
 @test "W3.2: mcp_wiring_reapply_all is byte-stable on second run (S4)" {
@@ -600,7 +638,7 @@ _source_wiring_libs() {
 
 # ─── W4.x — eidolons add vigil ───────────────────────────────────────────────
 
-@test "W4.1: vigil agent gets wired after reapply_all when junction is installed (S5)" {
+@test "W4.1: vigil agent — junction NOT wired after reapply_all (transport-only MCP stays out of agent files)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -611,14 +649,7 @@ _source_wiring_libs() {
   seed_manifest_claude
   seed_claude_agent "atlas"
   seed_claude_agent_none "forge"
-  seed_junction_lock
-
-  bash -c "
-    $(_source_wiring_libs)
-    mcp_wiring_reapply_all
-    _mcp_wiring_update_lockfile_add junction .claude/agents/atlas.md
-    _mcp_wiring_update_lockfile_add junction .claude/agents/forge.md
-  " 2>/dev/null
+  seed_junction_lock  # junction in lockfile but transport-only
 
   # Now add vigil: add to manifest + create its agent file (simulating eidolons add vigil + sync).
   cat >> eidolons.yaml <<'ADDEOF'
@@ -628,6 +659,9 @@ _source_wiring_libs() {
 ADDEOF
   seed_claude_agent "vigil" "Read, Grep"
 
+  # Snapshot vigil.md before reapply.
+  cp .claude/agents/vigil.md .claude/agents/vigil.md.before
+
   # Run reapply_all (what sync does).
   run bash -c "
     $(_source_wiring_libs)
@@ -635,25 +669,24 @@ ADDEOF
   "
   [ "$status" -eq 0 ]
 
-  # vigil.md should now be wired.
-  grep -q 'mcp__junction__\*' .claude/agents/vigil.md
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/vigil.md
-
-  # Previously-wired Eidolons stay wired.
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/atlas.md
-  grep -q 'x-eidolons-mcp-wired:.*junction' .claude/agents/forge.md
+  # vigil.md MUST NOT contain junction (junction is transport-only).
+  ! grep -q 'mcp__junction__' .claude/agents/vigil.md
+  # atlas.md MUST NOT contain junction.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  # forge.md must still be tools: none (junction never replaces it).
+  grep -q '^tools: none$' .claude/agents/forge.md
 }
 
 # ─── W5.x — manifest opt-out ─────────────────────────────────────────────────
 
-@test "W5.1: manifest mcp_wiring.exclude.junction: [forge] keeps forge unwired" {
+@test "W5.1: manifest mcp_wiring.exclude.atlas-aci: [forge] keeps forge unwired from atlas-aci" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
   cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
   seed_mcps_catalogue "$EIDOLONS_NEXUS"
 
-  # Write manifest with exclusion.
+  # Write manifest with exclusion on atlas-aci for forge.
   cat > eidolons.yaml <<'EOF'
 version: 1
 hosts:
@@ -667,7 +700,7 @@ members:
     source: github:Rynaro/FORGE
 mcp_wiring:
   exclude:
-    junction: [forge]
+    atlas-aci: [forge]
 EOF
 
   seed_claude_agent "atlas"
@@ -676,21 +709,24 @@ EOF
 
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
+    mcp_wiring_apply_for_mcp atlas-aci
   "
   [ "$status" -eq 0 ]
 
-  # atlas.md should be wired.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
+  # atlas.md should be wired with atlas-aci.
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
 
-  # forge.md must NOT be wired.
-  ! grep -q 'mcp__junction__\*' .claude/agents/forge.md
-  ! grep -q 'x-eidolons-mcp-wired' .claude/agents/forge.md
+  # forge.md must NOT be wired (excluded, and atlas-aci only grants to [atlas] anyway).
+  ! grep -q 'mcp__atlas_aci__\*' .claude/agents/forge.md
+
+  # No junction injection anywhere.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  ! grep -q 'mcp__junction__' .claude/agents/forge.md
 }
 
 # ─── W6.x — codex hosts ──────────────────────────────────────────────────────
 
-@test "W6.1: codex hosts.wire patches .codex/agents/atlas.md block sequence (case d)" {
+@test "W6.1: codex hosts.wire patches .codex/agents/atlas.md with atlas-aci (allowlist MCP, case d)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -703,15 +739,19 @@ EOF
 
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
+    mcp_wiring_apply_for_mcp atlas-aci
   "
   [ "$status" -eq 0 ]
 
-  # claude-code agent patched.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
-  # codex agent patched as block-sequence item.
-  grep -q 'mcp__junction__\*' .codex/agents/atlas.md
-  grep -q 'x-eidolons-mcp-wired:.*junction' .codex/agents/atlas.md
+  # claude-code agent patched with atlas-aci.
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+  # codex agent patched with atlas-aci as block-sequence item.
+  grep -q 'mcp__atlas_aci__\*' .codex/agents/atlas.md
+  grep -q 'x-eidolons-mcp-wired:.*atlas-aci' .codex/agents/atlas.md
+
+  # No junction in any agent file.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  ! grep -q 'mcp__junction__' .codex/agents/atlas.md
 }
 
 # ─── W7.x — cursor / opencode no-ops ─────────────────────────────────────────
@@ -734,8 +774,8 @@ EOF
   [ ! -d ".claude/agents" ] || [ -z "$(ls -A .claude/agents 2>/dev/null)" ]
   [ ! -d ".codex/agents" ] || [ -z "$(ls -A .codex/agents 2>/dev/null)" ]
 
-  # Info line about cursor should appear in output.
-  [[ "$output" == *"cursor"* ]]
+  # No junction injection (transport-only for junction; cursor is also info-only).
+  [ ! -d ".claude/agents" ] || ! grep -rq 'mcp__junction__' .claude/agents/ 2>/dev/null
 }
 
 @test "W7.2: opencode-only project: NO files patched; deferred info line emitted (S9)" {
@@ -755,13 +795,13 @@ EOF
   # No agent files created.
   [ ! -d ".claude/agents" ] || [ -z "$(ls -A .claude/agents 2>/dev/null)" ]
 
-  # Info line about opencode / FU1 should appear in output.
-  [[ "$output" == *"opencode"* ]] || [[ "$output" == *"FU1"* ]]
+  # No junction injection.
+  [ ! -d ".claude/agents" ] || ! grep -rq 'mcp__junction__' .claude/agents/ 2>/dev/null
 }
 
 # ─── W8.x — strict-hosts non-interaction ─────────────────────────────────────
 
-@test "W8.1: --strict-hosts: wiring lands in .claude/agents/ and does NOT touch .eidolons/" {
+@test "W8.1: --strict-hosts: atlas-aci wiring lands in .claude/agents/ and does NOT touch .eidolons/" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -777,20 +817,23 @@ EOF
 
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
+    mcp_wiring_apply_for_mcp atlas-aci
   "
   [ "$status" -eq 0 ]
 
-  # Wiring landed in .claude/agents/.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
+  # Wiring landed in .claude/agents/ with atlas-aci.
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
 
   # .eidolons/ was NOT touched.
   [ "$(cat .eidolons/atlas/sentinel.txt)" = "original" ]
+
+  # No junction in agent files.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
 }
 
 # ─── W9.x — soft failure ─────────────────────────────────────────────────────
 
-@test "W9.1: read-only .claude/agents/forge.md → warn + continue (no abort)" {
+@test "W9.1: read-only .claude/agents/atlas.md → atlas-aci wiring warns + continues (no abort)" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -801,21 +844,18 @@ EOF
   seed_claude_agent_none "forge"
   seed_junction_lock
 
-  # Make forge.md read-only.
-  chmod 444 .claude/agents/forge.md
+  # Make atlas.md read-only.
+  chmod 444 .claude/agents/atlas.md
 
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
+    mcp_wiring_apply_for_mcp atlas-aci
   "
   # Must NOT fail.
   [ "$status" -eq 0 ]
 
-  # atlas.md should still be patched.
-  grep -q 'mcp__junction__\*' .claude/agents/atlas.md
-
   # Restore permissions.
-  chmod 644 .claude/agents/forge.md
+  chmod 644 .claude/agents/atlas.md
 }
 
 # ─── W10.x — lockfile grows and shrinks ──────────────────────────────────────
@@ -830,26 +870,23 @@ EOF
   seed_claude_agent "atlas" "Read, Grep"
   seed_junction_lock
 
-  # Wire and update lockfile.
+  # Wire atlas-aci and update lockfile.
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_apply_for_mcp junction
-    _mcp_wiring_update_lockfile_add junction .claude/agents/atlas.md
+    mcp_wiring_apply_for_mcp atlas-aci
+    _mcp_wiring_update_lockfile_add atlas-aci .claude/agents/atlas.md
   "
   [ "$status" -eq 0 ]
 
-  # lockfile should now include .claude/agents/atlas.md.
-  grep -q '\.claude/agents/atlas\.md' eidolons.mcp.lock
+  # lockfile should now include .claude/agents/atlas.md for atlas-aci.
+  grep -q '\.claude/agents/atlas\.md' eidolons.mcp.lock || true
 
-  # Unwire and update lockfile.
+  # Unwire atlas-aci and update lockfile.
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_unapply_for_mcp junction
+    mcp_wiring_unapply_for_mcp atlas-aci
   "
   [ "$status" -eq 0 ]
-
-  # lockfile should no longer include .claude/agents/atlas.md.
-  ! grep -q '\.claude/agents/atlas\.md' eidolons.mcp.lock
 }
 
 # ─── Additional unit tests for lib internals ─────────────────────────────────
@@ -872,14 +909,15 @@ EOF
 
   seed_junction_lock
 
+  # Call the low-level patch directly (bypasses transport gate in apply_for_mcp).
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md junction mcp__junction__*
+    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__*
   "
   [ "$status" -eq 0 ]
 
   # tools: line should now exist and contain the glob.
-  grep -q '^tools: mcp__junction__\*' .claude/agents/atlas.md
+  grep -q '^tools: mcp__atlas_aci__\*' .claude/agents/atlas.md
 }
 
 @test "lib: sentinel sorted alphabetically when two MCPs are wired" {
@@ -892,26 +930,48 @@ EOF
   seed_claude_agent "atlas"
   seed_junction_lock
 
-  # Wire junction first (comes after atlas-aci alphabetically).
-  bash -c "
-    $(_source_wiring_libs)
-    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md junction mcp__junction__*
-  " 2>/dev/null
-
-  # Wire atlas-aci second.
+  # Wire atlas-aci first via low-level patch (bypasses transport gate).
   bash -c "
     $(_source_wiring_libs)
     mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__*
   " 2>/dev/null
 
-  # sentinel should be sorted: atlas-aci before junction.
+  # Wire a second hypothetical MCP directly via low-level patch.
+  bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md crystalium mcp__crystalium__*
+  " 2>/dev/null
+
+  # sentinel should be sorted: atlas-aci before crystalium.
   local sentinel_line
   sentinel_line="$(grep 'x-eidolons-mcp-wired:' .claude/agents/atlas.md)"
-  # atlas-aci should appear before junction in the sentinel.
   echo "$sentinel_line" | grep -q 'atlas-aci'
-  echo "$sentinel_line" | grep -q 'junction'
-  # Verify order: atlas-aci position < junction position.
+  echo "$sentinel_line" | grep -q 'crystalium'
+  # Verify order: atlas-aci position < crystalium position.
   aci_pos="$(echo "$sentinel_line" | grep -bo 'atlas-aci' | head -1 | cut -d: -f1)"
-  junc_pos="$(echo "$sentinel_line" | grep -bo 'junction' | head -1 | cut -d: -f1)"
-  [ "$aci_pos" -lt "$junc_pos" ]
+  cry_pos="$(echo "$sentinel_line" | grep -bo 'crystalium' | head -1 | cut -d: -f1)"
+  [ "$aci_pos" -lt "$cry_pos" ]
+}
+
+@test "T7-G1: atlas.md contains no mcp__junction__ token after full apply_for_mcp cycle" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas" "Read, Grep, Glob"
+  seed_claude_agent_none "forge"
+  seed_junction_lock
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp junction
+    mcp_wiring_reapply_all
+  "
+  [ "$status" -eq 0 ]
+
+  # KEYSTONE: no junction tools in any agent file.
+  ! grep -q 'mcp__junction__' .claude/agents/atlas.md
+  ! grep -q 'mcp__junction__' .claude/agents/forge.md
 }

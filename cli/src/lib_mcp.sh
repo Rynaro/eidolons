@@ -666,6 +666,72 @@ _mcp_source_harness() {
   . "$_LIB_MCP_DIR/harness.sh" || true
 }
 
+# _mcp_binary_merge_mcp_json NAME BIN PROJECT_ROOT
+# Merge (not overwrite) the junction MCP server entry into PROJECT_ROOT/.mcp.json.
+#
+# Behaviour:
+#   - If .mcp.json is absent: write a fresh file with the junction entry only.
+#   - If .mcp.json is present and valid JSON: jq-merge so that .mcpServers["junction"]
+#     is added/updated while ALL sibling keys (atlas-aci, etc.) are preserved.
+#   - If .mcp.json is present but NOT valid JSON: warn and do not write (soft-fail).
+# Binary-present gate (INV-7): callers MUST only call this when $BIN is non-empty and
+# the binary exists. The die at lib_mcp.sh:743-745 enforces this before reaching here.
+_mcp_binary_merge_mcp_json() {
+  local name="$1"
+  local bin="$2"
+  local project_root="$3"
+
+  # Locate and render the template.
+  local tmpl rendered mcp_json tmp
+  tmpl="${_LIB_MCP_DIR}/../templates/mcp/junction.mcp.json.tmpl"
+  if [ ! -f "$tmpl" ]; then
+    warn "_mcp_binary_merge_mcp_json: template not found at ${tmpl} — skipping .mcp.json write"
+    return 0
+  fi
+
+  # Render: substitute __JUNCTION_BIN__ with the resolved binary path (INV-3: sed, no eval).
+  rendered="$(sed -e "s|__JUNCTION_BIN__|${bin}|g" "$tmpl")"
+
+  mcp_json="${project_root}/.mcp.json"
+
+  # Use jq for all writes — ensures consistent (canonical) JSON formatting so that
+  # the fresh-file first write and subsequent idempotent merges produce byte-identical
+  # output (INV-1). Never use printf/echo to write raw JSON to the target file.
+  tmp="$(mktemp)"
+  if [ ! -f "$mcp_json" ]; then
+    # Fresh file — normalise through jq to canonical form (atomic write).
+    if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$mcp_json"
+      ok "junction .mcp.json entry written at ${mcp_json}"
+    else
+      rm -f "$tmp"
+      warn "jq failed to normalise junction template — skipping .mcp.json write"
+    fi
+    return 0
+  fi
+
+  # Pre-existing file — validate JSON before touching (INV-2, AC4).
+  if ! jq empty "$mcp_json" 2>/dev/null; then
+    rm -f "$tmp"
+    warn ".mcp.json at ${mcp_json} is not valid JSON — skipping junction server registration (manual merge required)"
+    return 0
+  fi
+
+  # Merge: keep all existing mcpServers; add/update the junction entry (INV-2).
+  # jq -s slurps both stdin and the file; .[0] = new entry, .[1] = existing file.
+  # The + operator on objects merges: existing keys preserved, junction added/updated.
+  if printf '%s\n' "$rendered" \
+    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
+        - "$mcp_json" \
+    > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$mcp_json"
+    ok "junction .mcp.json entry merged into ${mcp_json}"
+  else
+    rm -f "$tmp"
+    warn "jq merge failed for ${mcp_json} — skipping junction server registration"
+  fi
+}
+
 # mcp_driver_binary_install NAME VERSION [--force]
 # Installs junction via its install.sh. Idempotent.
 #
@@ -704,6 +770,10 @@ mcp_driver_binary_install() {
       ok "junction@${ver} already installed at $existing_bin (use --force to reinstall)"
       # Still upsert lockfile in case it's missing.
       _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
+      # Idempotent .mcp.json merge: a project fresh-cloned may have the binary
+      # cached but no .mcp.json yet — register the bus entry (merge is safe to
+      # call repeatedly; jq merge is order-stable and single-entry).
+      _mcp_binary_merge_mcp_json "$name" "$existing_bin" "$(pwd)"
       return 0
     fi
     if [ "$force" = "true" ]; then
@@ -748,6 +818,10 @@ mcp_driver_binary_install() {
   ok "junction@${ver} installed at $bin"
 
   _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
+  # Register the junction MCP server entry in the project .mcp.json (merge,
+  # not overwrite — atlas-aci and any sibling keys are preserved). Only called
+  # when $bin is confirmed present (binary-present gate INV-7 satisfied above).
+  _mcp_binary_merge_mcp_json "$name" "$bin" "$(pwd)"
 }
 
 # _mcp_binary_upsert_lock NAME VERSION CACHE_DIR — write/update the lockfile
@@ -769,7 +843,7 @@ _mcp_binary_upsert_lock() {
     target="$cache_dir"
   fi
 
-  local hosts_wired='[".eidolons/harness/manifest.json"]'
+  local hosts_wired='[".eidolons/harness/manifest.json", ".mcp.json"]'
 
   local entry
   entry="$(jq -n \
@@ -842,6 +916,20 @@ mcp_driver_binary_uninstall() {
   if [ -d "./.eidolons/harness" ]; then
     rm -rf "./.eidolons/harness"
     info "Removed marker: .eidolons/harness"
+  fi
+
+  # Remove the junction server entry from .mcp.json (symmetric with install).
+  local mcp_json="./.mcp.json"
+  if [ -f "$mcp_json" ] && command -v jq >/dev/null 2>&1; then
+    local tmp
+    tmp="$(mktemp)"
+    if jq 'del(.mcpServers["junction"])' "$mcp_json" > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$mcp_json"
+      info "Removed junction from .mcp.json"
+    else
+      rm -f "$tmp"
+      warn "Could not parse .mcp.json — manual cleanup may be required"
+    fi
   fi
 
   mcp_lock_remove "$name"
