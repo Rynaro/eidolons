@@ -12,6 +12,7 @@ here.
 | `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
 | `trance-matrix.md` | Per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
 | `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
+| `memory-protocol.md` | Full 8-tool CRYSTALIUM surface, layer × tier × operation matrix, Dream consolidation knobs, skill_invoke sandboxing, ECL-envelope → ingest mapping | Composing memory-aware chains, auditing tier gates, configuring Dream |
 
 ## Token budget note
 

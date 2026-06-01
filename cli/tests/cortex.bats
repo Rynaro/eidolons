@@ -398,3 +398,83 @@ EOF
   # Cortex block must still be present.
   grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
 }
+
+# ─── test: CRYSTALIUM memory protocol surface in EIDOLONS.md ──────────────
+
+@test "cortex: EIDOLONS.md memory protocol section references ingest tool" {
+  REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
+  [ -f "$REAL_CORTEX" ]
+  grep -q 'ingest' "$REAL_CORTEX"
+}
+
+@test "cortex: EIDOLONS.md memory protocol section references session_end tool" {
+  REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
+  grep -q 'session_end' "$REAL_CORTEX"
+}
+
+@test "cortex: EIDOLONS.md memory protocol section contains trust-tier map (T0/T1/T3)" {
+  REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
+  # The trust-tier map must name all three tiers.
+  grep -q 'T0' "$REAL_CORTEX"
+  grep -q 'T1' "$REAL_CORTEX"
+  grep -q 'T3' "$REAL_CORTEX"
+}
+
+@test "cortex: EIDOLONS.md declares crystalium wiring_mode as allowlist/direct" {
+  REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
+  grep -qi 'allowlist' "$REAL_CORTEX"
+}
+
+@test "cortex: memory-protocol.md deep table exists under methodology/cortex/" {
+  [ -f "$EIDOLONS_ROOT/methodology/cortex/memory-protocol.md" ]
+}
+
+@test "cortex: memory-protocol.md covers all 8 crystalium tools" {
+  PROTO="$EIDOLONS_ROOT/methodology/cortex/memory-protocol.md"
+  [ -f "$PROTO" ]
+  grep -q 'recall' "$PROTO"
+  grep -q 'commit' "$PROTO"
+  grep -q 'ingest' "$PROTO"
+  grep -q 'update' "$PROTO"
+  grep -q 'skill_invoke' "$PROTO"
+  grep -q 'plan_checkpoint' "$PROTO"
+  grep -q 'plan_replan' "$PROTO"
+  grep -q 'session_end' "$PROTO"
+}
+
+@test "cortex: sync mirrors memory-protocol.md into .eidolons/cortex/" {
+  setup_fake_git_for_upgrade
+  # Seed the cortex deep tables so the mirror logic finds them.
+  mkdir -p "$EIDOLONS_NEXUS/methodology/cortex"
+  cp "$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"    "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/handoff-graph.md"    "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/validation-gates.md" "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/README.md"           "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/memory-protocol.md"  "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/EIDOLONS.md" "$EIDOLONS_NEXUS/EIDOLONS.md"
+  seed_shared_dispatch_manifest
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/cortex/memory-protocol.md" ]
+}
+
+@test "cortex: memory-protocol.md mirror is idempotent — second sync produces no diff" {
+  setup_fake_git_for_upgrade
+  mkdir -p "$EIDOLONS_NEXUS/methodology/cortex"
+  cp "$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"    "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/handoff-graph.md"    "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/validation-gates.md" "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/README.md"           "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/methodology/cortex/memory-protocol.md"  "$EIDOLONS_NEXUS/methodology/cortex/"
+  cp "$EIDOLONS_ROOT/EIDOLONS.md" "$EIDOLONS_NEXUS/EIDOLONS.md"
+  seed_shared_dispatch_manifest
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  CHECKSUM1="$(sha256sum '.eidolons/cortex/memory-protocol.md' 2>/dev/null \
+               || shasum -a 256 '.eidolons/cortex/memory-protocol.md')"
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  CHECKSUM2="$(sha256sum '.eidolons/cortex/memory-protocol.md' 2>/dev/null \
+               || shasum -a 256 '.eidolons/cortex/memory-protocol.md')"
+  [ "$CHECKSUM1" = "$CHECKSUM2" ]
+}
