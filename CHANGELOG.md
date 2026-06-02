@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.17.0] — 2026-06-02
+
 ### Added
 
 - **(nexus) `eidolons nexus` command family** — three subcommands for the roster channel:
