@@ -214,11 +214,29 @@ CRYSTALIUM_PINNED="sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc87
 # ─── S11: docker absent ───────────────────────────────────────────────────
 
 @test "S11 mcp images: docker not on PATH → exit 0, PRESENT=(n/a), junction NOT listed" {
-  # Remove fake docker so docker is not on PATH.
-  local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
-  rm -f "$fake_bin/docker"
+  # Make docker truly absent regardless of host: a `rm -f fake-bin/docker`
+  # alone leaks a real host docker (which makes PRESENT=yes when an image
+  # happens to be pulled locally). Build a PATH mirroring every executable
+  # EXCEPT docker, then point PATH at it exclusively. mcp_images resolves the
+  # catalogue (yq/jq) before checking docker, so the full toolset is mirrored.
+  local nodoc="$BATS_TEST_TMPDIR/nodoc-bin"
+  mkdir -p "$nodoc"
+  local _dirs d f b
+  IFS=':' read -ra _dirs <<< "$PATH"
+  for d in "${_dirs[@]}"; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      [ -e "$f" ] || continue
+      b="$(basename "$f")"
+      [ "$b" = "docker" ] && continue
+      [ -e "$nodoc/$b" ] || ln -s "$f" "$nodoc/$b" 2>/dev/null || true
+    done
+  done
 
+  local _saved_path="$PATH"
+  PATH="$nodoc"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_images.sh"
+  PATH="$_saved_path"
   [ "$status" -eq 0 ]
 
   local img_output="$output"

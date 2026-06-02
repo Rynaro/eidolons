@@ -124,9 +124,9 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.2.0"
+      latest: "1.2.1"
       pins:
-        stable: "1.2.0"
+        stable: "1.2.1"
       releases:
         "0.1.0":
           digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
@@ -134,6 +134,11 @@ mcps:
         "1.2.0":
           digest: "sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc876630cdb3e5"
           released_at: "2026-06-01T00:00:00Z"
+        "1.2.1":
+          # Multi-arch index (linux/amd64 + linux/arm64). Supersedes the
+          # amd64-only 1.2.0 digest so Apple Silicon hosts can pull.
+          digest: "sha256:d8da22cbb89ba0f225ed276e07d1d8c705f65be9cea3037e864e243ac7f07fbb"
+          released_at: "2026-06-02T00:00:00Z"
     install:
       hosts_wired:
         - ".mcp.json"
