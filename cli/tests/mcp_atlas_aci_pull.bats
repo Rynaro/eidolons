@@ -434,9 +434,41 @@ run_pull() {
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=ok
 
-  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  # The atlas-aci pull alias now forwards to the catalogue-driven generic pull
+  # (mcp_pull.sh atlas-aci), so the digest comes from the catalogue, not the
+  # DEFAULT_IMAGE_DIGEST env. Override the catalogue with an all-zeros pinned
+  # digest at the path the CLI reads ($NEXUS/roster/mcps.yaml) and point
+  # EIDOLONS_NEXUS at this tmp dir. The bootstrap guard fires before any docker
+  # call, so docker.log stays empty.
+  mkdir -p "$BATS_TEST_TMPDIR/roster"
+  cat > "$BATS_TEST_TMPDIR/roster/mcps.yaml" <<'EOF'
+catalogue_version: "1.2"
+updated_at: "2026-06-02T00:00:00Z"
+mcps:
+  - name: atlas-aci
+    display_name: "Atlas-ACI"
+    scope: system
+    kind: oci-image
+    description: "Test"
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atlas-aci"
+    versions:
+      latest: "0.2.2"
+      pins:
+        stable: "0.2.2"
+      releases:
+        "0.2.2":
+          digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          released_at: "2026-06-02T00:00:00Z"
+    install:
+      template: "cli/templates/mcp/atlas-aci.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+EOF
 
-  DEFAULT_IMAGE_DIGEST="$placeholder" run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  EIDOLONS_NEXUS="$BATS_TEST_TMPDIR" run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
 
   [ "$status" -ne 0 ]
   [[ "$output" =~ "bootstrap placeholder" ]]

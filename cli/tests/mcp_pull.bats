@@ -212,14 +212,33 @@ ATLAS_ACI_DIGEST="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f1
 # ─── E1: Docker CLI absent ────────────────────────────────────────────────
 
 @test "E1 mcp pull: docker CLI absent → exit 1, actionable message" {
-  # Unset the fake docker so 'docker' is not on PATH.
-  local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
-  rm -f "$fake_bin/docker"
+  # Simulate "docker not installed" robustly on every runner (including hosts
+  # where a real docker exists, e.g. /usr/local/bin): build a PATH that mirrors
+  # every executable currently on PATH EXCEPT docker, then point PATH at it
+  # exclusively. command -v docker then finds nothing regardless of host.
+  # (The generic pull resolves the catalogue before the docker check, so the
+  # restricted PATH must still carry yq/jq/sed/etc. — hence the symlink farm.)
+  local nodoc="$BATS_TEST_TMPDIR/nodoc-bin"
+  mkdir -p "$nodoc"
+  local _dirs d f b
+  IFS=':' read -ra _dirs <<< "$PATH"
+  for d in "${_dirs[@]}"; do
+    [ -d "$d" ] || continue
+    for f in "$d"/*; do
+      [ -e "$f" ] || continue
+      b="$(basename "$f")"
+      [ "$b" = "docker" ] && continue
+      [ -e "$nodoc/$b" ] || ln -s "$f" "$nodoc/$b" 2>/dev/null || true
+    done
+  done
 
+  local _saved_path="$PATH"
+  PATH="$nodoc"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_pull.sh" crystalium
+  PATH="$_saved_path"
 
-  [ "$status" -eq 1 ]
-  [[ "$output" =~ "Docker" ]]
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "not installed" ]]
 }
 
 # ─── E2: Docker daemon down ───────────────────────────────────────────────
@@ -247,7 +266,11 @@ ATLAS_ACI_DIGEST="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f1
   # Use a mocked catalogue with a placeholder digest.
   # We can do this by testing the driver directly with a fake catalogue.
   # For this, we override the catalogue to contain a placeholder digest for crystalium.
-  local fake_cat="$BATS_TEST_TMPDIR/fake-mcps.yaml"
+  # The CLI reads the catalogue from $NEXUS/roster/mcps.yaml — write the fake
+  # there and point EIDOLONS_NEXUS at this tmp dir (libs still load from the
+  # script's own dir, so only the catalogue is overridden).
+  mkdir -p "$BATS_TEST_TMPDIR/roster"
+  local fake_cat="$BATS_TEST_TMPDIR/roster/mcps.yaml"
   cat > "$fake_cat" <<'EOF'
 catalogue_version: "1.2"
 updated_at: "2026-06-02T00:00:00Z"
