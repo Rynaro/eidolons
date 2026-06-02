@@ -124,8 +124,10 @@ case "$nexus_sub" in
     # ─── nexus status ────────────────────────────────────────────────────
     # Read-only report. Always exits 0.
 
-    # CLI section.
-    _cli_version="$(tr -d '[:space:]' < "$NEXUS/VERSION" 2>/dev/null || echo "0.0.0-dev")"
+    # CLI section. Use read_nexus_version (guards a missing VERSION file via the
+    # git-describe fallback) — a bare `< "$NEXUS/VERSION"` redirect leaks a raw
+    # "No such file" shell error that tr's 2>/dev/null does not suppress.
+    _cli_version="$(read_nexus_version 2>/dev/null || echo "0.0.0-dev")"
     _cli_ref="$(nexus_install_ref 2>/dev/null || echo unknown)"
     _cli_commit="$(cat "$NEXUS/.install_commit" 2>/dev/null || \
       git -C "$NEXUS" rev-parse --short HEAD 2>/dev/null || echo unknown)"
