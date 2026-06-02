@@ -119,10 +119,20 @@ _write_install_sidecars() {
 }
 
 # Check whether the nexus working tree is dirty (uncommitted local changes).
+# Keep this in sync with REFRESH_PATHS in nexus_refresh (lib.sh STORY-1):
+#   roster   EIDOLONS.md   methodology/cortex
+# Those three paths are excluded from the porcelain check because nexus_refresh
+# path-checkout induces drift there intentionally (CLI pinned / roster floats).
+# The upgrade-self clone+swap discards the old cache entirely, so data-layer
+# drift is throwaway. Genuine edits to CLI code (cli/src/*.sh, etc.) still trip
+# the guard — that is the guard's only real job.
 _nexus_is_dirty() {
   [[ -d "$NEXUS/.git" ]] || return 1  # no .git → not a git repo, not "dirty"
   local status
-  status="$(git -C "$NEXUS" status --porcelain 2>/dev/null | head -1)"
+  # Pathspec negation `:!<path>` excludes refresh-managed data paths.
+  # Verified to work on macOS git (2.39+) and GitHub Actions runner git.
+  status="$(git -C "$NEXUS" status --porcelain -- \
+    . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null | head -1)"
   [[ -n "$status" ]]
 }
 
@@ -306,6 +316,17 @@ fi
 
 # ─── Write install metadata into nexus.new before swap ───────────────────
 _write_install_sidecars "$NEXUS_NEW" "$TARGET_REF"
+
+# ─── Carry .roster_ref into nexus.new (STORY-4) ──────────────────────────
+# The fresh clone ($NEXUS_NEW) has no .roster_ref; we must carry the old
+# value forward so the user's configured channel survives the swap.
+# B1 invariant preserved: _write_install_sidecars intentionally does NOT write
+# .roster_ref (it only writes the CLI-pin sidecars). We carry it here explicitly.
+_old_roster_ref="${EIDOLONS_ROSTER_REF:-}"
+if [[ -f "$NEXUS/.roster_ref" ]]; then
+  _old_roster_ref="$(tr -d '[:space:]' < "$NEXUS/.roster_ref" || true)"
+fi
+printf '%s\n' "${_old_roster_ref:-main}" > "$NEXUS_NEW/.roster_ref"
 
 # ─── Atomic swap ─────────────────────────────────────────────────────────
 say "Swapping nexus.new into place"

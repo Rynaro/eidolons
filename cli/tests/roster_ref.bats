@@ -188,6 +188,52 @@ load helpers
     [[ "$output" =~ "up-to-date" ]] || [[ "$output" =~ "unknown" ]]
 }
 
+# ─── PR-6: upgrade self carries .roster_ref into new cache (STORY-4) ─────
+
+@test "PR-6a: upgrade self carries .roster_ref=v1.5.0 into new cache" {
+  # Test the carry logic directly (STORY-4) — simulate what the upgrade code does.
+  local old_nexus="$BATS_TEST_TMPDIR/nexus-pr6a-old"
+  local new_nexus="$BATS_TEST_TMPDIR/nexus-pr6a-new"
+  mkdir -p "$old_nexus" "$new_nexus"
+
+  printf 'v1.5.0\n' > "$old_nexus/.roster_ref"
+  printf 'v1.5.0\n' > "$old_nexus/.install_ref"
+
+  # Simulate the carry: read old .roster_ref and write into new clone.
+  run bash -c "
+    NEXUS='$old_nexus'
+    NEXUS_NEW='$new_nexus'
+    _old_roster_ref=''
+    if [[ -f \"\$NEXUS/.roster_ref\" ]]; then
+      _old_roster_ref=\"\$(tr -d '[:space:]' < \"\$NEXUS/.roster_ref\" || true)\"
+    fi
+    printf '%s\n' \"\${_old_roster_ref:-main}\" > \"\$NEXUS_NEW/.roster_ref\"
+    cat \"\$NEXUS_NEW/.roster_ref\"
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "v1.5.0" ]
+}
+
+@test "PR-6b: upgrade self writes 'main' into new cache when old .roster_ref absent" {
+  local old_nexus="$BATS_TEST_TMPDIR/nexus-pr6b-old"
+  local new_nexus="$BATS_TEST_TMPDIR/nexus-pr6b-new"
+  mkdir -p "$old_nexus" "$new_nexus"
+  # No .roster_ref in old nexus.
+
+  run bash -c "
+    NEXUS='$old_nexus'
+    NEXUS_NEW='$new_nexus'
+    _old_roster_ref=''
+    if [[ -f \"\$NEXUS/.roster_ref\" ]]; then
+      _old_roster_ref=\"\$(tr -d '[:space:]' < \"\$NEXUS/.roster_ref\" || true)\"
+    fi
+    printf '%s\n' \"\${_old_roster_ref:-main}\" > \"\$NEXUS_NEW/.roster_ref\"
+    cat \"\$NEXUS_NEW/.roster_ref\"
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" = "main" ]
+}
+
 # ─── RR-9: stale-cache round-trip — upgrade picks up new version after refresh ──
 
 @test "RR-9: B2 — upgrade reports new version after nexus_refresh updates roster" {

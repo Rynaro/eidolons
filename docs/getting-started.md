@@ -128,6 +128,9 @@ Each host has its own invocation conventions — see each Eidolon's `hosts/<host
 | Add a member | `eidolons add forge` |
 | Remove a member | `eidolons remove forge` (v1.1) |
 | Update to latest within constraints | `eidolons sync` |
+| Force a roster data refresh | `eidolons nexus refresh` |
+| Inspect CLI vs roster channel split | `eidolons nexus status` |
+| Freeze roster to latest release | `eidolons nexus channel stable` |
 | Health check the install | `eidolons doctor` |
 | Fix broken install | `eidolons doctor --fix` |
 | See what's installed | `eidolons list` |
@@ -136,11 +139,50 @@ Each host has its own invocation conventions — see each Eidolon's `hosts/<host
 
 ---
 
+## 5b. Roster freshness and channels
+
+By default the roster catalogue (which Eidolon versions are visible, which MCP
+`pins.stable` are current) tracks the `main` branch of the nexus repo. This is
+independent of the CLI version pin (`.install_ref`):
+
+- **CLI code** is pinned at the installed tag — updated only by `eidolons upgrade self`.
+- **Roster data** (`roster/`, `EIDOLONS.md`, `methodology/cortex/`) floats at
+  `.roster_ref` — updated by `nexus_refresh` which runs automatically on
+  `sync`, `init`, `upgrade`, `mcp install`, and `mcp upgrade`.
+
+Per-member integrity (commit/tree/archive SHA) is **still verified** at install
+and upgrade time. Floating the catalogue only changes which pins are visible —
+never their on-disk verification.
+
+**To see the current split:**
+```bash
+eidolons nexus status
+```
+
+**To freeze the catalogue to the latest stable release** (useful for
+reproducible builds or air-gap environments):
+```bash
+eidolons nexus channel stable   # magic: resolves to latest release tag at refresh time
+eidolons nexus channel v1.16.0  # explicit tag freeze
+```
+
+**To return to tracking `main`:**
+```bash
+eidolons nexus channel main
+```
+
+**To disable all auto-refresh** (fully offline / deterministic CI):
+```bash
+export EIDOLONS_SKIP_REFRESH=1
+```
+
+---
+
 ## 6. Troubleshooting
 
 **"`eidolons: command not found`"** → `~/.local/bin` isn't on your PATH. Add `export PATH="$HOME/.local/bin:$PATH"` to your shell rc.
 
-**"`Eidolon 'X' not found in roster`"** → Your nexus cache is stale. Update it: `cd ~/.eidolons/nexus && git pull`. Or reinstall the CLI to refresh.
+**"`Eidolon 'X' not found in roster`"** → Your roster cache may be stale. Run `eidolons nexus refresh` to update it. Or run `eidolons nexus status` to see if you are behind the channel.
 
 **"`EIIS-conformance warning`"** → The Eidolon's repo is missing required files per the install standard. It'll usually still install, but `eidolons doctor` will flag the gap. File an issue on the specific Eidolon's repo.
 

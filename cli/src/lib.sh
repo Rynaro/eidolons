@@ -793,16 +793,31 @@ nexus_ensure_roster_ref() {
   fi
 }
 
-# nexus_refresh → fetch + reset the nexus cache to the pinned ref recorded in
-# $NEXUS/.roster_ref (v1.11.0+) or $NEXUS/.install_ref (back-compat fallback).
-# Intended to be called once near the start of sync/init/upgrade so the roster
-# is always fresh without requiring a full `eidolons upgrade`.
+# nexus_refresh — path-restricted fetch of the roster/data layer.
+#
+# Updates ONLY the three data-layer paths from the roster channel ref recorded
+# in $NEXUS/.roster_ref (v1.11.0+) or $NEXUS/.install_ref (back-compat):
+#
+#   REFRESH_PATHS: roster   EIDOLONS.md   methodology/cortex
+#
+# CLI code paths (cli/, schemas/, VERSION, docs/, .github/, etc.) are NEVER
+# touched — they stay pinned at the installed tag (.install_ref). This is the
+# "CLI pinned / roster floats" contract: `eidolons upgrade self` controls the
+# CLI version; nexus_refresh controls the roster catalogue data.
+#
+# IMPORTANT — delete-does-not-prune: git checkout FETCH_HEAD -- <path> copies
+# files present at the ref into the working tree. If a file was DELETED at the
+# roster ref it will NOT be removed from the local cache. Stale extra files
+# under methodology/cortex/ are inert; index.yaml / mcps.yaml are single-file
+# overwrites, so deletions within those files propagate correctly. upgrade self
+# (full clone+swap) eventually clears any orphaned stale files.
 #
 # Skips silently when:
 #   - EIDOLONS_NEXUS is set (local-checkout / test mode — never auto-fetch)
 #   - EIDOLONS_SKIP_REFRESH=1 (user opt-out for offline-first workflows)
 #   - $NEXUS has no .git directory (bare checkout; upgrade path handles it)
 #   - .roster_ref and .install_ref both absent or contain "unknown"
+#   - .roster_ref = "stable" and nexus_latest_tag fails (offline) → warn + skip
 #
 # On network failure: emits a warn and returns 0 (non-fatal; stale cache used).
 # Bash 3.2 compatible.
@@ -827,13 +842,32 @@ nexus_refresh() {
   if [[ -z "$ref" || "$ref" == "unknown" ]]; then
     return 0
   fi
+  # E5: "stable" is a magic channel token meaning "latest published release tag".
+  # Resolve it at fetch time via nexus_latest_tag; offline → warn + skip.
+  if [[ "$ref" == "stable" ]]; then
+    local resolved_stable
+    resolved_stable="$(nexus_latest_tag 2>/dev/null || true)"
+    if [[ -z "$resolved_stable" ]]; then
+      warn "nexus cache stale; using cached state (stable channel: nexus_latest_tag unavailable — network unavailable?)"
+      return 0
+    fi
+    ref="$resolved_stable"
+  fi
   local repo
   repo="${EIDOLONS_REPO:-https://github.com/Rynaro/eidolons}"
   if ! git -C "$NEXUS" fetch --depth 1 origin "$ref" >/dev/null 2>&1; then
     warn "nexus cache stale; using cached state (network unavailable or ref $ref not found)"
     return 0
   fi
-  git -C "$NEXUS" reset --hard FETCH_HEAD >/dev/null 2>&1 || true
+  # Path-restricted checkout: update ONLY the roster/data layer.
+  # REFRESH_PATHS (keep in sync with _nexus_is_dirty in upgrade_self.sh):
+  #   roster   EIDOLONS.md   methodology/cortex
+  # Each path is best-effort (|| true) so a ref lacking methodology/cortex/
+  # (e.g. an ancient tag) does not abort the whole refresh.
+  local _rp
+  for _rp in roster EIDOLONS.md methodology/cortex; do
+    git -C "$NEXUS" checkout FETCH_HEAD -- "$_rp" >/dev/null 2>&1 || true
+  done
   return 0
 }
 

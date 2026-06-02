@@ -246,3 +246,18 @@ SHIM
     [ "$status" -ne 0 ]
   fi
 }
+
+# ─── PR-12: mcp upgrade skip-guard — EIDOLONS_NEXUS prevents fetch ────────
+
+@test "PR-12: mcp upgrade does NOT fetch when EIDOLONS_NEXUS is set (skip-guard)" {
+  # With EIDOLONS_NEXUS set, nexus_refresh is a no-op. A poison EIDOLONS_REPO
+  # proves no real fetch occurs.
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  export EIDOLONS_REPO="https://invalid.example.invalid/poison.git"
+
+  # Run mcp upgrade with no lockfile — should exit gracefully (no mcps to upgrade),
+  # but NOT fail with a network error.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" 2>&1 || true
+  # Must not say "nexus cache stale" (that would mean it tried to fetch).
+  [[ ! "$output" =~ "nexus cache stale" ]]
+}

@@ -187,7 +187,9 @@ fi
 # roster branch regardless of the installed CLI version tag.
 printf '%s\n' "$(date -u +%Y-%m-%d)" > "$NEXUS_DIR/.install_date"
 printf '%s\n' "$EIDOLONS_REF" > "$NEXUS_DIR/.install_ref"
-printf '%s\n' "$EIDOLONS_ROSTER_REF" > "$NEXUS_DIR/.roster_ref"
+# Default roster channel to "main" when EIDOLONS_ROSTER_REF is unset or empty,
+# so the sidecar is never empty (STORY-3: fix the empty-write bug).
+printf '%s\n' "${EIDOLONS_ROSTER_REF:-main}" > "$NEXUS_DIR/.roster_ref"
 printf '%s\n' "$(git -C "$NEXUS_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)" \
   > "$NEXUS_DIR/.install_commit"
 

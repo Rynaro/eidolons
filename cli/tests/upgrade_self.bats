@@ -401,6 +401,101 @@ EOF
   echo "$output" | grep -qE '^eidolons [0-9]+\.[0-9]+\.[0-9]'
 }
 
+# ─── PR-4: dirty-guard tolerates refresh-induced drift ──────────────────
+
+@test "PR-4: upgrade self --check does NOT abort on refresh-managed path drift" {
+  # Simulate a nexus whose only working-tree changes are in roster/ + EIDOLONS.md
+  # (what nexus_refresh path-checkout induces). The dirty guard should NOT abort.
+  local fake_nexus="$BATS_TEST_TMPDIR/nexus-pr4"
+  mkdir -p "$fake_nexus/.git" "$fake_nexus/roster" "$fake_nexus/cli/src" \
+    "$fake_nexus/methodology/cortex"
+
+  git -C "$fake_nexus" init -q 2>/dev/null || true
+  git -C "$fake_nexus" config user.email "t@t"
+  git -C "$fake_nexus" config user.name "T"
+
+  printf 'roster original\n' > "$fake_nexus/roster/index.yaml"
+  printf 'EIDOLONS original\n' > "$fake_nexus/EIDOLONS.md"
+  printf 'cli v1\n' > "$fake_nexus/cli/src/lib.sh"
+  printf 'v1.0.0\n' > "$fake_nexus/.install_ref"
+  printf 'v1.0.0\n' > "$fake_nexus/VERSION"
+  printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$fake_nexus/.gitignore"
+
+  git -C "$fake_nexus" add -A >/dev/null 2>&1
+  git -C "$fake_nexus" commit -q -m "base"
+
+  # Now simulate refresh-induced drift in ONLY the data paths.
+  printf 'roster UPDATED by refresh\n' > "$fake_nexus/roster/index.yaml"
+  printf 'EIDOLONS UPDATED by refresh\n' > "$fake_nexus/EIDOLONS.md"
+
+  # Test _nexus_is_dirty by calling it from the ACTUAL upgrade_self.sh environment.
+  # Use a subshell that sources upgrade_self.sh's helper function.
+  run bash -c "
+    NEXUS='$fake_nexus'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    # Define _nexus_is_dirty exactly as in upgrade_self.sh (STORY-2 version).
+    _nexus_is_dirty() {
+      [[ -d \"\$NEXUS/.git\" ]] || return 1
+      local status
+      status=\"\$(git -C \"\$NEXUS\" status --porcelain -- \
+        . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null | head -1)\"
+      [[ -n \"\$status\" ]]
+    }
+    if _nexus_is_dirty; then
+      echo 'DIRTY'
+      exit 1
+    else
+      echo 'CLEAN (data-only drift tolerated)'
+      exit 0
+    fi
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "CLEAN" ]]
+}
+
+# PR-5: A genuine edit to cli/src/lib.sh STILL trips the dirty guard.
+@test "PR-5: dirty guard still fires on genuine CLI code edit" {
+  local fake_nexus="$BATS_TEST_TMPDIR/nexus-pr5"
+  mkdir -p "$fake_nexus/.git" "$fake_nexus/roster" "$fake_nexus/cli/src" \
+    "$fake_nexus/methodology/cortex"
+
+  git -C "$fake_nexus" init -q 2>/dev/null || true
+  git -C "$fake_nexus" config user.email "t@t"
+  git -C "$fake_nexus" config user.name "T"
+
+  printf 'roster original\n' > "$fake_nexus/roster/index.yaml"
+  printf 'EIDOLONS original\n' > "$fake_nexus/EIDOLONS.md"
+  printf 'cli v1\n' > "$fake_nexus/cli/src/lib.sh"
+  printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$fake_nexus/.gitignore"
+
+  git -C "$fake_nexus" add -A >/dev/null 2>&1
+  git -C "$fake_nexus" commit -q -m "base"
+
+  # Edit a CLI file (lib.sh) — this SHOULD trip the guard.
+  printf 'cli HAND-EDITED\n' >> "$fake_nexus/cli/src/lib.sh"
+
+  run bash -c "
+    NEXUS='$fake_nexus'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    _nexus_is_dirty() {
+      [[ -d \"\$NEXUS/.git\" ]] || return 1
+      local status
+      status=\"\$(git -C \"\$NEXUS\" status --porcelain -- \
+        . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null | head -1)\"
+      [[ -n \"\$status\" ]]
+    }
+    if _nexus_is_dirty; then
+      echo 'DIRTY (correctly detected)'
+      exit 1
+    else
+      echo 'CLEAN'
+      exit 0
+    fi
+  "
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "DIRTY" ]]
+}
+
 # ─── B1: upgrade self does NOT modify .roster_ref ────────────────────────
 @test "upgrade self: .roster_ref unchanged after upgrade (B1)" {
   setup_fixture_remote "1.0.0"

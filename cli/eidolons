@@ -72,6 +72,11 @@ Commands:
   roster         Show detailed roster information
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
+  nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
+                   refresh [--quiet]        Force roster data refresh now
+                   channel [<ref>]          Get or set roster channel
+                   status                   Show CLI pin vs roster channel + freshness
+                 Run 'eidolons nexus --help' for full usage.
   mcp <sub>      MCP server store. Subcommands:
                    list                     List catalogue MCPs with status
                    show <name>              Show MCP details
@@ -179,6 +184,7 @@ case "$cmd" in
         ;;
     esac
     ;;
+  nexus)       exec bash "$CLI_SRC/nexus.sh"         "$@" ;;
   verify)         exec bash "$CLI_SRC/verify.sh"         "$@" ;;
   verify-release) exec bash "$CLI_SRC/verify_release.sh" "$@" ;;
   canary)         exec bash "$CLI_SRC/canary.sh"         "$@" ;;
