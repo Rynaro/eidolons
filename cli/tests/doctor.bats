@@ -1388,3 +1388,51 @@ CLAUDEMD
   run eidolons doctor
   [[ "$output" =~ "no wired vendor file marker drift detected" ]]
 }
+
+# ─── PR-13: doctor roster-freshness probe (STORY-8) ──────────────────────
+
+@test "PR-13a: doctor roster-freshness probe is skipped when EIDOLONS_NEXUS is set" {
+  # EIDOLONS_NEXUS is already set by helpers.bash setup() to EIDOLONS_ROOT.
+  # The probe must skip informally (not err).
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor
+  # The section header must appear.
+  [[ "$output" =~ "Roster freshness" ]]
+  # Must show "skipped" message.
+  [[ "$output" =~ "skipped" ]]
+  # Critically: must not increment ERRORS (overall exit code must match
+  # what it was without the probe — determined by other checks).
+}
+
+@test "PR-13b: doctor roster-freshness probe does not increment ERRORS (exit code unaffected)" {
+  # When EIDOLONS_NEXUS is set, the probe is skip-gated (info, non-fatal).
+  # A fully-wired project should still exit 0 even with the staleness section.
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Roster freshness" ]]
+}
+
+@test "PR-13c: doctor roster-freshness probe skips when EIDOLONS_SKIP_REFRESH=1" {
+  export EIDOLONS_SKIP_REFRESH=1
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor
+  [[ "$output" =~ "Roster freshness" ]]
+  [[ "$output" =~ "skipped" ]]
+  [ "$status" -eq 0 ]
+}

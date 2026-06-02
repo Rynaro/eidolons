@@ -432,3 +432,170 @@ ROSTER
   [ "$status" -eq 0 ]
   [ "$output" = "v1.10.0" ]
 }
+
+# ─── PR-1..PR-3: Path-restricted refresh (STORY-1) ──────────────────────
+
+# PR-1: After nexus_refresh, roster/ is updated from the channel ref but
+#        cli/ and VERSION are byte-identical to the tag (CLI stays pinned).
+@test "PR-1: nexus_refresh updates roster but leaves cli/+VERSION at tag" {
+  local remote="$BATS_TEST_TMPDIR/remote-pr1.git"
+  local nexus="$BATS_TEST_TMPDIR/nexus-pr1"
+  git init --bare "$remote" >/dev/null 2>&1
+
+  # Seed the remote with a tag (v1.0.0) and a main that advances roster.
+  local work="$BATS_TEST_TMPDIR/work-pr1"
+  git clone "$remote" "$work" >/dev/null 2>&1
+  mkdir -p "$work/roster" "$work/cli/src" "$work/methodology/cortex"
+  printf 'roster v1\n' > "$work/roster/index.yaml"
+  printf 'EIDOLONS v1\n' > "$work/EIDOLONS.md"
+  printf 'cli v1\n' > "$work/cli/src/lib.sh"
+  printf '1.0.0\n' > "$work/VERSION"
+  git -C "$work" add . >/dev/null 2>&1
+  git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "v1.0.0"
+  git -C "$work" tag v1.0.0
+  git -C "$work" push origin HEAD >/dev/null 2>&1
+  git -C "$work" push origin v1.0.0 >/dev/null 2>&1
+
+  # Advance roster on main; CLI and VERSION do NOT change.
+  printf 'roster v2 from main\n' > "$work/roster/index.yaml"
+  printf 'EIDOLONS v2\n' > "$work/EIDOLONS.md"
+  git -C "$work" add roster/index.yaml EIDOLONS.md >/dev/null 2>&1
+  git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "roster bump"
+  git -C "$work" push origin HEAD >/dev/null 2>&1
+
+  # Clone nexus at v1.0.0 (CLI pinned to tag).
+  local default_branch
+  default_branch="$(git -C "$work" rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
+  git clone "$remote" "$nexus" -q --branch v1.0.0 2>/dev/null || \
+    git clone "$remote" "$nexus" -q 2>/dev/null
+  printf '%s\n' "$default_branch" > "$nexus/.roster_ref"
+  printf 'v1.0.0\n' > "$nexus/.install_ref"
+
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    export EIDOLONS_REPO='$remote'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$nexus'
+    ROSTER_FILE='$nexus/roster/index.yaml'
+    nexus_refresh
+  "
+  [ "$status" -eq 0 ]
+
+  # Roster must have been updated to v2.
+  local roster_content
+  roster_content="$(cat "$nexus/roster/index.yaml")"
+  [[ "$roster_content" == *"v2"* ]]
+
+  # CLI code must still be at v1 (untouched by path-checkout).
+  local cli_content
+  cli_content="$(cat "$nexus/cli/src/lib.sh")"
+  [ "$cli_content" = "cli v1" ]
+
+  # VERSION must be untouched.
+  local ver_content
+  ver_content="$(cat "$nexus/VERSION")"
+  [ "$ver_content" = "1.0.0" ]
+}
+
+# PR-2: .roster_ref=stable → fetches nexus_latest_tag; offline stable → warn + return 0.
+@test "PR-2a: nexus_refresh with .roster_ref=stable resolves latest tag" {
+  local remote="$BATS_TEST_TMPDIR/remote-pr2a.git"
+  local nexus="$BATS_TEST_TMPDIR/nexus-pr2a"
+  git init --bare "$remote" >/dev/null 2>&1
+
+  local work="$BATS_TEST_TMPDIR/work-pr2a"
+  git clone "$remote" "$work" >/dev/null 2>&1
+  mkdir -p "$work/roster"
+  printf 'roster stable\n' > "$work/roster/index.yaml"
+  git -C "$work" add . >/dev/null 2>&1
+  git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "init"
+  git -C "$work" tag v1.2.0
+  git -C "$work" push origin HEAD >/dev/null 2>&1
+  git -C "$work" push origin v1.2.0 >/dev/null 2>&1
+
+  git clone "$remote" "$nexus" -q 2>/dev/null
+  printf 'stable\n' > "$nexus/.roster_ref"
+  printf 'v1.0.0\n' > "$nexus/.install_ref"
+
+  # With a real local repo, nexus_latest_tag should resolve v1.2.0.
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    export EIDOLONS_REPO='$remote'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$nexus'
+    ROSTER_FILE='$nexus/roster/index.yaml'
+    nexus_refresh
+  " 2>&1
+  [ "$status" -eq 0 ]
+}
+
+@test "PR-2b: nexus_refresh with .roster_ref=stable and offline repo warns and returns 0" {
+  local fake_nexus="$BATS_TEST_TMPDIR/nexus-pr2b"
+  mkdir -p "$fake_nexus/.git"
+  printf 'stable\n' > "$fake_nexus/.roster_ref"
+
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    export EIDOLONS_REPO='https://invalid.example.invalid/repo.git'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$fake_nexus'
+    ROSTER_FILE='$fake_nexus/roster/index.yaml'
+    nexus_refresh
+  " 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "nexus cache stale" ]]
+}
+
+# PR-3: New file added under roster/ on remote appears after refresh;
+#        CLI-only file on remote does NOT appear locally.
+@test "PR-3: refresh adds new roster file but not CLI-only remote file" {
+  local remote="$BATS_TEST_TMPDIR/remote-pr3.git"
+  local nexus="$BATS_TEST_TMPDIR/nexus-pr3"
+  git init --bare "$remote" >/dev/null 2>&1
+
+  local work="$BATS_TEST_TMPDIR/work-pr3"
+  git clone "$remote" "$work" >/dev/null 2>&1
+  mkdir -p "$work/roster" "$work/cli/src"
+  printf 'base roster\n' > "$work/roster/index.yaml"
+  printf 'cli v1\n' > "$work/cli/src/lib.sh"
+  git -C "$work" add . >/dev/null 2>&1
+  git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "init"
+  # Tag the initial commit so we can clone the nexus at this point.
+  git -C "$work" tag v1.0.0
+  git -C "$work" push origin HEAD >/dev/null 2>&1
+  git -C "$work" push origin v1.0.0 >/dev/null 2>&1
+
+  local default_branch
+  default_branch="$(git -C "$work" rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
+
+  # Add a new file under roster/ AND a new cli file on the remote.
+  printf 'extra roster data\n' > "$work/roster/new-extra.yaml"
+  printf 'cli v2 SHOULD NOT APPEAR\n' > "$work/cli/src/new_cli.sh"
+  git -C "$work" add . >/dev/null 2>&1
+  git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "add extras"
+  git -C "$work" push origin HEAD >/dev/null 2>&1
+
+  # Clone the nexus at v1.0.0 (before the "add extras" commit) so that
+  # new_cli.sh is NOT yet present in the working tree. After nexus_refresh
+  # (path-restricted to roster/ etc.), it must still be absent.
+  git clone "$remote" "$nexus" -q --branch v1.0.0 2>/dev/null || \
+    git clone "$remote" "$nexus" -q 2>/dev/null
+  printf '%s\n' "$default_branch" > "$nexus/.roster_ref"
+  printf 'v1.0.0\n' > "$nexus/.install_ref"
+
+  run bash -c "
+    export EIDOLONS_NEXUS=''
+    export EIDOLONS_REPO='$remote'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$nexus'
+    ROSTER_FILE='$nexus/roster/index.yaml'
+    nexus_refresh
+  " 2>&1
+  [ "$status" -eq 0 ]
+
+  # New roster file should be present after refresh.
+  [ -f "$nexus/roster/new-extra.yaml" ]
+
+  # New CLI file should NOT be present (path checkout only covers roster paths).
+  [ ! -f "$nexus/cli/src/new_cli.sh" ]
+}

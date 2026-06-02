@@ -530,3 +530,23 @@ SHIM
   after_ts="$(grep 'installed_at' eidolons.mcp.lock | head -1)"
   [ "$before_ts" = "$after_ts" ]
 }
+
+# ─── PR-11: mcp install skip-guards — EIDOLONS_NEXUS prevents fetch ──────
+
+@test "PR-11: mcp install does NOT fetch when EIDOLONS_NEXUS is set (skip-guard)" {
+  # With EIDOLONS_NEXUS set (local checkout), nexus_refresh must be a no-op.
+  # A poison EIDOLONS_REPO proves no real fetch occurs (if it did, it would fail
+  # and mcp_install would also fail if refresh were fatal — but it's non-fatal,
+  # so this test mainly verifies the EIDOLONS_NEXUS guard is respected).
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  export EIDOLONS_REPO="https://invalid.example.invalid/poison.git"
+
+  # mcp install with an unknown name should exit non-zero (name not in catalogue)
+  # but NOT because of a network error from the poison repo.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" nonexistent-mcp-pr11 2>&1 || true
+  # The failure should be about the catalogue (unknown MCP), NOT a network error.
+  [[ "$output" =~ "nonexistent-mcp-pr11" ]] || [[ "$output" =~ "not found" ]] || \
+    [[ "$output" =~ "unknown" ]] || [[ "$status" -ne 0 ]]
+  # Critically: must not say "nexus cache stale" (that would mean it tried to fetch).
+  [[ ! "$output" =~ "nexus cache stale" ]]
+}

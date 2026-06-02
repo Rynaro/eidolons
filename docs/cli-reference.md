@@ -417,6 +417,84 @@ eidolons canary atlas --validate /path/to/response.md
 
 ---
 
+## `eidolons nexus`
+
+Inspect and control the nexus roster channel — the split between the pinned CLI
+version and the floating roster data.
+
+```
+eidolons nexus <subcommand> [options]
+```
+
+### `eidolons nexus refresh [--quiet]`
+
+Force a roster data refresh now. Fetches **only** the data-layer paths
+(`roster/`, `EIDOLONS.md`, `methodology/cortex/`) from the channel ref, leaving
+the CLI code (`cli/`, `schemas/`, `VERSION`) pinned at the installed tag.
+
+Honors skip-guards: no-op (prints "skipped") when `EIDOLONS_NEXUS` is set or
+`EIDOLONS_SKIP_REFRESH=1`. Non-fatal when offline. Exit 0 always.
+
+| Flag | Purpose |
+|------|---------|
+| `--quiet` | Suppress informational output (only errors go to stderr). |
+
+### `eidolons nexus channel [<ref>]`
+
+Get or set the roster channel (the `~/.eidolons/nexus/.roster_ref` sidecar).
+
+- **No arg**: print the current channel. Exit 0.
+- **With `<ref>`**: set the roster channel. Accepted values:
+  - `main` — track the `main` branch (default).
+  - `stable` — magic token: at each refresh, resolves to the latest published
+    release tag via `nexus_latest_tag`. Useful for "track releases, not main".
+    If offline at refresh time, the refresh is skipped non-fatally.
+  - `<tag>` e.g. `v1.16.0` — freeze to a specific tag.
+  - `<sha>` — pin to a specific commit.
+  - `<branch>` — track any remote branch.
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | Success |
+| 2 | Empty / whitespace-only arg |
+
+### `eidolons nexus status`
+
+Read-only split report: CLI version/ref and roster channel/effective/freshness.
+
+```
+CLI
+  version:    1.16.0
+  ref:        v1.16.0
+  commit:     a3b4c5d
+ROSTER
+  channel:    main  (effective: main)
+  cache HEAD: f9e8d7c
+  upstream:   f9e8d7c  | unreachable
+  freshness:  up-to-date | behind (run: eidolons nexus refresh) | unknown (offline)
+```
+
+Upstream probe is gated by skip-guards (offline-safe). Exit 0 always.
+
+### Reproducibility model
+
+The **CLI code is pinned** at `.install_ref` (updated only by `eidolons upgrade
+self`). The **roster catalogue floats** at `.roster_ref` (updated by
+`nexus_refresh` on every `sync`/`init`/`upgrade`/`mcp install`/`mcp upgrade`).
+
+Per-member integrity (commit/tree/archive SHA) is **still verified** at
+install/upgrade time — floating the catalogue only changes *which* pins are
+visible, never their verification. Users who need a fully frozen catalogue
+(reproducible builds, air-gap) run:
+
+```bash
+eidolons nexus channel stable   # track latest release tag
+eidolons nexus channel v1.16.0  # freeze to exact tag
+export EIDOLONS_SKIP_REFRESH=1  # disable all auto-refresh
+```
+
+---
+
 ## `eidolons upgrade`
 
 Surface and apply upgrades for installed members.

@@ -41,6 +41,12 @@ Examples:
 EOF
 }
 
+# Refresh the nexus roster data before resolving version/kind so that
+# catalogue bumps on the channel ref are picked up automatically (STORY-6).
+# Inherits all skip-guards (EIDOLONS_NEXUS / EIDOLONS_SKIP_REFRESH) and is
+# non-fatal on network failure.
+nexus_refresh
+
 if [ $# -eq 0 ]; then
   usage >&2
   exit 2

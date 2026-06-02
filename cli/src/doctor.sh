@@ -565,6 +565,57 @@ else
     "${YELLOW:-}" "${RESET:-}"
 fi
 
+# ─── Check 12b: Roster freshness ────────────────────────────────────────────
+# Non-fatal informational probe: compare the local nexus cache roster against
+# the HEAD of the roster channel (origin/<channel>). Warns when behind and hints
+# "eidolons nexus refresh". Never increments ERRORS — purely advisory.
+# Skipped when EIDOLONS_NEXUS is set (local checkout) or EIDOLONS_SKIP_REFRESH=1.
+ui_section_out "Roster freshness"
+
+if [[ -n "${EIDOLONS_NEXUS:-}" ]]; then
+  printf "  %s·%s roster freshness check skipped (local checkout — EIDOLONS_NEXUS set)\n" \
+    "${YELLOW:-}" "${RESET:-}"
+elif [[ "${EIDOLONS_SKIP_REFRESH:-0}" == "1" ]]; then
+  printf "  %s·%s roster freshness check skipped (EIDOLONS_SKIP_REFRESH=1)\n" \
+    "${YELLOW:-}" "${RESET:-}"
+elif [[ ! -d "$NEXUS/.git" ]]; then
+  printf "  %s·%s roster freshness check skipped (nexus has no .git — not a managed cache)\n" \
+    "${YELLOW:-}" "${RESET:-}"
+else
+  # Resolve channel and effective ref.
+  nexus_ensure_roster_ref 2>/dev/null || true
+  _rfc_channel="$(nexus_roster_ref 2>/dev/null || echo main)"
+  _rfc_effective="$_rfc_channel"
+  if [[ "$_rfc_channel" == "stable" ]]; then
+    _rfc_resolved="$(nexus_latest_tag 2>/dev/null || true)"
+    if [[ -n "$_rfc_resolved" ]]; then
+      _rfc_effective="$_rfc_resolved"
+    else
+      _rfc_effective=""
+    fi
+  fi
+
+  if [[ -z "$_rfc_effective" ]]; then
+    printf "  %s·%s roster freshness check skipped (stable channel: offline or no tags reachable)\n" \
+      "${YELLOW:-}" "${RESET:-}"
+  else
+    _rfc_repo="${EIDOLONS_REPO:-https://github.com/Rynaro/eidolons}"
+    _rfc_cache_sha="$(git -C "$NEXUS" rev-parse HEAD 2>/dev/null || true)"
+    _rfc_upstream_sha=""
+    _rfc_upstream_sha="$(with_timeout 8 git ls-remote --refs "$_rfc_repo" "$_rfc_effective" \
+      2>/dev/null | awk '{print $1}' | head -1 || true)"
+
+    if [[ -z "$_rfc_upstream_sha" ]]; then
+      printf "  %s·%s roster freshness unknown (offline — could not probe origin/%s)\n" \
+        "${YELLOW:-}" "${RESET:-}" "$_rfc_channel"
+    elif [[ "$_rfc_upstream_sha" == "$_rfc_cache_sha" ]]; then
+      pass "roster cache fresh ($_rfc_channel)"
+    else
+      warn "roster cache behind $_rfc_channel — run: eidolons nexus refresh"
+    fi
+  fi
+fi
+
 # ─── Check 13: Legacy <name>-pointer stubs ────────────────────────────────
 # Warn-only: detects leftover <name>-pointer blocks from v1.6.0 installs
 # that have not yet been cleaned by eidolons sync (D10).

@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(nexus) `eidolons nexus` command family** — three subcommands for the roster channel:
+  - `eidolons nexus refresh [--quiet]` — force a path-restricted roster data refresh now.
+  - `eidolons nexus channel [<ref>]` — get or set the roster channel (`main` | `stable` | `<tag>` | `<sha>` | `<branch>`). `stable` is a magic token that resolves to the latest release tag at fetch time.
+  - `eidolons nexus status` — read-only split report: CLI version/ref (`.install_ref`) vs roster channel/effective ref/freshness (`.roster_ref`).
+- **(nexus) Path-restricted `nexus_refresh`** — replaces `git reset --hard FETCH_HEAD` with a per-path checkout loop that updates ONLY the data layer (`roster/`, `EIDOLONS.md`, `methodology/cortex/`). CLI code (`cli/`, `schemas/`, `VERSION`) stays pinned at the installed tag, closing the "roster frozen at CLI tag" bug that caused `eidolons mcp install crystalium` to resolve against a stale 1.2.0 (amd64-only) catalogue on Apple Silicon even though `main` carried 1.2.1 (multi-arch).
+- **(mcp) `nexus_refresh` wired into `mcp install` and `mcp upgrade`** — catalogue bumps on the roster channel are now picked up automatically before version/kind resolution.
+- **(doctor) Roster-freshness probe** — new non-fatal section ("Roster freshness") in `eidolons doctor`: warns when the local cache is behind the channel (`eidolons nexus refresh` hint), passes when fresh, and skips informally when offline or in local-checkout mode. Never increments ERRORS.
+
+### Changed
+
+- **(nexus) `upgrade self` dirty-guard tolerates refresh-induced drift** — `_nexus_is_dirty` now excludes the three refresh-managed data paths (`roster`, `EIDOLONS.md`, `methodology/cortex`) via git pathspec negation (`:!<path>`). A previous `eidolons sync` (which refreshes the roster) no longer poisons the next `upgrade self` into requiring `--force`. Genuine CLI-code edits still trip the guard.
+- **(install) `install.sh` writes a non-empty default `.roster_ref`** — was writing an empty file when `EIDOLONS_ROSTER_REF` was unset; now defaults to `main`.
+- **(nexus) `.roster_ref` preserved across `upgrade self`** — the fresh `nexus.new` clone now receives a copy of the old `.roster_ref` before the atomic swap, so a frozen channel (e.g. `v1.5.0`) survives self-upgrades instead of being silently dropped.
+
+### Notes
+
+- The "CLI pinned / roster floats / SHAs still verified" model: the CLI version is controlled by `eidolons upgrade self` (`.install_ref`). Roster data tracks `.roster_ref` (default: `main`). Per-member integrity (commit/tree/archive SHA) is still verified at install/upgrade — floating the catalogue changes *which* pins are visible, never their verification. Users who need a frozen catalogue run `eidolons nexus channel stable` or `eidolons nexus channel <tag>`.
+
 ## [1.16.1] — 2026-06-02
 
 ### Added

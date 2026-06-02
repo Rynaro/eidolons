@@ -36,6 +36,12 @@ Options:
 EOF
 }
 
+# Refresh the nexus roster data before reading the catalogue so that
+# pins.stable bumps on the channel ref are picked up automatically (STORY-7).
+# Inherits all skip-guards (EIDOLONS_NEXUS / EIDOLONS_SKIP_REFRESH) and is
+# non-fatal on network failure.
+nexus_refresh
+
 target=""
 no_pull=false
 while [ $# -gt 0 ]; do

@@ -90,6 +90,17 @@ EOF
   [ "$roster_ref" = "main" ]
 }
 
+# PR-7: Fresh install with EIDOLONS_ROSTER_REF unset → .roster_ref == 'main' (non-empty).
+@test "PR-7: install.sh writes non-empty .roster_ref=main when EIDOLONS_ROSTER_REF unset (STORY-3)" {
+  unset EIDOLONS_ROSTER_REF
+  bash "$EIDOLONS_ROOT/cli/install.sh" >/dev/null
+  local roster_ref
+  roster_ref="$(tr -d '[:space:]' < "$EIDOLONS_HOME/nexus/.roster_ref" 2>/dev/null || echo missing)"
+  # Must be exactly 'main' — non-empty.
+  [ "$roster_ref" = "main" ]
+  [ -n "$roster_ref" ]
+}
+
 @test "install.sh: writes .roster_ref ← EIDOLONS_ROSTER_REF when set (B1)" {
   EIDOLONS_ROSTER_REF="release/2026Q3" bash "$EIDOLONS_ROOT/cli/install.sh" >/dev/null
   local roster_ref
