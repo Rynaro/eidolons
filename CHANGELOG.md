@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.17.1] — 2026-06-02
 
 ### Added
 - vigil v1.4.1 published in the roster with release integrity metadata.
