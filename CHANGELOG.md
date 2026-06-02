@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- vigil v1.4.1 published in the roster with release integrity metadata.
 - atlas v1.9.1 published in the roster with release integrity metadata.
 
 ## [1.17.0] — 2026-06-02
