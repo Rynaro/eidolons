@@ -435,7 +435,8 @@ mcp_driver_oci_image_install() {
     if [ -n "$digest" ]; then
       local source_image_check
       source_image_check="$(mcp_catalogue_get_field "$name" '.source.image')"
-      if ! atlas_aci_check_image "${source_image_check}@${digest}"; then
+      if ! atlas_aci_check_image "${source_image_check}@${digest}" \
+           "Image for ${name} is not present on this host: ${source_image_check}@${digest}. Pull it with 'docker pull ${source_image_check}:${version}' and re-run 'eidolons mcp install ${name}'."; then
         return 1
       fi
     fi
