@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- crystalium v1.2.1 published in the roster with release integrity metadata.
+
 ### Changed
 
 - **(roster) crystalium re-pinned to 1.2.1 — multi-arch image.** The 1.2.0 GHCR image was `linux/amd64`-only, so `eidolons mcp install crystalium` failed on Apple Silicon (arm64) with "no matching manifest for linux/arm64/v8". crystalium v1.2.1 publishes a multi-arch index (amd64 + arm64); `roster/mcps.yaml` now pins `sha256:d8da22cb…` and `roster/index.yaml` tracks 1.2.1.
