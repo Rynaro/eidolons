@@ -32,6 +32,10 @@ mcps:
     source:
       type: ghcr
       image: "ghcr.io/rynaro/atlas-aci"
+      build:
+        git_url: "https://github.com/Rynaro/atlas-aci.git"
+        context: "mcp-server"
+        default_ref: "main"
     versions:
       latest: "0.2.2"
       pins:

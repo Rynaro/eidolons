@@ -408,14 +408,14 @@ run_pull() {
 
 # ─── Case 9: removing --build-locally handler causes this test to fail ────
 @test "pull --build-locally: handler must exist in script source (P0 invariant guard)" {
-  # This test directly inspects the script source to assert that the
-  # --build-locally handler is present. If a contributor removes the
-  # flag handler, this test fails with a clear message about the P0 invariant.
-  local script="$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  # OQ-1.A: mcp_atlas_aci_pull.sh is now a thin wrapper over mcp_driver_oci_image_pull
+  # in lib_mcp.sh. The source-grep target is updated to lib_mcp.sh where the P0
+  # build-locally logic now lives (and where the INVARIANT (P0) comment moved).
+  local script="$EIDOLONS_ROOT/cli/src/lib_mcp.sh"
   run grep -q "\-\-build-locally" "$script"
   [ "$status" -eq 0 ]
 
-  # The P0 invariant comment must also be present in the source.
+  # The P0 invariant comment must also be present in the source (now in lib_mcp.sh).
   run grep -q "INVARIANT (P0)" "$script"
   [ "$status" -eq 0 ]
 }
@@ -434,9 +434,41 @@ run_pull() {
   export FAKE_DOCKER_INFO_RESULT=ok
   export FAKE_DOCKER_INSPECT_RESULT=ok
 
-  local placeholder="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  # The atlas-aci pull alias now forwards to the catalogue-driven generic pull
+  # (mcp_pull.sh atlas-aci), so the digest comes from the catalogue, not the
+  # DEFAULT_IMAGE_DIGEST env. Override the catalogue with an all-zeros pinned
+  # digest at the path the CLI reads ($NEXUS/roster/mcps.yaml) and point
+  # EIDOLONS_NEXUS at this tmp dir. The bootstrap guard fires before any docker
+  # call, so docker.log stays empty.
+  mkdir -p "$BATS_TEST_TMPDIR/roster"
+  cat > "$BATS_TEST_TMPDIR/roster/mcps.yaml" <<'EOF'
+catalogue_version: "1.2"
+updated_at: "2026-06-02T00:00:00Z"
+mcps:
+  - name: atlas-aci
+    display_name: "Atlas-ACI"
+    scope: system
+    kind: oci-image
+    description: "Test"
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atlas-aci"
+    versions:
+      latest: "0.2.2"
+      pins:
+        stable: "0.2.2"
+      releases:
+        "0.2.2":
+          digest: "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+          released_at: "2026-06-02T00:00:00Z"
+    install:
+      template: "cli/templates/mcp/atlas-aci.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+EOF
 
-  DEFAULT_IMAGE_DIGEST="$placeholder" run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  EIDOLONS_NEXUS="$BATS_TEST_TMPDIR" run bash "$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
 
   [ "$status" -ne 0 ]
   [[ "$output" =~ "bootstrap placeholder" ]]

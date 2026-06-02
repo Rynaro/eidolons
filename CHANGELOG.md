@@ -8,6 +8,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(mcp) Generic `eidolons mcp pull <name>` command** — catalogue-pin-driven OCI image fetch for any `kind=oci-image` MCP (atlas-aci, crystalium, future additions). Idempotent no-op when image is already present. Supports `--image-digest` override, `--build-locally` (gated to MCPs that declare `source.build`), and `--git-ref`. Replaces the atlas-aci-only pull path with a unified generic driver (`mcp_driver_oci_image_pull` in `lib_mcp.sh`).
+- **(mcp) `eidolons mcp images` inventory command** — status table (and `--json` array) across all `oci-image` MCPs: NAME / IMAGE / PRESENT / LOCAL-digest / PINNED-digest / DRIFT / SIZE. Drift = LOCAL ≠ PINNED (catalogue is the authority). Docker absence surfaces as `(n/a)` cells; always exits 0. Junction (binary) is omitted.
+- **(mcp) `--no-pull` flag on `install` and `upgrade`** — suppresses auto-pull for air-gap environments; absent image aborts with a name-aware message. Accepted and silently ignored for `kind=binary` (junction).
+- **(mcp) Additive optional `source.build` block in `roster/mcps.yaml` and `schemas/mcp-catalogue.schema.json`** — presence gates `--build-locally`; atlas-aci declares it (buildable), crystalium does not (pull-only). `make schema` stays green (block is optional, no `required` change).
+
+### Changed
+
+- **(mcp) Auto-pull on `install` and `upgrade` for oci-image MCPs** — `eidolons mcp install crystalium` now auto-pulls the pinned image when missing, instead of aborting. Fixes the crystalium install pain point. Ordering invariant: auto-pull fires before `.mcp.json` wiring. atlas-aci install branch also honors auto-pull.
+- **(mcp) `mcp_driver_oci_image_refresh` is now MCP-agnostic** — previously hardcoded to shell out to `mcp_atlas_aci_pull.sh`, which silently failed for `mcp refresh crystalium`. Now routes through `mcp_driver_oci_image_pull NAME --image-digest <locked>`. Fixes a latent crystalium refresh bug.
+- **(mcp) `mcp_refresh.sh --image-digest` override now MCP-agnostic** — the `--image-digest` path in `mcp_refresh.sh` previously hardcoded `mcp_atlas_aci_pull.sh`; now routes through the generic pull driver.
+- **(mcp) `eidolons mcp atlas-aci pull` alias re-pointed** (OQ-4) — previously forwarded to `mcp refresh atlas-aci` (lockfile-driven semantics); now forwards to `mcp pull atlas-aci` (catalogue-pin-driven semantics). One DEPRECATED line still emitted; `EIDOLONS_SUPPRESS_DEPRECATED=1` still suppresses it. Scripted callers relying on lockfile-driven semantics should migrate to `eidolons mcp refresh atlas-aci`.
+- **(mcp) `mcp_atlas_aci_pull.sh` is now a thin wrapper** (OQ-1.A) — all pull logic consolidated in `mcp_driver_oci_image_pull` in `lib_mcp.sh`. The P0 `--build-locally` invariant and its source-grep guard (T9 Cases 8–9) are preserved; T9 Case 9 now greps `lib_mcp.sh`.
+
 ## [1.15.0] — 2026-06-02
 
 ### Added

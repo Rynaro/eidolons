@@ -191,6 +191,102 @@ glob `$EIDOLONS_HOME/cache/junction@*/junction` (fallback).
 
 ---
 
+## Image management
+
+### `eidolons mcp pull <name>` — fetch an OCI image
+
+Catalogue-pin-driven image fetch. Idempotent: no-op when the image is
+already present at the pinned ref. Does **not** touch the lockfile or
+`.mcp.json`.
+
+```bash
+eidolons mcp pull crystalium                              # pull at pins.stable digest
+eidolons mcp pull atlas-aci --image-digest sha256:...    # digest override
+eidolons mcp pull atlas-aci --build-locally              # offline escape hatch (buildable MCPs only)
+eidolons mcp pull atlas-aci --build-locally --git-ref v1.2
+```
+
+Exit codes: 0 = present (or pulled), 1 = docker/pull failure, 2 = bad usage.
+
+`--build-locally` is only valid for MCPs that declare a `source.build` block
+in the catalogue. Currently: **atlas-aci** (buildable), **crystalium**
+(pull-only). Attempting `--build-locally` on a pull-only MCP exits 2 with a
+clear message. The `--git-ref` flag requires `--build-locally` and defaults to
+the MCP's `source.build.default_ref` (usually `main`).
+
+### `eidolons mcp images` — image inventory
+
+Status table across all `oci-image` MCPs. Binary MCPs (junction) are omitted.
+Always exits 0 — docker absence is shown as `(n/a)`, not a failure.
+
+```bash
+eidolons mcp images           # human-readable table
+eidolons mcp images --json    # JSON array (machine-readable)
+```
+
+Table columns:
+
+| Column | Meaning |
+|--------|---------|
+| `NAME` | Catalogue name |
+| `IMAGE` | Registry ref (no digest) |
+| `PRESENT` | `yes` / `no` / `(n/a)` — `(n/a)` when docker CLI/daemon unavailable |
+| `LOCAL` | First 19 chars of the locally-resolved image digest, or `—` |
+| `PINNED` | First 19 chars of `versions.releases[pins.stable].digest` |
+| `DRIFT` | `no` / `yes` / `unknown` |
+| `SIZE` | Human-readable image size, or `—` |
+
+**Drift semantics:**
+- `unknown` — docker unavailable, image absent, or local digest unresolvable
+  (e.g. locally-built image with no RepoDigest).
+- `no` — image present AND local digest == catalogue pinned digest.
+- `yes` — image present AND local digest != catalogue pinned digest (stale
+  image, post-catalogue-bump, or locally-built override).
+
+The `--json` output includes `locked_digest` (from the lockfile) for
+completeness, but DRIFT is strictly local-vs-pinned.
+
+### Auto-pull on `install` / `upgrade`
+
+`eidolons mcp install` and `eidolons mcp upgrade` automatically pull the
+pinned OCI image when it is missing, so they "just work" on a fresh host
+without a prior manual `docker pull`.
+
+```bash
+eidolons mcp install crystalium          # auto-pulls if image absent
+eidolons mcp upgrade crystalium          # auto-pulls if newer image is absent
+```
+
+To suppress auto-pull (air-gap environments), pass `--no-pull`:
+
+```bash
+eidolons mcp install crystalium --no-pull   # aborts if image absent (old behavior)
+eidolons mcp upgrade crystalium --no-pull   # same
+```
+
+`--no-pull` is accepted and silently ignored for `kind: binary` MCPs (junction):
+binary install fetches its own artefact independently of OCI.
+
+### `source.build` catalogue block
+
+MCPs that support `--build-locally` declare a `source.build` block in
+`roster/mcps.yaml`:
+
+```yaml
+source:
+  type: ghcr
+  image: "ghcr.io/rynaro/atlas-aci"
+  build:
+    git_url: "https://github.com/Rynaro/atlas-aci.git"
+    context: "mcp-server"
+    default_ref: "main"
+```
+
+Presence of `source.build` gates the `--build-locally` flag. MCPs without
+this block are pull-only; attempting `--build-locally` exits 2.
+
+---
+
 ## Deprecated aliases
 
 Both legacy command families remain functional through nexus **v2.9.x** and
@@ -201,11 +297,19 @@ version and has not yet migrated).
 | Legacy | New equivalent | Removed in |
 |---|---|---|
 | `eidolons mcp atlas-aci [--force]` | `eidolons mcp install atlas-aci [--force]` | v3.0.0 |
-| `eidolons mcp atlas-aci pull [...]` | `eidolons mcp refresh atlas-aci [...]` | v3.0.0 |
+| `eidolons mcp atlas-aci pull [...]` | `eidolons mcp pull atlas-aci [...]` | v3.0.0 |
 | `eidolons harness install [ver]` | `eidolons mcp install junction[@ver]` | v3.0.0 |
 | `eidolons harness up` | `eidolons mcp health junction` | v3.0.0 |
 | `eidolons harness verify [args]` | `eidolons mcp run junction verify [args]` | v3.0.0 |
 | `eidolons harness uninstall` | `eidolons mcp uninstall junction` | v3.0.0 |
+
+> **Behavior change (OQ-4):** `eidolons mcp atlas-aci pull` was previously an
+> alias for `eidolons mcp refresh atlas-aci` (lockfile-driven). It is now
+> re-pointed to `eidolons mcp pull atlas-aci` (catalogue-pin-driven). This
+> matches the user intuition of "pull = fetch the current catalogue image" and
+> unifies the image-fetch surface. Scripted callers of the deprecated alias
+> that relied on lockfile-driven semantics should migrate to
+> `eidolons mcp refresh atlas-aci`.
 
 ---
 

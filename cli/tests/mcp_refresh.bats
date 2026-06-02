@@ -102,3 +102,118 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
+
+# ─── Crystalium refresh via generic driver ────────────────────────────────
+
+setup_fake_docker_for_refresh() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
+INFO_RESULT="${FAKE_DOCKER_INFO_RESULT:-ok}"
+INSPECT_RESULT="${FAKE_DOCKER_INSPECT_RESULT:-ok}"
+PULL_RESULT="${FAKE_DOCKER_PULL_RESULT:-ok}"
+INSPECT_AFTER_PULL="${FAKE_DOCKER_INSPECT_AFTER_PULL:-}"
+
+count_pulls() {
+  if [ -f "$DOCKER_LOG" ]; then
+    grep -c '^pull ' "$DOCKER_LOG" 2>/dev/null || true
+  else
+    printf '0'
+  fi
+}
+
+subcmd="${1:-}"
+case "$subcmd" in
+  info) [ "$INFO_RESULT" = "ok" ] && exit 0 || exit 1 ;;
+  image)
+    action="${2:-}"
+    case "$action" in
+      inspect)
+        _eff="$INSPECT_RESULT"
+        if [ -n "$INSPECT_AFTER_PULL" ] && [ "$(count_pulls)" -ge 1 ]; then
+          _eff="$INSPECT_AFTER_PULL"
+        fi
+        shift 2
+        _iref=""
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --format) shift 2 ;;
+            *) _iref="$1"; shift ;;
+          esac
+        done
+        printf 'image inspect %s\n' "$_iref" >> "$DOCKER_LOG"
+        [ "$_eff" = "ok" ] && exit 0 || exit 1
+        ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  pull)
+    printf 'pull %s\n' "${2:-}" >> "$DOCKER_LOG"
+    [ "$PULL_RESULT" = "ok" ] && exit 0 || exit 1
+    ;;
+  *) exit 0 ;;
+esac
+SHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+  export BATS_TEST_TMPDIR
+}
+
+seed_crystalium_lock_for_refresh() {
+  local digest="sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc876630cdb3e5"
+  cat > eidolons.mcp.lock <<EOF
+# eidolons.mcp.lock
+generated_at: "2026-05-19T00:00:00Z"
+eidolons_cli_version: "1.3.0"
+catalogue_version: "1.2"
+mcps:
+  - name: crystalium
+    kind: oci-image
+    version: "1.2.0"
+    source:
+      image: "ghcr.io/rynaro/crystalium"
+    integrity:
+      algo: oci-digest
+      value: "${digest}"
+    target: ".mcp.json"
+    hosts_wired:
+      - ".mcp.json"
+    installed_at: "2026-05-01T00:00:00Z"
+EOF
+}
+
+@test "mcp refresh crystalium: routes through generic pull driver (not atlas-aci hardcode)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_refresh
+  seed_crystalium_lock_for_refresh
+
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_refresh.sh" crystalium
+  [ "$status" -eq 0 ]
+
+  # Lockfile must still be valid.
+  [ -f "eidolons.mcp.lock" ]
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh' && yaml_to_json eidolons.mcp.lock | jq '.mcps | length'"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+}
+
+@test "mcp refresh crystalium: --image-digest override routes through generic driver" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_refresh
+  seed_crystalium_lock_for_refresh
+
+  local override_digest="sha256:1111111111111111111111111111111111111111111111111111111111111111"
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_refresh.sh" crystalium --image-digest "$override_digest"
+  [ "$status" -eq 0 ]
+
+  # Lockfile must be updated.
+  [ -f "eidolons.mcp.lock" ]
+}

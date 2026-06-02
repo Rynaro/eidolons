@@ -29,6 +29,8 @@ Subcommands:
   sync                    Reconcile project eidolons.yaml mcps: block with installed state
   health [<name>|--all]   Run health probes for installed MCPs
   run <name> [<args>...]  Pass-through to a runnable MCP (binary kind only in v1.3)
+  pull <name>             Pull an oci-image MCP image onto this host (catalogue-pin driven)
+  images                  Show image inventory for oci-image MCPs (present/digest/drift)
 
 Options:
   -h, --help    Show this help
@@ -53,6 +55,8 @@ case "$subcmd" in
   sync)      exec bash "$SELF_DIR/mcp_sync.sh"      "$@" ;;
   health)    exec bash "$SELF_DIR/mcp_health.sh"    "$@" ;;
   run)       exec bash "$SELF_DIR/mcp_run.sh"       "$@" ;;
+  pull)      exec bash "$SELF_DIR/mcp_pull.sh"      "$@" ;;
+  images)    exec bash "$SELF_DIR/mcp_images.sh"    "$@" ;;
   -h|--help|help)
     usage
     exit 0
@@ -64,7 +68,7 @@ case "$subcmd" in
   *)
     echo "Unknown mcp subcommand: $subcmd" >&2
     echo "" >&2
-    echo "Available subcommands: list show install refresh uninstall upgrade sync health run" >&2
+    echo "Available subcommands: list show install refresh uninstall upgrade sync health run pull images" >&2
     echo "Run 'eidolons mcp --help' for usage." >&2
     exit 2
     ;;

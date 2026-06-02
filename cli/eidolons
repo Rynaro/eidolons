@@ -198,7 +198,7 @@ case "$cmd" in
     [ $# -gt 0 ] && shift
     case "$mcp_sub" in
       # New unified verbs — delegate to mcp.sh sub-dispatcher.
-      list|show|install|refresh|uninstall|upgrade|sync|health|run|-h|--help|help)
+      list|show|install|refresh|uninstall|upgrade|sync|health|run|pull|images|-h|--help|help)
         exec bash "$CLI_SRC/mcp.sh" "$mcp_sub" "$@"
         ;;
       # Legacy deprecated alias: 'eidolons mcp atlas-aci [pull] [...]'
@@ -207,8 +207,11 @@ case "$cmd" in
         case "$_sub2" in
           pull)
             shift
-            _deprecated_alias "eidolons mcp atlas-aci pull" "eidolons mcp refresh atlas-aci"
-            exec bash "$CLI_SRC/mcp_refresh.sh" "atlas-aci" "$@"
+            # Re-pointed from mcp_refresh.sh → mcp_pull.sh (OQ-4).
+            # Semantics change: lockfile-driven → catalogue-pin-driven.
+            # The alias remains DEPRECATED; re-point is noted in CHANGELOG.
+            _deprecated_alias "eidolons mcp atlas-aci pull" "eidolons mcp pull atlas-aci"
+            exec bash "$CLI_SRC/mcp_pull.sh" "atlas-aci" "$@"
             ;;
           *)
             _deprecated_alias "eidolons mcp atlas-aci" "eidolons mcp install atlas-aci"

@@ -374,3 +374,159 @@ JSTUB
   # cursor agent file must NOT have been modified.
   ! grep -q 'mcp__junction__' .cursor/rules/atlas.mdc
 }
+
+# ─── S4/S5/G8 — Auto-pull on oci-image install ───────────────────────────
+
+# setup_fake_docker_for_oci reuses the same harness as setup_fake_docker_for_install
+# but is defined inline here for clarity (per-file convention).
+
+setup_fake_docker_for_oci() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+DOCKER_LOG="${BATS_TEST_TMPDIR}/docker.log"
+INFO_RESULT="${FAKE_DOCKER_INFO_RESULT:-ok}"
+INSPECT_RESULT="${FAKE_DOCKER_INSPECT_RESULT:-ok}"
+PULL_RESULT="${FAKE_DOCKER_PULL_RESULT:-ok}"
+INSPECT_AFTER_PULL="${FAKE_DOCKER_INSPECT_AFTER_PULL:-}"
+
+count_pulls() {
+  if [ -f "$DOCKER_LOG" ]; then
+    grep -c '^pull ' "$DOCKER_LOG" 2>/dev/null || true
+  else
+    printf '0'
+  fi
+}
+
+subcmd="${1:-}"
+case "$subcmd" in
+  info)
+    [ "$INFO_RESULT" = "ok" ] && exit 0 || exit 1
+    ;;
+  image)
+    action="${2:-}"
+    case "$action" in
+      inspect)
+        _ifmt=""
+        _iref=""
+        shift 2
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --format) _ifmt="${2:-}"; shift 2 ;;
+            *) _iref="$1"; shift ;;
+          esac
+        done
+        printf 'image inspect %s\n' "$_iref" >> "$DOCKER_LOG"
+        _eff="$INSPECT_RESULT"
+        if [ -n "$INSPECT_AFTER_PULL" ] && [ "$(count_pulls)" -ge 1 ]; then
+          _eff="$INSPECT_AFTER_PULL"
+        fi
+        [ "$_eff" = "ok" ] && exit 0 || exit 1
+        ;;
+      *) exit 0 ;;
+    esac
+    ;;
+  pull)
+    printf 'pull %s\n' "${2:-}" >> "$DOCKER_LOG"
+    [ "$PULL_RESULT" = "ok" ] && exit 0 || exit 1
+    ;;
+  build) exit 0 ;;
+  *) exit 0 ;;
+esac
+SHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+  export BATS_TEST_TMPDIR
+}
+
+@test "S4 auto-pull on install: crystalium image absent + docker present → auto-pull fires before .mcp.json, exit 0" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+
+  # Image absent before pull; present after pull.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=ok
+  export FAKE_DOCKER_INSPECT_AFTER_PULL=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+
+  [ "$status" -eq 0 ]
+
+  # docker.log must show a pull line (auto-pull fired).
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  [ -f "$log" ]
+  run grep -c '^pull ' "$log"
+  [ "$output" -ge 1 ]
+
+  # .mcp.json must have been written (wiring ran after auto-pull).
+  [ -f ".mcp.json" ]
+  run bash -c "jq -e '.mcpServers.crystalium' .mcp.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "S5 install --no-pull: crystalium image absent + --no-pull → exit 1, no pull, no .mcp.json" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=fail
+  export FAKE_DOCKER_PULL_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium --no-pull
+
+  [ "$status" -eq 1 ]
+
+  # stderr must contain name-aware message.
+  [[ "$output" =~ "crystalium" ]]
+
+  # docker.log must have NO pull line.
+  local log="$BATS_TEST_TMPDIR/docker.log"
+  if [ -f "$log" ]; then
+    run grep -q '^pull ' "$log"
+    [ "$status" -ne 0 ]
+  fi
+
+  # .mcp.json must NOT have been written.
+  [ ! -f ".mcp.json" ]
+}
+
+@test "S5b install --no-pull accepted for junction (binary kind, no-op)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}" --no-pull
+
+  # --no-pull is silently ignored for binary kind; install should succeed.
+  [ "$status" -eq 0 ]
+}
+
+@test "G8 idempotency: repeat install crystalium → byte-identical .mcp.json and lockfile" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+
+  # Image present from the start.
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # First install.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+  [ "$status" -eq 0 ]
+
+  [ -f ".mcp.json" ]
+  [ -f "eidolons.mcp.lock" ]
+  cp .mcp.json .mcp.json.after1
+  cp eidolons.mcp.lock eidolons.mcp.lock.after1
+
+  # Second install (no --force, same version).
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+  [ "$status" -eq 0 ]
+
+  # .mcp.json and lockfile must be byte-identical (idempotency invariant).
+  diff .mcp.json.after1 .mcp.json
+  # lockfile installed_at unchanged when no-op.
+  before_ts="$(grep 'installed_at' eidolons.mcp.lock.after1 | head -1)"
+  after_ts="$(grep 'installed_at' eidolons.mcp.lock | head -1)"
+  [ "$before_ts" = "$after_ts" ]
+}
