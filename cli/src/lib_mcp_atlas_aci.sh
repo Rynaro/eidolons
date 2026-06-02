@@ -167,21 +167,26 @@ atlas_aci_check_docker_daemon() {
 }
 
 # ---------------------------------------------------------------------------
-# atlas_aci_check_image <full-ref>
+# atlas_aci_check_image <full-ref> [missing-message]
 #   Returns 0 if `docker image inspect <full-ref>` succeeds (image is in the
 #   local store), 4 otherwise.
 #   Uses `docker image inspect`, NOT `docker images`, because the latter has
 #   different semantics for digest-only references.
-#   On failure: writes a one-line actionable message to stderr.
+#   On failure: writes a one-line actionable message to stderr. The default
+#   message is atlas-aci-specific; generic oci-image callers (e.g. crystalium)
+#   pass their own name-aware remediation as the optional second argument so the
+#   output isn't mis-branded as Atlas-ACI.
 # ---------------------------------------------------------------------------
 atlas_aci_check_image() {
   local ref="$1"
+  local msg="${2:-}"
   if docker image inspect "$ref" >/dev/null 2>&1; then
     return 0
   fi
-  printf '%s\n' \
-    "Atlas-ACI image not loaded on this host: ${ref}. Run 'eidolons mcp atlas-aci pull' to fetch it, or build it from the Atlas-ACI repository's Dockerfile." \
-    >&2
+  if [ -z "$msg" ]; then
+    msg="Atlas-ACI image not loaded on this host: ${ref}. Run 'eidolons mcp atlas-aci pull' to fetch it, or build it from the Atlas-ACI repository's Dockerfile."
+  fi
+  printf '%s\n' "$msg" >&2
   return 4
 }
 
