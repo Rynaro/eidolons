@@ -12,6 +12,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ### Added
 - vigil v1.4.1 published in the roster with release integrity metadata.
 - atlas v1.9.1 published in the roster with release integrity metadata.
+- roster-health CI now runs each shipped Eidolon's `install.sh --non-interactive`
+  against a temp target, gating the per-Eidolon `agent.md` ≤1000-token P0 budget
+  (and the install-layout sweep) before a version can pass health checks. This
+  closes the hole that let atlas v1.9.0 / vigil v1.4.0 ship an over-budget
+  `agent.md` — `--help` and EIIS conformance never exercise that gate.
 
 ## [1.17.0] — 2026-06-02
 
