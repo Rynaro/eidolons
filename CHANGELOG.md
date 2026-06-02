@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.16.0] — 2026-06-02
+
 ### Added
 
 - **(mcp) Generic `eidolons mcp pull <name>` command** — catalogue-pin-driven OCI image fetch for any `kind=oci-image` MCP (atlas-aci, crystalium, future additions). Idempotent no-op when image is already present. Supports `--image-digest` override, `--build-locally` (gated to MCPs that declare `source.build`), and `--git-ref`. Replaces the atlas-aci-only pull path with a unified generic driver (`mcp_driver_oci_image_pull` in `lib_mcp.sh`).
@@ -22,6 +24,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - **(mcp) `mcp_refresh.sh --image-digest` override now MCP-agnostic** — the `--image-digest` path in `mcp_refresh.sh` previously hardcoded `mcp_atlas_aci_pull.sh`; now routes through the generic pull driver.
 - **(mcp) `eidolons mcp atlas-aci pull` alias re-pointed** (OQ-4) — previously forwarded to `mcp refresh atlas-aci` (lockfile-driven semantics); now forwards to `mcp pull atlas-aci` (catalogue-pin-driven semantics). One DEPRECATED line still emitted; `EIDOLONS_SUPPRESS_DEPRECATED=1` still suppresses it. Scripted callers relying on lockfile-driven semantics should migrate to `eidolons mcp refresh atlas-aci`.
 - **(mcp) `mcp_atlas_aci_pull.sh` is now a thin wrapper** (OQ-1.A) — all pull logic consolidated in `mcp_driver_oci_image_pull` in `lib_mcp.sh`. The P0 `--build-locally` invariant and its source-grep guard (T9 Cases 8–9) are preserved; T9 Case 9 now greps `lib_mcp.sh`.
+
+### Fixed
+
+- **(mcp) Generic oci-image install no longer mis-brands its "image not present" error.** `eidolons mcp install crystalium` previously printed an Atlas-ACI-specific message pointing at `eidolons mcp atlas-aci pull`. The message is now name-aware with the correct `docker pull <image>:<version>` remediation; `atlas_aci_check_image` takes an optional caller-supplied message (default text unchanged for atlas-aci callers).
+- **(mcp) `eidolons mcp install` is now genuinely idempotent for oci-image MCPs.** The lockfile no-op comparison is canonicalized (sorted object keys + sorted `hosts_wired`), so a repeat install preserves `installed_at` instead of re-stamping it. The lockfile writer sorts `hosts_wired` on write, which previously defeated the no-op against an insertion-order rebuild — latent across all oci-image MCPs, surfaced as a darwin-green / ubuntu-red idempotency test.
 
 ## [1.15.0] — 2026-06-02
 
