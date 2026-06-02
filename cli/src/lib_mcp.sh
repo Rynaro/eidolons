@@ -227,11 +227,16 @@ mcp_lock_upsert() {
   local new_entry_final
   if [ -n "$old_entry" ]; then
     # Compare fields that matter for idempotency (all except installed_at).
+    # Canonicalize for an order-insensitive comparison: -S sorts object keys and
+    # `hosts_wired|sort` normalizes the array — the lockfile writer sorts that
+    # array on write, so a freshly-built (insertion-order) entry would otherwise
+    # never match the re-read (sorted) one, defeating the no-op and re-stamping
+    # installed_at on every install.
     local old_sig new_sig
     old_sig="$(printf '%s' "$old_entry" \
-      | jq -c '{kind,version,source,integrity,target,hosts_wired}')"
+      | jq -cS '{kind,version,source,integrity,target,hosts_wired:(.hosts_wired // [] | sort)}')"
     new_sig="$(printf '%s' "$new_entry" \
-      | jq -c '{kind,version,source,integrity,target,hosts_wired}')"
+      | jq -cS '{kind,version,source,integrity,target,hosts_wired:(.hosts_wired // [] | sort)}')"
 
     if [ "$old_sig" = "$new_sig" ]; then
       # No-op: preserve the original installed_at. Skip write.
