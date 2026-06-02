@@ -1384,6 +1384,42 @@ mcp_driver_binary_health() {
   printf '%s  OVERALL          %s\n' "$name" "$overall"
 }
 
+# mcp_assert_version_published NAME VER
+# Asserts that VER exists as a published release in the catalogue for NAME.
+# Calls die() (exit 1) with an actionable message listing available versions
+# when the release record is absent.
+# Bash 3.2 safe: uses a plain for/while loop; no readarray/mapfile.
+mcp_assert_version_published() {
+  local name="$1"
+  local ver="$2"
+
+  # Check the release record exists (kind-agnostic: works for oci-image + binary).
+  local release_check
+  release_check="$(mcp_catalogue_get "$name" \
+    | jq -r --arg v "$ver" '.versions.releases[$v] // empty')"
+
+  if [ -z "$release_check" ]; then
+    # Build a newline-separated list of published versions for the error message.
+    local published_list
+    published_list="$(mcp_catalogue_get_field "$name" '.versions.releases | keys[]' 2>/dev/null || true)"
+
+    local published_display=""
+    if [ -n "$published_list" ]; then
+      local v
+      while IFS= read -r v; do
+        [ -z "$v" ] && continue
+        published_display="${published_display}${published_display:+, }${v}"
+      done <<< "$published_list"
+    fi
+
+    if [ -n "$published_display" ]; then
+      die "${name}@${ver} is not published in the roster catalogue. Publish it via a roster bump first. Published versions: ${published_display}"
+    else
+      die "${name}@${ver} is not published in the roster catalogue. Publish it via a roster bump first."
+    fi
+  fi
+}
+
 # ─── Generic dispatch helpers ─────────────────────────────────────────────────
 
 # mcp_dispatch_driver KIND HOOK NAME [...]
