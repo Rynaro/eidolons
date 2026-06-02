@@ -278,6 +278,211 @@ mcp_lock_remove() {
 
 # ─── oci-image driver ─────────────────────────────────────────────────────────
 
+# mcp_driver_oci_image_pull NAME [--image-digest DIGEST] [--build-locally] [--git-ref REF]
+# Generic, catalogue-pin-driven pull driver for any kind=oci-image MCP.
+# Reuses atlas_aci_check_docker_cli/daemon/image from lib_mcp_atlas_aci.sh.
+#
+# INVARIANT (P0): the --build-locally branch is the air-gap escape hatch for
+# buildable MCPs. It must never be removed. See .spectra/plans/
+# 2026-06-02-mcp-image-management-spec.md §"P0 build-locally invariant".
+#
+# Exit codes:
+#   0  image present (already, or after pull/build)
+#   1  docker CLI/daemon failure, pull failure, or build failure
+#   2  bad usage (unknown MCP, wrong kind, --build-locally on pull-only MCP,
+#      --git-ref without --build-locally, bootstrap-placeholder digest)
+mcp_driver_oci_image_pull() {
+  local name="$1"
+  shift
+
+  local override_digest=""
+  local build_locally=false
+  local git_ref=""
+  local digest_explicit=false
+
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --image-digest)
+        [ -z "${2:-}" ] && { printf '%s\n' "--image-digest requires an argument" >&2; return 2; }
+        override_digest="$2"
+        digest_explicit=true
+        shift 2
+        ;;
+      --build-locally)
+        build_locally=true
+        shift
+        ;;
+      --git-ref)
+        [ -z "${2:-}" ] && { printf '%s\n' "--git-ref requires an argument" >&2; return 2; }
+        git_ref="$2"
+        shift 2
+        ;;
+      *)
+        printf '%s\n' "mcp_driver_oci_image_pull: unknown option $1" >&2
+        return 2
+        ;;
+    esac
+  done
+
+  # --git-ref without --build-locally is a usage error.
+  if [ -n "$git_ref" ] && [ "$build_locally" = "false" ]; then
+    printf '%s\n' "--git-ref requires --build-locally" >&2
+    return 2
+  fi
+
+  # Validate name is in catalogue.
+  local kind
+  kind="$(mcp_catalogue_get_field "$name" '.kind')"
+  if [ -z "$kind" ]; then
+    printf '%s\n' "MCP '${name}' not found in catalogue. Try: eidolons mcp list" >&2
+    return 2
+  fi
+  if [ "$kind" != "oci-image" ]; then
+    printf '%s\n' "mcp pull only supports oci-image MCPs; '${name}' is kind=${kind}" >&2
+    return 2
+  fi
+
+  # Resolve source.image and pinned digest.
+  local source_image
+  source_image="$(mcp_catalogue_get_field "$name" '.source.image')"
+
+  local pinned_digest
+  pinned_digest="$(mcp_catalogue_get "$name" \
+    | jq -r '.versions.releases[.versions.pins.stable].digest // empty')"
+
+  # Determine effective digest.
+  local digest
+  if [ "$digest_explicit" = "true" ]; then
+    digest="$override_digest"
+  else
+    digest="${pinned_digest:-}"
+  fi
+
+  # Bootstrap-placeholder guard: refuse if digest is all-zeros and no override/build path.
+  local _BOOTSTRAP_PLACEHOLDER="sha256:0000000000000000000000000000000000000000000000000000000000000000"
+  if [ "$digest_explicit" = "false" ] && [ "$build_locally" = "false" ] && [ "$digest" = "$_BOOTSTRAP_PLACEHOLDER" ]; then
+    printf '%s\n' \
+      "The pinned digest for '${name}' is still the bootstrap placeholder." \
+      "The first registry release has not landed yet (or the digest constant has not been updated). Either:" \
+      "  1. Run 'eidolons mcp pull ${name} --build-locally' to build from source (air-gap escape hatch)." \
+      "  2. Pass --image-digest sha256:<real-digest> to override." \
+      "  3. Wait for the first published release and the corresponding digest-bump PR." \
+      >&2
+    return 2
+  fi
+
+  # --build-locally gate: requires source.build to be present in catalogue.
+  if [ "$build_locally" = "true" ]; then
+    local build_git_url
+    build_git_url="$(mcp_catalogue_get_field "$name" '.source.build.git_url')"
+    if [ -z "$build_git_url" ]; then
+      printf '%s\n' \
+        "'${name}' does not declare a buildable source; --build-locally is not supported." \
+        "Pull from the registry or load a tarball." \
+        >&2
+      return 2
+    fi
+
+    local build_context build_default_ref
+    build_context="$(mcp_catalogue_get_field "$name" '.source.build.context')"
+    build_default_ref="$(mcp_catalogue_get_field "$name" '.source.build.default_ref')"
+    local effective_git_ref="${git_ref:-${build_default_ref:-main}}"
+
+    # Docker CLI + daemon checks.
+    if ! atlas_aci_check_docker_cli; then return 1; fi
+    if ! atlas_aci_check_docker_daemon; then return 1; fi
+
+    local _build_tag="${source_image}:locally-built-$(date +%Y%m%d-%H%M%S)"
+    local _build_url="${build_git_url}#${effective_git_ref}:${build_context}"
+
+    say "Building locally: docker build -t ${_build_tag} ${_build_url}"
+    if docker build -t "$_build_tag" "$_build_url" >&2; then
+      ok "Local build complete. Image tagged: ${_build_tag}"
+      warn "Note: locally-built images cannot match the upstream registry digest (${digest:-<unknown>})."
+      warn "To use this image, pass --image-digest to override the pinned digest, or reference"
+      warn "the locally-built tag directly in your docker run command: ${_build_tag}"
+      return 0
+    else
+      warn "Local build failed."
+      return 1
+    fi
+  fi
+
+  # Registry pull path: need a digest.
+  if [ -z "$digest" ]; then
+    printf '%s\n' "No digest pinned for '${name}' in catalogue (no release for pins.stable)" >&2
+    return 1
+  fi
+
+  local image_ref="${source_image}@${digest}"
+
+  # Docker CLI + daemon checks.
+  if ! atlas_aci_check_docker_cli; then return 1; fi
+  if ! atlas_aci_check_docker_daemon; then return 1; fi
+
+  # Idempotency: no-op if image already present.
+  if atlas_aci_check_image "$image_ref" 2>/dev/null; then
+    info "Image '${name}' already present at ${image_ref} — nothing to do"
+    return 0
+  fi
+
+  # Pull from registry.
+  say "Attempting: docker pull ${image_ref}"
+  local _pull_tmpfile
+  _pull_tmpfile="$(mktemp)"
+  if docker pull "$image_ref" >"$_pull_tmpfile" 2>&1; then
+    rm -f "$_pull_tmpfile"
+    if atlas_aci_check_image "$image_ref" 2>/dev/null; then
+      ok "Image '${name}' pulled and verified: ${image_ref}"
+      return 0
+    else
+      die "docker pull reported success but the image is still not in the local store for '${image_ref}'. Try 'docker image inspect ${image_ref}' to diagnose."
+    fi
+  fi
+  rm -f "$_pull_tmpfile"
+
+  # Pull failure: emit name-aware fallback block.
+  # Include --build-locally alternative only when the MCP declares source.build.
+  local has_build
+  has_build="$(mcp_catalogue_get_field "$name" '.source.build.git_url')"
+
+  printf '%s\n' \
+    "'${name}' image could not be pulled from ${source_image}." \
+    "This may be a temporary registry outage, a network restriction, or an air-gap environment." \
+    "" \
+    "To obtain the image, do ONE of:" \
+    "" \
+    >&2
+  if [ -n "$has_build" ]; then
+    printf '%s\n' \
+      "  1. Build locally (recommended air-gap / offline escape hatch):" \
+      "       eidolons mcp pull ${name} --build-locally [--git-ref REF]" \
+      "" \
+      "  2. Load from a tarball someone shared with you:" \
+      "       docker load -i ${name}.tar" \
+      "" \
+      "  3. Pull from a private registry mirror (if your org publishes one):" \
+      "       docker pull <registry>/${name}@${digest}" \
+      "       docker tag <registry>/${name}@${digest} ${image_ref}" \
+      "" \
+      "Then re-run 'eidolons mcp pull ${name}' to verify." \
+      >&2
+  else
+    printf '%s\n' \
+      "  1. Load from a tarball someone shared with you:" \
+      "       docker load -i ${name}.tar" \
+      "" \
+      "  2. Pull from a private registry mirror (if your org publishes one):" \
+      "       docker pull <registry>/${name}@${digest}" \
+      "       docker tag <registry>/${name}@${digest} ${image_ref}" \
+      "" \
+      "Then re-run 'eidolons mcp pull ${name}' to verify." \
+      >&2
+  fi
+
+  return 1
+}
+
 # _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH
 # Internal helper: renders a template with placeholder substitution and
 # jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
@@ -392,10 +597,12 @@ mcp_driver_oci_image_install() {
 
   local force=false
   local project_root=""
+  local no_pull=false
   while [ $# -gt 0 ]; do
     case "$1" in
       --force)         force=true; shift ;;
       --project-root)  project_root="$2"; shift 2 ;;
+      --no-pull)       no_pull=true; shift ;;
       *)               warn "mcp_driver_oci_image_install: unknown option $1"; shift ;;
     esac
   done
@@ -416,9 +623,23 @@ mcp_driver_oci_image_install() {
   tmpl_rel="$(mcp_catalogue_get_field "$name" '.install.template')"
 
   if [ "$name" = "atlas-aci" ]; then
-    # atlas-aci: delegate to the dedicated script which handles Docker pre-flight,
-    # memex dir creation, bootstrap-placeholder guard, slug computation, and now
-    # jq-merge into .mcp.json (sibling entries are preserved, not clobbered).
+    # atlas-aci: auto-pull support (OQ-2) — when image is missing and --no-pull is
+    # not set, auto-pull before delegating to mcp_atlas_aci.sh.
+    # mcp_atlas_aci.sh handles Docker pre-flight, memex dir creation, bootstrap-
+    # placeholder guard, slug computation, and jq-merge into .mcp.json.
+    if [ "$no_pull" = "false" ] && [ -n "$digest" ]; then
+      local aci_img
+      aci_img="$(mcp_catalogue_get_field "$name" '.source.image')"
+      if ! atlas_aci_check_docker_cli 2>/dev/null; then
+        return 1
+      fi
+      if ! atlas_aci_check_docker_daemon 2>/dev/null; then
+        return 1
+      fi
+      if ! atlas_aci_check_image "${aci_img}@${digest}" 2>/dev/null; then
+        mcp_driver_oci_image_pull "$name" --image-digest "$digest" || return $?
+      fi
+    fi
     local aci_args="--project-root ${project_root}"
     if [ "$force" = "true" ]; then
       aci_args="${aci_args} --force"
@@ -430,14 +651,23 @@ mcp_driver_oci_image_install() {
     bash "$_LIB_MCP_DIR/mcp_atlas_aci.sh" $aci_args || return $?
   else
     # Generic oci-image path (e.g. crystalium): Docker pre-flight + render + merge.
+    # Auto-pull fires BEFORE .mcp.json wiring (ordering invariant).
     if ! atlas_aci_check_docker_cli; then return 1; fi
     if ! atlas_aci_check_docker_daemon; then return 1; fi
     if [ -n "$digest" ]; then
       local source_image_check
       source_image_check="$(mcp_catalogue_get_field "$name" '.source.image')"
-      if ! atlas_aci_check_image "${source_image_check}@${digest}" \
-           "Image for ${name} is not present on this host: ${source_image_check}@${digest}. Pull it with 'docker pull ${source_image_check}:${version}' and re-run 'eidolons mcp install ${name}'."; then
-        return 1
+      if ! atlas_aci_check_image "${source_image_check}@${digest}" 2>/dev/null; then
+        if [ "$no_pull" = "true" ]; then
+          # --no-pull: preserve existing abort behavior with name-aware message.
+          printf '%s\n' \
+            "Image for ${name} is not present on this host: ${source_image_check}@${digest}." \
+            "Pull it with 'eidolons mcp pull ${name}' and re-run 'eidolons mcp install ${name}'." \
+            >&2
+          return 1
+        fi
+        # Auto-pull the image.
+        mcp_driver_oci_image_pull "$name" --image-digest "$digest" || return $?
       fi
     fi
     _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
@@ -499,8 +729,8 @@ mcp_driver_oci_image_refresh() {
 
   say "Refreshing image: $full_ref"
   if ! atlas_aci_check_image "$full_ref" 2>/dev/null; then
-    bash "$_LIB_MCP_DIR/mcp_atlas_aci_pull.sh" \
-      --image-digest "$digest" || return $?
+    # Route through the generic pull driver (MCP-agnostic — fixes crystalium refresh).
+    mcp_driver_oci_image_pull "$name" --image-digest "$digest" || return $?
   else
     info "Image already present, confirming..."
   fi
@@ -523,7 +753,7 @@ mcp_driver_oci_image_refresh() {
     mcp_lock_write_from_array "$new_arr"
   fi
 
-  ok "atlas-aci refresh complete"
+  ok "${name} refresh complete"
 }
 
 # mcp_driver_oci_image_uninstall NAME [--project-root PATH]

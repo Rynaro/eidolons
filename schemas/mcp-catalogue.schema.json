@@ -59,7 +59,16 @@
               "image": { "type": "string" },
               "repo": { "type": "string" },
               "install_url": { "type": "string" },
-              "url": { "type": "string" }
+              "url": { "type": "string" },
+              "build": {
+                "description": "Optional. Presence signals the MCP is locally-buildable (gates --build-locally). Absent = pull-only.",
+                "type": "object",
+                "properties": {
+                  "git_url": { "type": "string", "description": "Git remote URL to build from (e.g. https://github.com/Rynaro/atlas-aci.git)" },
+                  "context": { "type": "string", "description": "Build context subdirectory appended after '#<ref>:' in the Docker build URL" },
+                  "default_ref": { "type": "string", "description": "Default git ref to build from (e.g. main)" }
+                }
+              }
             }
           },
           "versions": {

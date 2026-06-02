@@ -408,14 +408,14 @@ run_pull() {
 
 # ─── Case 9: removing --build-locally handler causes this test to fail ────
 @test "pull --build-locally: handler must exist in script source (P0 invariant guard)" {
-  # This test directly inspects the script source to assert that the
-  # --build-locally handler is present. If a contributor removes the
-  # flag handler, this test fails with a clear message about the P0 invariant.
-  local script="$EIDOLONS_ROOT/cli/src/mcp_atlas_aci_pull.sh"
+  # OQ-1.A: mcp_atlas_aci_pull.sh is now a thin wrapper over mcp_driver_oci_image_pull
+  # in lib_mcp.sh. The source-grep target is updated to lib_mcp.sh where the P0
+  # build-locally logic now lives (and where the INVARIANT (P0) comment moved).
+  local script="$EIDOLONS_ROOT/cli/src/lib_mcp.sh"
   run grep -q "\-\-build-locally" "$script"
   [ "$status" -eq 0 ]
 
-  # The P0 invariant comment must also be present in the source.
+  # The P0 invariant comment must also be present in the source (now in lib_mcp.sh).
   run grep -q "INVARIANT (P0)" "$script"
   [ "$status" -eq 0 ]
 }

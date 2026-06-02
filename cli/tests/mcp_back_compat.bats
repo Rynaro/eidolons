@@ -104,6 +104,35 @@ JSTUB
   echo "$output" | grep -q "DEPRECATED"
 }
 
+# ─── S13: atlas-aci pull alias back-compat + suppress env ────────────────
+
+@test "S13a: mcp atlas-aci pull routes to mcp pull atlas-aci (generic verb), one DEPRECATED line" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_compat
+  # Image present so pull exits 0 (fake docker inspect returns 0).
+  run eidolons mcp atlas-aci pull 2>&1 || true
+  local dep_count
+  dep_count="$(echo "$output" | grep -c "DEPRECATED" || true)"
+  [ "$dep_count" -eq 1 ]
+}
+
+@test "S13b: EIDOLONS_SUPPRESS_DEPRECATED=1 suppresses atlas-aci pull DEPRECATED line" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_compat
+  count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons mcp atlas-aci pull 2>&1 | grep -c "DEPRECATED" || true)"
+  [ "$count" -eq 0 ]
+}
+
+@test "S13c: mcp atlas-aci pull re-pointed to pull semantics (not refresh)" {
+  # Verify the dispatcher maps atlas-aci pull to mcp_pull.sh, not mcp_refresh.sh.
+  # We do this by checking the eidolons dispatcher source for the new routing.
+  run grep -A5 "atlas-aci" "$EIDOLONS_ROOT/cli/eidolons"
+  [ "$status" -eq 0 ]
+  # The pull case must reference mcp_pull.sh (not mcp_refresh.sh).
+  run grep "mcp_pull.sh" "$EIDOLONS_ROOT/cli/eidolons"
+  [ "$status" -eq 0 ]
+}
+
 # ─── harness alias tests ─────────────────────────────────────────────────────
 
 @test "F5 S24: eidolons harness install emits DEPRECATED line" {

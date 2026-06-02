@@ -21,7 +21,7 @@ usage() {
   cat <<EOF
 eidolons mcp upgrade — upgrade installed MCPs to catalogue pins.stable
 
-Usage: eidolons mcp upgrade [<name>|--all]
+Usage: eidolons mcp upgrade [<name>|--all] [--no-pull]
 
 Arguments:
   name    Upgrade a specific MCP by name.
@@ -29,14 +29,19 @@ Arguments:
           If neither is given, defaults to --all.
 
 Options:
+  --no-pull   Suppress auto-pull for oci-image MCPs during upgrade.
+              If the image is missing, the upgrade aborts for that MCP.
+              Accepted and ignored for kind=binary (no-op).
   -h, --help  Show this help
 EOF
 }
 
 target=""
+no_pull=false
 while [ $# -gt 0 ]; do
   case "$1" in
     --all)     target="--all"; shift ;;
+    --no-pull) no_pull=true; shift ;;
     -h|--help) usage; exit 0 ;;
     -*)        warn "Unknown option: $1"; usage >&2; exit 2 ;;
     *)         target="$1"; shift ;;
@@ -63,7 +68,11 @@ _upgrade_one() {
 
   if [ -z "$current" ]; then
     say "$mname not installed — installing at ${stable}"
-    bash "$SELF_DIR/mcp_install.sh" "$mname" --force
+    if [ "$no_pull" = "true" ]; then
+      bash "$SELF_DIR/mcp_install.sh" "$mname" --force --no-pull
+    else
+      bash "$SELF_DIR/mcp_install.sh" "$mname" --force
+    fi
     return 0
   fi
 
@@ -73,7 +82,11 @@ _upgrade_one() {
   fi
 
   say "Upgrading $mname: $current → $stable"
-  bash "$SELF_DIR/mcp_install.sh" "${mname}@${stable}" --force
+  if [ "$no_pull" = "true" ]; then
+    bash "$SELF_DIR/mcp_install.sh" "${mname}@${stable}" --force --no-pull
+  else
+    bash "$SELF_DIR/mcp_install.sh" "${mname}@${stable}" --force
+  fi
 }
 
 if [ "$target" = "--all" ]; then

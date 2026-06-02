@@ -68,8 +68,9 @@ say "Refreshing ${mcp_name}@${locked_ver} (kind=${kind})"
 case "$kind" in
   oci-image)
     if [ -n "$image_digest" ]; then
-      # Pass override digest to the pull script directly.
-      bash "$SELF_DIR/mcp_atlas_aci_pull.sh" --image-digest "$image_digest"
+      # Override-digest path: route through the generic pull driver (MCP-agnostic).
+      # Previously hardcoded to mcp_atlas_aci_pull.sh — now works for any oci-image MCP.
+      mcp_driver_oci_image_pull "$mcp_name" --image-digest "$image_digest"
       # Update installed_at in lock.
       local_entry="$(mcp_lock_entry "$mcp_name")"
       if [ -n "$local_entry" ]; then
