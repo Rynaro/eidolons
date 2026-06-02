@@ -444,6 +444,11 @@ mcp_driver_oci_image_pull() {
       die "docker pull reported success but the image is still not in the local store for '${image_ref}'. Try 'docker image inspect ${image_ref}' to diagnose."
     fi
   fi
+  # Surface docker's actual error (last lines) — it carries the real cause
+  # (e.g. "no matching manifest for linux/arm64" for a single-arch image), which
+  # a generic "network/air-gap" message would otherwise hide.
+  local _pull_err
+  _pull_err="$(tail -n 3 "$_pull_tmpfile" 2>/dev/null)"
   rm -f "$_pull_tmpfile"
 
   # Pull failure: emit name-aware fallback block.
@@ -453,7 +458,12 @@ mcp_driver_oci_image_pull() {
 
   printf '%s\n' \
     "'${name}' image could not be pulled from ${source_image}." \
-    "This may be a temporary registry outage, a network restriction, or an air-gap environment." \
+    >&2
+  if [ -n "$_pull_err" ]; then
+    printf 'docker reported:\n  %s\n' "$_pull_err" >&2
+  fi
+  printf '%s\n' \
+    "Likely cause: the image has no manifest for this host architecture ($(uname -m)), or a private/unauthenticated registry, network restriction, or air-gap." \
     "" \
     "To obtain the image, do ONE of:" \
     "" \

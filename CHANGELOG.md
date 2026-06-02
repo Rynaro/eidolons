@@ -8,6 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **(roster) crystalium re-pinned to 1.2.1 — multi-arch image.** The 1.2.0 GHCR image was `linux/amd64`-only, so `eidolons mcp install crystalium` failed on Apple Silicon (arm64) with "no matching manifest for linux/arm64/v8". crystalium v1.2.1 publishes a multi-arch index (amd64 + arm64); `roster/mcps.yaml` now pins `sha256:d8da22cb…` and `roster/index.yaml` tracks 1.2.1.
+
+### Fixed
+
+- **(mcp) `mcp pull`/`install` now surface docker's actual error on a failed pull.** Previously the driver discarded docker's stderr and printed a generic "registry outage / network / air-gap" message — which hid the real cause (e.g. a single-arch image with "no matching manifest for <arch>") and sent users down the wrong path. The failure now prints docker's reported error plus the host architecture.
+
 ## [1.16.0] — 2026-06-02
 
 ### Added
