@@ -16,12 +16,8 @@ load helpers
   mkdir -p "$fake_nexus/.git"
   printf 'main\n' > "$fake_nexus/.roster_ref"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel
   [ "$status" -eq 0 ]
   [ "$output" = "main" ]
 }
@@ -31,12 +27,8 @@ load helpers
   mkdir -p "$fake_nexus"
   printf 'stable\n' > "$fake_nexus/.roster_ref"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel main
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel main
   [ "$status" -eq 0 ]
   # After set, read back value.
   local got
@@ -48,12 +40,8 @@ load helpers
   local fake_nexus="$BATS_TEST_TMPDIR/nexus-pr8c"
   mkdir -p "$fake_nexus"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel stable
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel stable
   [ "$status" -eq 0 ]
   local got
   got="$(cat "$fake_nexus/.roster_ref")"
@@ -64,12 +52,8 @@ load helpers
   local fake_nexus="$BATS_TEST_TMPDIR/nexus-pr8d"
   mkdir -p "$fake_nexus"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel v1.5.0
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel v1.5.0
   [ "$status" -eq 0 ]
   local got
   got="$(cat "$fake_nexus/.roster_ref")"
@@ -81,12 +65,8 @@ load helpers
   mkdir -p "$fake_nexus"
   local sha="abc1234def5678901234567890123456789012ab"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel '$sha'
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel "$sha"
   [ "$status" -eq 0 ]
   local got
   got="$(cat "$fake_nexus/.roster_ref")"
@@ -125,12 +105,8 @@ load helpers
   mkdir -p "$fake_nexus"
   printf 'main\n' > "$fake_nexus/.roster_ref"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' channel v1.14.0
-  "
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus channel v1.14.0
   [ "$status" -eq 0 ]
   [[ "$output" =~ "main -> v1.14.0" ]]
 }
@@ -145,14 +121,9 @@ load helpers
   printf 'v1.14.0\n' > "$fake_nexus/VERSION"
   printf 'abc1234\n' > "$fake_nexus/.install_commit"
 
-  run bash -c "
-    export EIDOLONS_NEXUS=''
-    export EIDOLONS_REPO='https://invalid.example.invalid/notareal.git'
-    . '$EIDOLONS_ROOT/cli/src/lib.sh'
-    NEXUS='$fake_nexus'
-    ROSTER_FILE='$fake_nexus/roster/index.yaml'
-    . '$EIDOLONS_ROOT/cli/src/nexus.sh' status
-  " 2>&1
+  run env EIDOLONS_NEXUS="$fake_nexus" \
+    EIDOLONS_REPO='https://invalid.example.invalid/notareal.git' \
+    bash "$EIDOLONS_ROOT/cli/eidolons" nexus status
   [ "$status" -eq 0 ]
   # Must show CLI ref (install_ref) and roster channel separately.
   [[ "$output" =~ "ref:" ]]

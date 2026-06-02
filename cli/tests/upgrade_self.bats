@@ -430,9 +430,11 @@ EOF
 
   # Test _nexus_is_dirty by calling it from the ACTUAL upgrade_self.sh environment.
   # Use a subshell that sources upgrade_self.sh's helper function.
+  # NEXUS is set AFTER sourcing lib.sh so that lib.sh's re-derivation
+  # (NEXUS=\${EIDOLONS_NEXUS:-\$EIDOLONS_HOME/nexus}) does not clobber it.
   run bash -c "
-    NEXUS='$fake_nexus'
     . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$fake_nexus'
     # Define _nexus_is_dirty exactly as in upgrade_self.sh (STORY-2 version).
     _nexus_is_dirty() {
       [[ -d \"\$NEXUS/.git\" ]] || return 1

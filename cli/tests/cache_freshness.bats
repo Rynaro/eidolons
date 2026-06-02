@@ -560,7 +560,10 @@ ROSTER
   printf 'cli v1\n' > "$work/cli/src/lib.sh"
   git -C "$work" add . >/dev/null 2>&1
   git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "init"
+  # Tag the initial commit so we can clone the nexus at this point.
+  git -C "$work" tag v1.0.0
   git -C "$work" push origin HEAD >/dev/null 2>&1
+  git -C "$work" push origin v1.0.0 >/dev/null 2>&1
 
   local default_branch
   default_branch="$(git -C "$work" rev-parse --abbrev-ref HEAD 2>/dev/null || echo master)"
@@ -572,7 +575,11 @@ ROSTER
   git -C "$work" -c user.email="t@t" -c user.name="T" commit -q -m "add extras"
   git -C "$work" push origin HEAD >/dev/null 2>&1
 
-  git clone "$remote" "$nexus" -q 2>/dev/null
+  # Clone the nexus at v1.0.0 (before the "add extras" commit) so that
+  # new_cli.sh is NOT yet present in the working tree. After nexus_refresh
+  # (path-restricted to roster/ etc.), it must still be absent.
+  git clone "$remote" "$nexus" -q --branch v1.0.0 2>/dev/null || \
+    git clone "$remote" "$nexus" -q 2>/dev/null
   printf '%s\n' "$default_branch" > "$nexus/.roster_ref"
   printf 'v1.0.0\n' > "$nexus/.install_ref"
 
