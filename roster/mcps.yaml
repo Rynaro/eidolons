@@ -7,7 +7,7 @@
 #   wiring_mode: transport — MCP registered in .mcp.json only; never injected
 #   into agent tools: allowlists (e.g. junction, a project-level bus).
 catalogue_version: "1.2"
-updated_at: "2026-05-28T00:00:00Z"
+updated_at: "2026-06-02T00:00:00Z"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -37,13 +37,16 @@ mcps:
         context: "mcp-server"
         default_ref: "main"
     versions:
-      latest: "0.2.2"
+      latest: "0.2.3"
       pins:
-        stable: "0.2.2"
+        stable: "0.2.3"
       releases:
         "0.2.2":
           digest: "sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
           released_at: "2026-04-30T00:00:00Z"
+        "0.2.3":
+          digest: "sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
+          released_at: "2026-06-02T00:00:00Z"
     install:
       hosts_wired:
         - ".mcp.json"

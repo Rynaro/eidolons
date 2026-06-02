@@ -8,6 +8,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.18.0] — 2026-06-02
+
+### Added
+
+- **(mcp) `eidolons mcp use <name>@<ver>`** — switch an installed MCP to any
+  catalogue-published version, up or down. Downgrades are allowed (it is the
+  sanctioned "put me on exactly this version" verb). Requires an explicit
+  `@<ver>`; delegates to `mcp install --force` after validation, so it rewrites
+  both `eidolons.mcp.lock` and the `.mcp.json` wiring. No-op (byte-identical
+  lockfile) when already on the target version.
+- **(mcp) `eidolons mcp upgrade <name>@<ver>`** — the `upgrade` verb now accepts
+  an explicit target version for a forward move. Downgrades are rejected and
+  point the user at `eidolons mcp use`. Bare `upgrade [<name>|--all]` is
+  unchanged (still chases catalogue `pins.stable`). `--all` combined with an
+  explicit `@<ver>` is a usage error.
+- **(mcp) `mcp_assert_version_published`** — both switch flows reject any version
+  not published in `roster/mcps.yaml` under `versions.releases.<ver>`, with an
+  actionable error that lists the published versions and points at a roster bump.
+  This keeps the nexus the single source of `oci-digest` truth — no consumer can
+  pin a version the catalogue has not blessed.
+- **(roster) atlas-aci 0.2.3** — published in the MCP catalogue (multi-arch
+  index digest pinned; `pins.stable`/`latest` advanced from 0.2.2). Adds Rust
+  support. With this bump, `eidolons mcp use atlas-aci@0.2.3` switches a 0.2.2
+  install to 0.2.3 in one command.
+
+### Fixed
+
+- **(mcp) `eidolons mcp use` dispatch** — the top-level `cli/eidolons` mcp
+  sub-command allowlist now includes `use` (previously only the inner
+  `cli/src/mcp.sh` dispatcher knew the verb, so `eidolons mcp use …` fell through
+  to "Unknown mcp subcommand").
+
 ## [1.17.1] — 2026-06-02
 
 ### Added

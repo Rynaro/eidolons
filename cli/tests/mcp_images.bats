@@ -110,8 +110,8 @@ teardown() {
   cd "$EIDOLONS_ROOT"
 }
 
-# Pinned digest for atlas-aci stable.
-ATLAS_ACI_PINNED="sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
+# Pinned digest for atlas-aci stable (0.2.3).
+ATLAS_ACI_PINNED="sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
 # Pinned digest for crystalium stable.
 CRYSTALIUM_PINNED="sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc876630cdb3e5"
 

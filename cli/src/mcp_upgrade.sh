@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # cli/src/mcp_upgrade.sh — upgrade installed MCPs to catalogue pins.stable.
 #
-# Usage: eidolons mcp upgrade [<name>|--all]
+# Usage: eidolons mcp upgrade [<name>[@<ver>]|--all] [--no-pull]
+#
+# With no arguments or --all: upgrades all installed MCPs to catalogue pins.stable.
+# With <name>: upgrades a specific MCP to catalogue pins.stable.
+# With <name>@<ver>: upgrades to an explicit published version (forward-only;
+#   downgrades are rejected — use 'eidolons mcp use <name>@<ver>' instead).
 #
 # Reads catalogue → resolves target version; reads lockfile → confirms current.
 # Re-runs mcp_install.sh with --force only when the version has changed.
@@ -21,12 +26,15 @@ usage() {
   cat <<EOF
 eidolons mcp upgrade — upgrade installed MCPs to catalogue pins.stable
 
-Usage: eidolons mcp upgrade [<name>|--all] [--no-pull]
+Usage: eidolons mcp upgrade [<name>[@<ver>]|--all] [--no-pull]
 
 Arguments:
-  name    Upgrade a specific MCP by name.
-  --all   Upgrade all installed MCPs.
-          If neither is given, defaults to --all.
+  name          Upgrade a specific MCP to catalogue pins.stable.
+  name@ver      Upgrade a specific MCP to an explicit published version
+                (forward-only; use 'eidolons mcp use name@ver' to downgrade).
+  --all         Upgrade all installed MCPs to catalogue pins.stable.
+                If neither is given, defaults to --all.
+                Cannot be combined with a name@ver explicit version.
 
 Options:
   --no-pull   Suppress auto-pull for oci-image MCPs during upgrade.
@@ -43,16 +51,42 @@ EOF
 nexus_refresh
 
 target=""
+explicit_ver=""
 no_pull=false
+all_flag=false
 while [ $# -gt 0 ]; do
   case "$1" in
-    --all)     target="--all"; shift ;;
+    --all)     all_flag=true; shift ;;
     --no-pull) no_pull=true; shift ;;
     -h|--help) usage; exit 0 ;;
     -*)        warn "Unknown option: $1"; usage >&2; exit 2 ;;
-    *)         target="$1"; shift ;;
+    *)
+      # Detect name@ver form.
+      case "$1" in
+        *@*)
+          target="${1%%@*}"
+          explicit_ver="${1#*@}"
+          ;;
+        *)
+          target="$1"
+          ;;
+      esac
+      shift
+      ;;
   esac
 done
+
+# --all + explicit @ver is a usage error (regardless of argument order).
+if [ "$all_flag" = "true" ] && [ -n "$explicit_ver" ]; then
+  echo "error: --all cannot be combined with an explicit version (@${explicit_ver})" >&2
+  usage >&2
+  exit 2
+fi
+
+# Resolve target: --all flag takes precedence over a bare target.
+if [ "$all_flag" = "true" ]; then
+  target="--all"
+fi
 
 # Default to --all when no argument given.
 if [ -z "$target" ]; then
@@ -94,6 +128,39 @@ _upgrade_one() {
     bash "$SELF_DIR/mcp_install.sh" "${mname}@${stable}" --force
   fi
 }
+
+# Explicit-version branch: upgrade <name>@<ver> (forward-only).
+if [ -n "$explicit_ver" ]; then
+  # Validate catalogue entry exists.
+  mcp_resolve_kind "$target" > /dev/null
+
+  # Assert the requested version is published in the catalogue.
+  mcp_assert_version_published "$target" "$explicit_ver"
+
+  # Read installed version.
+  current="$(mcp_lock_entry "$target" | jq -r '.version // ""')"
+
+  # No-op idempotency: already at target.
+  if [ -n "$current" ] && [ "$current" = "$explicit_ver" ]; then
+    info "${target} already at ${explicit_ver} — no-op"
+    ok "Upgrade complete."
+    exit 0
+  fi
+
+  # Direction gate: reject downgrades.
+  if [ -n "$current" ] && semver_lt "$explicit_ver" "$current"; then
+    die "${explicit_ver} is older than the installed version (${current}). Use 'eidolons mcp use ${target}@${explicit_ver}' to downgrade."
+  fi
+
+  say "Upgrading ${target}: ${current:-<not installed>} → ${explicit_ver}"
+  if [ "$no_pull" = "true" ]; then
+    bash "$SELF_DIR/mcp_install.sh" "${target}@${explicit_ver}" --force --no-pull
+  else
+    bash "$SELF_DIR/mcp_install.sh" "${target}@${explicit_ver}" --force
+  fi
+  ok "Upgrade complete."
+  exit 0
+fi
 
 if [ "$target" = "--all" ]; then
   # Only upgrade MCPs that are already in the lockfile.

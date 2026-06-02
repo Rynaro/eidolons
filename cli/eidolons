@@ -204,7 +204,7 @@ case "$cmd" in
     [ $# -gt 0 ] && shift
     case "$mcp_sub" in
       # New unified verbs — delegate to mcp.sh sub-dispatcher.
-      list|show|install|refresh|uninstall|upgrade|sync|health|run|pull|images|-h|--help|help)
+      list|show|install|refresh|uninstall|upgrade|use|sync|health|run|pull|images|-h|--help|help)
         exec bash "$CLI_SRC/mcp.sh" "$mcp_sub" "$@"
         ;;
       # Legacy deprecated alias: 'eidolons mcp atlas-aci [pull] [...]'
