@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/routing.schema.json",
+  "title": "Eidolons Routing Data",
+  "description": "Machine-readable cortex for `eidolons run` (the mechanical routing kernel). Sibling to roster/index.yaml; mirrors EIDOLONS.md trigger/refuse columns + dispatch thresholds.",
+  "type": "object",
+  "required": ["routing_version", "thresholds", "eidolons"],
+  "additionalProperties": true,
+  "properties": {
+    "routing_version": { "type": "string" },
+    "updated_at": { "type": "string" },
+    "thresholds": {
+      "type": "object",
+      "required": ["tau_standard", "tau_trance", "chain_floor"],
+      "additionalProperties": true,
+      "properties": {
+        "tau_standard": { "type": "number", "minimum": 0, "maximum": 1 },
+        "tau_trance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "chain_floor": { "type": "number", "minimum": 0, "maximum": 1 },
+        "max_reroutes": { "type": "integer", "minimum": 0 },
+        "max_parallel": { "type": "integer", "minimum": 1 },
+        "surface_files": { "type": "integer", "minimum": 0 },
+        "surface_modules": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "eidolons": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["capability_class", "model_tier", "trigger_verbs", "refuse_verbs"],
+        "additionalProperties": true,
+        "properties": {
+          "capability_class": { "type": "string" },
+          "model_tier": { "type": "string", "enum": ["speed-class", "reasoning-class"] },
+          "trigger_verbs": { "type": "array", "items": { "type": "string" } },
+          "refuse_verbs": { "type": "array", "items": { "type": "string" } },
+          "downstream": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "match", "boost"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string" },
+          "match": { "type": "array", "items": { "type": "string" } },
+          "boost": { "type": "object", "additionalProperties": { "type": "number" } },
+          "stakes": { "type": "boolean" },
+          "note": { "type": "string" }
+        }
+      }
+    },
+    "chains": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "steps", "requires_classes"],
+        "additionalProperties": true,
+        "properties": {
+          "name": { "type": "string" },
+          "steps": { "type": "array", "items": { "type": "string" } },
+          "requires_classes": { "type": "array", "items": { "type": "string" } },
+          "when": { "type": "string" }
+        }
+      }
+    }
+  }
+}
