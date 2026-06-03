@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.21.0] — 2026-06-03
+
 ### Added
 
 - **(doctor) D7 — ACI boundary conformance gate** + the `roster/aci.yaml` contract
