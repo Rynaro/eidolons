@@ -1,0 +1,60 @@
+# Eidolons Agent-Computer Interface (ACI) Contract
+# ─────────────────────────────────────────────────
+# Codifies the SWE-agent ACI rubric — "Agent-Computer Interfaces Enable Automated
+# Software Engineering" (Yang et al., NeurIPS 2024): interface DESIGN, not the
+# model, drives agent performance. This is the strongest peer-reviewed evidence
+# in the frontier dossier (R8-02).
+#
+# `eidolons doctor --deep` gate D7 mechanically verifies that each installed
+# Eidolon's roster security block (reads_repo / writes_repo / reads_network)
+# conforms to its capability class's boundary contract below. This makes the
+# read/write/network boundary an ENFORCED invariant (Prime Directive D3 —
+# mechanical-over-prompt), closing the gap where D10 ("doctor verifies security
+# claims") was declared but never actually checked.
+#
+# Schema: ../schemas/aci.schema.json   Sibling to roster/index.yaml & routing.yaml.
+
+aci_version: "1.0"
+reference: "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering (Yang et al., NeurIPS 2024)"
+
+# Universal invariants — every capability class in v1.0.
+universal:
+  # No Eidolon reads the network by construction. (There is deliberately no
+  # researcher/external-knowledge class — see the dossier anti-recommendations.)
+  reads_network: false
+
+# Per-capability-class boundary contract. The D7 gate checks the roster security
+# block against these keys. Absent keys are unconstrained (not checked). The
+# bounded_primitives are the LAYER-2 rubric each Eidolon repo must satisfy
+# (paginated viewer, match-only search, lint-gated edits, success-on-empty
+# feedback) — documented here, enforced in the Eidolon repos / atlas-aci.
+classes:
+  scout:
+    read_only: true            # writes_repo MUST be false
+    reads_repo: true
+    rationale: "Read-only-by-construction scout (ATLAS); refusal enforced at the tool surface (atlas-aci exposes only read primitives)."
+    bounded_primitives: ["paginated view_file (<=100 lines)", "match-only search_text (<=50)", "bounded list_dir (<=200)"]
+  planner:
+    read_only: true
+    rationale: "Spec-only; never modifies files."
+  coder:
+    read_only: false           # the ONLY class permitted to write
+    requires_edit_gate: true   # MUST declare a lint/compile + test-anchored Verify before commit (rubric, layer-2)
+    rationale: "Brownfield implementer; edits gated by a per-edit lint/compile and test-anchored Verify (SWE-agent edit-with-linter)."
+    bounded_primitives: ["lint-gated edits", "paginated view", "match-only search", "success-on-empty-output feedback"]
+  scriber:
+    read_only: true
+    reads_repo: false          # synthesis from provided context only; no retrieval
+    rationale: "Documents from provided context only; no retrieval, no code analysis, no Bash."
+  reasoner:
+    read_only: true
+    reads_repo: false
+    tool_less: true            # reads_repo, writes_repo, reads_network ALL false
+    rationale: "Reasoning-only; no tools, no mutations, no retrieval."
+  debugger:
+    read_only: true            # emits verified-patch.diff, never auto-applies
+    reads_repo: true
+    rationale: "Forensic; read-only authority by default — write is never inferred."
+  memory:
+    exempt: true               # MCP-mediated substrate; access is enforced server-side, not via roster repo-tool security
+    rationale: "Tier-gated MCP chokepoint; not a repo-tool-surface class."
