@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.22.0] — 2026-06-03
+
 ### Added
 
 - **(trace) `eidolons trace cost|otel`** — the ECL telemetry/cost spine (roadmap #4).
