@@ -8,6 +8,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(trace) `eidolons trace cost|otel`** — the ECL telemetry/cost spine (roadmap #4).
+  ECL envelopes carry a `trace` block + `context_delta.token_budget`/`tokens_used`,
+  but nothing consumed them — they were write-only disk provenance (the largest
+  standing D3 debt: prime-directives demands telemetry sinks + budget-exhaustion
+  control). This reads them:
+  - **`eidolons trace cost <path...> [--budget N]`** — per-Eidolon token-attribution
+    ledger across a hand-off chain (by producer / `from.eidolon`), with a
+    **budget-exhaustion abort** (exit 3 when total `tokens_used` > N). `--json`.
+  - **`eidolons trace otel <path...>`** — emits **OpenTelemetry GenAI-convention**
+    spans (`gen_ai.operation.name=invoke_agent`, `gen_ai.agent.name`,
+    `gen_ai.request.model`, `gen_ai.usage.output_tokens`, …) on stdout — pipe to
+    any OTel collector/backend. The nexus **bundles none** (BUILD the mapping,
+    BUY/delegate the backend). The convention version is pinned (`--otel-version`,
+    default 1.30.0; the spec is [Development]/experimental).
+
+  `<path>` is a junction thread dir (recursed for `*.envelope.json`) or envelope
+  files; deterministic, no LLM. Token figures are **self-reported estimates**
+  (R2-02), not audited spend, and labelled as such. This per-step token attribution
+  is the prerequisite for the honest budget-matched benchmarking the eval harness
+  (roadmap #7) needs. Tests: `cli/tests/trace.bats` (10). Follow-up: consult the
+  ledger from `eidolons run` for a kernel-level budget abort; share the trace-read
+  with the #5 `trace show/graph/verify` reader.
+
 ## [1.21.0] — 2026-06-03
 
 ### Added
