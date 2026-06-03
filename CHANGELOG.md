@@ -8,6 +8,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(verify-envelope) `eidolons verify-envelope <envelope.json>`** — the mechanical
+  ECL hand-off integrity gate (roadmap #2). A deterministic, non-LLM SHA-256
+  verifier (R3-09: a shasum compare, never a judging Eidolon): recomputes the
+  payload hash and compares it to the envelope's integrity tag. Eidolon-agnostic —
+  any receiver (or the orchestrator) runs the SAME gate, making verification
+  **symmetric** instead of APIVR-only. Staged **warn|block** modes (default `warn`
+  per the ECL v1.0 opt-in P0; flip via `EIDOLONS_ECL_VERIFY_MODE=block`); `block`
+  enforces ECL §6.2.2 "receiver SHALL NOT process on integrity mismatch" (exit 3).
+  Verdicts: pass/tamper/inconsistent/unverifiable/missing_payload/malformed; honors
+  the parent-fills-SHA pattern (placeholder → unverifiable, never a hard fail);
+  `--trace` appends a verify_pass/verify_fail JSONL event; `--json` for the verdict.
+- **(run) `eidolons run --verify <envelope> [--verify-block]`** — wires the gate in
+  as a **pre-step**: verify the incoming hand-off BEFORE routing. Block mode refuses
+  to route a tampered hand-off (exit 3); warn mode records `incoming_verify` on the
+  routing artifact and proceeds.
+
+### Notes
+
+- Reconciles gap **V3**: an envelope's `envelope_version: "2.0"` is the WIRE format,
+  the ECL spec is at v1.0, and `artifact.schema_version` is the ARTIFACT schema —
+  three distinct layers, not a contradiction. Tests: `cli/tests/verify_envelope.bats`
+  (15). Follow-up (layer-2): distribute a thin symmetric verify-incoming skill that
+  calls this verb to all 6 member repos, replacing apivr-verify-incoming's
+  warn-only, LLM-interpreted check.
+
 ## [1.19.0] — 2026-06-03
 
 ### Added

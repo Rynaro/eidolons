@@ -34,6 +34,10 @@ Options:
   --surface-modules N    Declare module count (large-surface complexity flag)
   --trance               Supply the explicit TRANCE token (stakes flag input)
   --prior-failure        Mark a prior APIVR-Δ Reflect-exhaustion this turn
+  --verify <envelope>    Verify an incoming ECL hand-off envelope BEFORE routing
+                         (mechanical SHA-256 gate; records the verdict on the
+                         artifact). In block mode a failure refuses to route.
+  --verify-block         Run the --verify gate in block mode (ECL §6.2.2)
   -h, --help             Show this help
 
 Tiers: 'standard' is always the default. 'trance' is emitted only when a
@@ -54,6 +58,8 @@ SURFACE_FILES=0
 SURFACE_MODULES=0
 TRANCE_TOKEN=false
 PRIOR_FAILURE=false
+VERIFY_ENVELOPE=""
+VERIFY_MODE="${EIDOLONS_ECL_VERIFY_MODE:-warn}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,6 +69,8 @@ while [[ $# -gt 0 ]]; do
     --surface-modules) SURFACE_MODULES="${2:-0}"; shift 2 ;;
     --trance)          TRANCE_TOKEN=true; shift ;;
     --prior-failure)   PRIOR_FAILURE=true; shift ;;
+    --verify)          VERIFY_ENVELOPE="${2:-}"; shift 2 ;;
+    --verify-block)    VERIFY_MODE="block"; shift ;;
     -h|--help)         usage; exit 0 ;;
     --)                shift; PROMPT="${PROMPT}${PROMPT:+ }$*"; break ;;
     -*)                die "Unknown option: $1 (see 'eidolons run --help')" ;;
@@ -75,6 +83,25 @@ if [[ -z "${PROMPT// }" ]]; then
 fi
 
 [[ -f "$ROUTING_FILE" ]] || die "Routing data not found: $ROUTING_FILE"
+
+# ── ECL verification pre-step (roadmap #2) ────────────────────────────────────
+# When --verify <envelope> is given, mechanically verify the incoming hand-off
+# BEFORE routing. In block mode a tamper/integrity failure refuses to route at
+# all (ECL §6.2.2 enforced at the orchestration layer); in warn mode the verdict
+# is recorded on the artifact but routing proceeds.
+VERIFY_VERDICT=""
+if [[ -n "$VERIFY_ENVELOPE" ]]; then
+  # `|| _vrc=$?` keeps `set -e` from exiting on a block-mode failure (exit 3)
+  # before we can act on the verdict.
+  _vrc=0
+  _vjson="$(bash "$SELF_DIR/verify_envelope.sh" "$VERIFY_ENVELOPE" --mode "$VERIFY_MODE" --json 2>/dev/null)" || _vrc=$?
+  VERIFY_VERDICT="$(printf '%s' "$_vjson" | jq -r '.verdict // "error"' 2>/dev/null || echo "error")"
+  if [[ "$_vrc" -eq 3 ]]; then
+    # Exit 3 mirrors the verify gate's "blocked" code (not die's generic 1).
+    warn "ecl verify blocked [$VERIFY_VERDICT]: refusing to route a hand-off that fails integrity ($VERIFY_ENVELOPE). Correct the upstream artifact or re-run in warn mode."
+    exit 3
+  fi
+fi
 
 ROUTING_JSON="$(yaml_to_json "$ROUTING_FILE")"
 
@@ -209,6 +236,13 @@ ARTIFACT="$(printf '%s' "$ROUTING_JSON" | jq \
   --arg prompt "$PROMPT_LC" \
   --argjson ctx "$CTX_JSON" \
   "$ROUTE_JQ")"
+
+# Record the incoming-hand-off verification verdict on the artifact (Step 5).
+if [[ -n "$VERIFY_ENVELOPE" ]]; then
+  ARTIFACT="$(printf '%s' "$ARTIFACT" | jq \
+    --arg vv "$VERIFY_VERDICT" --arg vm "$VERIFY_MODE" --arg ve "$VERIFY_ENVELOPE" \
+    '. + {incoming_verify: {verdict:$vv, mode:$vm, envelope:$ve}}')"
+fi
 
 # ── Render ────────────────────────────────────────────────────────────────────
 if [[ "$EXPLAIN" == "1" ]]; then
