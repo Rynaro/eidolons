@@ -2001,3 +2001,66 @@ deep_check_skills_dual_write() {
   fi
   return "$rc"
 }
+
+# deep_check_aci_conformance NAME
+#
+# D7: verify the member's roster security block (the read/write/network boundary)
+# conforms to its capability class's ACI contract in roster/aci.yaml. Codifies the
+# SWE-agent ACI rubric (R8-02) as a mechanical gate — read-only-by-construction
+# classes MUST NOT declare writes_repo:true, tool-less classes MUST declare all
+# boundaries false, etc. Returns the violation count (0 = conformant).
+deep_check_aci_conformance() {
+  local name="$1"
+  local aci_file; aci_file="$(dirname "$ROSTER_FILE")/aci.yaml"
+  if [[ ! -f "$aci_file" ]]; then
+    warn "$name: roster/aci.yaml missing — skipping ACI conformance (D7)"
+    return 0
+  fi
+  local entry; entry="$(roster_get "$name" 2>/dev/null)" || {
+    err "$name: not found in roster (cannot check ACI conformance)"; return 1; }
+  local aci; aci="$(yaml_to_json "$aci_file")"
+  local class; class="$(printf '%s' "$entry" | jq -r '.capability_class // ""')"
+  if [[ -z "$class" ]]; then
+    warn "$name: no capability_class in roster — skipping ACI conformance"
+    return 0
+  fi
+
+  # The conformance logic lives in one jq program: it emits one line per
+  # violation. Bool-safe comparisons throughout — `// false` would turn an
+  # explicit `false` into the fallback, so we compare typed values directly.
+  local violations
+  violations="$(jq -nr \
+    --argjson entry "$entry" --argjson aci "$aci" \
+    '
+    $aci.classes[$entry.capability_class] as $p
+    | ($entry.security // {}) as $sec
+    | if ($p == null) or ($p.exempt == true) then empty
+      else
+        ( if ($aci.universal.reads_network != null) and ($sec.reads_network != null)
+             and ($sec.reads_network != $aci.universal.reads_network)
+          then "reads_network=\($sec.reads_network) violates universal contract (must be \($aci.universal.reads_network))"
+          else empty end ),
+        ( if ($p.read_only == true) and ($sec.writes_repo == true)
+          then "class \($entry.capability_class) is read-only-by-construction but writes_repo=true"
+          else empty end ),
+        ( if ($p.reads_repo != null) and ($sec.reads_repo != null) and ($sec.reads_repo != $p.reads_repo)
+          then "class \($entry.capability_class) contract requires reads_repo=\($p.reads_repo) but reads_repo=\($sec.reads_repo)"
+          else empty end ),
+        ( if ($p.tool_less == true) and (($sec.writes_repo == true) or ($sec.reads_repo == true) or ($sec.reads_network == true))
+          then "class \($entry.capability_class) is tool-less but declares reads_repo=\($sec.reads_repo) writes_repo=\($sec.writes_repo) reads_network=\($sec.reads_network)"
+          else empty end )
+      end
+    ' 2>/dev/null)"
+
+  local rc=0
+  if [[ -n "$violations" ]]; then
+    while IFS= read -r _v; do
+      [[ -z "$_v" ]] && continue
+      err "$name: ACI violation — $_v"
+      rc=$((rc + 1))
+    done <<< "$violations"
+  else
+    pass "$name: ACI boundary conforms (class=$class)"
+  fi
+  return "$rc"
+}

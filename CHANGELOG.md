@@ -8,6 +8,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(doctor) D7 — ACI boundary conformance gate** + the `roster/aci.yaml` contract
+  (roadmap #3). Codifies the SWE-agent ACI rubric (Yang et al., NeurIPS 2024 —
+  *interface design, not the model, drives agent performance*; the strongest
+  peer-reviewed item in the frontier dossier, R8-02) as a mechanical
+  `eidolons doctor --deep` gate. For each installed Eidolon, D7 verifies its roster
+  security block (the read/write/network boundary) matches its capability class's
+  contract: read-only-by-construction classes MUST NOT declare `writes_repo:true`,
+  the reasoner MUST be tool-less (`reads_repo`/`writes_repo`/`reads_network` all
+  false), no class reads the network (universal invariant), and the memory class is
+  exempt (MCP-mediated). This makes the read/write boundary an **enforced** invariant
+  (Prime Directive D3 — mechanical-over-prompt), closing the gap where D10 ("doctor
+  verifies security claims") was declared but never actually checked. The finer ACI
+  primitives (paginated viewer, match-only search, lint-gated edits, success-on-empty
+  feedback) are documented as the **layer-2 rubric** each Eidolon repo / atlas-aci
+  must satisfy. Adds `schemas/aci.schema.json`. Tests: `cli/tests/aci.bats` (7); the
+  shipped roster is verified ACI-clean.
+
 ## [1.20.0] — 2026-06-03
 
 ### Added

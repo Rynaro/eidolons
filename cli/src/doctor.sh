@@ -17,8 +17,8 @@ Usage: eidolons doctor [OPTIONS]
 
 Options:
   --fix         Attempt to auto-repair simple structural issues (lockfile drift,
-                missing host wiring). Read-only for methodology gates (D1..D6).
-  --deep        Run methodology-integrity gates (D1..D6) after the fast checks.
+                missing host wiring). Read-only for methodology gates (D1..D7).
+  --deep        Run methodology-integrity gates (D1..D7) after the fast checks.
                 Required to catch broken outbound links, token-budget overruns,
                 and content drift vs the release manifest.
   -h, --help    Show this help.
@@ -38,6 +38,7 @@ Deep checks (--deep):
   D4   manifest_sha256 vs lock                   MUST match (WARN-skip on legacy)
   D5   host-vendor agent body contract           MUST reference agent.md + SPEC.md, zero legacy <UPPER>.md refs
   D6   skills/ dual-write SHA parity             MUST match between .eidolons/<n>/skills/*.md and .claude/skills/<n>-<basename>/SKILL.md
+  D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
 EOF
 }
 
@@ -717,7 +718,7 @@ fi
 unset _r5_hosts_csv _r5_pt_csv _r5_strict _r5_drift_count _r5_vfile _r5_vhost _R5_VENDOR_HOST_MAP
 
 # ─── Methodology integrity (--deep) ─────────────────────────────────────
-# D1..D6 run only when --deep is passed. The fast checks (1..14) always run
+# D1..D7 run only when --deep is passed. The fast checks (1..14) always run
 # first. Within this section, checks do NOT short-circuit on early failures:
 # each member is iterated through all 6 gates independently so a broken
 # Eidolon does not mask drift in another.
@@ -797,6 +798,15 @@ if [[ "$DEEP" == "true" ]]; then
         _d6_rc=0
         deep_check_skills_dual_write "$_dm" || _d6_rc=$?
         ERRORS=$((ERRORS + _d6_rc))
+      done <<< "$_deep_members"
+
+      # D7 — ACI boundary conformance (SWE-agent ACI rubric, R8-02)
+      echo "  D7 — ACI boundary conformance"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d7_rc=0
+        deep_check_aci_conformance "$_dm" || _d7_rc=$?
+        ERRORS=$((ERRORS + _d7_rc))
       done <<< "$_deep_members"
     fi
 
