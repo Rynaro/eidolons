@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ### Added
 
+- spectra v4.7.0 published in the roster with release integrity metadata.
 - atlas v1.10.0 published in the roster with release integrity metadata.
 - **(run) `eidolons run "<prompt>"`** — the mechanical routing kernel. Converts
   the cortex Dispatch Protocol (EIDOLONS.md Steps 1–5) from host-LLM-interpreted
