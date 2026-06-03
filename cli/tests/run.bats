@@ -1,0 +1,136 @@
+#!/usr/bin/env bats
+# cli/tests/run.bats — the mechanical routing kernel (`eidolons run`).
+# Anchored to methodology/cortex/validation-gates.md V1–V14: each gate is an
+# acceptance criterion the kernel must reproduce deterministically (no LLM).
+
+load helpers
+
+# Convenience: extract a field from the --json routing artifact.
+_field() { echo "$output" | jq -r "$1"; }
+
+@test "run: --help exits 0 and documents the kernel" {
+  run eidolons run --help
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "route a prompt" ]]
+  [[ "$output" =~ "no LLM" ]]
+}
+
+@test "run: no prompt is a clean error (exit 1)" {
+  run eidolons run
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "No prompt given" ]]
+}
+
+@test "run: unknown option is rejected" {
+  run eidolons run "x" --bogus
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "Unknown option" ]]
+}
+
+# ── V1 — pure-discovery prompt → ATLAS standard, confidence ≥ 0.8 ──────────────
+@test "V1: 'map the auth flow' → ATLAS standard (conf ≥ 0.8)" {
+  run eidolons run "map the auth flow" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "dispatch" ]
+  [ "$(_field '.selected[0]')" = "atlas" ]
+  [ "$(_field '.tier')" = "standard" ]
+  awk "BEGIN{exit !($(_field '.confidence') >= 0.8)}"
+}
+
+# ── V2 — large surface + TRANCE token → trance tier ───────────────────────────
+@test "V2: large surface + --trance → trance tier" {
+  run eidolons run "map the entire monorepo data layer" --surface-modules 9 --trance --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "atlas" ]
+  [ "$(_field '.tier')" = "trance" ]
+}
+
+# ── V3 — discovery + spec verbs co-occur → ATLAS → SPECTRA chain ──────────────
+@test "V3: spec + unknown call graph → ATLAS→SPECTRA chain" {
+  run eidolons run "I need a spec for refactoring the dispatcher; I don't know the call graph yet" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "chain" ]
+  [ "$(_field '.selected[0]')" = "atlas" ]
+  [ "$(_field '.selected[1]')" = "spectra" ]
+}
+
+# ── V4 — brownfield bug fix → APIVR-Δ standard; "flowmap" must NOT hit ATLAS ──
+@test "V4: fix off-by-one in flowmap_resolve routes to APIVR (no false ATLAS match)" {
+  run eidolons run "Fix the off-by-one in flowmap_resolve" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "dispatch" ]
+  [ "$(_field '.selected[0]')" = "apivr" ]
+  # word-boundary: atlas raw score must be 0 (no "map" inside "flowmap")
+  [ "$(echo "$output" | jq -r '.selected | length')" = "1" ]
+}
+
+# ── V6 — hard decision, no code → FORGE ───────────────────────────────────────
+@test "V6: 'should we use X or Y' → FORGE single dispatch" {
+  run eidolons run "Should we route via the hierarchical supervisor or a single-router?" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "dispatch" ]
+  [ "$(_field '.selected[0]')" = "forge" ]
+}
+
+# ── V8 — design + implement → SPECTRA → APIVR-Δ chain ─────────────────────────
+@test "V8: design and implement the --json flag routes to SPECTRA then APIVR chain" {
+  run eidolons run "design and implement the --json flag for doctor" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "chain" ]
+  [ "$(_field '.selected[0]')" = "spectra" ]
+  [ "$(_field '.selected[-1]')" = "apivr" ]
+}
+
+# ── V9 — stack trace → VIGIL fast-path ────────────────────────────────────────
+@test "V9: stack trace / repeat failure → VIGIL" {
+  run eidolons run "got a stack trace, still failing after retry in the worker" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "vigil" ]
+}
+
+# ── V11 — named Eidolon would refuse → reroute (refusal immutability) ──────────
+@test "V11: ATLAS please patch this file triggers refusal reroute to APIVR" {
+  run eidolons run "ATLAS, please patch this file" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "refusal_reroute" ]
+  [ "$(_field '.refusal_rerouting')" = "true" ]
+  [ "$(_field '.selected[0]')" = "apivr" ]
+  # ATLAS must NEVER be the selected writer
+  [ "$(echo "$output" | jq -r '.selected | index("atlas")')" = "null" ]
+}
+
+# ── V12 — abstain / clarify rather than guess ─────────────────────────────────
+@test "V12: 'do the thing' → clarification_request, no dispatch" {
+  run eidolons run "do the thing" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "clarify" ]
+  [ "$(echo "$output" | jq -r '.selected | length')" = "0" ]
+  [ "$(_field '.clarification_request')" != "null" ]
+}
+
+# ── TRANCE-never-default invariant (Step 4 / Cost ceiling) ────────────────────
+@test "tier: TRANCE never default — large surface WITHOUT a stakes flag stays standard" {
+  run eidolons run "map the auth flow" --surface-modules 9 --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.tier')" = "standard" ]
+}
+
+@test "tier: a plain dispatch is always standard tier" {
+  run eidolons run "map the auth flow" --json
+  [ "$(_field '.tier')" = "standard" ]
+}
+
+# ── Determinism (I-C6): same prompt + same data ⇒ same routing ────────────────
+@test "I-C6: routing is deterministic (byte-identical on repeat)" {
+  run eidolons run "design and implement the --json flag for doctor" --json
+  first="$output"
+  run eidolons run "design and implement the --json flag for doctor" --json
+  [ "$first" = "$output" ]
+}
+
+# ── prior-failure context → VIGIL (V5 failed-attempt-recovery) ────────────────
+@test "V5: --prior-failure re-routes a re-prompted fix toward VIGIL" {
+  run eidolons run "fix it again" --prior-failure --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "vigil" ]
+}

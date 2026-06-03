@@ -70,6 +70,8 @@ Commands:
   sync           Install/update to match eidolons.yaml (idempotent)
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
+  run            Deterministically route a prompt to the correct Eidolon(s)
+                 (mechanical cortex dispatch over roster/routing.yaml; no LLM)
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
@@ -144,6 +146,7 @@ case "$cmd" in
   sync)        exec bash "$CLI_SRC/sync.sh"    "$@" ;;
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
+  run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)

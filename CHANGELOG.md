@@ -8,6 +8,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(run) `eidolons run "<prompt>"`** — the mechanical routing kernel. Converts
+  the cortex Dispatch Protocol (EIDOLONS.md Steps 1–5) from host-LLM-interpreted
+  prose into a deterministic, table-driven decision over a new machine-readable
+  `roster/routing.yaml` (sibling to `index.yaml`/`mcps.yaml`). No LLM, no eval
+  (I-C2), bash 3.2 safe. Word-boundary trigger matching (so "map" never matches
+  "flowmap", "patch" never "dispatch"); mechanically enforces refusal
+  immutability (a named/top Eidolon that would refuse never dispatches — it
+  reroutes to a capable peer), the τ thresholds, chain-template selection, and
+  **TRANCE-never-default** (the trance tier requires a complexity flag AND a
+  stakes flag, never automatic). Same prompt + same routing data ⇒ byte-identical
+  artifact (I-C6). Flags: `--json`, `--explain`, `--surface-files/-modules N`,
+  `--trance`, `--prior-failure`. This is the team's own D3 directive
+  (mechanical-over-prompt) finally applied to the orchestration layer it most
+  violated. Acceptance-anchored to `methodology/cortex/validation-gates.md`
+  V1–V14 (`cli/tests/run.bats`, 16 tests). Adds `schemas/routing.schema.json`.
+  Follow-ups (not in this change): generate the EIDOLONS.md descriptor table
+  FROM `routing.yaml` + a `doctor --deep` drift-parity gate; richer NL classify.
+
 ## [1.18.0] — 2026-06-02
 
 ### Added

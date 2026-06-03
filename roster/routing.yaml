@@ -1,0 +1,126 @@
+# Eidolons Routing Data — machine-readable cortex
+# ────────────────────────────────────────────────
+# Single source of truth for `eidolons run` — the mechanical routing kernel.
+# This file makes the EIDOLONS.md descriptor table + dispatch protocol
+# DETERMINISTIC: the kernel reads these fields and table-matches, rather than a
+# host LLM interpreting prose. Mirrors EIDOLONS.md §"Roster Index" and
+# §"Dispatch Protocol"; `eidolons doctor --deep` is the planned drift gate.
+#
+# Schema: ../schemas/routing.schema.json
+# Sibling to roster/index.yaml (the member registry) and roster/mcps.yaml.
+#
+# Invariant I-C6: same prompt + same context + same routing data ⇒ same routing.
+# Invariant I-C2: this is DATA. The kernel interprets it; there is no eval.
+
+routing_version: "1.0"
+updated_at: "2026-06-03T21:00Z"
+
+# ─── Gate thresholds (Dispatch Protocol Step 2 / TRANCE Step 4) ─────────────────
+thresholds:
+  tau_standard: 0.6        # min top-score to dispatch a single Eidolon (OQ-2)
+  tau_trance: 0.8          # min score that, WITH a stakes flag, may escalate tier
+  chain_floor: 0.6         # min score for a second Eidolon to co-trigger a chain
+  max_reroutes: 2          # OQ-6 reroute cap (anti ping-pong)
+  max_parallel: 5          # TRANCE cost ceiling C1
+  surface_files: 25        # large-surface complexity flag (C5)
+  surface_modules: 5
+
+# ─── Per-Eidolon routing descriptors (mirror EIDOLONS.md trigger/refuses) ───────
+# score = (# distinct trigger phrases matched in the prompt). Refusal is checked
+# against refuse_verbs. model_tier maps to the speed/reasoning capability class.
+eidolons:
+  atlas:
+    capability_class: scout
+    model_tier: speed-class
+    trigger_verbs: ["map", "trace", "find where", "who calls", "call graph", "list entrypoints", "entrypoints", "audit", "explore", "where is", "scout", "understand the codebase", "make sense of"]
+    refuse_verbs: ["implement", "fix", "edit", "write", "commit", "deploy", "migrate", "refactor", "patch"]
+    downstream: ["spectra", "apivr", "idg"]
+  spectra:
+    capability_class: planner
+    model_tier: reasoning-class
+    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
+    refuse_verbs: ["implement code", "modify files", "write the code"]
+    downstream: ["apivr", "idg"]
+  apivr:
+    capability_class: coder
+    model_tier: speed-class
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
+    refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
+    downstream: ["idg"]
+  idg:
+    capability_class: scriber
+    model_tier: speed-class
+    trigger_verbs: ["document", "adr", "runbook", "chronicle", "synthesize", "record decisions", "write the docs", "changelog narrative"]
+    refuse_verbs: ["explore repo", "find calls", "retrieve", "analyze code"]
+    downstream: []
+  forge:
+    capability_class: reasoner
+    model_tier: reasoning-class
+    trigger_verbs: ["trade-off", "tradeoff", "which approach", "should we", "ambiguous", "counterfactual", "deliberate", "x or y", "decide between"]
+    refuse_verbs: ["implement", "retrieve", "synthesize prose"]
+    downstream: []
+  vigil:
+    capability_class: debugger
+    model_tier: reasoning-class
+    trigger_verbs: ["root cause", "flaky", "heisenbug", "regression after", "post-mortem", "postmortem", "why does this fail", "why does it fail"]
+    refuse_verbs: ["build new feature", "plan from scratch"]
+    downstream: []
+
+# ─── Confidence signals (Dispatch Protocol §"Confidence Signals") ───────────────
+# Applied additively to the matched Eidolon's score. `stakes: true` marks a
+# signal as a TRANCE stakes-flag contributor (does not by itself escalate tier).
+# Boosts are in score-space (added to base; final compared uncapped, displayed
+# capped at 1.0). stack_trace / prior_apivr_failure are DECISIVE (≥ tau_standard
+# alone and dominate a competing 'fix' verb) to honour V9/V5, which the cortex
+# prose under-weights at +0.3.
+signals:
+  - id: stack_trace
+    match: ["stack trace", "traceback", "panic", "segfault", "still failing", "after retry", "fails after"]
+    boost: { vigil: 0.9 }
+    note: "stack trace / repeat failure → VIGIL fast-path (V9)"
+  - id: prior_apivr_failure
+    match: ["tried to fix", "already tried", "reflect exhausted", "still broken after"]
+    boost: { vigil: 0.95 }
+    note: "prior failed APIVR-Δ attempt → VIGIL (V5)"
+  - id: greenfield
+    match: ["greenfield", "from scratch", "brand new project", "novel architecture"]
+    boost: { apivr: -0.4 }
+    note: "APIVR-Δ refuses greenfield"
+  - id: no_spec_yet
+    match: ["don't have a spec", "no spec yet", "i don't know the call graph", "not sure what to build"]
+    boost: { spectra: 0.2 }
+  - id: large_surface
+    match: ["entire monorepo", "whole codebase", "all modules", "across all"]
+    boost: { atlas: 0.2 }
+    stakes: true
+    note: "large surface → ATLAS-TRANCE candidate (V2)"
+
+# ─── Chain templates (EIDOLONS.md §"Chain Templates") ───────────────────────────
+# Selected when ≥2 capability classes co-trigger. `requires_classes` lists the
+# capability classes whose presence selects this template; the kernel picks the
+# most specific (longest requires_classes) matching template.
+chains:
+  - name: plan-before-build
+    steps: ["atlas", "spectra", "apivr", "idg"]
+    requires_classes: ["scout", "planner", "coder"]
+    when: "Unfamiliar code + multi-component change"
+  - name: decide-then-implement
+    steps: ["forge", "spectra", "apivr"]
+    requires_classes: ["reasoner", "coder"]
+    when: "Should we use X or Y, then build it"
+  - name: audit-without-touching
+    steps: ["atlas", "idg"]
+    requires_classes: ["scout", "scriber"]
+    when: "Audit/explain/review with no write intent"
+  - name: ship-fast
+    steps: ["spectra", "apivr"]
+    requires_classes: ["planner", "coder"]
+    when: "Known terrain, scoped feature"
+  - name: forensic-then-fix
+    steps: ["vigil", "apivr"]
+    requires_classes: ["debugger", "coder"]
+    when: "Bug with reproduction + verified patch"
+  - name: scout-then-spec
+    steps: ["atlas", "spectra"]
+    requires_classes: ["scout", "planner"]
+    when: "Discovery + spec verbs co-occur (V3)"
