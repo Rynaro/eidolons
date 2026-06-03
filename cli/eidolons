@@ -72,6 +72,9 @@ Commands:
   roster         Show detailed roster information
   run            Deterministically route a prompt to the correct Eidolon(s)
                  (mechanical cortex dispatch over roster/routing.yaml; no LLM)
+  trace <sub>    Read ECL hand-off telemetry. Subcommands:
+                   cost <path...> [--budget N]  per-Eidolon token attribution
+                   otel <path...>               emit OpenTelemetry GenAI spans
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
@@ -149,6 +152,7 @@ case "$cmd" in
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
+  trace)       exec bash "$CLI_SRC/trace.sh"   "$@" ;;
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)
