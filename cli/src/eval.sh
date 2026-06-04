@@ -29,13 +29,17 @@ usage() {
   cat <<EOF
 eidolons eval — measure the Eidolons against labelled ground truth (no LLM)
 
-Usage: eidolons eval <routing|quality> [OPTIONS]
+Usage: eidolons eval <routing|quality|swe> [OPTIONS]
 
 routing   Run the DETERMINISTIC routing benchmark: drive 'eidolons run' against
           evals/routing-suite.yaml and score per-category accuracy + cost.
 quality   HUMAN-IN-THE-LOOP contract-conformance quality benchmark (emit a mission,
           run the Eidolon, grade the saved output; pass^k). See
           'eidolons eval quality --help'.
+swe       SWE-task-solving harness: drive 'eidolons sandbox loop' over a task
+          suite (resolved-rate + pass^k). The bundled suite is a HARNESS
+          SELF-TEST; a real number needs an external suite + a model --fix-hook
+          + a real --via sandbox. See 'eidolons eval swe --help'.
 
 Options (routing):
   --suite public|holdout|all   Which suite(s) to run (default: public).
@@ -56,7 +60,8 @@ case "$SUBCMD" in
   -h|--help|"") usage; exit 0 ;;
   routing) ;;
   quality) exec bash "$SELF_DIR/eval_quality.sh" "$@" ;;
-  *) die "Unknown subcommand: $SUBCMD (want: routing | quality). See 'eidolons eval --help'" ;;
+  swe) exec bash "$SELF_DIR/eval_swe.sh" "$@" ;;
+  *) die "Unknown subcommand: $SUBCMD (want: routing | quality | swe). See 'eidolons eval --help'" ;;
 esac
 
 SUITE_SEL="public"

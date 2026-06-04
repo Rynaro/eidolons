@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/swe-suite.schema.json",
+  "title": "Eidolons SWE-task-solving Harness Suite",
+  "description": "Consumed by `eidolons eval swe`. Each task is a broken repo + a red test + (for the smoke) a deterministic reference fix. The harness drives `eidolons sandbox loop` per task and records resolved/unresolved. The bundled suite is a HARNESS SELF-TEST, not a capability benchmark — a real number needs an external suite + a model --fix-hook + a real --via sandbox.",
+  "type": "object",
+  "required": ["swe_version", "tasks"],
+  "additionalProperties": true,
+  "properties": {
+    "swe_version": { "type": "string" },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "setup", "test"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "description": { "type": "string" },
+          "setup": { "type": "string", "minLength": 1, "description": "Shell run in the empty per-task workdir to materialise the broken repo state." },
+          "test": { "type": "string", "minLength": 1, "description": "Shell test command: RED before the fix, GREEN after. Run via a script so pipes/&& work." },
+          "gold_fix": { "type": "string", "description": "Deterministic reference fix used as the fix-hook in smoke mode (no model). Omit for external suites driven by a real --fix-hook." }
+        }
+      }
+    }
+  }
+}
