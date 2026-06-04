@@ -8,6 +8,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(eval) `eidolons eval quality`** — the human-in-the-loop quality benchmark
+  (dossier reversal condition **N1**, honest form). Same discipline as `canary`:
+  the CLI **never embeds a model and never uses an LLM-judge**. It `emit`s a
+  mission, a human runs the named Eidolon in their LLM and saves the output, and
+  the CLI `grade`s the saved output against **mechanical (grep) rubric assertions**
+  — the Eidolon's own methodology P0 contracts (path:line anchors, GIVEN/WHEN/THEN,
+  ≥3 hypotheses + reversal conditions, structural markers, Internal-First, …).
+  Reports **pass^k** over k independent human-run samples (R6-F08 reliability metric)
+  — one bad run fails the whole. `evals/quality-suite.yaml` (6 tasks, one per
+  methodology Eidolon) + `schemas/quality-suite.schema.json`.
+  - `eidolons eval quality list | emit <task> | grade <task> <file>...`; `--json`;
+    `--suite-file <path>`.
+
+  **Honest scope (stated in the tool + suite):** this measures **structural /
+  contract-conformance quality**, *not* a rival-comparable task-SOLVING number. A
+  SWE-bench-Verified-class (code) or LOCOMO-class (memory) head-to-head needs an
+  execution sandbox + a clean EXTERNAL suite — see roadmap #9 (autonomous loop) and
+  the dossier N1. Tests: `cli/tests/eval_quality.bats` (12).
+
 ## [1.24.0] — 2026-06-04
 
 ### Added
