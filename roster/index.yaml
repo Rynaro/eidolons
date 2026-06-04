@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-04T16:53Z"
+updated_at: "2026-06-04T16:54Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -547,9 +547,9 @@ eidolons:
       repo: Rynaro/IDG
       default_ref: main
     versions:
-      latest: "1.6.0"
+      latest: "1.7.0"
       pins:
-        stable: "1.6.0"
+        stable: "1.7.0"
       releases:
         1.1.5:
           tag: v1.1.5
@@ -655,6 +655,15 @@ eidolons:
           commit: 3fe04c59d78cd6fc2a27f806c383d95df4b72c34
           tree: ceac39993dd022f3185c7e4af4d86bb3e79235cd
           archive_sha256: ce18d63ae59e172899caaae64d310b3523b789c28037cdf03b7dea8f0557a593
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.7.0:
+          tag: v1.7.0
+          commit: 7cd24477a440ae5f5215046bbd65e9ad3d40d106
+          tree: 5b8cf9dd999dc46523871d0fdd3863bbbd618c19
+          archive_sha256: 727455d0f98b1ebe43e64d57d9143f19a96a4a1c0a4a7efdb79647d6063f90e6
           manifest_sha256:
           provenance:
             github_attestation: true
