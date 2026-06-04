@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.28.0] — 2026-06-04
+
 ### Added
 - **`eidolons eval swe` — SWE-task-solving harness (sandbox-mediated)**, the third eval mode (routing = deterministic, quality = human-in-the-loop, **swe = task-solving**). For each task in a suite it materialises a broken repo, drives `eidolons sandbox loop` (the #9 bounded edit-run-test engine), and records resolved/unresolved → a **resolved-rate + pass^k** scorecard. New `evals/swe-suite.yaml` (bundled smoke suite, pure sh/coreutils/git — no python/Docker) + `schemas/swe-suite.schema.json`. `--suite-file`, `--fix-hook`, `--via`, `--max-attempts`, `--k`, `--min` (CI gate), `--validate-suite`, `--list`, `--json`. Mirrors the sandbox loop's R8-03 isolation policy (a real `--fix-hook` runs untrusted model code → requires `--via` or explicit `--allow-unsafe-host`). **HONEST SCOPE (stated in tool/suite/banner/tests): the bundled suite is a HARNESS SELF-TEST with gold-fix reference patches — a 100% smoke resolved-rate proves the orchestration end-to-end, NOT a model solving unseen tasks. The real SWE-bench-class number (reversal R4, what moves frontier confidence past 0.70) requires an external `--suite-file` + a model `--fix-hook` + a real `--via` sandbox** — this PR is the instrument that makes that measurable, not the number. Adapter, not engine: the nexus has no LLM and builds no sandbox; it owns the harness and delegates the model + isolation. 10 `eval_swe.bats`.
 
