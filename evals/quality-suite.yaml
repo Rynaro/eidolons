@@ -1,0 +1,98 @@
+# Eidolons Quality Eval Suite
+# ───────────────────────────
+# A HUMAN-IN-THE-LOOP contract-conformance quality benchmark, consumed by
+# `eidolons eval quality`. Same discipline as `canary`: the CLI NEVER embeds a
+# model and NEVER uses an LLM-judge — it prints a mission, a human runs the
+# Eidolon in their LLM, saves the output, and the CLI grades it against
+# MECHANICAL rubric assertions (the Eidolon's own methodology P0 contracts).
+# Reports pass^k over k independent human-run samples (R6-F08 reliability metric).
+#
+# HONEST SCOPE (read this): this measures STRUCTURAL / CONTRACT-CONFORMANCE
+# quality — "did the Eidolon produce output that conforms to the contract its
+# methodology promises". It is NOT a rival-comparable task-SOLVING number. A
+# SWE-bench-Verified-class (code) or LOCOMO-class (memory) head-to-head requires
+# an execution sandbox + a clean EXTERNAL suite — see roadmap #9 (autonomous loop)
+# and the dossier reversal condition N1. Do not read these scores as "beats
+# OpenHands/Devin"; read them as "the methodology contract is mechanically met".
+#
+# Rubric item kinds (all grep-based, portable, no LLM):
+#   contains_any  {patterns:[...]}        output contains >=1 of patterns (substring)
+#   contains_all  {patterns:[...]}        output contains every pattern (substring)
+#   regex         {pattern:"..."}         output matches the ERE (>=1)
+#   min_count     {pattern:"...", n:N}    output has >=N matches of the ERE
+# Each item is `must: true` (FAIL on miss) or `must: false` (INCONCLUSIVE on miss).
+# `ci: true` makes the match case-insensitive.
+#
+# Schema: ../schemas/quality-suite.schema.json
+
+quality_version: "1.0"
+created_at: "2026-06-04"
+grades: "contract-conformance (structural), pass^k over human-run samples; not rival-comparable task-solving"
+
+tasks:
+  - id: Q-ATLAS-1
+    eidolon: atlas
+    mission: |
+      Scout where request authentication is enforced in a web codebase and identify
+      ONE decision target: which module a new auth-bypass guard should hook into.
+      Produce an ATLAS scout-report with evidence anchors and a decision-target answer.
+    rubric:
+      - { must: true,  kind: regex, pattern: "[A-Za-z0-9_./-]+:[0-9]+", desc: "cites >=1 path:line evidence anchor" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["decision_target", "decision target", "decision-target"], desc: "answers the decision target" }
+      - { must: false, kind: contains_any, patterns: ["FINDING-", "[GAP]", "[DISPUTED]"], desc: "uses ATLAS structural markers" }
+      - { must: false, kind: regex, ci: true, pattern: "confidence[:= ]+[HML]", desc: "evidence carries an H/M/L confidence tier" }
+
+  - id: Q-SPECTRA-1
+    eidolon: spectra
+    mission: |
+      Produce a decision-ready SPECTRA spec for adding a `--dry-run` flag to a
+      deployment command. Include user stories and validation/acceptance gates,
+      and name at least one rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "uses GIVEN/WHEN/THEN stories" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["gate", "validation", "acceptance criteria"], desc: "names validation/acceptance gates" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["rejected", "alternative", "trade-off"], desc: "names rejected alternatives" }
+
+  - id: Q-FORGE-1
+    eidolon: forge
+    mission: |
+      Deliberate whether a 6-service team should adopt a monorepo or polyrepo.
+      Produce a FORGE reasoning report: >=3 stress-tested hypotheses/options, a
+      verdict, and explicit reversal conditions.
+    rubric:
+      - { must: true,  kind: min_count, ci: true, pattern: "hypothesis|option|alternative", n: 3, desc: ">=3 hypotheses/options considered" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["reversal", "would change", "revisit if", "flip the verdict"], desc: "states reversal conditions" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["verdict", "recommend"], desc: "commits to a verdict" }
+
+  - id: Q-VIGIL-1
+    eidolon: vigil
+    mission: |
+      A test passes locally but fails intermittently in CI. Produce a VIGIL
+      root-cause analysis (describe reproduction strategy + ranked hypotheses; no
+      code execution required).
+    rubric:
+      - { must: true,  kind: contains_any, ci: true, patterns: ["root-cause", "root cause", "[ROOT-CAUSE]"], desc: "names a root cause" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["reproduc", "repro"], desc: "addresses reproduction" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["counterfactual", "intervention", "hypothesis"], desc: "uses hypothesis/counterfactual reasoning" }
+
+  - id: Q-IDG-1
+    eidolon: idg
+    mission: |
+      Chronicle this decision into an ADR: "We chose sibling YAML files over a
+      monolithic config because of independent versioning." Produce the ADR with
+      structural markers and provenance to the source statement.
+    rubric:
+      - { must: true,  kind: contains_any, ci: true, patterns: ["[DECISION]", "## decision", "decision:"], desc: "records the decision" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["sibling", "independent versioning", "monolithic"], desc: "traces to the source statement (provenance)" }
+      - { must: false, kind: contains_any, patterns: ["[ACTION]", "[GAP]", "[DISPUTED]"], desc: "uses structural markers" }
+
+  - id: Q-APIVR-1
+    eidolon: apivr
+    mission: |
+      Describe how you would implement a bounded retry-with-backoff in an EXISTING
+      worker, following Internal-First (USE -> EXTEND -> WRAP -> CREATE). Produce an
+      APIVR-Δ completion-style report; it must be test-anchored.
+    rubric:
+      - { must: true,  kind: contains_any, ci: true, patterns: ["internal-first", "internal first", "USE ->", "USE→", "reuse"], desc: "follows Internal-First" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["test", "verify"], desc: "is test-anchored" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["bounded", "max attempts", "3 attempts", "escalate"], desc: "bounds the retry / failure recovery" }

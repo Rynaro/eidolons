@@ -79,7 +79,8 @@ Commands:
                    cost <path...> [--budget N]  per-Eidolon token attribution
                    otel <path...>               emit OpenTelemetry GenAI spans
   eval <sub>     Measure the Eidolons against labelled ground truth (no LLM):
-                   routing [--suite ...] [--min N]  deterministic routing benchmark
+                   routing [--suite ...] [--min N]   deterministic routing benchmark
+                   quality emit|grade <task> ...     human-in-the-loop quality (pass^k)
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
