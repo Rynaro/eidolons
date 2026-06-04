@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.23.0] — 2026-06-03
+
 ### Added
 
 - **(trace) `eidolons trace show|graph|verify`** — the read-only ECL trace consumer
