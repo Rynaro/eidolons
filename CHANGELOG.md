@@ -8,6 +8,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(eval) `eidolons eval routing`** — the evaluation harness (roadmap #7, the
+  verdict-flipper). A published, contamination-resistant, deterministic benchmark is
+  the single piece of evidence that lifts the project-wide "M confidence,
+  unbenchmarked" cap toward High. Because the routing kernel is deterministic (I-C6),
+  the routing benchmark is **fully automated** — no LLM, no human, reproducible. The
+  harness **never embeds a model and never uses an LLM-judge**: it grades
+  `eidolons run`'s structured output against **Eidolons-authored ground truth**
+  (`evals/routing-suite.yaml` — 19 tasks across 12 categories; a private `holdout`
+  set kept separate from `public`). Reports per-category **accuracy + cost** (routing
+  = 0 model tokens, stated honestly) + determinism (pass^k == pass^1 here).
+  - **`--validate-suite`** runs the task-validity checklist on the suite *itself*
+    (unique ids, unique prompt+ctx, valid decisions/tiers, `selected` ∈ roster) so the
+    harness can't ship the brittle-checker defect it exists to catch (R6-F07).
+  - **`--min N`** gates CI on overall accuracy; **`--suite public|holdout|all`**,
+    **`--suite-file <path>`**, `--json`, `--verbose`.
+
+  Adds `schemas/eval-suite.schema.json`. Tests: `cli/tests/eval.bats` (12). The shipped
+  router scores **100% on the ground-truth suite** — the first **measured** Eidolons
+  number, retiring the routing half of the M cap (cortex OQ-1). Follow-up: the quality
+  + CRYSTALIUM-recall evals (human-in-the-loop / MCP, pass^k, budget-matched via #4's
+  token attribution) extend this same harness.
+
 ## [1.23.0] — 2026-06-03
 
 ### Added
