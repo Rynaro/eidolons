@@ -8,14 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.26.1] — 2026-06-04
 
 ### Added
-- vigil v1.5.0 published in the roster with release integrity metadata.
-- forge v1.8.0 published in the roster with release integrity metadata.
-- idg v1.7.0 published in the roster with release integrity metadata.
-- apivr v3.6.0 published in the roster with release integrity metadata.
-- spectra v4.8.0 published in the roster with release integrity metadata.
-- atlas v1.11.0 published in the roster with release integrity metadata.
+- **(roster) Blocking + symmetric `verify-incoming` receiver gate distributed to all 6 Eidolons (frontier roadmap N3).** Every receiver now refuses to process an ECL hand-off whose SHA-256 integrity was not verified-and-passed (ECL §6.2.2), replacing APIVR-Δ's prior warn-only, single-receiver posture. The mechanical gate runs at the orchestrator (`eidolons verify-envelope` / `run --verify`, shipped v1.20.0) and writes `verify_pass`/`verify_fail` to the thread trace; each receiver enforces the result using only `Read` (so it works even for the tool-less Reasoner). Closes reversal **R3** (PARTIAL→MET): ECL provenance is now enforced end-to-end, not just at the orchestrator. Published via:
+  - atlas v1.11.0 published in the roster with release integrity metadata.
+  - spectra v4.8.0 published in the roster with release integrity metadata.
+  - apivr v3.6.0 published in the roster with release integrity metadata.
+  - idg v1.7.0 published in the roster with release integrity metadata.
+  - forge v1.8.0 published in the roster with release integrity metadata.
+  - vigil v1.5.0 published in the roster with release integrity metadata.
 
 ## [1.26.0] — 2026-06-04
 
