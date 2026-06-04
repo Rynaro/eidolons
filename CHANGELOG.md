@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.26.0] — 2026-06-04
+
 ### Added
 
 - **(sandbox) `eidolons sandbox check|run|loop`** — the bounded, delegated
