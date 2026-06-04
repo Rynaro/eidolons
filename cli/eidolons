@@ -78,6 +78,8 @@ Commands:
                    verify <path...> [--block]   batch SHA-256 integrity check
                    cost <path...> [--budget N]  per-Eidolon token attribution
                    otel <path...>               emit OpenTelemetry GenAI spans
+  eval <sub>     Measure the Eidolons against labelled ground truth (no LLM):
+                   routing [--suite ...] [--min N]  deterministic routing benchmark
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
@@ -156,6 +158,7 @@ case "$cmd" in
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
   trace)       exec bash "$CLI_SRC/trace.sh"   "$@" ;;
+  eval)        exec bash "$CLI_SRC/eval.sh"    "$@" ;;
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)

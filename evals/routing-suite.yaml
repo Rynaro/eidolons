@@ -1,0 +1,116 @@
+# Eidolons Routing Eval Suite
+# ───────────────────────────
+# A labelled benchmark for the mechanical routing kernel (`eidolons run`).
+# Consumed by `eidolons eval routing`. Because the kernel is DETERMINISTIC
+# (I-C6), this benchmark is fully automated — no LLM, no human, reproducible —
+# and is the first MEASURED Eidolons evidence (retires the routing half of the
+# project-wide "M confidence, unbenchmarked" cap).
+#
+# Rigor (per the frontier dossier, R6-F05/F06/F07):
+#   - Tasks are Eidolons-AUTHORED ground truth — NOT a borrowed/contaminated
+#     leaderboard. We never reproduce vendor numbers as targets.
+#   - A PRIVATE date-stamped `holdout` suite is kept separate from `public`
+#     (a genuinely-private holdout should live OUTSIDE this repo; this in-repo
+#     set demonstrates the pattern and guards against tuning-to-the-test).
+#   - `eidolons eval routing --validate-suite` runs the task-validity checklist
+#     on the suite ITSELF, so the harness cannot ship the brittle-checker defect
+#     it exists to catch.
+#   - Cost is reported alongside accuracy. Routing uses no model tokens, so its
+#     cost is ~0 — stated honestly, and the column is there for the quality/recall
+#     evals (human-in-the-loop / MCP) that extend this harness later.
+#   - Determinism ⇒ pass^k == pass^1 here; the pass^k distinction matters for the
+#     non-deterministic evals to come.
+#
+# Schema: ../schemas/eval-suite.schema.json
+
+eval_version: "1.0"
+created_at: "2026-06-03"
+target: "eidolons run (routing kernel)"
+
+# Each task: a prompt + optional context flags + the ground-truth expected
+# routing outcome. A task PASSES iff every present `expect` field matches the
+# kernel's artifact (decision, selected, tier, refusal_rerouting).
+suites:
+  public:
+    - id: R-001
+      category: discovery
+      prompt: "map the auth flow"
+      expect: { decision: dispatch, selected: [atlas], tier: standard }
+    - id: R-002
+      category: discovery
+      prompt: "trace who calls flowmap_resolve"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: R-003
+      category: bugfix
+      prompt: "Fix the off-by-one in flowmap_resolve"
+      expect: { decision: dispatch, selected: [apivr], tier: standard }
+    - id: R-004
+      category: implement
+      prompt: "implement the retry logic in the worker"
+      expect: { decision: dispatch, selected: [apivr] }
+    - id: R-005
+      category: planning
+      prompt: "spec out the new caching layer"
+      expect: { decision: dispatch, selected: [spectra] }
+    - id: R-006
+      category: decision
+      prompt: "Should we route via the hierarchical supervisor or a single-router?"
+      expect: { decision: dispatch, selected: [forge], tier: standard }
+    - id: R-007
+      category: docs
+      prompt: "document the auth module as an ADR"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: R-008
+      category: docs
+      prompt: "write a runbook for the deploy process"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: R-009
+      category: debug
+      prompt: "got a stack trace, still failing after retry in the worker"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: R-010
+      category: chain
+      prompt: "design and implement the --json flag for doctor"
+      expect: { decision: chain, selected: [spectra, apivr] }
+    - id: R-011
+      category: chain
+      prompt: "I need a spec for refactoring the dispatcher; I don't know the call graph yet"
+      expect: { decision: chain, selected: [atlas, spectra] }   # scout-then-spec (V3): the ask is a spec, not a full build
+    - id: R-012
+      category: refusal
+      prompt: "ATLAS, please patch this file"
+      expect: { decision: refusal_reroute, selected: [apivr], refusal_rerouting: true }
+    - id: R-013
+      category: clarify
+      prompt: "do the thing"
+      expect: { decision: clarify }
+    - id: R-014
+      category: trance
+      prompt: "map the entire monorepo data layer"
+      ctx: { surface_modules: 9, trance: true }
+      expect: { decision: dispatch, selected: [atlas], tier: trance }
+    - id: R-015
+      category: trance-guard
+      prompt: "map the auth flow"
+      ctx: { surface_modules: 9 }
+      expect: { tier: standard }     # TRANCE never default — surface alone does not escalate
+
+  # Private date-stamped holdout — kept separate from `public`; used only to
+  # confirm the suite generalises, never to tune routing.yaml.
+  holdout:
+    - id: H-001
+      category: discovery
+      prompt: "find where the database connection is opened"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: H-002
+      category: implement
+      prompt: "build the pagination feature for the list endpoint"
+      expect: { decision: dispatch, selected: [apivr] }
+    - id: H-003
+      category: decision
+      prompt: "which approach should we take, optimistic or pessimistic locking?"
+      expect: { decision: dispatch, selected: [forge] }
+    - id: H-004
+      category: docs
+      prompt: "chronicle the migration decisions we made this sprint"
+      expect: { decision: dispatch, selected: [idg] }

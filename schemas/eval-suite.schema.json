@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/eval-suite.schema.json",
+  "title": "Eidolons Routing Eval Suite",
+  "description": "Labelled ground-truth benchmark for `eidolons run`, consumed by `eidolons eval routing`.",
+  "type": "object",
+  "required": ["eval_version", "suites"],
+  "additionalProperties": true,
+  "properties": {
+    "eval_version": { "type": "string" },
+    "created_at": { "type": "string" },
+    "target": { "type": "string" },
+    "suites": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "required": ["id", "category", "prompt", "expect"],
+          "additionalProperties": true,
+          "properties": {
+            "id": { "type": "string" },
+            "category": { "type": "string" },
+            "prompt": { "type": "string", "minLength": 1 },
+            "ctx": {
+              "type": "object",
+              "additionalProperties": true,
+              "properties": {
+                "surface_files": { "type": "integer" },
+                "surface_modules": { "type": "integer" },
+                "trance": { "type": "boolean" },
+                "prior_failure": { "type": "boolean" }
+              }
+            },
+            "expect": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "decision": { "type": "string", "enum": ["dispatch", "chain", "refusal_reroute", "clarify"] },
+                "selected": { "type": "array", "items": { "type": "string" } },
+                "tier": { "type": "string", "enum": ["standard", "trance"] },
+                "refusal_rerouting": { "type": "boolean" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
