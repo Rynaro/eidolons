@@ -73,6 +73,9 @@ Commands:
   run            Deterministically route a prompt to the correct Eidolon(s)
                  (mechanical cortex dispatch over roster/routing.yaml; no LLM)
   trace <sub>    Read ECL hand-off telemetry. Subcommands:
+                   show <path...>               render the hand-off chain
+                   graph <path...>              render the hand-off DAG
+                   verify <path...> [--block]   batch SHA-256 integrity check
                    cost <path...> [--budget N]  per-Eidolon token attribution
                    otel <path...>               emit OpenTelemetry GenAI spans
   doctor         Health-check installed Eidolons and host wiring

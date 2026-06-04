@@ -8,6 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(trace) `eidolons trace show|graph|verify`** — the read-only ECL trace consumer
+  (roadmap #5 / E2), completing the `trace` verb family. Makes the on-disk ECL trace
+  (zero CLI consumers before #4) fully readable:
+  - **`show <path...>`** — the hand-off chain in stage order (each hop: from→to,
+    performative, artifact, tokens, tier, model). `--json`.
+  - **`graph <path...>`** — the hand-off DAG (unique from→to edges + performatives).
+    `--json`.
+  - **`verify <path...> [--block]`** — **batch SHA-256 integrity** across a whole
+    thread (the CLI half of the blocking ECL gate, B5/C-1): runs the mechanical
+    `verify-envelope` gate per hop and aggregates; block mode exits 3 if any hop
+    fails. `--mode warn|block` / `--block`. `--json`.
+
+  Deterministic, no LLM; reuses the #2 verify gate + the #4 trace-read. Tests:
+  `cli/tests/trace_reader.bats` (7). Follow-up (E1): extend `--json` to the remaining
+  human-output commands (init / sync / doctor) as a single sweep.
+
 ## [1.22.0] — 2026-06-03
 
 ### Added
