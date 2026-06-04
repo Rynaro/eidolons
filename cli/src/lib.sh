@@ -2064,3 +2064,69 @@ deep_check_aci_conformance() {
   fi
   return "$rc"
 }
+
+# deep_check_verify_incoming_conformance NAME
+#
+# D8: verify that an installed RECEIVER Eidolon ships a BLOCKING verify-incoming
+# skill (ECL v1.0 section 6.2.2; frontier roadmap N3). The mechanical SHA-256
+# gate runs at the orchestrator; this gate proves every receiver actually carries
+# the refuse-on-mismatch skill (not the old warn-only posture), making N3's
+# symmetric guarantee an enforced, nexus-checkable invariant. Receiver-ness +
+# the blocking/forbidden markers come from roster/ecl.yaml. Returns the violation
+# count (0 = conformant or exempt).
+deep_check_verify_incoming_conformance() {
+  local name="$1"
+  local ecl_file; ecl_file="$(dirname "$ROSTER_FILE")/ecl.yaml"
+  if [[ ! -f "$ecl_file" ]]; then
+    warn "$name: roster/ecl.yaml missing — skipping ECL receiver conformance (D8)"
+    return 0
+  fi
+  local entry; entry="$(roster_get "$name" 2>/dev/null)" || {
+    err "$name: not found in roster (cannot check ECL receiver conformance)"; return 1; }
+  local class; class="$(printf '%s' "$entry" | jq -r '.capability_class // ""')"
+  if [[ -z "$class" ]]; then
+    warn "$name: no capability_class in roster — skipping ECL receiver conformance"
+    return 0
+  fi
+
+  local ecl; ecl="$(yaml_to_json "$ecl_file")"
+  # Non-receivers (memory MCP substrate) are exempt — not hand-off receivers.
+  local is_recv; is_recv="$(printf '%s' "$ecl" | jq -r --arg c "$class" '.classes[$c].receiver // false')"
+  if [[ "$is_recv" != "true" ]]; then
+    pass "$name: class=$class is not an ECL hand-off receiver (exempt from D8)"
+    return 0
+  fi
+
+  local skill_rel; skill_rel="$(printf '%s' "$ecl" | jq -r '.verify_incoming.skill_path // "skills/verify-incoming.md"')"
+  local skill=".eidolons/$name/$skill_rel"
+  if [[ ! -f "$skill" ]]; then
+    err "$name: missing blocking verify-incoming skill ($skill) — ECL 6.2.2 receiver gate (N3)"
+    return 1
+  fi
+
+  local rc=0
+  # At least one blocking marker MUST be present (proves refuse-on-mismatch).
+  local found_block=0 _m
+  while IFS= read -r _m; do
+    [[ -z "$_m" ]] && continue
+    if grep -qF -- "$_m" "$skill"; then found_block=1; break; fi
+  done <<< "$(printf '%s' "$ecl" | jq -r '.verify_incoming.blocking_markers[]?')"
+  if (( found_block == 0 )); then
+    err "$name: verify-incoming present but declares no blocking posture (expected REFUSE / SHALL NOT / Do not process)"
+    rc=$((rc + 1))
+  fi
+
+  # No prescriptive warn-only marker may be present.
+  while IFS= read -r _m; do
+    [[ -z "$_m" ]] && continue
+    if grep -qF -- "$_m" "$skill"; then
+      err "$name: verify-incoming declares warn-only posture — found \"$_m\" (ECL 6.2.2 requires refusal)"
+      rc=$((rc + 1))
+    fi
+  done <<< "$(printf '%s' "$ecl" | jq -r '.verify_incoming.forbid_markers[]?')"
+
+  if (( rc == 0 )); then
+    pass "$name: blocking verify-incoming gate present (class=$class)"
+  fi
+  return "$rc"
+}
