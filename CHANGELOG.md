@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.24.0] — 2026-06-04
+
 ### Added
 
 - **(eval) `eidolons eval routing`** — the evaluation harness (roadmap #7, the
