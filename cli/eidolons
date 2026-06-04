@@ -81,6 +81,9 @@ Commands:
   eval <sub>     Measure the Eidolons against labelled ground truth (no LLM):
                    routing [--suite ...] [--min N]   deterministic routing benchmark
                    quality emit|grade <task> ...     human-in-the-loop quality (pass^k)
+  sandbox <sub>  Bounded, delegated edit-run-test loop (adapter, not an engine):
+                   check / run / loop  — delegates isolation (--via) + edits
+                   (--fix-hook); diff-not-apply; VIGIL hand-off on cap-out
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:
@@ -160,6 +163,7 @@ case "$cmd" in
   run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
   trace)       exec bash "$CLI_SRC/trace.sh"   "$@" ;;
   eval)        exec bash "$CLI_SRC/eval.sh"    "$@" ;;
+  sandbox)     exec bash "$CLI_SRC/sandbox.sh" "$@" ;;
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)

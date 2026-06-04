@@ -8,6 +8,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **(sandbox) `eidolons sandbox check|run|loop`** — the bounded, delegated
+  edit-run-test loop (roadmap #9 — the largest competitive gap, the
+  OpenHands/Cursor/Devin closed loop). Built as an **adapter, not an engine**: the
+  nexus has no LLM and **never builds a sandbox** (the dossier's clearest
+  build-vs-buy anti-recommendation). It owns the bounded control flow + the
+  ≤N-attempt hard cap (Prime Directive **D5**, made executable), **diff-not-apply**
+  discipline (emits a candidate diff for review; **never** commits/merges), and a
+  mandatory **VIGIL hand-off on cap-out** (never a silent retry). It **delegates**
+  isolation to a host/user sandbox via `--via <cmd>` (microVM/gVisor/container) and
+  the edit/LLM step to a host `--fix-hook <cmd>` (where the model lives — e.g. an
+  APIVR-Δ invocation). **Refuses** to run untrusted/LLM-authored code on the bare
+  host without `--allow-unsafe-host` (R8-03: LLM code needs hardware-level isolation).
+  - `check` — classify the `--via` isolation tier + apply the refusal policy.
+  - `run -- <test-cmd>` — run a test command through the delegated sandbox.
+  - `loop --tests <cmd> --fix-hook <cmd> --via <cmd> [--max-attempts N]` — the
+    bounded loop; writes `.eidolons/sandbox/<run>/{loop.json, candidate.diff,
+    repair-failed-report.md}`; exit 3 on cap-out, exit 0 on pass.
+
+  Opt-in by design (agentic loops cost up to ~50x). This is the nexus's honest half
+  of dossier reversal **R4**: it makes APIVR-Δ's V-loop **executable + sandboxed**,
+  while the host LLM provides the intelligence (the `--fix-hook`). Tests:
+  `cli/tests/sandbox.bats` (13). Bug caught pre-merge: `( cmd ) || true; rc=$?`
+  masks the test's exit code — use `cmd || rc=$?` (real exit + no `set -e` trip).
+
 ## [1.25.0] — 2026-06-04
 
 ### Added
