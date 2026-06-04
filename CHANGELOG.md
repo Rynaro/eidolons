@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.25.0] — 2026-06-04
+
 ### Added
 
 - **(eval) `eidolons eval quality`** — the human-in-the-loop quality benchmark
