@@ -17,8 +17,8 @@ Usage: eidolons doctor [OPTIONS]
 
 Options:
   --fix         Attempt to auto-repair simple structural issues (lockfile drift,
-                missing host wiring). Read-only for methodology gates (D1..D7).
-  --deep        Run methodology-integrity gates (D1..D7) after the fast checks.
+                missing host wiring). Read-only for methodology gates (D1..D8).
+  --deep        Run methodology-integrity gates (D1..D8) after the fast checks.
                 Required to catch broken outbound links, token-budget overruns,
                 and content drift vs the release manifest.
   -h, --help    Show this help.
@@ -39,6 +39,7 @@ Deep checks (--deep):
   D5   host-vendor agent body contract           MUST reference agent.md + SPEC.md, zero legacy <UPPER>.md refs
   D6   skills/ dual-write SHA parity             MUST match between .eidolons/<n>/skills/*.md and .claude/skills/<n>-<basename>/SKILL.md
   D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
+  D8   ECL receiver verify-incoming             every installed receiver Eidolon MUST ship a blocking verify-incoming skill (roster/ecl.yaml; ECL 6.2.2, frontier N3)
 EOF
 }
 
@@ -807,6 +808,15 @@ if [[ "$DEEP" == "true" ]]; then
         _d7_rc=0
         deep_check_aci_conformance "$_dm" || _d7_rc=$?
         ERRORS=$((ERRORS + _d7_rc))
+      done <<< "$_deep_members"
+
+      # D8 — ECL receiver verify-incoming conformance (frontier N3, ECL 6.2.2)
+      echo "  D8 — ECL receiver verify-incoming"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d8_rc=0
+        deep_check_verify_incoming_conformance "$_dm" || _d8_rc=$?
+        ERRORS=$((ERRORS + _d8_rc))
       done <<< "$_deep_members"
     fi
 

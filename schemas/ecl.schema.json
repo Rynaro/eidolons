@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/ecl.schema.json",
+  "title": "Eidolons ECL Receiver Conformance Contract",
+  "description": "Drives `eidolons doctor --deep` gate D8 — every installed receiver Eidolon MUST ship a blocking verify-incoming skill (ECL v1.0 section 6.2.2; frontier roadmap N3).",
+  "type": "object",
+  "required": ["ecl_version", "verify_incoming", "classes"],
+  "additionalProperties": true,
+  "properties": {
+    "ecl_version": { "type": "string" },
+    "reference": { "type": "string" },
+    "verify_incoming": {
+      "type": "object",
+      "required": ["skill_path", "blocking_markers", "forbid_markers"],
+      "additionalProperties": false,
+      "properties": {
+        "skill_path": { "type": "string", "minLength": 1 },
+        "blocking_markers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "forbid_markers": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "classes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["receiver"],
+        "additionalProperties": true,
+        "properties": {
+          "receiver": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

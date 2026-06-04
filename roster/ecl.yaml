@@ -1,0 +1,60 @@
+# Eidolons Communication Layer (ECL) Receiver Conformance Contract
+# ────────────────────────────────────────────────────────────────
+# Codifies frontier roadmap N3: the blocking + symmetric verify-incoming
+# receiver gate. ECL v1.0 section 6.2.2 mandates that a receiver SHALL NOT
+# process a payload whose SHA-256 integrity tag does not match. The mechanical
+# gate runs at the orchestrator (eidolons verify-envelope / run --verify) and
+# writes a verify_pass/verify_fail trace event; every hand-off RECEIVER then
+# refuses to process an artefact lacking a verify_pass.
+#
+# `eidolons doctor --deep` gate D8 mechanically verifies that each installed
+# receiver Eidolon actually ships a BLOCKING verify-incoming skill (not the old
+# warn-only posture). This makes N3's "symmetric, end-to-end" property an
+# ENFORCED invariant checkable from the nexus (Prime Directive D3 —
+# mechanical-over-prompt), rather than six files we hope stay in place.
+#
+# Schema: ../schemas/ecl.schema.json   Sibling to roster/index.yaml, aci.yaml, routing.yaml.
+
+ecl_version: "1.0"
+reference: "ECL v1.0 section 6.2.2 - a receiver SHALL NOT process a payload whose integrity tag does not match"
+
+verify_incoming:
+  # Installed-tree path (relative to .eidolons/<member>/) of the receiver skill.
+  skill_path: "skills/verify-incoming.md"
+
+  # At least ONE of these MUST appear in the skill — proof of the refuse-on-mismatch
+  # (blocking) posture. Matched as fixed strings.
+  blocking_markers:
+    - "REFUSE"
+    - "SHALL NOT"
+    - "Do not process"
+
+  # NONE of these may appear — they are the OLD warn-only skill's PRESCRIPTIVE
+  # phrases. Note: bare "warn-only" is deliberately NOT forbidden — the canonical
+  # blocking skill references it in historical-contrast prose ("previous versions
+  # ... processed the payload anyway. That is now superseded." / "Blocking, not
+  # warn-only."). Forbidding the bare term would false-positive on that prose, so
+  # the gate forbids only the prescriptive present-tense phrasings.
+  forbid_markers:
+    - "payload is always processed"
+    - "process the payload anyway"
+    - "WARN-ONLY on failure"
+
+# Which capability classes receive ECL hand-offs (and so MUST ship the gate).
+# Non-receivers (the memory MCP substrate) are exempt — they are not hand-off
+# receivers in the ECL graph. Keep this in sync with roster/aci.yaml classes.
+classes:
+  scout:
+    receiver: true
+  planner:
+    receiver: true
+  coder:
+    receiver: true
+  scriber:
+    receiver: true
+  reasoner:
+    receiver: true
+  debugger:
+    receiver: true
+  memory:
+    receiver: false   # MCP-mediated substrate; not an ECL hand-off receiver

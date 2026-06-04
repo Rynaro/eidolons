@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **`doctor --deep` gate D8 — ECL receiver `verify-incoming` conformance** (frontier roadmap N3 capstone). Mechanically verifies that every installed *receiver* Eidolon ships a **blocking** `verify-incoming` skill (ECL v1.0 §6.2.2), not the old warn-only posture — making N3's symmetric, end-to-end guarantee an enforced, nexus-checkable invariant (Prime Directive D3) rather than six files we hope stay in place. New machine-readable contract `roster/ecl.yaml` (sibling to `aci.yaml`/`routing.yaml`) + `schemas/ecl.schema.json`; `deep_check_verify_incoming_conformance` in `lib.sh`, wired into `doctor.sh` after D7. The marker discipline forbids the *prescriptive* warn-only phrasings (`payload is always processed`, `process the payload anyway`, `WARN-ONLY on failure`) but **not** bare "warn-only" — so it never false-positives on the canonical skill's own historical-contrast prose. Non-receiver classes (`memory`) are exempt. 9 `ecl_conformance.bats` tests.
+
 ## [1.26.1] — 2026-06-04
 
 ### Added
