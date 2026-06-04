@@ -1,0 +1,46 @@
+# Eidolons SWE-task-solving harness — bundled SMOKE suite
+# ───────────────────────────────────────────────────────
+# Consumed by `eidolons eval swe`. Each task is a broken repo + a red test + a
+# deterministic reference fix (`gold_fix`). The harness materialises the task,
+# drives `eidolons sandbox loop` (the #9 bounded edit-run-test engine), and
+# records whether the loop reached green within the attempt cap.
+#
+# ⚠️ HONEST SCOPE — READ THIS. This bundled suite is a HARNESS SELF-TEST, not a
+# capability benchmark. In the default (smoke) mode the "fix" applied each round
+# is the task's own `gold_fix` reference patch — so a 100% resolved-rate here
+# proves the edit-run-test ORCHESTRATION works end-to-end (setup → red → fix →
+# green → diff-not-apply), NOT that a model solved an unseen task.
+#
+# To produce a real SWE-bench-class task-solving number you must supply ALL of:
+#   --suite-file <external manifest>   real instances (e.g. SWE-bench-Verified)
+#   --fix-hook   '<model invocation>'  reads $EIDOLONS_SANDBOX_LAST_OUTPUT, edits repo
+#   --via        '<docker/gvisor/e2b>' a real sandbox carrying the task repo state
+# That number — not this smoke — is what moves the frontier-dossier confidence
+# past 0.70 (reversal R4). This PR is the INSTRUMENT, not the number.
+#
+# Tasks use only POSIX sh + coreutils + git (no python/node) so the smoke is
+# deterministic and dependency-free across macos/ubuntu CI.
+#
+# Schema: ../schemas/swe-suite.schema.json
+
+swe_version: "1.0"
+tasks:
+  - id: smoke-greet
+    description: "greet.sh prints the wrong string; the test greps for 'hello world'. One-line fix."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'echo hello\n' > greet.sh
+      git add -A && git commit -qm "broken: greet prints 'hello' not 'hello world'"
+    test: "sh greet.sh | grep -q 'hello world'"
+    gold_fix: |
+      printf 'echo "hello world"\n' > greet.sh
+
+  - id: smoke-exit-code
+    description: "check.sh exits non-zero; the test asserts a clean exit. Fix flips the exit status."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf '#!/bin/sh\nexit 1\n' > check.sh
+      git add -A && git commit -qm "broken: check exits 1"
+    test: "sh check.sh"
+    gold_fix: |
+      printf '#!/bin/sh\nexit 0\n' > check.sh
