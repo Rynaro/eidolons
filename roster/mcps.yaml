@@ -127,9 +127,9 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.2.1"
+      latest: "1.3.0"
       pins:
-        stable: "1.2.1"
+        stable: "1.3.0"
       releases:
         "0.1.0":
           digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
@@ -142,6 +142,11 @@ mcps:
           # amd64-only 1.2.0 digest so Apple Silicon hosts can pull.
           digest: "sha256:d8da22cbb89ba0f225ed276e07d1d8c705f65be9cea3037e864e243ac7f07fbb"
           released_at: "2026-06-02T00:00:00Z"
+        "1.3.0":
+          # Multi-arch index (linux/amd64 + linux/arm64). CRYSTALIUM T1 correctness
+          # + T2 ablations (EVB + pattern-completion earned ON) + kuzu max_db_size cap.
+          digest: "sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894"
+          released_at: "2026-06-05T00:00:00Z"
     install:
       hosts_wired:
         - ".mcp.json"
