@@ -194,6 +194,73 @@ SH
   [ "$(echo "$output" | jq -r '.final')" = "passed" ]
 }
 
+# ── S1.4-parser: deepened localized-feedback parser (capture-live fixtures) ────
+# Each test drives the loop with a real fixture so the parser processes verbatim
+# runner output — not fabricated strings (capture-live mandate).
+
+@test "S1.4-parser: bats fixture — extracts bats-style loci (test-file:line) and test name" {
+  _git_project
+  # Feed the REAL bats fixture verbatim: the loop's --tests cmd copies it to
+  # stdout/stderr and exits 1 so the parser sees the actual runner output.
+  run eidolons sandbox loop \
+    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/bats-fail.txt'; exit 1" \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  # Loci must contain math.bats:3 or math.bats:7 (from "(in test file math.bats, line 3)")
+  jq -r '.loci[]' .out/feedback.json | grep -q 'math\.bats:[37]'
+  # test_name must include the failing test name from "not ok N <name>"
+  jq -r '.test_name[]' .out/feedback.json | grep -q 'addition computes the right total'
+  # contract_version stays "1.0" (additive-only change)
+  [ "$(jq -r '.contract_version' .out/feedback.json)" = "1.0" ]
+}
+
+@test "S1.4-parser: pytest fixture — extracts colon-form loci and FAILED test name" {
+  _git_project
+  run eidolons sandbox loop \
+    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/pytest-fail.txt'; exit 1" \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  # loci must contain calc_test.py:8 (colon form)
+  jq -r '.loci[]' .out/feedback.json | grep -q 'calc_test\.py:8'
+  # test_name must include the pytest test name
+  jq -r '.test_name[]' .out/feedback.json | grep -q 'test_running_total_inclusive'
+  # assertion must capture the assert 10 == 15 line
+  jq -r '.assertion[]' .out/feedback.json | grep -qi 'assert'
+}
+
+@test "S1.4-parser: shellcheck fixture — extracts shellcheck-style loci (file:line)" {
+  _git_project
+  run eidolons sandbox loop \
+    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/shellcheck-fail.txt'; exit 1" \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  # loci must contain deploy.sh:4 (shellcheck "In deploy.sh line 4:" format)
+  jq -r '.loci[]' .out/feedback.json | grep -q 'deploy\.sh:4'
+}
+
+@test "S1.4-parser: back-compat — existing fields (contract_version, failing, loci, output_tail) still present" {
+  _git_project
+  cat > failer.sh <<'SH'
+echo "app/foo.rb:42: assertion failed: expected 5 got 3" >&2
+exit 1
+SH
+  run eidolons sandbox loop --tests 'sh failer.sh' \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  # All original fields must be present
+  [ "$(jq -r '.contract_version' .out/feedback.json)" = "1.0" ]
+  jq -e '.failing' .out/feedback.json >/dev/null
+  jq -e '.loci' .out/feedback.json >/dev/null
+  jq -e '.output_tail' .out/feedback.json >/dev/null
+  # New additive fields must also be present
+  jq -e '.test_name' .out/feedback.json >/dev/null
+  jq -e '.assertion' .out/feedback.json >/dev/null
+}
+
 @test "sandbox loop: a chatty fix-hook (stdout) must NOT corrupt the --json ledger" {
   _git_project
   # An LLM fix-hook prints a verbose response to stdout; that must go to stderr, not

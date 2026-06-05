@@ -175,12 +175,35 @@ _run_in_sandbox() {
   local tail_txt failing loci full_ref
   tail_txt="$(tail -n 40 "$logf" 2>/dev/null || true)"
   failing="$(grep -nEi '(fail(ed|ure)?|error|exception|assert|panic:|not ok|--- FAIL|FAILED|traceback)' "$logf" 2>/dev/null | head -n 30 || true)"
-  loci="$(grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$logf" 2>/dev/null | sort -u | head -n 20 || true)"
+  # Deepened loci extraction: three formats handled.
+  # Format 1 (colon form): file.ext:NN — pytest, go test, generic
+  # Format 2 (bats): "(in test file <name>, line NN)"
+  # Format 3 (shellcheck): "In <file> line NN:"
+  loci_colon="$(grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$logf" 2>/dev/null || true)"
+  loci_bats="$(grep -oE 'in test file [A-Za-z0-9_./-]+,? line [0-9]+' "$logf" 2>/dev/null \
+    | sed 's/in test file \([^ ,]*\),\? line \([0-9]*\)/\1:\2/' || true)"
+  loci_sc="$(grep -oE 'In [A-Za-z0-9_./-]+ line [0-9]+:' "$logf" 2>/dev/null \
+    | sed 's/In \([^ ]*\) line \([0-9]*\):/\1:\2/' || true)"
+  loci="$(printf '%s\n%s\n%s\n' "$loci_colon" "$loci_bats" "$loci_sc" \
+    | grep -v '^$' | sort -u | head -n 20 || true)"
+  # Failing test names: "not ok N <name>" (bats) and "FAILED <module>::<name>" (pytest).
+  test_names_bats="$(grep -oE 'not ok [0-9]+ .+' "$logf" 2>/dev/null \
+    | sed 's/not ok [0-9]* //' || true)"
+  test_names_pytest="$(grep -oE 'FAILED [A-Za-z0-9_./-]+::[A-Za-z0-9_]+' "$logf" 2>/dev/null \
+    | sed 's/FAILED //' || true)"
+  test_name="$(printf '%s\n%s\n' "$test_names_bats" "$test_names_pytest" \
+    | grep -v '^$' | head -n 5 || true)"
+  # Assertion extraction: "assert X == Y" (pytest E-line), `[ "$x" -eq Y ]' failed (bats).
+  assertion="$(grep -E '^E\s+(assert|AssertionError)' "$logf" 2>/dev/null | head -n 5 \
+    || grep -oE "\`[^']+' failed" "$logf" 2>/dev/null | head -n 5 || true)"
   if [[ "$keep" == true ]]; then full_ref="$logf"; else full_ref=""; fi
   jq -nc --argjson rc "$rc" --argjson dur "$((end - start))" \
     --arg tail "$tail_txt" --arg full "$full_ref" --arg failing "$failing" --arg loci "$loci" \
+    --arg test_name "$test_name" --arg assertion "$assertion" \
     '{passed: ($rc == 0), exit_code: $rc, duration_s: $dur, output_tail: $tail,
-      full_log: $full, failing: $failing, loci: ($loci | split("\n") | map(select(length>0)))}'
+      full_log: $full, failing: $failing, loci: ($loci | split("\n") | map(select(length>0))),
+      test_name: ($test_name | split("\n") | map(select(length>0))),
+      assertion: ($assertion | split("\n") | map(select(length>0)))}'
   [[ "$keep" == false ]] && rm -f "$logf"
   return 0
 }
@@ -308,6 +331,7 @@ case "$SUB" in
       printf '%s' "$result" | jq -c --argjson n "$n" \
         '{contract_version:"1.0", attempt:$n, exit_code:.exit_code, phase:.phase, passed:.passed,
           flaky:(.flaky // false), failing:.failing, loci:.loci,
+          test_name:(.test_name // []), assertion:(.assertion // []),
           full_log:"full-log.txt", output_tail:.output_tail}' > "$OUT_DIR/feedback.json"
 
       attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" --argjson r "$result" \
