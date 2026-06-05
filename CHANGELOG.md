@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.28.1] — 2026-06-04
+
+### Changed
+- **Roster: re-pin CRYSTALIUM 1.2.1 → 1.3.0** (source-install integrity in `roster/index.yaml`, attested; OCI digest `sha256:9f49f98b…` for the multi-arch index in `roster/mcps.yaml`). v1.3.0 is the CRYSTALIUM **T1 correctness + T2 ablation** campaign: the canary-0.80 "blocker" corrected to a test-harness volume confound (fixed via ephemeral per-run isolation); **EVB + pattern-completion earned ON** (genuine discriminating-gate wins — retained-set purity 1.0 vs 0.33; multi-hop recall 0.67→1.0); context-match / prefetch / FSRS / Dream kept **honestly OFF** (each with a discriminating gate proving no confound-free win); plus a kuzu `max_db_size` cap (8 TB → 1 GiB) the completion-ON flip surfaced. `check_roster_mcp_skew` OK.
+
 ## [1.28.0] — 2026-06-04
 
 ### Added
