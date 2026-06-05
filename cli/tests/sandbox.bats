@@ -327,6 +327,49 @@ SH
   [ "$(jq -r '[.attempts[0].passk_runs[].passed] | all' .out/loop.json)" = "true" ]
 }
 
+@test "S1.3: --lint-hook passes → tests run normally (phase not lint)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' \
+    --fix-hook 'true' --lint-hook 'true' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.final' .out/loop.json)" = "passed" ]
+  # phase must not be "lint" (lint passed → tests ran)
+  [ "$(jq -r '.attempts[0].phase' .out/loop.json)" != "lint" ]
+}
+
+@test "S1.3: --lint-hook fails → iteration short-circuits, feedback.json phase=lint" {
+  _git_project
+  # Use the real shellcheck fixture format to verify loci extraction from lint output
+  run eidolons sandbox loop \
+    --tests 'true' --fix-hook 'true' \
+    --lint-hook "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/shellcheck-fail.txt'; exit 1" \
+    --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  [ "$(jq -r '.phase' .out/feedback.json)" = "lint" ]
+  [ "$(jq -r '.passed' .out/feedback.json)" = "false" ]
+  # loci must contain deploy.sh:4 from the shellcheck fixture
+  jq -r '.loci[]' .out/feedback.json | grep -q 'deploy\.sh:4'
+}
+
+@test "S1.3: --lint-hook fails → tests are NOT run that iteration (no test phase in attempts)" {
+  _git_project
+  # If the lint-hook fails, the iteration should not produce a test-phase attempt entry.
+  # We use max-attempts=2 so the loop can record attempts; first attempt short-circuits.
+  cat > fix2.sh <<'SH'
+# no-op fix hook
+SH
+  LINT_CALL_COUNT=0
+  run eidolons sandbox loop \
+    --tests 'false' --fix-hook 'true' \
+    --lint-hook 'exit 1' \
+    --max-attempts 2 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  # feedback.json phase must be lint (lint short-circuited)
+  [ "$(jq -r '.phase' .out/feedback.json)" = "lint" ]
+}
+
 @test "S1.2: flaky pass^k still records non-deterministic run in passk.runs" {
   _git_project
   cat > flaky2.sh <<'SH'

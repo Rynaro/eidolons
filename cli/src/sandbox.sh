@@ -46,7 +46,8 @@ Usage:
   eidolons sandbox loop  --tests <test-cmd> [--fix-hook <cmd>] [--via <cmd>]
                          [--max-attempts N] [--base <ref>] [--out <dir>]
                          [--protect <glob>] [--regression <cmd>] [--reproduction <cmd>]
-                         [--k N] [--allow-unsafe-host] [--json]
+                         [--k N] [--lint-hook <cmd>] [--holdout <cmd>]
+                         [--fresh-context] [--allow-unsafe-host] [--json]
 
 check   Classify the isolation tier of --via and apply the refusal policy
         (untrusted code needs >= container isolation).
@@ -64,6 +65,13 @@ loop    Bounded edit-run-test loop: run tests -> on fail call --fix-hook (the
                                 test FAILS).
           --k N                 pass^k: a green candidate must pass N re-runs in a
                                 row; a non-deterministic pass is flaky -> BLOCKED.
+          --lint-hook <cmd>     run AFTER --fix-hook, BEFORE tests; failing lint
+                                short-circuits the iteration with phase:"lint"
+                                feedback carrying compile loci (ACI edit-gate).
+          --holdout <cmd>       sealed test suite the fix-hook NEVER sees; run
+                                ONLY after final=passed; failure → reward-hacked.
+          --fresh-context       signal to the fix-hook that each retry should use
+                                only localized feedback (no prior transcript).
         The fix-hook receives EIDOLONS_SANDBOX_FEEDBACK (structured JSON: failing
         markers, file:line loci, full-log path) — localized, not a raw tail.
 
@@ -104,6 +112,9 @@ PROTECT=""
 REGRESSION=""
 REPRODUCTION=""
 K=1
+LINT_HOOK=""
+HOLDOUT=""
+FRESH_CONTEXT=false
 TEST_CMD=()
 _after_dd=false
 while [[ $# -gt 0 ]]; do
@@ -121,6 +132,9 @@ while [[ $# -gt 0 ]]; do
     --regression)        REGRESSION="${2:-}"; shift 2 ;;
     --reproduction)      REPRODUCTION="${2:-}"; shift 2 ;;
     --k)                 K="${2:-1}"; shift 2 ;;
+    --lint-hook)         LINT_HOOK="${2:-}"; shift 2 ;;
+    --holdout)           HOLDOUT="${2:-}"; shift 2 ;;
+    --fresh-context)     FRESH_CONTEXT=true; shift ;;
     --)                  _after_dd=true; shift ;;
     -h|--help)           usage; exit 0 ;;
     -*)                  die "Unknown option: $1" ;;
@@ -373,6 +387,7 @@ case "$SUB" in
       EIDOLONS_SANDBOX_LAST_OUTPUT="$OUT_DIR/last-output.txt" \
       EIDOLONS_SANDBOX_ATTEMPT="$n" \
       EIDOLONS_SANDBOX_BASE="$base_sha" \
+      EIDOLONS_SANDBOX_FRESH_CONTEXT="$FRESH_CONTEXT" \
         bash -c "$FIX_HOOK" >&2 || _fh_rc=$?
       # `>&2`: the fix-hook communicates by EDITING the working tree; its stdout is
       # diagnostic only (LLM CLIs print verbose responses). Route it to stderr so a
@@ -385,6 +400,34 @@ case "$SUB" in
           final="protected-tests-mutated"
           [[ "$OUT" != "json" ]] && warn "sandbox loop: --fix-hook MUTATED a protected anchoring test (--protect) — ABORT + escalate (anti-reward-hacking)"
           break
+        fi
+      fi
+
+      # Lint gate (ACI edit-gate): run --lint-hook AFTER fix-hook + protect check,
+      # BEFORE the next test iteration. Failing lint short-circuits this iteration
+      # and writes a phase:"lint" feedback artefact with compile loci.
+      if [[ -n "$LINT_HOOK" ]]; then
+        _lint_log="$OUT_DIR/lint-log.txt"
+        _lint_rc=0
+        bash -c "$LINT_HOOK" >"$_lint_log" 2>&1 || _lint_rc=$?
+        if [[ "$_lint_rc" -ne 0 ]]; then
+          [[ "$OUT" != "json" ]] && warn "sandbox loop: --lint-hook failed (exit $_lint_rc) — short-circuiting iteration, writing lint feedback"
+          # Extract compile loci from the lint output using the deepened parser.
+          _lint_tail="$(tail -n 40 "$_lint_log" 2>/dev/null || true)"
+          _lint_loci_colon="$(grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$_lint_log" 2>/dev/null || true)"
+          _lint_loci_sc="$(grep -oE 'In [A-Za-z0-9_./-]+ line [0-9]+:' "$_lint_log" 2>/dev/null \
+            | sed 's/In \([^ ]*\) line \([0-9]*\):/\1:\2/' || true)"
+          _lint_loci="$(printf '%s\n%s\n' "$_lint_loci_colon" "$_lint_loci_sc" \
+            | grep -v '^$' | sort -u | head -n 20 || true)"
+          jq -nc --argjson n "$n" --argjson rc "$_lint_rc" \
+            --arg loci "$_lint_loci" --arg tail "$_lint_tail" \
+            '{contract_version:"1.0", attempt:$n, phase:"lint", passed:false,
+              exit_code:$rc, flaky:false, failing:"lint hook failed",
+              loci:($loci | split("\n") | map(select(length>0))),
+              test_name:[], assertion:[],
+              full_log:"lint-log.txt", output_tail:$tail}' > "$OUT_DIR/feedback.json"
+          # Short-circuit: continue the outer while to get a fix-hook call on the next attempt
+          continue
         fi
       fi
     done

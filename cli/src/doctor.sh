@@ -41,6 +41,7 @@ Deep checks (--deep):
   D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
   D8   ECL receiver verify-incoming             every installed receiver Eidolon MUST ship a blocking verify-incoming skill (roster/ecl.yaml; ECL 6.2.2, frontier N3)
   D9   host-tier gate structural check          when ≥2 coders exist and one requires a host_tier, assert a conservative fallback coder is present (routing tiebreak invariant)
+  D10  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
 EOF
 }
 
@@ -827,6 +828,17 @@ if [[ "$DEEP" == "true" ]]; then
       _d9_rc=0
       deep_check_host_tier_gate || _d9_rc=$?
       ERRORS=$((ERRORS + _d9_rc))
+
+      # D10 — coder edit-gate ACI conformance (S1.3, declarative contract)
+      # Per-member: coder-class members MUST declare requires_edit_gate:true in
+      # ACI + reference the lint gate in SPEC.md. Non-coder members are exempt.
+      echo "  D10 — coder edit-gate ACI conformance"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d10_rc=0
+        deep_check_coder_edit_gate "$_dm" || _d10_rc=$?
+        ERRORS=$((ERRORS + _d10_rc))
+      done <<< "$_deep_members"
     fi
 
     # Remedy hint when methodology errors were found.

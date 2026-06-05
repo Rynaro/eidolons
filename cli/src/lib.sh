@@ -2215,3 +2215,51 @@ deep_check_verify_incoming_conformance() {
   fi
   return "$rc"
 }
+
+# deep_check_coder_edit_gate NAME
+#
+# D10: for a `coder`-class member, assert the ACI contract declares
+# requires_edit_gate:true AND the member's SPEC.md contains a reference to the
+# lint gate (a SPEC.md pointer presence check). This is a DECLARATIVE check —
+# not a runtime-wired assertion — mirroring the D7 posture (structure, not
+# behaviour). Non-coder members are exempt. Returns 0 (pass/exempt) or 1 (fail).
+deep_check_coder_edit_gate() {
+  local name="$1"
+  local aci_file; aci_file="$(dirname "$ROSTER_FILE")/aci.yaml"
+  if [[ ! -f "$aci_file" ]]; then
+    warn "$name: roster/aci.yaml missing — skipping coder edit-gate check (D10)"
+    return 0
+  fi
+  local entry; entry="$(roster_get "$name" 2>/dev/null)" || {
+    err "$name: not found in roster (cannot check coder edit-gate)"; return 1; }
+  local class; class="$(printf '%s' "$entry" | jq -r '.capability_class // ""')"
+  # Non-coder members are exempt.
+  if [[ "$class" != "coder" ]]; then
+    pass "$name: class=$class is not a coder (D10 exempt)"
+    return 0
+  fi
+  local aci; aci="$(yaml_to_json "$aci_file")"
+  # 1. ACI contract must declare requires_edit_gate:true for the coder class.
+  local aci_gate; aci_gate="$(printf '%s' "$aci" \
+    | jq -r '.classes.coder.requires_edit_gate // false' 2>/dev/null || echo "false")"
+  local rc=0
+  if [[ "$aci_gate" != "true" ]]; then
+    err "$name: ACI coder class does not declare requires_edit_gate:true (D10)"
+    rc=$((rc + 1))
+  fi
+  # 2. SPEC.md must contain a reference to the lint/edit gate contract.
+  local spec_file=".eidolons/$name/SPEC.md"
+  if [[ ! -f "$spec_file" ]]; then
+    err "$name: SPEC.md missing at $spec_file (D10 — cannot verify lint-gate pointer)"
+    rc=$((rc + 1))
+    return "$rc"
+  fi
+  if ! grep -qiE '(lint.hook|lint.gate|edit.gate|requires_edit_gate)' "$spec_file" 2>/dev/null; then
+    err "$name: SPEC.md at $spec_file does not reference the lint/edit gate (D10 — add a lint-gate pointer)"
+    rc=$((rc + 1))
+  fi
+  if (( rc == 0 )); then
+    pass "$name: coder edit-gate declared in ACI + referenced in SPEC.md (D10)"
+  fi
+  return "$rc"
+}
