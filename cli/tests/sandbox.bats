@@ -272,3 +272,70 @@ SH
   [ "$(jq -r '.final' ledger.json)" = "passed" ]
   [ "$(jq -r '.attempts[1].passed' ledger.json)" = "true" ]
 }
+
+# ── S1.2: pass^k breakdown in loop.json + ECL inform sidecar ─────────────────
+
+@test "S1.2: loop.json carries passk breakdown (k, runs array) — additive field" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --k 2 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f .out/loop.json ]
+  # .k is preserved (back-compat: sandbox.bats:189-195 asserts .k)
+  [ "$(jq -r '.k' .out/loop.json)" = "2" ]
+  # passk additive field must exist
+  jq -e '.passk' .out/loop.json >/dev/null
+  [ "$(jq -r '.passk.k' .out/loop.json)" = "2" ]
+  # runs array must have at least 1 entry (attempt 1)
+  [ "$(jq -r '.passk.runs | length' .out/loop.json)" -ge 1 ]
+}
+
+@test "S1.2: default --k 1 keeps .k==1 back-compat (pass^k back-compat regression)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.k' .out/loop.json)" = "1" ]
+  [ "$(jq -r '.final' .out/loop.json)" = "passed" ]
+}
+
+@test "S1.2: ECL inform sidecar loop.json.envelope.json is emitted after loop" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f .out/loop.json.envelope.json ]
+  # Must be valid JSON
+  jq -e . .out/loop.json.envelope.json >/dev/null
+  # performative must be "inform" (closed-10 ECL set, no new performative)
+  [ "$(jq -r '.performative' .out/loop.json.envelope.json)" = "inform" ]
+  # sender must be eidolons-sandbox
+  [ "$(jq -r '.sender.eidolon' .out/loop.json.envelope.json)" = "eidolons-sandbox" ]
+  # integrity method must be cksum (bash 3.2 compatible)
+  [ "$(jq -r '.integrity.method' .out/loop.json.envelope.json)" = "cksum" ]
+  # integrity value must be non-empty
+  [ -n "$(jq -r '.integrity.value' .out/loop.json.envelope.json)" ]
+  # artifact path references loop.json
+  [ "$(jq -r '.artifact.path' .out/loop.json.envelope.json)" = "loop.json" ]
+}
+
+@test "S1.2: passk.runs records per-run pass boolean for each k re-run" {
+  _git_project
+  # With k=2 and a stable passing test, both re-runs should be recorded as passed
+  run eidolons sandbox loop --tests 'true' --k 2 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  # attempt 1's passk_runs should have 2 entries (k=2 re-runs)
+  [ "$(jq -r '.attempts[0].passk_runs | length' .out/loop.json)" = "2" ]
+  # both runs should be passed
+  [ "$(jq -r '[.attempts[0].passk_runs[].passed] | all' .out/loop.json)" = "true" ]
+}
+
+@test "S1.2: flaky pass^k still records non-deterministic run in passk.runs" {
+  _git_project
+  cat > flaky2.sh <<'SH'
+if [ -f .ctr2 ]; then exit 1; else : > .ctr2; exit 0; fi
+SH
+  run eidolons sandbox loop --tests 'sh flaky2.sh' \
+    --fix-hook 'true' --k 2 --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(jq -r '.final' .out/loop.json)" = "flaky" ]
+  # passk.runs for attempt 1 must exist (the k re-run was attempted)
+  [ "$(jq -r '.passk.runs | length' .out/loop.json)" -ge 1 ]
+}

@@ -312,18 +312,38 @@ case "$SUB" in
       passed="$(printf '%s' "$result" | jq -r '.passed')"
 
       # pass^k: a green that is non-deterministic across k re-runs is flaky → BLOCKED.
+      # per-k breakdown: record each re-run result for the passk ledger field.
+      passk_runs="[]"
       if [[ "$passed" == "true" && "$K" -gt 1 ]]; then
+        passk_runs="$(printf '%s' "$passk_runs" | jq -c \
+          --argjson r "$result" --argjson ki 1 \
+          '. + [{run:$ki, passed:$r.passed, exit_code:$r.exit_code}]')"
         kk=1; flaky=false
         while [[ "$kk" -lt "$K" ]]; do
           kk=$((kk + 1))
           r2="$(_eval_once "$OUT_DIR/full-log.txt")"
-          if [[ "$(printf '%s' "$r2" | jq -r '.passed')" != "true" ]]; then flaky=true; break; fi
+          r2_passed="$(printf '%s' "$r2" | jq -r '.passed')"
+          r2_rc="$(printf '%s' "$r2" | jq -r '.exit_code')"
+          passk_runs="$(printf '%s' "$passk_runs" | jq -c \
+            --argjson ki "$kk" --argjson rp "$([ "$r2_passed" = "true" ] && printf 'true' || printf 'false')" \
+            --argjson rc2 "${r2_rc:-1}" \
+            '. + [{run:$ki, passed:$rp, exit_code:$rc2}]')"
+          if [[ "$r2_passed" != "true" ]]; then flaky=true; break; fi
         done
         if [[ "$flaky" == true ]]; then
           passed="false"; last_flaky=true
           result="$(printf '%s' "$result" | jq -c --argjson k "$K" '. + {passed:false, flaky:true, k:$k}')"
           [[ "$OUT" != "json" ]] && warn "sandbox loop: attempt $n passed once but is FLAKY across k=$K — BLOCKED (not accepted)"
         fi
+      else
+        # K=1: single run; still record for the breakdown
+        _r1_passed_val="$(printf '%s' "$result" | jq -r '.passed')"
+        _r1_rc_val="$(printf '%s' "$result" | jq -r '.exit_code')"
+        passk_runs="$(printf '%s' "$passk_runs" | jq -c \
+          --argjson ki 1 \
+          --argjson rp "$([ "$_r1_passed_val" = "true" ] && printf 'true' || printf 'false')" \
+          --argjson rc1 "${_r1_rc_val:-1}" \
+          '. + [{run:$ki, passed:$rp, exit_code:$rc1}]')"
       fi
 
       # Structured localized feedback artefact (loop_contract) — replaces tail -n 20.
@@ -335,7 +355,8 @@ case "$SUB" in
           full_log:"full-log.txt", output_tail:.output_tail}' > "$OUT_DIR/feedback.json"
 
       attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" --argjson r "$result" \
-        '. + [{attempt:$n, passed:$r.passed, exit_code:$r.exit_code, duration_s:($r.duration_s // 0), phase:($r.phase // "tests"), flaky:($r.flaky // false)}]')"
+        --argjson pkruns "$passk_runs" \
+        '. + [{attempt:$n, passed:$r.passed, exit_code:$r.exit_code, duration_s:($r.duration_s // 0), phase:($r.phase // "tests"), flaky:($r.flaky // false), passk_runs:$pkruns}]')"
 
       if [[ "$passed" == "true" ]]; then final="passed"; break; fi
       [[ "$n" -ge "$MAX_ATTEMPTS" ]] && break
@@ -412,17 +433,42 @@ case "$SUB" in
       } > "$vigil_handoff"
     fi
 
+    # passk summary: k value + all per-attempt runs (additive; .k field preserved for back-compat)
+    passk_summary="$(printf '%s' "$attempts" | jq -c \
+      --argjson k "$K" \
+      '{k:$k, runs:[.[] | {attempt:.attempt, passk_runs:.passk_runs}]}')"
     ledger="$(jq -nc \
       --arg final "$final" --argjson attempts "$attempts" --argjson max "$MAX_ATTEMPTS" \
       --argjson k "$K" --arg protect "$PROTECT" \
       --arg tier "$TIER" --arg base "${base_sha:-$BASE}" --arg diff "$diff_path" \
       --arg feedback "$OUT_DIR/feedback.json" \
       --arg vigil "$vigil_handoff" --arg out "$OUT_DIR" \
+      --argjson passk "$passk_summary" \
       '{final:$final, attempts_run:($attempts|length), max_attempts:$max, k:$k,
         protect:$protect, tier:$tier, base:$base, candidate_diff:$diff,
         feedback:$feedback, vigil_handoff:$vigil, out_dir:$out,
-        merged:false, attempts:$attempts}')"
+        merged:false, attempts:$attempts, passk:$passk}')"
     printf '%s\n' "$ledger" > "$OUT_DIR/loop.json"
+
+    # ECL sidecar: loop.json.envelope.json — inform performative, cksum integrity.
+    # Reuses the closed-10 `inform` performative (GAP-2 decision); bash 3.2 safe (cksum).
+    # sender="eidolons-sandbox" (stateless substrate identity); receiver="" (consuming agent,
+    # Vivi, unknown at substrate level — R1 residual confirmed: empty string is the safe default).
+    _loop_cksum="$(cksum "$OUT_DIR/loop.json" 2>/dev/null | awk '{print $1"-"$2}' || echo "0-0")"
+    _loop_size="$(cksum "$OUT_DIR/loop.json" 2>/dev/null | awk '{print $2}' || echo "0")"
+    _loop_ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')"
+    jq -nc \
+      --arg ts "$_loop_ts" \
+      --arg cksum "$_loop_cksum" \
+      --argjson sz "$_loop_size" \
+      --arg out "$OUT_DIR" \
+      '{envelope_version:"1.0",
+        performative:"inform",
+        sender:{eidolon:"eidolons-sandbox",version:"1.0"},
+        receiver:{eidolon:"",version:""},
+        artifact:{kind:"loop-ledger",path:"loop.json"},
+        integrity:{method:"cksum",value:$cksum,size_bytes:$sz},
+        trace:{ts:$ts,out_dir:$out}}' > "$OUT_DIR/loop.json.envelope.json"
 
     if [[ "$OUT" == "json" ]]; then printf '%s\n' "$ledger"
     else
