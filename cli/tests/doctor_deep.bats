@@ -453,7 +453,7 @@ JSON
   # The important assertion is that the gate runs without crashing.
 }
 
-@test "DD-24: D10 FAIL — coder member SPEC.md missing lint-gate pointer exits 1" {
+@test "DD-24: D10 advisory — coder member SPEC.md missing lint-gate pointer WARNS (not a hard fail)" {
   # Use a custom EIDOLONS_NEXUS with a coder entry that lacks the lint pointer
   local custom_nexus="$BATS_TEST_TMPDIR/dd24-nexus"
   _dd19_nexus_two_coders "$custom_nexus"
@@ -484,12 +484,15 @@ EOF
 {"eiis_version":"1.4","name":"vivi","version":"1.0.0","install_ts":"2026-01-01T00:00:00Z","files":[]}
 JSON
 
-  # vivi is in the real roster as in_construction with coder class — D10 should fire.
-  # Since vivi may or may not be in the real roster's coder class, we only assert
-  # that D10 outputs appear (not necessarily a failure — vivi might be exempt if
-  # roster_get fails gracefully). The key is no crash and the D10 section runs.
+  # vivi is a coder (in_construction) in the copied roster. A missing lint-gate
+  # pointer is ADVISORY (staged opt-in): D10 must emit a warning, NOT a hard error —
+  # a new gate must not regress an existing coder. The ACI class-declaration check
+  # (the hard invariant) stays green.
   EIDOLONS_NEXUS="$custom_nexus" run eidolons doctor --deep
   [[ "$output" =~ "D10 — coder edit-gate ACI conformance" ]]
+  [[ "$output" =~ "D10 advisory" ]]
+  # the advisory must NOT raise a hard D10 edit-gate error for the missing pointer
+  ! [[ "$output" =~ "does not reference the lint/edit gate (D10 —" ]]
 }
 
 _dd18_sha() {

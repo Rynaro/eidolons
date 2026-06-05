@@ -2247,19 +2247,20 @@ deep_check_coder_edit_gate() {
     err "$name: ACI coder class does not declare requires_edit_gate:true (D10)"
     rc=$((rc + 1))
   fi
-  # 2. SPEC.md must contain a reference to the lint/edit gate contract.
+  # 2. SPEC.md SHOULD reference the lint/edit-gate contract — ADVISORY (warn, not
+  #    fail). The edit-gate methodology is a staged layer-2 rollout, and the
+  #    conservative non-loop coder (apivr) legitimately omits it; a new gate must
+  #    not regress an existing roster member (staged opt-in — dossier V.3 #5). The
+  #    HARD invariant is the ACI class declaration (check 1); the per-member
+  #    pointer is surfaced as a warning so loop-native coders adopt it over time.
   local spec_file=".eidolons/$name/SPEC.md"
   if [[ ! -f "$spec_file" ]]; then
-    err "$name: SPEC.md missing at $spec_file (D10 — cannot verify lint-gate pointer)"
-    rc=$((rc + 1))
-    return "$rc"
-  fi
-  if ! grep -qiE '(lint.hook|lint.gate|edit.gate|requires_edit_gate)' "$spec_file" 2>/dev/null; then
-    err "$name: SPEC.md at $spec_file does not reference the lint/edit gate (D10 — add a lint-gate pointer)"
-    rc=$((rc + 1))
+    warn "$name: SPEC.md not installed at $spec_file — cannot verify lint-gate pointer (D10 advisory)"
+  elif ! grep -qiE '(lint.hook|lint.gate|edit.gate|requires_edit_gate)' "$spec_file" 2>/dev/null; then
+    warn "$name: SPEC.md does not yet reference the lint/edit gate (D10 advisory — loop-native coders should add a lint-gate pointer)"
   fi
   if (( rc == 0 )); then
-    pass "$name: coder edit-gate declared in ACI + referenced in SPEC.md (D10)"
+    pass "$name: coder edit-gate declared in ACI coder class (D10)"
   fi
   return "$rc"
 }
