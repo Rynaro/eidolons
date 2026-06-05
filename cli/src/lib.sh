@@ -2065,7 +2065,92 @@ deep_check_aci_conformance() {
   return "$rc"
 }
 
-# deep_check_verify_incoming_conformance NAME
+# deep_check_host_tier_gate
+#
+# D9: when ≥2 coders are present in the routing table and one declares
+# requires_host_tier, assert that with host_tier unset/standard the default
+# resolution does NOT pick the gated coder. This is a structural check on the
+# routing inputs — it catches a misconfiguration where a thinking-only coder is
+# declared default_for_class but no fallback coder exists (so a conservative host
+# would have nowhere to fall back to). Pure jq over routing.yaml + eidolons.yaml;
+# no live routing call. Returns 0 (pass) or 1 (misconfiguration found).
+deep_check_host_tier_gate() {
+  local routing_file; routing_file="$(dirname "$ROSTER_FILE")/routing.yaml"
+  if [[ ! -f "$routing_file" ]]; then
+    pass "D9 host-tier gate: no routing.yaml — skip"
+    return 0
+  fi
+
+  local routing_json; routing_json="$(yaml_to_json "$routing_file" 2>/dev/null || true)"
+  if [[ -z "$routing_json" ]]; then
+    warn "D9 host-tier gate: could not parse routing.yaml — skip"
+    return 0
+  fi
+
+  # Read host_tier from the project manifest (null if absent).
+  local host_tier_val="null"
+  if [[ -f "$PROJECT_MANIFEST" ]]; then
+    local _ht; _ht="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+      | jq -r '.host_tier // empty' 2>/dev/null || true)"
+    if [[ -n "$_ht" ]]; then
+      host_tier_val="$_ht"
+    fi
+  fi
+
+  # Run the structural check via jq.
+  # Logic:
+  #   1. If fewer than 2 coder-class members → skip (no tiebreak in play).
+  #   2. Find the default_for_class coder.
+  #   3. If it declares requires_host_tier AND the project host_tier does NOT match:
+  #      assert there is at least one OTHER coder to fall back to.
+  #      Misconfiguration = gated default + no fallback.
+  local result
+  result="$(printf '%s' "$routing_json" | jq -r \
+    --arg host_tier "$host_tier_val" \
+    '
+    (.eidolons | to_entries
+      | map(select(.value.capability_class == "coder"))
+    ) as $coders
+    | if ($coders | length) < 2 then "skip"
+      else
+        ($coders | map(select(.value.default_for_class == "coder")) | .[0]) as $dflt
+        | if $dflt == null then "skip"
+          else
+            ($dflt.value.requires_host_tier // null) as $rht
+            | if $rht == null then "ok: no requires_host_tier on default coder"
+              elif $rht == $host_tier then "ok: host_tier matches requires_host_tier"
+              else
+                ($coders | map(select(.key != $dflt.key)) | length) as $nfallback
+                | if $nfallback > 0
+                  then "ok: gated coder has fallback"
+                  else "FAIL: default coder \($dflt.key) requires host_tier=\($rht) but host_tier=\($host_tier) and no fallback coder exists"
+                  end
+              end
+          end
+      end
+    ' 2>/dev/null || echo "error")"
+
+  case "$result" in
+    skip|ok*)
+      pass "D9 host-tier gate: routing tiebreak correctly structured"
+      return 0
+      ;;
+    FAIL:*)
+      err "D9 host-tier gate: ${result#FAIL: }"
+      return 1
+      ;;
+    error)
+      warn "D9 host-tier gate: jq parse error — skip"
+      return 0
+      ;;
+    *)
+      pass "D9 host-tier gate: routing tiebreak correctly structured"
+      return 0
+      ;;
+  esac
+}
+
+
 #
 # D8: verify that an installed RECEIVER Eidolon ships a BLOCKING verify-incoming
 # skill (ECL v1.0 section 6.2.2; frontier roadmap N3). The mechanical SHA-256

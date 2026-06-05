@@ -64,6 +64,11 @@
         }
       }
     },
+    "host_tier": {
+      "type": "string",
+      "enum": ["thinking", "standard"],
+      "description": "Declarative host capability tier. 'thinking' enables loop-native coders (e.g. Vivi) as the default for their class; 'standard' (or absent) falls back to the conservative coder (APIVR-Δ). NOT auto-detected; set explicitly by the project owner."
+    },
     "composition": {
       "type": "object",
       "description": "Documentation of intended pipeline. Not enforced by the CLI.",
