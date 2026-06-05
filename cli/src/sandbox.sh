@@ -328,7 +328,10 @@ case "$SUB" in
       EIDOLONS_SANDBOX_LAST_OUTPUT="$OUT_DIR/last-output.txt" \
       EIDOLONS_SANDBOX_ATTEMPT="$n" \
       EIDOLONS_SANDBOX_BASE="$base_sha" \
-        bash -c "$FIX_HOOK" || _fh_rc=$?
+        bash -c "$FIX_HOOK" >&2 || _fh_rc=$?
+      # `>&2`: the fix-hook communicates by EDITING the working tree; its stdout is
+      # diagnostic only (LLM CLIs print verbose responses). Route it to stderr so a
+      # chatty fix-hook can NEVER corrupt the loop's own `--json` ledger on stdout.
       [[ "$_fh_rc" -ne 0 && "$OUT" != "json" ]] && warn "sandbox loop: --fix-hook returned $_fh_rc (continuing to re-test)"
 
       # Anti-reward-hacking gate: did the fix-hook mutate a protected test file?

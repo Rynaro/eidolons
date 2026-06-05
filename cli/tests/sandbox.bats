@@ -193,3 +193,15 @@ SH
   [ "$(echo "$output" | jq -r '.k')" = "1" ]
   [ "$(echo "$output" | jq -r '.final')" = "passed" ]
 }
+
+@test "sandbox loop: a chatty fix-hook (stdout) must NOT corrupt the --json ledger" {
+  _git_project
+  # An LLM fix-hook prints a verbose response to stdout; that must go to stderr, not
+  # pollute the loop's own --json ledger (regression: it did, so eval-swe's jq parse
+  # failed → resolved tasks mis-counted as unresolved). Capture stdout only.
+  eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo "verbose model summary — definitely not json"; echo fixed > state.txt' \
+    --allow-unsafe-host --out .out --json > ledger.json 2>/dev/null
+  [ "$(jq -r '.final' ledger.json)" = "passed" ]
+  [ "$(jq -r '.attempts[1].passed' ledger.json)" = "true" ]
+}
