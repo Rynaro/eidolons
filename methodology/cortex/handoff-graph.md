@@ -87,17 +87,17 @@ junction bus endpoint; individual Eidolons do not interact with junction directl
 
 ## ATLAS MCP-first When atlas-aci Present
 
-When `atlas-aci` is installed in the target project (i.e. `mcp__atlas_aci__*`
+When `atlas-aci` is installed in the target project (i.e. `mcp__atlas-aci__*`
 tools are wired into ATLAS's `tools:` allowlist), ATLAS applies MCP-first
 precedence for structural reads:
 
 | Structural task | Preferred | Fallback |
 |---|---|---|
-| View a file | `mcp__atlas_aci__view_file` | `Read` |
-| Search symbol | `mcp__atlas_aci__search_symbol` | `Grep` / `rg` |
-| Search text | `mcp__atlas_aci__search_text` | `Grep` / `rg` |
-| List directory | `mcp__atlas_aci__list_dir` | `Glob` |
-| Graph query | `mcp__atlas_aci__graph_query` | — (no native equivalent) |
+| View a file | `mcp__atlas-aci__view_file` | `Read` |
+| Search symbol | `mcp__atlas-aci__search_symbol` | `Grep` / `rg` |
+| Search text | `mcp__atlas-aci__search_text` | `Grep` / `rg` |
+| List directory | `mcp__atlas-aci__list_dir` | `Glob` |
+| Graph query | `mcp__atlas-aci__graph_query` | — (no native equivalent) |
 
 This is the opposite of junction's transport model: `atlas-aci` is a genuine
 **in-agent capability** that is injected into ATLAS's allowlist (the only Eidolon
