@@ -32,6 +32,19 @@
           "bounded_primitives": { "type": "array", "items": { "type": "string" } }
         }
       }
+    },
+    "loop_contract": {
+      "type": "object",
+      "description": "Substrate <-> loop-native-coder interface (VIVI v4): localized feedback + anti-reward-hacking + pass^k. Per-member conformance; APIVR-Δ (non-loop fallback) need not satisfy it.",
+      "additionalProperties": true,
+      "properties": {
+        "contract_version": { "type": "string" },
+        "feedback_artifact": { "type": "object", "additionalProperties": true },
+        "anti_reward_hacking": { "type": "object", "additionalProperties": true },
+        "reliability": { "type": "object", "additionalProperties": true },
+        "escalation": { "type": "object", "additionalProperties": true },
+        "host_contingency": { "type": "object", "additionalProperties": true }
+      }
     }
   }
 }

@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Loop contract for the closed edit-run-test loop** (`roster/aci.yaml` + `schemas/aci.schema.json`) — **APIVR-Δ → VIVI succession, Stage 1c.** Codifies the substrate↔loop-native-coder interface the new coding Eidolon (VIVI) drives: **structured localized feedback** (failing markers + `file:line` loci + the FULL log, exported as `EIDOLONS_SANDBOX_FEEDBACK`) replacing the un-localized `tail -n 20` — a model fixes an error when told WHERE it is (Tyen et al.); **anti-reward-hacking** gates (`--protect <glob>` test-set immutability — mutating an anchoring test aborts + escalates to VIGIL; `--regression`/`--reproduction` ordering — regression-first, passing only the new test FAILS); and **pass^k** (`--k`) — a non-deterministic green is flaky → BLOCKED. Per-member conformance (VIVI satisfies it; APIVR-Δ is the non-loop conservative fallback). Plan: `DOSSIER-APIVR-OVERHAUL-2026-06.md`; evidence digest: `.spectra/research/apivr-overhaul-digest.md`.
+
+### Changed
+- **`eidolons sandbox loop` implements the loop contract** (`cli/src/sandbox.sh`): emits `feedback.json` (+ `full-log.txt`) each iteration and exports `EIDOLONS_SANDBOX_FEEDBACK` / `EIDOLONS_SANDBOX_FULL_LOG` to the `--fix-hook`; adds `--protect`, `--regression`, `--reproduction`, `--k`; the VIGIL `repair-failed-report` now distinguishes `capped` / `flaky` / `protected-tests-mutated` / `no_fix_hook` and is coder-agnostic. **Backward compatible** — all prior loop behavior preserved. +7 `sandbox.bats` (20 total green); shellcheck clean.
+
 ## [1.28.1] — 2026-06-04
 
 ### Changed

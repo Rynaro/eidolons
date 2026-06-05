@@ -115,3 +115,81 @@ _git_project() {
   [ "$status" -ne 0 ]
   [[ "$output" =~ "Unknown subcommand" ]]
 }
+
+# ── loop_contract: localized feedback + anti-reward-hacking + pass^k ────────────
+# (roster/aci.yaml loop_contract; APIVR-Δ → VIVI succession, DOSSIER-APIVR-OVERHAUL)
+
+@test "sandbox loop: structured localized feedback carries failing markers + file:line loci" {
+  _git_project
+  cat > failer.sh <<'SH'
+echo "app/foo.rb:42: assertion failed: expected 5 got 3" >&2
+exit 1
+SH
+  run eidolons sandbox loop --tests 'sh failer.sh' \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ -f .out/feedback.json ]
+  [ -f .out/full-log.txt ]
+  [ "$(jq -r '.contract_version' .out/feedback.json)" = "1.0" ]
+  [ "$(jq -r '.loci[0]' .out/feedback.json)" = "app/foo.rb:42" ]
+  jq -r '.failing' .out/feedback.json | grep -qi "failed"
+}
+
+@test "sandbox loop: fix-hook receives EIDOLONS_SANDBOX_FEEDBACK (localized, not a raw tail)" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'jq -e ".loci" "$EIDOLONS_SANDBOX_FEEDBACK" >/dev/null && echo fixed > state.txt' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+}
+
+@test "sandbox loop: --protect aborts + escalates when the fix-hook mutates an anchoring test" {
+  _git_project
+  echo "assert fixed" > test_anchor.txt
+  git add -A && git commit -qm anchor
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo cheat > test_anchor.txt' \
+    --protect 'test_anchor.txt' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.final')" = "protected-tests-mutated" ]
+  [ -f .out/repair-failed-report.md ]
+  grep -qi "protected" .out/repair-failed-report.md
+}
+
+@test "sandbox loop: regression-first — both pass → passes (phase reproduction)" {
+  _git_project
+  run eidolons sandbox loop --regression 'true' --reproduction 'true' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.attempts[0].phase')" = "reproduction" ]
+}
+
+@test "sandbox loop: regression-first — a broken regression FAILS even if reproduction would pass" {
+  _git_project
+  run eidolons sandbox loop --regression 'false' --reproduction 'true' \
+    --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.attempts[0].phase')" = "regression" ]
+}
+
+@test "sandbox loop: --k pass^k blocks a flaky green (non-deterministic pass)" {
+  _git_project
+  cat > flaky.sh <<'SH'
+if [ -f .ctr ]; then exit 1; else : > .ctr; exit 0; fi
+SH
+  run eidolons sandbox loop --tests 'sh flaky.sh' \
+    --fix-hook 'true' --k 2 --max-attempts 1 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.attempts[0].flaky')" = "true" ]
+  [ "$(echo "$output" | jq -r '.final')" = "flaky" ]
+}
+
+@test "sandbox loop: default --k 1 keeps a single green passing (back-compat)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.k')" = "1" ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+}

@@ -42,6 +42,7 @@ classes:
     requires_edit_gate: true   # MUST declare a lint/compile + test-anchored Verify before commit (rubric, layer-2)
     rationale: "Brownfield implementer; edits gated by a per-edit lint/compile and test-anchored Verify (SWE-agent edit-with-linter)."
     bounded_primitives: ["lint-gated edits", "paginated view", "match-only search", "success-on-empty-output feedback"]
+    loop_native: "per-member: a loop-native coder (VIVI) MUST satisfy loop_contract below; APIVR-Δ is the non-loop conservative fallback and need not."
   scriber:
     read_only: true
     reads_repo: false          # synthesis from provided context only; no retrieval
@@ -58,3 +59,44 @@ classes:
   memory:
     exempt: true               # MCP-mediated substrate; access is enforced server-side, not via roster repo-tool security
     rationale: "Tier-gated MCP chokepoint; not a repo-tool-surface class."
+
+# ─── Loop contract — substrate (`eidolons sandbox loop`) ↔ loop-native coder ────
+# The closed edit-run-test loop and a loop-native coder (VIVI; APIVR-Δ as the
+# conservative control) communicate through this contract. Evidence: execution-
+# feedback loops are the dominant lever, but pay off only with LOCALIZED feedback
+# (Tyen et al. — a model fixes an error when told WHERE it is, not from a raw
+# tail) and only behind anti-reward-hacking guards (loops AMPLIFY evaluator-gaming
+# — a structural equilibrium, not a one-time check). Added 2026-06 for the
+# APIVR-Δ → VIVI succession; rationale in DOSSIER-APIVR-OVERHAUL-2026-06.md.
+# Per-member conformance: VIVI satisfies it; APIVR-Δ (non-loop fallback) does not.
+loop_contract:
+  contract_version: "1.0"
+  # The substrate writes a structured feedback artefact each failing iteration
+  # (replacing the un-localized `tail -n 20`); the coder consumes it via the env
+  # var below. The substrate does best-effort pattern extraction; the coder does
+  # the deep parse. The FULL log is always preserved (never only a tail).
+  feedback_artifact:
+    path_env: "EIDOLONS_SANDBOX_FEEDBACK"   # JSON file path exported to --fix-hook
+    fields:
+      exit_code: "test command exit code"
+      failing: "best-effort extracted failing-test markers (ids / FAIL / Error / assertion lines)"
+      loci: "file:line frames where extractable"
+      full_log: "path to the COMPLETE captured output — never just a tail"
+      output_tail: "last N lines; fallback only"
+  # All mechanical, substrate-enforced (Prime Directive D3 — mechanical-over-prompt).
+  anti_reward_hacking:
+    test_set_immutability:
+      flag: "--protect <glob>"               # caller declares the anchoring tests
+      rule: "hash protected files before/after each --fix-hook call; on change → ABORT + ECL repair-failed-report to VIGIL"
+    ordering:
+      flags: ["--regression <cmd>", "--reproduction <cmd>"]   # optional split of --tests
+      rule: "regression-first THEN reproduction; passing only the new test (not regression) FAILS"
+    forbid: ["editing anchoring tests", "always-pass shims", "reading future commits / gold patches"]
+  reliability:
+    passk_per_iteration:
+      flag: "--k <n>"
+      rule: "a green candidate must pass k re-runs INSIDE the loop; a non-deterministic pass is flaky → BLOCKED, not accepted"
+  escalation:
+    rule: "methodology ≤3-same-category counter (authority) OR substrate --max-attempts (ceiling) — whichever trips first → ECL repair-failed-report to VIGIL (existing kind; closed 10-performative set preserved)"
+  host_contingency:
+    note: "the loop's gain belongs to an RL-trained / loop-competent host; a methodology EXPLOITS it, never adds it. APIVR-Δ (non-loop) is the documented fallback for loop-incompetent hosts and governance-maximal contexts."
