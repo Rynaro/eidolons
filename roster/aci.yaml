@@ -42,7 +42,7 @@ classes:
     requires_edit_gate: true   # MUST declare a lint/compile + test-anchored Verify before commit (rubric, layer-2)
     rationale: "Brownfield implementer; edits gated by a per-edit lint/compile and test-anchored Verify (SWE-agent edit-with-linter)."
     bounded_primitives: ["lint-gated edits", "paginated view", "match-only search", "success-on-empty-output feedback"]
-    loop_native: "per-member: a loop-native coder (VIVI) MUST satisfy loop_contract below; APIVR-Δ is the non-loop conservative fallback and need not."
+    loop_native: "per-member: a loop-native coder (Vivi) MUST satisfy loop_contract below; APIVR-Δ is the non-loop conservative fallback and need not."
   scriber:
     read_only: true
     reads_repo: false          # synthesis from provided context only; no retrieval
@@ -61,14 +61,14 @@ classes:
     rationale: "Tier-gated MCP chokepoint; not a repo-tool-surface class."
 
 # ─── Loop contract — substrate (`eidolons sandbox loop`) ↔ loop-native coder ────
-# The closed edit-run-test loop and a loop-native coder (VIVI; APIVR-Δ as the
+# The closed edit-run-test loop and a loop-native coder (Vivi; APIVR-Δ as the
 # conservative control) communicate through this contract. Evidence: execution-
 # feedback loops are the dominant lever, but pay off only with LOCALIZED feedback
 # (Tyen et al. — a model fixes an error when told WHERE it is, not from a raw
 # tail) and only behind anti-reward-hacking guards (loops AMPLIFY evaluator-gaming
 # — a structural equilibrium, not a one-time check). Added 2026-06 for the
-# APIVR-Δ → VIVI succession; rationale in DOSSIER-APIVR-OVERHAUL-2026-06.md.
-# Per-member conformance: VIVI satisfies it; APIVR-Δ (non-loop fallback) does not.
+# APIVR-Δ → Vivi succession; rationale in DOSSIER-APIVR-OVERHAUL-2026-06.md.
+# Per-member conformance: Vivi satisfies it; APIVR-Δ (non-loop fallback) does not.
 loop_contract:
   contract_version: "1.0"
   # The substrate writes a structured feedback artefact each failing iteration

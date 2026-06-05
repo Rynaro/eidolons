@@ -135,7 +135,7 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$(_field '.selected[0]')" = "vigil" ]
 }
 
-# ── V15 — two-coder routing tiebreak (APIVR-Δ → VIVI succession, Stage 1e) ─────
+# ── V15 — two-coder routing tiebreak (APIVR-Δ → Vivi succession, Stage 1e) ─────
 # A custom routing fixture with TWO `coder`s (vivi default_for_class + apivr
 # fallback) proves the mechanism the live single-coder roster cannot exercise yet
 # (vivi goes live at Stage 3). The mechanism is dormant in the real roster.
@@ -153,7 +153,7 @@ chains: []
 YAML
 }
 
-@test "V15: two coders → a bare coder verb routes to the default_for_class member (VIVI)" {
+@test "V15: two coders → a bare coder verb routes to the default_for_class member (Vivi)" {
   local custom="$BATS_TEST_TMPDIR/two-coder-default"
   _two_coder_routing_fixture "$custom"
   EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json

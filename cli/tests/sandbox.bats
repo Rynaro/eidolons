@@ -117,7 +117,7 @@ _git_project() {
 }
 
 # ── loop_contract: localized feedback + anti-reward-hacking + pass^k ────────────
-# (roster/aci.yaml loop_contract; APIVR-Δ → VIVI succession, DOSSIER-APIVR-OVERHAUL)
+# (roster/aci.yaml loop_contract; APIVR-Δ → Vivi succession, DOSSIER-APIVR-OVERHAUL)
 
 @test "sandbox loop: structured localized feedback carries failing markers + file:line loci" {
   _git_project

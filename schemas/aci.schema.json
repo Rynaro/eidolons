@@ -35,7 +35,7 @@
     },
     "loop_contract": {
       "type": "object",
-      "description": "Substrate <-> loop-native-coder interface (VIVI v4): localized feedback + anti-reward-hacking + pass^k. Per-member conformance; APIVR-Δ (non-loop fallback) need not satisfy it.",
+      "description": "Substrate <-> loop-native-coder interface (Vivi v4): localized feedback + anti-reward-hacking + pass^k. Per-member conformance; APIVR-Δ (non-loop fallback) need not satisfy it.",
       "additionalProperties": true,
       "properties": {
         "contract_version": { "type": "string" },

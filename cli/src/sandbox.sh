@@ -10,7 +10,7 @@
 #     or merges),
 #   - a mandatory VIGIL hand-off on cap-out (never a silent retry),
 #   - STRUCTURED LOCALIZED FEEDBACK + anti-reward-hacking gates + pass^k, per the
-#     loop_contract in roster/aci.yaml (added 2026-06 for the APIVR-Δ → VIVI
+#     loop_contract in roster/aci.yaml (added 2026-06 for the APIVR-Δ → Vivi
 #     succession; see DOSSIER-APIVR-OVERHAUL-2026-06.md). Localized feedback (the
 #     failing markers + file:line loci + the FULL log) replaces the un-localized
 #     `tail -n 20` — a model fixes an error when told WHERE it is (Tyen et al.).
@@ -20,7 +20,7 @@
 #     unless `--allow-unsafe-host` is given (R8-03: LLM code needs hardware-level
 #     isolation),
 #   - the edit/LLM step to a host-provided `--fix-hook <cmd>` (that is where the
-#     model lives — e.g. a VIVI invocation; APIVR-Δ is the non-loop fallback).
+#     model lives — e.g. a Vivi invocation; APIVR-Δ is the non-loop fallback).
 #
 #   eidolons sandbox check [--via <cmd>] [--allow-unsafe-host]
 #   eidolons sandbox run   [--via <cmd>] [--allow-unsafe-host] -- <test-cmd...>

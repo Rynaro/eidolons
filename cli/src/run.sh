@@ -152,7 +152,7 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
 | ($s1 | map(. + { score: (.base + ($boost[.name] // 0)) })) as $scored
 | ($scored | sort_by(-.score)) as $ranked
 # default_for_class tiebreak (V15): among members tied at the TOP score (e.g. two
-# `coder`s — VIVI as default + APIVR-Δ as the conservative fallback), prefer the
+# `coder`s — Vivi as default + APIVR-Δ as the conservative fallback), prefer the
 # one whose default_for_class matches its capability class. A NAMED member already
 # wins via the +0.5 name bonus, so "APIVR-Δ, implement X" still routes to APIVR-Δ.
 # No-op when no member declares default_for_class (the single-coder live roster).
