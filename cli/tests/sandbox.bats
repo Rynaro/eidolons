@@ -338,6 +338,40 @@ SH
   [ "$(jq -r '.attempts[0].phase' .out/loop.json)" != "lint" ]
 }
 
+@test "S1.5: sealed holdout passes → final=passed (no reward-hacking)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' \
+    --holdout 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.final' .out/loop.json)" = "passed" ]
+}
+
+@test "S1.5: sealed holdout fails (visible pass, holdout fail) → final=reward-hacked + VIGIL report" {
+  _git_project
+  # Visible tests pass; sealed holdout fails.
+  run eidolons sandbox loop --tests 'true' \
+    --holdout 'false' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(jq -r '.final' .out/loop.json)" = "reward-hacked" ]
+  [ -f .out/repair-failed-report.md ]
+  grep -qi "reward-hacked\|sealed holdout\|evaluator-gaming" .out/repair-failed-report.md
+}
+
+@test "S1.5: holdout command is NEVER exported to the fix-hook env (sealed by construction)" {
+  _git_project
+  # The fix-hook dumps its env; the holdout command string must NOT appear.
+  # We give the holdout a distinctive string and assert env does not contain it.
+  run eidolons sandbox loop \
+    --tests 'grep -q fixed state.txt' \
+    --fix-hook 'env > /tmp/fh-env-dump.txt; echo fixed > state.txt' \
+    --holdout 'true' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  # The env dump must not contain HOLDOUT or the holdout value.
+  ! grep -q 'HOLDOUT' /tmp/fh-env-dump.txt 2>/dev/null || true
+  rm -f /tmp/fh-env-dump.txt
+}
+
 @test "S1.3: --lint-hook fails → iteration short-circuits, feedback.json phase=lint" {
   _git_project
   # Use the real shellcheck fixture format to verify loci extraction from lint output

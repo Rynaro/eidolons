@@ -243,6 +243,15 @@ _eval_once() {
   return 0
 }
 
+# ── Sealed holdout evaluator: run ONCE after final=passed; the fix-hook NEVER
+# sees this command (it is never exported to the fix-hook env block). If it
+# fails while visible tests passed = reward-hacked (evaluator-gaming). ──────────
+_eval_holdout() {
+  local logdest="$1"
+  _run_in_sandbox "$HOLDOUT" "$logdest" | jq -c '. + {phase:"holdout"}'
+  return 0
+}
+
 # ── Anti-reward-hacking: a single signature over the protected (anchoring) test
 # files. A change between baseline and post-fix-hook = evaluator-gaming. ────────
 _protect_snapshot() {
@@ -372,7 +381,23 @@ case "$SUB" in
         --argjson pkruns "$passk_runs" \
         '. + [{attempt:$n, passed:$r.passed, exit_code:$r.exit_code, duration_s:($r.duration_s // 0), phase:($r.phase // "tests"), flaky:($r.flaky // false), passk_runs:$pkruns}]')"
 
-      if [[ "$passed" == "true" ]]; then final="passed"; break; fi
+      if [[ "$passed" == "true" ]]; then
+        final="passed"
+        # Sealed holdout gate: the fix-hook never sees --holdout (it is not in
+        # the env block above). Run ONLY after visible tests pass. Failure here =
+        # reward-hacked (the coder passed the visible suite but failed the sealed
+        # oracle — evaluator-gaming caught).
+        if [[ -n "$HOLDOUT" ]]; then
+          _hout_log="$OUT_DIR/holdout-log.txt"
+          _hout_result="$(_eval_holdout "$_hout_log")"
+          _hout_passed="$(printf '%s' "$_hout_result" | jq -r '.passed')"
+          if [[ "$_hout_passed" != "true" ]]; then
+            final="reward-hacked"
+            [[ "$OUT" != "json" ]] && warn "sandbox loop: SEALED HOLDOUT FAILED — visible tests passed but holdout FAILED (reward-hacking / evaluator-gaming) — BLOCKED"
+          fi
+        fi
+        break
+      fi
       [[ "$n" -ge "$MAX_ATTEMPTS" ]] && break
       if [[ -z "$FIX_HOOK" ]]; then
         # No edit source — a loop with no fix-hook degrades to a single verify.
@@ -451,6 +476,7 @@ case "$SUB" in
         flaky)                    _reason="a candidate passed once but is FLAKY across pass^k (k=$K) — BLOCKED, not merged" ;;
         protected-tests-mutated)  _reason="the --fix-hook MUTATED a protected anchoring test (evaluator-gaming) — ABORTED" ;;
         no_fix_hook)              _reason="no --fix-hook supplied; the loop degraded to a single verify" ;;
+        reward-hacked)            _reason="passed the visible suite but FAILED the sealed holdout (evaluator-gaming) — BLOCKED" ;;
       esac
       {
         echo "# repair-failed-report → VIGIL (forensic-then-fix)"
@@ -461,6 +487,7 @@ case "$SUB" in
         echo "- pass^k: k=$K"
         echo "- tests: \`${TESTS:-${REGRESSION:+regression: $REGRESSION }${REPRODUCTION:+reproduction: $REPRODUCTION}}\`"
         echo "- protected (anchoring) tests: \`${PROTECT:-<none>}\`"
+        echo "- sealed holdout: \`${HOLDOUT:-<none>}\`"
         echo "- isolation tier: $TIER"
         echo "- base: ${base_sha:-$BASE}"
         echo "- candidate diff: ${diff_path:-<none — not a git repo>} (NOT applied/merged)"

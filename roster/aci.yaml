@@ -92,6 +92,11 @@ loop_contract:
       flags: ["--regression <cmd>", "--reproduction <cmd>"]   # optional split of --tests
       rule: "regression-first THEN reproduction; passing only the new test (not regression) FAILS"
     forbid: ["editing anchoring tests", "always-pass shims", "reading future commits / gold patches"]
+    sealed_holdout:
+      flag: "--holdout <cmd>"                # caller declares the sealed oracle suite
+      rule: "holdout command is NEVER exported to the fix-hook env (sealed by construction); run ONLY after final=passed; failure → final=reward-hacked + ECL repair-failed-report to VIGIL"
+      guarantee: "the fix-hook cannot read, enumerate, or predict the holdout command — it is never in EIDOLONS_SANDBOX_FEEDBACK, FULL_LOG, or any env var passed to the fix-hook"
+      new_terminal_state: "reward-hacked — visible tests passed but holdout failed; evaluator-gaming caught; BLOCKED"
   reliability:
     passk_per_iteration:
       flag: "--k <n>"
