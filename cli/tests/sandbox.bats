@@ -14,6 +14,16 @@ _git_project() {
   git add -A && git commit -qm init
 }
 
+# Stage a real captured-fixture as the loop's test output. The loop word-splits
+# --tests and execs directly (no `sh -c`), so a compound `cat f; exit 1` cannot be
+# passed inline; copy the fixture into cwd and emit a runner script the loop runs
+# via `sh runner.sh`. This feeds the REAL runner output (bats/pytest/shellcheck)
+# through the parser — the capture-live-before-parsing contract.
+_feed_fixture() {
+  cp "$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/$1" ./runner-out.txt
+  printf 'cat runner-out.txt\nexit 1\n' > runner.sh
+}
+
 # ── check ─────────────────────────────────────────────────────────────────────
 @test "sandbox check: no isolation refuses untrusted execution (exit 3)" {
   run eidolons sandbox check
@@ -200,10 +210,10 @@ SH
 
 @test "S1.4-parser: bats fixture — extracts bats-style loci (test-file:line) and test name" {
   _git_project
-  # Feed the REAL bats fixture verbatim: the loop's --tests cmd copies it to
-  # stdout/stderr and exits 1 so the parser sees the actual runner output.
+  # Feed the REAL bats fixture verbatim so the parser sees actual runner output.
+  _feed_fixture bats-fail.txt
   run eidolons sandbox loop \
-    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/bats-fail.txt'; exit 1" \
+    --tests 'sh runner.sh' \
     --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
   [ "$status" -eq 3 ]
   [ -f .out/feedback.json ]
@@ -217,8 +227,9 @@ SH
 
 @test "S1.4-parser: pytest fixture — extracts colon-form loci and FAILED test name" {
   _git_project
+  _feed_fixture pytest-fail.txt
   run eidolons sandbox loop \
-    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/pytest-fail.txt'; exit 1" \
+    --tests 'sh runner.sh' \
     --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
   [ "$status" -eq 3 ]
   [ -f .out/feedback.json ]
@@ -232,8 +243,9 @@ SH
 
 @test "S1.4-parser: shellcheck fixture — extracts shellcheck-style loci (file:line)" {
   _git_project
+  _feed_fixture shellcheck-fail.txt
   run eidolons sandbox loop \
-    --tests "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/shellcheck-fail.txt'; exit 1" \
+    --tests 'sh runner.sh' \
     --fix-hook 'true' --max-attempts 1 --allow-unsafe-host --out .out --json
   [ "$status" -eq 3 ]
   [ -f .out/feedback.json ]
@@ -422,11 +434,14 @@ SH
 
 @test "S1.3: --lint-hook fails → iteration short-circuits, feedback.json phase=lint" {
   _git_project
-  # Use the real shellcheck fixture format to verify loci extraction from lint output
+  # A FAILING test triggers the fix-hook path; the lint gate then runs on the edit
+  # and fails (real shellcheck fixture). max-attempts 2 so the fix→lint path is
+  # reached (attempt 1) and the lint-pending re-fix caps (attempt 2). lint-hook runs
+  # via `bash -c`, so the compound `cat …; exit 1` is valid here (unlike --tests).
   run eidolons sandbox loop \
-    --tests 'true' --fix-hook 'true' \
+    --tests 'false' --fix-hook 'true' \
     --lint-hook "cat '$EIDOLONS_ROOT/cli/tests/fixtures/loop-feedback/shellcheck-fail.txt'; exit 1" \
-    --max-attempts 1 --allow-unsafe-host --out .out --json
+    --max-attempts 2 --allow-unsafe-host --out .out --json
   [ "$status" -eq 3 ]
   [ -f .out/feedback.json ]
   [ "$(jq -r '.phase' .out/feedback.json)" = "lint" ]

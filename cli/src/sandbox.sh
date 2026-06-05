@@ -194,8 +194,10 @@ _run_in_sandbox() {
   # Format 2 (bats): "(in test file <name>, line NN)"
   # Format 3 (shellcheck): "In <file> line NN:"
   loci_colon="$(grep -oE '[A-Za-z0-9_./-]+\.[A-Za-z0-9]+:[0-9]+' "$logf" 2>/dev/null || true)"
+  # sed -E (ERE): BSD/macOS sed does NOT support the GNU `\?` quantifier in BRE,
+  # so the optional comma must use ERE `?` or the substitution silently no-ops.
   loci_bats="$(grep -oE 'in test file [A-Za-z0-9_./-]+,? line [0-9]+' "$logf" 2>/dev/null \
-    | sed 's/in test file \([^ ,]*\),\? line \([0-9]*\)/\1:\2/' || true)"
+    | sed -E 's/in test file ([^ ,]*),? line ([0-9]+)/\1:\2/' || true)"
   loci_sc="$(grep -oE 'In [A-Za-z0-9_./-]+ line [0-9]+:' "$logf" 2>/dev/null \
     | sed 's/In \([^ ]*\) line \([0-9]*\):/\1:\2/' || true)"
   loci="$(printf '%s\n%s\n%s\n' "$loci_colon" "$loci_bats" "$loci_sc" \
@@ -327,10 +329,22 @@ case "$SUB" in
     attempts="[]"
     final="capped"
     last_flaky=false
+    _lint_pending=false
     n=0
     while [[ "$n" -lt "$MAX_ATTEMPTS" ]]; do
       n=$((n + 1))
       last_flaky=false
+      if [[ "$_lint_pending" == "true" ]]; then
+        # The previous attempt's fix-hook edit FAILED the lint gate. Do NOT re-run
+        # the tests on a known-bad edit (ACI edit-gate: reject invalid code BEFORE
+        # testing — SWE-agent edit-with-linter). The phase:"lint" feedback from the
+        # prior iteration stays the active feedback the fix-hook reads. Record a
+        # lint attempt, then fall straight through to the fix-hook re-invocation.
+        _lint_pending=false
+        passed="false"
+        attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" \
+          '. + [{attempt:$n, passed:false, exit_code:1, duration_s:0, phase:"lint", flaky:false, passk_runs:[]}]')"
+      else
       result="$(_eval_once "$OUT_DIR/full-log.txt")"
       passed="$(printf '%s' "$result" | jq -r '.passed')"
 
@@ -380,6 +394,7 @@ case "$SUB" in
       attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" --argjson r "$result" \
         --argjson pkruns "$passk_runs" \
         '. + [{attempt:$n, passed:$r.passed, exit_code:$r.exit_code, duration_s:($r.duration_s // 0), phase:($r.phase // "tests"), flaky:($r.flaky // false), passk_runs:$pkruns}]')"
+      fi
 
       if [[ "$passed" == "true" ]]; then
         final="passed"
@@ -451,7 +466,9 @@ case "$SUB" in
               loci:($loci | split("\n") | map(select(length>0))),
               test_name:[], assertion:[],
               full_log:"lint-log.txt", output_tail:$tail}' > "$OUT_DIR/feedback.json"
-          # Short-circuit: continue the outer while to get a fix-hook call on the next attempt
+          # Short-circuit: flag the next iteration to SKIP the test eval (don't test
+          # a known-bad edit) and re-invoke the fix-hook with this lint feedback.
+          _lint_pending=true
           continue
         fi
       fi
