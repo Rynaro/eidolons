@@ -338,6 +338,54 @@ SH
   [ "$(jq -r '.attempts[0].phase' .out/loop.json)" != "lint" ]
 }
 
+@test "S1.6: --fresh-context exports EIDOLONS_SANDBOX_FRESH_CONTEXT=true to fix-hook" {
+  _git_project
+  # The fix-hook dumps its env to a file so we can inspect it.
+  run eidolons sandbox loop \
+    --tests 'grep -q fixed state.txt' \
+    --fix-hook 'env > /tmp/s16-env-dump.txt; echo fixed > state.txt' \
+    --fresh-context --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f /tmp/s16-env-dump.txt ]
+  # EIDOLONS_SANDBOX_FRESH_CONTEXT must be exported and set to "true"
+  grep -q 'EIDOLONS_SANDBOX_FRESH_CONTEXT=true' /tmp/s16-env-dump.txt
+  rm -f /tmp/s16-env-dump.txt
+}
+
+@test "S1.6: absent --fresh-context exports EIDOLONS_SANDBOX_FRESH_CONTEXT=false to fix-hook" {
+  _git_project
+  run eidolons sandbox loop \
+    --tests 'grep -q fixed state.txt' \
+    --fix-hook 'env > /tmp/s16-env-dump2.txt; echo fixed > state.txt' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f /tmp/s16-env-dump2.txt ]
+  # Without --fresh-context, the var must be set to "false" (not unset, not "true")
+  grep -q 'EIDOLONS_SANDBOX_FRESH_CONTEXT=false' /tmp/s16-env-dump2.txt
+  rm -f /tmp/s16-env-dump2.txt
+}
+
+@test "S1.6: fix-hook env carries only documented localized vars (no transcript var)" {
+  _git_project
+  # The env block exports exactly the documented vars; no accumulated transcript.
+  run eidolons sandbox loop \
+    --tests 'grep -q fixed state.txt' \
+    --fix-hook 'env | grep "^EIDOLONS_SANDBOX_" | sort > /tmp/s16-envvars.txt; echo fixed > state.txt' \
+    --fresh-context --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f /tmp/s16-envvars.txt ]
+  # The documented vars must all be present
+  grep -q 'EIDOLONS_SANDBOX_FEEDBACK=' /tmp/s16-envvars.txt
+  grep -q 'EIDOLONS_SANDBOX_FULL_LOG=' /tmp/s16-envvars.txt
+  grep -q 'EIDOLONS_SANDBOX_LAST_OUTPUT=' /tmp/s16-envvars.txt
+  grep -q 'EIDOLONS_SANDBOX_ATTEMPT=' /tmp/s16-envvars.txt
+  grep -q 'EIDOLONS_SANDBOX_BASE=' /tmp/s16-envvars.txt
+  grep -q 'EIDOLONS_SANDBOX_FRESH_CONTEXT=' /tmp/s16-envvars.txt
+  # No TRANSCRIPT or HISTORY var (no accumulated transcript exported)
+  ! grep -q 'EIDOLONS_SANDBOX_TRANSCRIPT\|EIDOLONS_SANDBOX_HISTORY\|EIDOLONS_SANDBOX_PRIOR' /tmp/s16-envvars.txt
+  rm -f /tmp/s16-envvars.txt
+}
+
 @test "S1.5: sealed holdout passes → final=passed (no reward-hacking)" {
   _git_project
   run eidolons sandbox loop --tests 'true' \
