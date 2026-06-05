@@ -1194,3 +1194,127 @@ EOF
   [ "$status" -eq 0 ]
   diff .claude/agents/atlas.md.snap .claude/agents/atlas.md
 }
+
+# ─── A1.1 — atlas-aci grant to [atlas, vivi] (S1.1) ──────────────────────────
+#
+# These tests use a LOCAL catalogue fixture (seed_mcps_catalogue_with_vivi) rather
+# than mutating the shared seed_mcps_catalogue, which many sibling tests depend
+# on for [atlas]-only semantics. This keeps the existing W1.4/W1.5/W1.6 tests
+# passing unchanged while covering the new [atlas, vivi] grant.
+
+# Local fixture: atlas-aci with grants_to_eidolons: [atlas, vivi].
+seed_mcps_catalogue_with_vivi() {
+  local nexus_override="${1:-$EIDOLONS_ROOT}"
+  mkdir -p "$nexus_override/roster"
+  cat > "$nexus_override/roster/mcps.yaml" <<'EOF'
+catalogue_version: "1.2"
+updated_at: "2026-06-05T00:00:00Z"
+mcps:
+  - name: atlas-aci
+    display_name: "Atlas-ACI"
+    scope: system
+    kind: oci-image
+    description: "Stdio MCP server exposing structural codebase intelligence."
+    use_cases:
+      - "Cross-language symbol search."
+    related_eidolons: [atlas]
+    grants_to_eidolons:
+      - atlas
+      - vivi
+    exposes_tools:
+      glob: "mcp__atlas_aci__*"
+      list:
+        - mcp__atlas_aci__view_file
+        - mcp__atlas_aci__search_symbol
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atlas-aci"
+    versions:
+      latest: "0.2.3"
+      pins:
+        stable: "0.2.3"
+      releases:
+        "0.2.3":
+          digest: "sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
+          released_at: "2026-06-02T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+      template: "cli/templates/mcp/atlas-aci.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+EOF
+}
+
+@test "A1.1a: atlas-aci grant [atlas,vivi] — vivi.md installed → gains mcp__atlas_aci__* glob" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_vivi "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas"
+  seed_claude_agent "vivi" "Read, Edit, Write"
+
+  # Save vivi.md before to verify it changed.
+  cp .claude/agents/vivi.md .claude/agents/vivi.md.before
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp atlas-aci
+  "
+  [ "$status" -eq 0 ]
+  # vivi.md MUST be patched with the atlas-aci glob (grant includes vivi).
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/vivi.md
+  # atlas.md MUST also be patched (still in the grant list).
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+}
+
+@test "A1.1b: atlas-aci grant [atlas,vivi] — vivi.md ABSENT → clean no-op (soft-fail GAP 7)" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_vivi "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas"
+  # vivi.md is deliberately NOT created.
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp atlas-aci
+  "
+  # Must succeed (no error) even though vivi.md is absent.
+  [ "$status" -eq 0 ]
+  # vivi.md must NOT have been created.
+  [ ! -f ".claude/agents/vivi.md" ]
+  # atlas.md still gets the glob (it IS installed).
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+}
+
+@test "A1.1c: atlas-aci grant [atlas,vivi] — apivr.md present → receives NO atlas-aci glob (G3)" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_vivi "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas"
+  seed_claude_agent "apivr" "Read, Edit, Write"
+
+  # Save apivr.md before.
+  cp .claude/agents/apivr.md .claude/agents/apivr.md.before
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp atlas-aci
+  "
+  [ "$status" -eq 0 ]
+  # apivr.md MUST NOT receive atlas-aci glob (not in the grant list).
+  ! grep -q 'mcp__atlas_aci__' .claude/agents/apivr.md
+  # apivr.md must be byte-identical to before.
+  diff .claude/agents/apivr.md.before .claude/agents/apivr.md
+  # atlas.md still gets the glob.
+  grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+}
