@@ -134,3 +134,38 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$status" -eq 0 ]
   [ "$(_field '.selected[0]')" = "vigil" ]
 }
+
+# ── V15 — two-coder routing tiebreak (APIVR-Δ → VIVI succession, Stage 1e) ─────
+# A custom routing fixture with TWO `coder`s (vivi default_for_class + apivr
+# fallback) proves the mechanism the live single-coder roster cannot exercise yet
+# (vivi goes live at Stage 3). The mechanism is dormant in the real roster.
+_two_coder_routing_fixture() {
+  local dir="$1"
+  mkdir -p "$dir/roster"
+  cat > "$dir/roster/routing.yaml" <<'YAML'
+routing_version: "1.0"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  vivi:  { capability_class: coder, model_tier: reasoning-class, default_for_class: coder, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+  apivr: { capability_class: coder, model_tier: speed-class, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+signals: []
+chains: []
+YAML
+}
+
+@test "V15: two coders → a bare coder verb routes to the default_for_class member (VIVI)" {
+  local custom="$BATS_TEST_TMPDIR/two-coder-default"
+  _two_coder_routing_fixture "$custom"
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}
+
+@test "V15: naming the apivr fallback overrides the default → routes to apivr (opt-in)" {
+  local custom="$BATS_TEST_TMPDIR/two-coder-named"
+  _two_coder_routing_fixture "$custom"
+  EIDOLONS_NEXUS="$custom" run eidolons run "apivr implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "apivr" ]
+}

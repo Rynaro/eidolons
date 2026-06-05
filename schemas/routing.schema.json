@@ -35,7 +35,8 @@
           "model_tier": { "type": "string", "enum": ["speed-class", "reasoning-class"] },
           "trigger_verbs": { "type": "array", "items": { "type": "string" } },
           "refuse_verbs": { "type": "array", "items": { "type": "string" } },
-          "downstream": { "type": "array", "items": { "type": "string" } }
+          "downstream": { "type": "array", "items": { "type": "string" } },
+          "default_for_class": { "type": "string", "description": "Capability class this member is the default for when multiple members share it (two-coder routing tiebreak; the named-Eidolon bonus still overrides)." }
         }
       }
     },
