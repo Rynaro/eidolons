@@ -320,10 +320,10 @@ SH
   [ "$(jq -r '.performative' .out/loop.json.envelope.json)" = "inform" ]
   # sender must be eidolons-sandbox
   [ "$(jq -r '.sender.eidolon' .out/loop.json.envelope.json)" = "eidolons-sandbox" ]
-  # integrity method must be cksum (bash 3.2 compatible)
-  [ "$(jq -r '.integrity.method' .out/loop.json.envelope.json)" = "cksum" ]
-  # integrity value must be non-empty
-  [ -n "$(jq -r '.integrity.value' .out/loop.json.envelope.json)" ]
+  # integrity method must be sha256 (ECL P0: SHA-256 is the default integrity algorithm)
+  [ "$(jq -r '.integrity.method' .out/loop.json.envelope.json)" = "sha256" ]
+  # integrity value must be a 64-hex-char SHA-256 digest
+  [[ "$(jq -r '.integrity.value' .out/loop.json.envelope.json)" =~ ^[0-9a-f]{64}$ ]]
   # artifact path references loop.json
   [ "$(jq -r '.artifact.path' .out/loop.json.envelope.json)" = "loop.json" ]
 }

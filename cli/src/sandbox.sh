@@ -537,16 +537,20 @@ case "$SUB" in
         merged:false, attempts:$attempts, passk:$passk}')"
     printf '%s\n' "$ledger" > "$OUT_DIR/loop.json"
 
-    # ECL sidecar: loop.json.envelope.json — inform performative, cksum integrity.
-    # Reuses the closed-10 `inform` performative (GAP-2 decision); bash 3.2 safe (cksum).
+    # ECL sidecar: loop.json.envelope.json — inform performative, SHA-256 integrity.
+    # ECL P0: "SHA-256 is the default integrity algorithm". Computed NON-FATALLY
+    # (the loop already succeeded; the envelope is a sidecar — never die here).
+    # Reuses the closed-10 `inform` performative (GAP-2 decision); bash 3.2 safe.
     # sender="eidolons-sandbox" (stateless substrate identity); receiver="" (consuming agent,
     # Vivi, unknown at substrate level — R1 residual confirmed: empty string is the safe default).
-    _loop_cksum="$(cksum "$OUT_DIR/loop.json" 2>/dev/null | awk '{print $1"-"$2}' || echo "0-0")"
+    _loop_sha="$( { shasum -a 256 "$OUT_DIR/loop.json" 2>/dev/null || sha256sum "$OUT_DIR/loop.json" 2>/dev/null; } | awk '{print $1}' )"
+    _loop_sha="${_loop_sha:-}"
+    # Portable byte count: cksum prints "checksum size path"; we only need size (field 2).
     _loop_size="$(cksum "$OUT_DIR/loop.json" 2>/dev/null | awk '{print $2}' || echo "0")"
     _loop_ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')"
     jq -nc \
       --arg ts "$_loop_ts" \
-      --arg cksum "$_loop_cksum" \
+      --arg sha "$_loop_sha" \
       --argjson sz "$_loop_size" \
       --arg out "$OUT_DIR" \
       '{envelope_version:"1.0",
@@ -554,7 +558,7 @@ case "$SUB" in
         sender:{eidolon:"eidolons-sandbox",version:"1.0"},
         receiver:{eidolon:"",version:""},
         artifact:{kind:"loop-ledger",path:"loop.json"},
-        integrity:{method:"cksum",value:$cksum,size_bytes:$sz},
+        integrity:{method:"sha256",value:$sha,size_bytes:$sz},
         trace:{ts:$ts,out_dir:$out}}' > "$OUT_DIR/loop.json.envelope.json"
 
     if [[ "$OUT" == "json" ]]; then printf '%s\n' "$ledger"
