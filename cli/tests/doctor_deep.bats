@@ -460,9 +460,13 @@ JSON
 
   scaffold_full vivi
   write_agent_md vivi 5
-  # SPEC.md deliberately has NO lint/edit-gate reference
+  # SPEC.md deliberately has NO lint/edit-gate reference. NOTE: the prose must not
+  # contain the substrings the D10 grep matches — `lint.hook` (ERE `.` = any char)
+  # would match a literal "lint hook", so avoid the words lint/edit-gate entirely
+  # (this accidental match passed vacuously on darwin via apivr's side-effect but
+  # failed on ubuntu — capture-live/verify-cross-platform lesson).
   mkdir -p ".eidolons/vivi"
-  printf '# Vivi SPEC\nThis spec has no lint hook reference at all.\n' \
+  printf '# Vivi SPEC\nThis spec describes the coder role and its cycle phases only.\n' \
     > ".eidolons/vivi/SPEC.md"
   write_host_agent_correct vivi
 
