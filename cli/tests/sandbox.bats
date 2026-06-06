@@ -479,3 +479,99 @@ SH
   # passk.runs for attempt 1 must exist (the k re-run was attempted)
   [ "$(jq -r '.passk.runs | length' .out/loop.json)" -ge 1 ]
 }
+
+# ── replay (#9): read-only render of a completed loop's artifacts ─────────────
+
+@test "replay: renders a PASSED loop — exit 0, output mentions final=passed" {
+  _git_project
+  # Run a real passing loop to produce the out-dir artifacts.
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  # Replay the out-dir: must exit 0 and mention "passed".
+  run eidolons sandbox replay .out
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "passed" ]]
+}
+
+@test "replay --json: emits parseable JSON with final, integrity, passk_determinism" {
+  _git_project
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  run eidolons sandbox replay .out --json
+  [ "$status" -eq 0 ]
+  # Must be valid JSON (jq -e fails if output is not valid JSON or falsey).
+  echo "$output" | jq -e . >/dev/null
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  # integrity field must be present (VERIFIED, unverifiable, or MISMATCH).
+  [ -n "$(echo "$output" | jq -r '.integrity')" ]
+  # passk_determinism field must be present.
+  [ -n "$(echo "$output" | jq -r '.passk_determinism')" ]
+}
+
+@test "replay: integrity VERIFIED on an untampered out-dir" {
+  _git_project
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  run eidolons sandbox replay .out --json
+  [ "$status" -eq 0 ]
+  # Integrity must be VERIFIED (loop just ran; loop.json not mutated).
+  [ "$(echo "$output" | jq -r '.integrity')" = "VERIFIED" ]
+}
+
+@test "replay: integrity MISMATCH after tampering loop.json — exits non-zero (exit 4)" {
+  _git_project
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  # Tamper: append a space to loop.json — SHA-256 will no longer match the envelope.
+  printf ' ' >> .out/loop.json
+  run eidolons sandbox replay .out --json
+  [ "$status" -eq 4 ]
+  [ "$(echo "$output" | jq -r '.integrity')" = "MISMATCH" ]
+}
+
+@test "replay: missing out-dir → die non-zero" {
+  run eidolons sandbox replay /nonexistent/replay-dir
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "not found" || "$output" =~ "directory" ]]
+}
+
+@test "replay: missing loop.json → die non-zero" {
+  mkdir -p .empty-out
+  run eidolons sandbox replay .empty-out
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "loop.json" ]]
+}
+
+@test "replay: read-only proof — replay does not re-execute or mutate loop.json" {
+  _git_project
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  # Capture modification time of loop.json before replay.
+  _mtime_before="$(ls -l .out/loop.json)"
+  _attempts_before="$(jq -r '.attempts_run' .out/loop.json)"
+  # Run replay (no --allow-unsafe-host — read-only needs no isolation).
+  run eidolons sandbox replay .out
+  [ "$status" -eq 0 ]
+  # loop.json must NOT have been mutated (mtime and attempts_run unchanged).
+  _mtime_after="$(ls -l .out/loop.json)"
+  [ "$_mtime_before" = "$_mtime_after" ]
+  [ "$(jq -r '.attempts_run' .out/loop.json)" = "$_attempts_before" ]
+}
+
+@test "replay: works WITHOUT --allow-unsafe-host (no isolation needed; read-only)" {
+  _git_project
+  eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json > /dev/null
+  # replay must succeed without any isolation flag or --via.
+  run eidolons sandbox replay .out
+  [ "$status" -eq 0 ]
+}
+
+@test "replay: pass^k NON-DETERMINISTIC flag detected for a flaky attempt" {
+  _git_project
+  cat > flaky3.sh <<'SH'
+if [ -f .ctr3 ]; then exit 1; else : > .ctr3; exit 0; fi
+SH
+  # k=2, max-attempts=1: first run passes, second (k re-run) fails → flaky.
+  eidolons sandbox loop --tests 'sh flaky3.sh' \
+    --fix-hook 'true' --k 2 --max-attempts 1 --allow-unsafe-host --out .out --json > /dev/null || true
+  run eidolons sandbox replay .out --json
+  # replay must exit 0 (integrity, not flakiness, drives the exit code).
+  [ "$status" -eq 0 ]
+  # passk_determinism must flag non-determinism.
+  [[ "$(echo "$output" | jq -r '.passk_determinism')" =~ "NON-DETERMINISTIC" ]]
+}

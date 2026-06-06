@@ -84,6 +84,8 @@ Commands:
   sandbox <sub>  Bounded, delegated edit-run-test loop (adapter, not an engine):
                    check / run / loop  — delegates isolation (--via) + edits
                    (--fix-hook); diff-not-apply; VIGIL hand-off on cap-out
+                   replay <out_dir>    read-only render of a completed loop's
+                   artifacts; SHA-256 integrity verify; pass^k report; no re-exec
   doctor         Health-check installed Eidolons and host wiring
   migrate-stamp  Rewrite eidolons.yaml/eidolons.lock version stamps to current nexus VERSION
   nexus <sub>    Inspect and control the nexus roster channel. Subcommands:

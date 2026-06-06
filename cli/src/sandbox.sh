@@ -41,13 +41,14 @@ usage() {
 eidolons sandbox — bounded, delegated edit-run-test loop (adapter, not an engine)
 
 Usage:
-  eidolons sandbox check [--via <cmd>] [--allow-unsafe-host] [--json]
-  eidolons sandbox run   [--via <cmd>] [--allow-unsafe-host] [--json] -- <test-cmd...>
-  eidolons sandbox loop  --tests <test-cmd> [--fix-hook <cmd>] [--via <cmd>]
-                         [--max-attempts N] [--base <ref>] [--out <dir>]
-                         [--protect <glob>] [--regression <cmd>] [--reproduction <cmd>]
-                         [--k N] [--lint-hook <cmd>] [--holdout <cmd>]
-                         [--fresh-context] [--allow-unsafe-host] [--json]
+  eidolons sandbox check  [--via <cmd>] [--allow-unsafe-host] [--json]
+  eidolons sandbox run    [--via <cmd>] [--allow-unsafe-host] [--json] -- <test-cmd...>
+  eidolons sandbox loop   --tests <test-cmd> [--fix-hook <cmd>] [--via <cmd>]
+                          [--max-attempts N] [--base <ref>] [--out <dir>]
+                          [--protect <glob>] [--regression <cmd>] [--reproduction <cmd>]
+                          [--k N] [--lint-hook <cmd>] [--holdout <cmd>]
+                          [--fresh-context] [--allow-unsafe-host] [--json]
+  eidolons sandbox replay <out_dir> [--json]
 
 check   Classify the isolation tier of --via and apply the refusal policy
         (untrusted code needs >= container isolation).
@@ -56,6 +57,11 @@ loop    Bounded edit-run-test loop: run tests -> on fail call --fix-hook (the
         host's LLM/edit step) -> retry, capped at --max-attempts (default 3).
         Emits a candidate diff for review (NEVER commits/merges). On cap-out,
         emits a mandatory VIGIL repair-failed-report and exits 3.
+replay  READ-ONLY render of a completed loop's artifacts. Reads loop.json from
+        <out_dir> (required), renders final state / per-attempt summary / pass^k
+        non-determinism report, and verifies SHA-256 journal integrity against
+        the ECL sidecar envelope (if present). NEVER re-executes anything. No
+        isolation required (--allow-unsafe-host is not needed).
 
         loop_contract (roster/aci.yaml) extras:
           --protect <glob>      anchoring tests the fix-hook MUST NOT edit; a
@@ -96,8 +102,8 @@ _adequate_for_untrusted() { case "$1" in microvm|container|delegated) return 0 ;
 SUB="${1:-}"; [[ $# -gt 0 ]] && shift || true
 case "$SUB" in
   -h|--help|"") usage; exit 0 ;;
-  check|run|loop) ;;
-  *) die "Unknown subcommand: $SUB (want: check | run | loop). See 'eidolons sandbox --help'" ;;
+  check|run|loop|replay) ;;
+  *) die "Unknown subcommand: $SUB (want: check | run | loop | replay). See 'eidolons sandbox --help'" ;;
 esac
 
 VIA=""
@@ -116,6 +122,7 @@ LINT_HOOK=""
 HOLDOUT=""
 FRESH_CONTEXT=false
 TEST_CMD=()
+REPLAY_OUT_DIR=""
 _after_dd=false
 while [[ $# -gt 0 ]]; do
   if [[ "$_after_dd" == true ]]; then TEST_CMD+=("$1"); shift; continue; fi
@@ -138,7 +145,14 @@ while [[ $# -gt 0 ]]; do
     --)                  _after_dd=true; shift ;;
     -h|--help)           usage; exit 0 ;;
     -*)                  die "Unknown option: $1" ;;
-    *)                   TEST_CMD+=("$1"); shift ;;
+    *)
+      # replay: first positional is <out_dir>; all other subcommands use TEST_CMD.
+      if [[ "$SUB" == "replay" && -z "$REPLAY_OUT_DIR" ]]; then
+        REPLAY_OUT_DIR="$1"; shift
+      else
+        TEST_CMD+=("$1"); shift
+      fi
+      ;;
   esac
 done
 
@@ -570,5 +584,155 @@ case "$SUB" in
       else warn "cap reached — VIGIL hand-off written: $vigil_handoff"; fi
     fi
     [[ "$final" == "passed" ]] && exit 0 || exit 3
+    ;;
+
+  # ── replay: read-only render of a completed loop's artifacts ─────────────────
+  # NO re-execution. NO isolation required. Reads artifacts, verifies SHA-256
+  # journal integrity, reports pass^k determinism. Exits non-zero only on
+  # tampered journal (exit 4) or missing/unparseable loop.json (exit 1).
+  # (Artifact-level SHA-256 tamper-evidence of the on-disk journal; does NOT
+  # change ECL receiver verification semantics — that is ecosystem-coordinated.)
+  replay)
+    [[ -n "$REPLAY_OUT_DIR" ]] || die "replay needs an <out_dir> argument. Usage: eidolons sandbox replay <out_dir> [--json]"
+    [[ -d "$REPLAY_OUT_DIR" ]] || die "replay: directory not found: $REPLAY_OUT_DIR"
+    _rp_loop="$REPLAY_OUT_DIR/loop.json"
+    [[ -f "$_rp_loop" ]] || die "replay: loop.json not found in $REPLAY_OUT_DIR — has the loop completed?"
+
+    # Validate loop.json is parseable JSON (non-fatal parse attempt).
+    _rp_valid=false
+    jq -e . "$_rp_loop" >/dev/null 2>&1 && _rp_valid=true
+    [[ "$_rp_valid" == true ]] || die "replay: loop.json is not valid JSON in $REPLAY_OUT_DIR"
+
+    # Read core fields from loop.json.
+    _rp_final="$(jq -r '.final // "unknown"' "$_rp_loop")"
+    _rp_attempts_run="$(jq -r '.attempts_run // 0' "$_rp_loop")"
+    _rp_max_attempts="$(jq -r '.max_attempts // 0' "$_rp_loop")"
+    _rp_k="$(jq -r '.k // 1' "$_rp_loop")"
+    _rp_candidate_diff="$(jq -r '.candidate_diff // ""' "$_rp_loop")"
+    _rp_vigil_handoff="$(jq -r '.vigil_handoff // ""' "$_rp_loop")"
+    _rp_attempts_json="$(jq -c '.attempts // []' "$_rp_loop")"
+    _rp_passk_json="$(jq -c '.passk // {}' "$_rp_loop")"
+
+    # ── Integrity verification (SHA-256 tamper-evidence) ──────────────────────
+    _rp_envelope="$REPLAY_OUT_DIR/loop.json.envelope.json"
+    _rp_integrity="unverifiable"
+    _rp_integrity_detail="no envelope"
+    _rp_tampered=false
+    if [[ -f "$_rp_envelope" ]]; then
+      _rp_env_method="$(jq -r '.integrity.method // ""' "$_rp_envelope" 2>/dev/null || true)"
+      _rp_env_sha="$(jq -r '.integrity.value // ""' "$_rp_envelope" 2>/dev/null || true)"
+      if [[ "$_rp_env_method" == "sha256" && -n "$_rp_env_sha" ]]; then
+        # Recompute SHA-256 of loop.json (non-fatal; empty = cannot compute).
+        _rp_actual_sha="$( { shasum -a 256 "$_rp_loop" 2>/dev/null || sha256sum "$_rp_loop" 2>/dev/null; } | awk '{print $1}' )"
+        _rp_actual_sha="${_rp_actual_sha:-}"
+        if [[ -z "$_rp_actual_sha" ]]; then
+          _rp_integrity="unverifiable"
+          _rp_integrity_detail="cannot compute sha256 (no shasum/sha256sum)"
+        elif [[ "$_rp_actual_sha" == "$_rp_env_sha" ]]; then
+          _rp_integrity="VERIFIED"
+          _rp_integrity_detail="sha256 matches envelope"
+        else
+          _rp_integrity="MISMATCH"
+          _rp_integrity_detail="journal tampered since the run (expected=$_rp_env_sha actual=$_rp_actual_sha)"
+          _rp_tampered=true
+        fi
+      else
+        # Envelope exists but uses a different method (e.g. legacy cksum).
+        _rp_integrity="unverifiable"
+        _rp_integrity_detail="envelope method is '${_rp_env_method:-unknown}' (not sha256)"
+      fi
+    fi
+
+    # ── pass^k non-determinism report ─────────────────────────────────────────
+    # For each attempt, inspect its passk_runs[]. If any run has passed != all
+    # others, the attempt is NON-DETERMINISTIC (flaky).
+    _rp_passk_report="[]"
+    _rp_any_flaky=false
+    _rp_attempt_count="$(printf '%s' "$_rp_attempts_json" | jq -r 'length')"
+    _rp_i=0
+    while [[ "$_rp_i" -lt "$_rp_attempt_count" ]]; do
+      _rp_att="$(printf '%s' "$_rp_attempts_json" | jq -c ".[$_rp_i]")"
+      _rp_att_n="$(printf '%s' "$_rp_att" | jq -r '.attempt // 0')"
+      _rp_att_passed="$(printf '%s' "$_rp_att" | jq -r '.passed // false')"
+      _rp_pkruns="$(printf '%s' "$_rp_att" | jq -c '.passk_runs // []')"
+      _rp_pk_len="$(printf '%s' "$_rp_pkruns" | jq -r 'length')"
+      _rp_det="deterministic"
+      if [[ "$_rp_pk_len" -gt 1 ]]; then
+        # Check if all passed values are identical.
+        _rp_unique="$(printf '%s' "$_rp_pkruns" | jq -r '[.[].passed] | unique | length')"
+        if [[ "$_rp_unique" -gt 1 ]]; then
+          _rp_det="NON-DETERMINISTIC"
+          _rp_any_flaky=true
+        fi
+      fi
+      _rp_passk_report="$(printf '%s' "$_rp_passk_report" | jq -c \
+        --argjson n "$_rp_att_n" --arg det "$_rp_det" --argjson p "$_rp_att_passed" \
+        --argjson pkr "$_rp_pkruns" \
+        '. + [{attempt:$n, passed:$p, determinism:$det, passk_runs:$pkr}]')"
+      _rp_i=$((_rp_i + 1))
+    done
+    _rp_passk_determinism="deterministic"
+    [[ "$_rp_any_flaky" == true ]] && _rp_passk_determinism="NON-DETERMINISTIC (flaky pass^k detected)"
+
+    if [[ "$OUT" == "json" ]]; then
+      jq -nc \
+        --arg out_dir "$REPLAY_OUT_DIR" \
+        --arg final "$_rp_final" \
+        --argjson attempts_run "$_rp_attempts_run" \
+        --argjson max_attempts "$_rp_max_attempts" \
+        --argjson k "$_rp_k" \
+        --arg passk_determinism "$_rp_passk_determinism" \
+        --arg integrity "$_rp_integrity" \
+        --arg integrity_detail "$_rp_integrity_detail" \
+        --arg candidate_diff "$_rp_candidate_diff" \
+        --arg vigil_handoff "$_rp_vigil_handoff" \
+        --argjson attempts "$_rp_passk_report" \
+        '{out_dir:$out_dir, final:$final, attempts_run:$attempts_run,
+          max_attempts:$max_attempts, k:$k,
+          passk_determinism:$passk_determinism,
+          integrity:$integrity, integrity_detail:$integrity_detail,
+          candidate_diff:$candidate_diff, vigil_handoff:$vigil_handoff,
+          attempts:$attempts}'
+    else
+      printf '%s\n' "─────────────────────────────────────────────────────────"
+      printf '%s\n' "  sandbox replay: $REPLAY_OUT_DIR"
+      printf '%s\n' "─────────────────────────────────────────────────────────"
+      printf '  final:         %s\n' "$_rp_final"
+      printf '  attempts:      %s / %s\n' "$_rp_attempts_run" "$_rp_max_attempts"
+      printf '  k (pass^k):    %s\n' "$_rp_k"
+      printf '\n  per-attempt:\n'
+      # Render each attempt: "  attempt N: PASS/FAIL [phase] (flaky?)"
+      printf '%s' "$_rp_attempts_json" | jq -r \
+        '.[] | "  attempt \(.attempt): \(if .passed then "PASS" else "FAIL" end) [\(.phase // "tests")]\(if .flaky // false then " (flaky)" else "" end)"'
+      printf '\n  pass^k report (%s re-runs):\n' "$_rp_k"
+      printf '%s' "$_rp_passk_report" | jq -r \
+        '.[] | "    attempt \(.attempt): \(.determinism)"'
+      printf '  pass^k summary: %s\n' "$_rp_passk_determinism"
+      printf '\n'
+      if [[ -n "$_rp_candidate_diff" && "$_rp_candidate_diff" != "null" ]]; then
+        printf '  candidate diff (NOT applied): %s\n' "$_rp_candidate_diff"
+      fi
+      if [[ -n "$_rp_vigil_handoff" && "$_rp_vigil_handoff" != "null" ]]; then
+        printf '  vigil handoff: %s\n' "$_rp_vigil_handoff"
+      fi
+      if [[ -f "$REPLAY_OUT_DIR/feedback.json" ]]; then
+        printf '  feedback:      %s/feedback.json\n' "$REPLAY_OUT_DIR"
+      fi
+      if [[ -f "$REPLAY_OUT_DIR/repair-failed-report.md" ]]; then
+        printf '  repair-failed: %s/repair-failed-report.md\n' "$REPLAY_OUT_DIR"
+      fi
+      printf '\n  integrity: '
+      case "$_rp_integrity" in
+        VERIFIED)     printf 'VERIFIED (sha256)\n' ;;
+        MISMATCH)     printf 'MISMATCH — journal tampered since the run\n' ;;
+        unverifiable) printf 'unverifiable (%s)\n' "$_rp_integrity_detail" ;;
+        *)            printf '%s\n' "$_rp_integrity" ;;
+      esac
+      printf '%s\n' "─────────────────────────────────────────────────────────"
+    fi
+
+    # MISMATCH → exit 4 (tamper detected; callers can detect it).
+    # VERIFIED or unverifiable (no envelope) → exit 0.
+    [[ "$_rp_tampered" == true ]] && exit 4 || exit 0
     ;;
 esac
