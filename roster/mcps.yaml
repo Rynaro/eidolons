@@ -18,7 +18,7 @@ mcps:
       - "Cross-language symbol search inside an MCP-capable host."
       - "ATLAS subagent's per-project codegraph backend."
     related_eidolons: [atlas]
-    grants_to_eidolons: [atlas]
+    grants_to_eidolons: [atlas, kupo]
     exposes_tools:
       glob: "mcp__atlas_aci__*"
       list:

@@ -29,6 +29,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_patch_applier.sh"
 
 usage() {
   cat <<EOF
@@ -40,6 +42,7 @@ Usage:
   eidolons sandbox loop  --tests <test-cmd> [--fix-hook <cmd>] [--via <cmd>]
                          [--max-attempts N] [--base <ref>] [--out <dir>]
                          [--allow-unsafe-host] [--json]
+  eidolons sandbox apply --proposal <edit-proposal.json> --root <scratch-dir> [--json]
 
 check   Classify the isolation tier of --via and apply the refusal policy
         (untrusted code needs >= container isolation).
@@ -48,6 +51,11 @@ loop    Bounded edit-run-test loop: run tests -> on fail call --fix-hook (the
         host's LLM/edit step) -> retry, capped at --max-attempts (default 3).
         Emits a candidate diff for review (NEVER commits/merges). On cap-out,
         emits a mandatory VIGIL repair-failed-report and exits 3.
+apply   Deterministically apply an Eidolon's EMITTED edit-proposal (search/replace
+        or whole-file) into a SCRATCH --root via the fuzzy applier — the mechanical
+        P-phase of the Kupo executor. Requires an explicit --root; NEVER defaults to
+        the real tree (diff-not-apply discipline). The model emits intent; this
+        deterministic, non-LLM applier reconciles it (small models can't hand-apply).
 
 The nexus DELEGATES isolation (--via) and the edit step (--fix-hook); it owns only
 the bounded control flow, diff-not-apply discipline, and the VIGIL escalation.
@@ -69,8 +77,8 @@ _adequate_for_untrusted() { case "$1" in microvm|container|delegated) return 0 ;
 SUB="${1:-}"; [[ $# -gt 0 ]] && shift || true
 case "$SUB" in
   -h|--help|"") usage; exit 0 ;;
-  check|run|loop) ;;
-  *) die "Unknown subcommand: $SUB (want: check | run | loop). See 'eidolons sandbox --help'" ;;
+  check|run|loop|apply) ;;
+  *) die "Unknown subcommand: $SUB (want: check | run | loop | apply). See 'eidolons sandbox --help'" ;;
 esac
 
 VIA=""
@@ -81,6 +89,8 @@ FIX_HOOK=""
 MAX_ATTEMPTS=3
 BASE="HEAD"
 OUT_DIR=""
+PROPOSAL=""
+ROOT_DIR=""
 TEST_CMD=()
 _after_dd=false
 while [[ $# -gt 0 ]]; do
@@ -94,6 +104,8 @@ while [[ $# -gt 0 ]]; do
     --max-attempts)      MAX_ATTEMPTS="${2:-3}"; shift 2 ;;
     --base)              BASE="${2:-HEAD}"; shift 2 ;;
     --out)               OUT_DIR="${2:-}"; shift 2 ;;
+    --proposal)          PROPOSAL="${2:-}"; shift 2 ;;
+    --root)              ROOT_DIR="${2:-}"; shift 2 ;;
     --)                  _after_dd=true; shift ;;
     -h|--help)           usage; exit 0 ;;
     -*)                  die "Unknown option: $1" ;;
@@ -262,5 +274,24 @@ case "$SUB" in
       else warn "cap reached — VIGIL hand-off written: $vigil_handoff"; fi
     fi
     [[ "$final" == "passed" ]] && exit 0 || exit 3
+    ;;
+
+  # ── apply: deterministic fuzzy edit applier (the Kupo executor's P phase) ────
+  apply)
+    [[ -n "$PROPOSAL" ]] || die "apply needs --proposal <edit-proposal.json>"
+    [[ -n "$ROOT_DIR" ]] || die "apply needs --root <scratch-dir> (NEVER defaults to the real tree)"
+    [[ -f "$PROPOSAL" ]] || die "apply: proposal not found: $PROPOSAL"
+    [[ -d "$ROOT_DIR" ]] || die "apply: --root is not a directory: $ROOT_DIR"
+    rc=0
+    result="$(pa_apply_proposal "$PROPOSAL" "$ROOT_DIR")" || rc=$?
+    if [[ "$OUT" == "json" ]]; then printf '%s\n' "$result"
+    else
+      printf '%ssandbox apply%s  applied=%s failed=%s  →  %s\n' "${BOLD:-}" "${RESET:-}" \
+        "$(printf '%s' "$result" | jq -r '.applied // 0')" \
+        "$(printf '%s' "$result" | jq -r '.failed // 0')" \
+        "$(printf '%s' "$result" | jq -r 'if .ok then "ok" else "INCOMPLETE" end')"
+      printf '%s' "$result" | jq -r '.results[]? | "  \(.status): \(.op) \(.path) — \(.detail)"'
+    fi
+    [[ "$rc" -eq 0 ]] && exit 0 || exit 1
     ;;
 esac

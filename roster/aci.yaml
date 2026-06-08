@@ -42,6 +42,12 @@ classes:
     requires_edit_gate: true   # MUST declare a lint/compile + test-anchored Verify before commit (rubric, layer-2)
     rationale: "Brownfield implementer; edits gated by a per-edit lint/compile and test-anchored Verify (SWE-agent edit-with-linter)."
     bounded_primitives: ["lint-gated edits", "paginated view", "match-only search", "success-on-empty-output feedback"]
+  executor:
+    read_only: true            # never writes the REAL tree — emits a verified edit-proposal; the parent applies (like debugger's verified-patch.diff)
+    reads_repo: true
+    requires_edit_gate: true   # the PROPOSE is gated by a NAMED external verifier (test/lint/typecheck/compile) green signal in an ephemeral scratch sandbox before hand-off
+    rationale: "Low-effort localized executor; fuzzy-applies edits into an EPHEMERAL scratch sandbox, proves them with an external verifier, and emits an edit-proposal for the parent to apply & commit. Real-tree authority is read-only — write is never inferred."
+    bounded_primitives: ["fuzzy search/replace into a scratch sandbox (eidolons sandbox apply)", "external-verifier-gated PROPOSE (success-on-empty feedback)", "paginated view / match-only search via atlas-aci"]
   scriber:
     read_only: true
     reads_repo: false          # synthesis from provided context only; no retrieval
