@@ -50,6 +50,8 @@ classes:
     receiver: true
   coder:
     receiver: true
+  executor:
+    receiver: true
   scriber:
     receiver: true
   reasoner:

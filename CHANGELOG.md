@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Kupo — the low-effort `executor` Eidolon (debut as `in_construction` v0.1.0).** A small/cheap/low-latency (haiku) worker that heavier Eidolons `DELEGATE` quick, localized, verifier-backed micro-tasks to (rename, import/path fix, lockfile bump, lint autofix, one-line fix, grep-replace) — keeping their own sessions lean. Cycle **K→U→P→O** (Keep-or-Kick → Understand → Patch → Observe). **PROPOSE-only**: Kupo fuzzy-applies edits into an *ephemeral scratch sandbox*, proves them with a NAMED external verifier, and emits a verified ECL `PROPOSE` for the parent to apply & commit — it never writes the real tree (the debugger-style emit-patch-never-apply posture, so it does not overlap the APIVR-Δ/Vivi coder). New `executor` capability class (`schemas/roster-entry.schema.json` + `roster/{aci,ecl,routing}.yaml`), roster member + `errands` preset, atlas-aci grant, cortex recognition (`EIDOLONS.md` + `methodology/cortex/handoff-graph.md`), and the roster-health matrix. Reuses the existing `eidolons sandbox` runtime and adds the harness-owned **deterministic fuzzy edit applier** (`cli/src/lib_patch_applier.sh` + `eidolons sandbox apply`; 8 `patch_applier.bats`). Design grounded in a 24-agent / 3-round / 82-claim weighted-voting frontier-research pass + a max-effort FORGE decision record (`.spectra/research/kupo-build-dossier.md`). **Ship-gated:** stays `in_construction` until a KEEP-cohort eval proves it net-additive (honoring the frontier dossier's "measure before trust" / "add ZERO new Eidolons unless additive" principle). Repo: [Rynaro/Kupo](https://github.com/Rynaro/Kupo).
+
 ## [1.28.1] — 2026-06-04
 
 ### Changed

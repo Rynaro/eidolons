@@ -13,7 +13,7 @@
 # Invariant I-C2: this is DATA. The kernel interprets it; there is no eval.
 
 routing_version: "1.0"
-updated_at: "2026-06-03T21:00Z"
+updated_at: "2026-06-08T00:00Z"
 
 # ─── Gate thresholds (Dispatch Protocol Step 2 / TRANCE Step 4) ─────────────────
 thresholds:
@@ -64,6 +64,15 @@ eidolons:
     model_tier: reasoning-class
     trigger_verbs: ["root cause", "flaky", "heisenbug", "regression after", "post-mortem", "postmortem", "why does this fail", "why does it fail"]
     refuse_verbs: ["build new feature", "plan from scratch"]
+    downstream: []
+  kupo:
+    capability_class: executor
+    model_tier: speed-class
+    # NARROW by design: only clearly-localized micro-task verbs, so the router never
+    # poaches APIVR-Δ/Vivi coding work. Kupo is primarily a DELEGATION target (heavier
+    # Eidolons hand it micro-tasks); these verbs let it also be dispatched directly.
+    trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "autofix lint", "format fix", "one-line fix", "update fixture", "grep-replace", "config key edit", "fix the typo"]
+    refuse_verbs: ["design", "cross-cutting refactor", "refactor across", "plan", "novel architecture", "greenfield", "open-ended", "loop-native campaign", "implement feature"]
     downstream: []
 
 # ─── Confidence signals (Dispatch Protocol §"Confidence Signals") ───────────────

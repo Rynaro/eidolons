@@ -20,6 +20,9 @@
 | **IDG** | scriber | document, ADR, runbook, chronicle, synthesize, record decisions | explore repo, find calls, retrieve | (terminal) |
 | **FORGE** | reasoner | trade-off, which approach, ambiguous, counterfactual, deliberate | implement, retrieve, synthesize prose | (lateral consultant) |
 | **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X, post-mortem, why does this fail | build new feature, plan from scratch | (lateral specialist) |
+| **Kupo** | executor | rename, import/path fix, lockfile bump, lint autofix, one-line fix, grep-replace (localized, verifier-backed micro-tasks) | design, plan, cross-cutting refactor (>2 files), loop-native campaign | (replies to delegating parent) |
+
+> **Delegation target.** Any Eidolon may `DELEGATE` a localized, verifier-backed micro-task to **Kupo** (the low-effort executor, `in_construction`) to keep its own session lean. Kupo patches an ephemeral sandbox, proves it with an external verifier, and PROPOSEs a verified patch back to the delegating parent — it never commits and never routes work onward (worker, never router).
 
 ---
 
