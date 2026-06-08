@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-08T00:00Z"
+updated_at: "2026-06-08T22:07Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1086,7 +1086,16 @@ eidolons:
       latest: "0.1.0"
       pins:
         stable: "0.1.0"
-      releases: {}                 # populated by Roster Intake at the shipped (v1.0.0) flip; in_construction skips strict integrity
+      releases:                    # populated by Roster Intake at the shipped (v1.0.0) flip; in_construction skips strict integrity
+        0.1.0:
+          tag: v0.1.0
+          commit: 1cad991e35ff793f5f3ba89a71b3bd72601a2666
+          tree: 735026ca542b0612072aee1c5f24abe3ad7c0f6f
+          archive_sha256: ecc13ccf37835fe88ed0451c58039069b03a608328de7cb8c7261eac579271d3
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/kupo"
       standalone: true
