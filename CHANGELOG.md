@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.32.1] — 2026-06-09
+
+### Added
+- **Vivi sigil** (`art/eidolons/vivi.txt`) — the Black Mage takes the coder seat: 12×6 frameless tile (pointed hat, wide brim, glowing eyes), `art-lint` G1–G8 clean, rendered via `ui_load_sigil` in the `init`/`add` cards. Completes the roster tile set after the Stage-3b default-coder flip (every member now has a portrait).
+
 ## [1.32.0] — 2026-06-09 — Vivi succession lands: loop substrate Stage 1+2 + the default-coder flip
 
 ### Changed (Stage 3b — Vivi takes the default-coder seat)
