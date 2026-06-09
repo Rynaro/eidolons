@@ -676,6 +676,19 @@ EOF
 
 # ─── Dispatch ─────────────────────────────────────────────────────────────────
 
+# Strip already-parsed global flags from the positionals so the first remaining
+# positional is the subcommand (otherwise `eidolons model --non-interactive`
+# treats the flag itself as an unknown subcommand). bash 3.2: guard the
+# empty-array expansion against `set -u`.
+_model_args=()
+for _a in "$@"; do
+  case "$_a" in
+    --non-interactive|--dry-run|--json) ;;   # already captured into env vars above
+    *) _model_args+=("$_a") ;;
+  esac
+done
+if [ "${#_model_args[@]}" -gt 0 ]; then set -- "${_model_args[@]}"; else set --; fi
+
 subcmd="${1:-}"
 [ $# -gt 0 ] && shift
 

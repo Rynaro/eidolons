@@ -36,7 +36,7 @@ _profiles_json() {
 }
 
 @test "model-profiles: schema is valid JSON" {
-  jq empty "$SCHEMA_FILE"
+  run jq empty "$SCHEMA_FILE"
   [ "$status" -eq 0 ]
 }
 
