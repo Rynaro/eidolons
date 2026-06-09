@@ -284,10 +284,16 @@ _eval_once() {
 
 # ── Sealed holdout evaluator: run ONCE after final=passed; the fix-hook NEVER
 # sees this command (it is never exported to the fix-hook env block). If it
-# fails while visible tests passed = reward-hacked (evaluator-gaming). ──────────
+# fails while visible tests passed = reward-hacked (evaluator-gaming). The
+# command is materialised TRANSIENTLY under OUT_DIR only for the eval itself
+# (argv-style --via wrappers need a file to exec) and removed before control
+# can ever return to a fix-hook — the seal against the fix-hook holds. ──────────
 _eval_holdout() {
-  local logdest="$1"
-  _run_in_sandbox "$HOLDOUT" "$logdest" | jq -c '. + {phase:"holdout"}'
+  local logdest="$1" hf="$OUT_DIR/.holdout-run.sh" res
+  printf '%s\n' "$HOLDOUT" > "$hf"
+  res="$(_run_in_sandbox "sh $hf" "$logdest")"
+  rm -f "$hf"
+  printf '%s' "$res" | jq -c '. + {phase:"holdout"}'
   return 0
 }
 
@@ -444,9 +450,15 @@ case "$SUB" in
     # validity is the bottleneck). Verify red FIRST, before any fix attempt. ───
     red_gate=""
     if [[ "$REQUIRE_RED" == true ]]; then
-      _red_cmd="${REPRODUCTION:-$TESTS}"
-      [[ -n "$_red_cmd" ]] || die "--require-red needs --reproduction (or --tests)"
-      _red_result="$(_run_in_sandbox "$_red_cmd" "$OUT_DIR/red-gate-log.txt")"
+      [[ -n "$REPRODUCTION" || -n "$TESTS" ]] || die "--require-red needs --reproduction (or --tests)"
+      if [[ -n "$REPRODUCTION" ]]; then
+        _red_result="$(_run_in_sandbox "$REPRODUCTION" "$OUT_DIR/red-gate-log.txt")"
+      else
+        # --tests path: use the argv form (empty cmd_str → TEST_CMD array), the
+        # same execution shape the loop itself uses — an argv-style --via wrapper
+        # would mis-exec a multi-word command string and fake a "red" verdict.
+        _red_result="$(_run_in_sandbox "" "$OUT_DIR/red-gate-log.txt")"
+      fi
       if [[ "$(printf '%s' "$_red_result" | jq -r '.passed')" == "true" ]]; then
         red_gate="vacuous"
         [[ "$OUT" != "json" ]] && warn "sandbox loop: --require-red FAILED — the reproduction test PASSES on the base tree (vacuous: it cannot anchor a fix)"
