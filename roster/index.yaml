@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-08T22:07Z"
+updated_at: "2026-06-08T23:30Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1083,10 +1083,10 @@ eidolons:
       repo: Rynaro/Kupo
       default_ref: main
     versions:
-      latest: "0.1.0"
+      latest: "0.1.1"
       pins:
-        stable: "0.1.0"
-      releases:                    # populated by Roster Intake at the shipped (v1.0.0) flip; in_construction skips strict integrity
+        stable: "0.1.1"
+      releases:                    # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
         0.1.0:
           tag: v0.1.0
           commit: 1cad991e35ff793f5f3ba89a71b3bd72601a2666
