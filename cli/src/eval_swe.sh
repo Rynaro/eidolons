@@ -43,12 +43,22 @@ Options:
   --allow-unsafe-host Run on the bare host (trusted code only; the smoke default).
   --max-attempts N    Per-task bounded cap passed to the loop (default 3).
   --k N               Run each task N times; pass^k = resolved in ALL N (default 1).
+  --fanout N          Parallel-sample-and-select: pass --fanout N to the loop
+                      (N independent fresh-context candidates, external selection).
+  --require-red       Pass --require-red to the loop (the task's test must FAIL
+                      on the base tree before any fix attempt).
+  --judge-hook CMD    Pass an external diff-review judge to the loop.
   --min N             Exit 1 if resolved_rate < N percent (CI gate).
   --keep              Keep per-task workdirs (default: cleaned up).
   --validate-suite    Self-test the suite shape and exit (no execution).
   --list              List task ids + descriptions and exit.
   --json              Emit the scorecard as JSON.
   -h, --help          Show this help.
+
+Suite task fields (optional, per task): holdout: <cmd> — a SEALED oracle the
+fix-hook never sees (held in the loop process only, NEVER materialised into the
+task workdir); failing it after a visible pass → final=reward-hacked.
+protect: <glob> — anchoring files the fix-hook must not mutate.
 
 SCOPE: the bundled suite is a harness self-test with reference fixes, NOT a
 capability benchmark. See 'eidolons sandbox --help' for the loop it drives.
@@ -61,6 +71,9 @@ VIA=""
 ALLOW_UNSAFE=false
 MAX_ATTEMPTS=3
 K=1
+FANOUT=1
+REQUIRE_RED=false
+JUDGE_HOOK=""
 MIN=""
 KEEP=false
 VALIDATE=false
@@ -75,6 +88,9 @@ while [[ $# -gt 0 ]]; do
     --allow-unsafe-host) ALLOW_UNSAFE=true; shift ;;
     --max-attempts)     MAX_ATTEMPTS="${2:-3}"; shift 2 ;;
     --k)                K="${2:-1}"; shift 2 ;;
+    --fanout)           FANOUT="${2:-1}"; shift 2 ;;
+    --require-red)      REQUIRE_RED=true; shift ;;
+    --judge-hook)       JUDGE_HOOK="${2:-}"; shift 2 ;;
     --min)              MIN="${2:-}"; shift 2 ;;
     --keep)             KEEP=true; shift ;;
     --validate-suite)   VALIDATE=true; shift ;;
@@ -88,6 +104,7 @@ done
 [[ -f "$SUITE" ]] || die "Suite file not found: $SUITE"
 [[ "$MAX_ATTEMPTS" -ge 1 ]] 2>/dev/null || die "--max-attempts must be >= 1"
 [[ "$K" -ge 1 ]] 2>/dev/null || die "--k must be >= 1"
+[[ "$FANOUT" -ge 1 ]] 2>/dev/null || die "--fanout must be >= 1"
 suite_json="$(yaml_to_json "$SUITE")" || die "Could not parse suite YAML: $SUITE"
 
 # Mode = smoke (gold_fix reference) unless a real --fix-hook is supplied.
@@ -164,8 +181,20 @@ while IFS= read -r tid; do
   test_cmd="$(printf '%s' "$task" | jq -r '.test')"
   hook="$FIX_HOOK"
   [[ -z "$hook" ]] && hook="$(printf '%s' "$task" | jq -r '.gold_fix // ""')"
+  # Stage 2: optional per-task sealed holdout + protected anchoring files. The
+  # holdout command stays INLINE (loop-process memory only) — it is never
+  # written into the task workdir, so the fix-hook cannot read it from disk.
+  holdout_cmd="$(printf '%s' "$task" | jq -r '.holdout // ""')"
+  protect_glob="$(printf '%s' "$task" | jq -r '.protect // ""')"
+  loop_extra=()
+  [[ -n "$holdout_cmd" ]]        && loop_extra+=(--holdout "$holdout_cmd")
+  [[ -n "$protect_glob" ]]       && loop_extra+=(--protect "$protect_glob")
+  [[ "$FANOUT" -gt 1 ]]          && loop_extra+=(--fanout "$FANOUT")
+  [[ "$REQUIRE_RED" == true ]]   && loop_extra+=(--require-red)
+  [[ -n "$JUDGE_HOOK" ]]         && loop_extra+=(--judge-hook "$JUDGE_HOOK")
 
   resolved_runs=0
+  finals="[]"
   for run in $(seq 1 "$K"); do
     wd="$WORK_ROOT/$tid-$run"
     mkdir -p "$wd"
@@ -181,9 +210,11 @@ while IFS= read -r tid; do
       --fix-hook "$hook" \
       "${iso_flags[@]}" \
       --max-attempts "$MAX_ATTEMPTS" \
+      "${loop_extra[@]+"${loop_extra[@]}"}" \
       --out ".sb" \
       --json 2>/dev/null)" || rc=$?
     final="$(printf '%s' "$ledger" | jq -r '.final // "error"' 2>/dev/null || echo error)"
+    finals="$(printf '%s' "$finals" | jq -c --arg f "$final" '. + [$f]')"
     [[ "$final" == "passed" ]] && resolved_runs=$((resolved_runs + 1))
   done
 
@@ -192,7 +223,8 @@ while IFS= read -r tid; do
   results="$(printf '%s' "$results" | jq -c \
     --arg id "$tid" --argjson rr "$resolved_runs" --argjson k "$K" \
     --argjson res "$task_resolved" --argjson allk "$task_all_k" \
-    '. + [{id:$id, resolved_runs:$rr, k:$k, resolved:$res, resolved_all_k:$allk}]')"
+    --argjson fin "$finals" \
+    '. + [{id:$id, resolved_runs:$rr, k:$k, resolved:$res, resolved_all_k:$allk, finals:$fin}]')"
   [[ "$OUT" != "json" ]] && printf '  %-22s %s (%s/%s runs)\n' "$tid" \
     "$([[ "$task_resolved" == true ]] && echo RESOLVED || echo UNRESOLVED)" "$resolved_runs" "$K"
 done <<< "$task_ids"
@@ -206,13 +238,16 @@ passk="$(printf '%s' "$results" | jq -n --argjson r "$passk_n" --argjson t "$tot
 scope_note="HARNESS SELF-TEST with reference fixes — NOT a model solving unseen tasks. A real SWE-bench-class number needs an external --suite-file + a model --fix-hook + a real --via sandbox."
 [[ "$MODE" == "model-driven" ]] && scope_note="model-driven run via the supplied --fix-hook. resolved_rate is the measured task-solving number for this suite."
 
+finals_summary="$(printf '%s' "$results" | jq -c '[.[].finals[]] | group_by(.) | map({key:.[0], value:length}) | from_entries')"
 scorecard="$(jq -nc \
   --arg mode "$MODE" --arg hook "$([[ "$MODE" == smoke ]] && echo 'gold_fix (per-task reference)' || echo "$FIX_HOOK")" \
   --arg iso "$iso_label" --argjson total "$total" --argjson resolved "$resolved" \
   --argjson rate "$rate" --argjson passk "$passk" --argjson k "$K" \
+  --argjson fanout "$FANOUT" --argjson finsum "$finals_summary" \
   --arg note "$scope_note" --argjson tasks "$results" \
   '{swe_version:"1.0", mode:$mode, fix_hook:$hook, isolation:$iso,
     total:$total, resolved:$resolved, resolved_rate:$rate, pass_k:$passk, k:$k,
+    fanout:$fanout, finals_summary:$finsum,
     model_tokens:(if $mode=="smoke" then 0 else null end),
     scope_note:$note, tasks:$tasks}')"
 
