@@ -185,6 +185,24 @@ skipped entirely when `eidolons.yaml` is missing.
 
 ---
 
+## `eidolons model`
+
+Vendor-neutral model management: assign each Eidolon a tier (`light < standard < deep`), pick a vendor profile, and let the nexus resolve and write the concrete `model:` into host agent frontmatter.
+
+```
+eidolons model                          # interactive picker (TTY) / usage (non-interactive)
+eidolons model list                     # tier ladder + profiles (active marked) + tier→model maps
+eidolons model show [<eidolon>] [--json]# resolved table: tier · profile · source · effective model
+eidolons model use <eidolon>@<tier>     # set a per-member tier override (light|standard|deep)
+eidolons model use <eidolon>@<model>    # pin a concrete model for one Eidolon (escape hatch)
+eidolons model profile <name>           # switch active profile; re-resolve + re-wire all members
+eidolons model reset [<eidolon>]        # clear a member's override/pin (all + calibration if no arg)
+```
+
+Profiles (the sole home for vendor model strings) live in `roster/model-profiles.yaml`; per-Eidolon suggested tiers live in `roster/routing.yaml`. The resolved effective model is recorded in `eidolons.lock` and written to `.claude/agents/<id>.md` (claude-code) / `.codex/agents/<id>.md` (codex) inside an idempotent `# eidolons:managed model` block; copilot/cursor are a no-op. Exit codes: `0` ok · `2` bad args / unknown Eidolon or profile · `3` resolve hard-miss · `4` frontmatter write failed. `eidolons doctor --deep` (gate **D9**) reports frontmatter-vs-lock drift. Full reference: [`docs/model.md`](model.md).
+
+---
+
 ## `eidolons verify`
 
 Read-only release integrity verification for installed members.
