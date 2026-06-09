@@ -19,14 +19,34 @@
 
 ---
 
+## Model Tiers
+
+The tier ladder `light < standard < deep` assigns a vendor-neutral capability level to each Eidolon. Concrete model strings live exclusively in `roster/model-profiles.yaml` (never in this file or EIDOLONS.md — PD #162).
+
+**FORGE-derived per-class defaults:**
+
+| Eidolon | Suggested tier | Rationale |
+|---|---|---|
+| SPECTRA | deep | Planner; spec quality gates require full reasoning |
+| FORGE | deep | Deliberation; self-consistency via N=3 traces |
+| VIGIL | deep | Forensic; counterfactual chains require depth |
+| ATLAS | standard | Scout; deterministic retrieval first, LLM second |
+| APIVR-Δ | standard | Coder; `loop_native:false` — deep is benchmark-gated |
+| IDG | light | Scriber; synthesis from provided context |
+| Kupo | light | Executor; localized micro-tasks |
+
+**Resolution precedence** (most-specific wins): per-member PIN → per-tier calibration → active profile → roster `suggested_tier` → class default → nexus `default_profile`. Use `eidolons model show` to inspect resolved values; `eidolons model use` to override.
+
+---
+
 ## Cost Ceiling Rules
 
 | Rule | Value | Rationale |
 |---|---|---|
-| C1 — Max parallel branches | 5 | Anthropic empirical sweet spot for orchestrator-workers |
-| C2 — Max model-tier upgrade | lead = reasoning-class, workers = speed-class | Mirrors Anthropic research-system topology; D9 |
+| C1 — Max parallel branches | 5 | Empirical sweet spot for orchestrator-workers |
+| C2 — Max model-tier upgrade | lead = deep, workers = light | Mirrors research-system topology; D9 |
 | C3 — Max wall-clock | Host-enforced; cortex emits `wall_clock_budget_seconds` hint | Cortex never spins indefinite background jobs without user opt-in |
-| C4 — Token budget warning | Emit `[DECISION]` at ≥ 5× standard-tier budget | Anthropic 15× lift number is upper bound, not default |
+| C4 — Token budget warning | Emit `[DECISION]` at ≥ 5× standard-tier budget | 15× lift number is upper bound, not default |
 | C5 — Surface-size threshold | > 25 files OR > 5 modules = large surface | Heuristic; configurable |
 | C6 — Auto-trigger requirement | Both complexity flag AND stakes flag must hold | Either alone keeps cortex at standard tier |
 
