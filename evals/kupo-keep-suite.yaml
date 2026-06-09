@@ -1,0 +1,93 @@
+# Kupo KEEP-cohort eval suite — the ship-gate for the `executor` Eidolon
+# ──────────────────────────────────────────────────────────────────────
+# Consumed by `eidolons eval swe`. Each task is a Kupo-shaped KEEP-cohort
+# instance: localized (one file), with a NAMED external verifier (the `test`)
+# and a gold reference fix. Tasks map 1:1 onto Kupo's scope-guard KEEP classes
+# (import/path fix · rename/symbol consistency · lockfile/dep-pin bump ·
+# config-key edit · one-line failing-assertion fix · bounded grep-replace ·
+# lint/syntax autofix). Everything REFUSE/ESCALATE (open-ended, cross-cutting,
+# ambiguous) is deliberately ABSENT — by construction this is the cohort Kupo
+# KEEPs, so resolved-rate here is the additive-proof number.
+#
+# HONEST SCOPE (same as swe-suite.yaml): smoke mode applies each task's gold_fix
+# (no model) → a 100% resolved-rate proves the ORCHESTRATION (setup → red →
+# fuzzy-apply → green) end-to-end, NOT that Kupo-the-haiku-model solved it. The
+# behavioral number — what flips Kupo `in_construction → shipped` — needs a real
+# model `--fix-hook` (a haiku agent running K→U→P→O) measured vs the ~20%
+# Haiku→Opus cost-ratio. See the build dossier §4.5 (MASTER eval-gate).
+#
+# Pure POSIX sh + coreutils + git + jq (no python/node) → deterministic smoke
+# across macos/ubuntu. Schema: ../schemas/swe-suite.schema.json
+
+swe_version: "1.0"
+tasks:
+  - id: keep-import-path-fix
+    description: "main.sh sources the wrong path (./helper.sh vs ./helpers.sh); greet is undefined. Fix the source path. Verifier: run + grep output."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'greet() { echo "hi kupo"; }\n' > helpers.sh
+      printf '. ./helper.sh\ngreet\n' > main.sh
+      git add -A && git commit -qm "broken: main.sh sources ./helper.sh (should be ./helpers.sh)"
+    test: "sh main.sh 2>/dev/null | grep -q 'hi kupo'"
+    gold_fix: |
+      printf '. ./helpers.sh\ngreet\n' > main.sh
+
+  - id: keep-rename-call-consistency
+    description: "calc.sh defines compute_total but calls compute_ttl; the call must match the definition. Verifier: run + grep result."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'compute_total() { echo 42; }\ncompute_ttl\n' > calc.sh
+      git add -A && git commit -qm "broken: calls compute_ttl, defined compute_total"
+    test: "sh calc.sh 2>/dev/null | grep -q '^42$'"
+    gold_fix: |
+      printf 'compute_total() { echo 42; }\ncompute_total\n' > calc.sh
+
+  - id: keep-lockfile-pin-bump
+    description: "deps.lock pins widget==1.2.0; the project requires 1.3.0. Bump exactly that pin. Verifier: grep the lock."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'widget==1.2.0\ngadget==2.0.0\n' > deps.lock
+      git add -A && git commit -qm "broken: widget pinned at 1.2.0 (need 1.3.0)"
+    test: "grep -q '^widget==1.3.0$' deps.lock && grep -q '^gadget==2.0.0$' deps.lock"
+    gold_fix: |
+      printf 'widget==1.3.0\ngadget==2.0.0\n' > deps.lock
+
+  - id: keep-config-key-edit
+    description: "app.conf sets PORT=3000; the spec requires PORT=8080. Edit only that key. Verifier: grep the config."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'HOST=localhost\nPORT=3000\nDEBUG=false\n' > app.conf
+      git add -A && git commit -qm "broken: PORT=3000 (spec requires 8080)"
+    test: "grep -q '^PORT=8080$' app.conf && grep -q '^HOST=localhost$' app.conf"
+    gold_fix: |
+      printf 'HOST=localhost\nPORT=8080\nDEBUG=false\n' > app.conf
+
+  - id: keep-one-line-arithmetic
+    description: "add.sh subtracts instead of adds; the test asserts add 2 3 == 5. One-line operator fix. Verifier: run + assert."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf '#!/bin/sh\nexpr "$1" - "$2"\n' > add.sh
+      git add -A && git commit -qm "broken: add.sh uses '-' not '+'"
+    test: "test \"$(sh add.sh 2 3)\" = \"5\""
+    gold_fix: |
+      printf '#!/bin/sh\nexpr "$1" + "$2"\n' > add.sh
+
+  - id: keep-grep-replace-multi
+    description: "styles.txt uses British 'colour' in 3 places; convert all to 'color'. Bounded grep-replace, one file. Verifier: no 'colour' remains + a known key converted."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'colour: red\nbg-colour: blue\nborder-colour: green\n' > styles.txt
+      git add -A && git commit -qm "broken: British spelling 'colour' x3"
+    test: "! grep -q 'colour' styles.txt && grep -q '^color: red$' styles.txt"
+    gold_fix: |
+      printf 'color: red\nbg-color: blue\nborder-color: green\n' > styles.txt
+
+  - id: keep-json-syntax-fix
+    description: "data.json has a trailing comma and is invalid; jq must parse it. Single-file syntax autofix. Verifier: jq empty."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf '{\n  "a": 1,\n  "b": 2,\n}\n' > data.json
+      git add -A && git commit -qm "broken: trailing comma makes data.json invalid"
+    test: "jq empty data.json"
+    gold_fix: |
+      printf '{\n  "a": 1,\n  "b": 2\n}\n' > data.json
