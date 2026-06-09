@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.30.0] — 2026-06-09
+
 ### Added
 - **`eidolons init` now offers CRYSTALIUM — the team's shared-memory backbone — during bootstrap.** CRYSTALIUM lives in the separate `roster/mcps.yaml` catalogue, so `init` (even `--preset full`) previously shipped the whole Eidolon team with no memory substrate, even though the always-loaded cortex memory protocol assumes it. `init` now offers it *after* `sync` (when agent files exist, so the `mcp__crystalium__*` grant wires cleanly): **interactive** uses a default-Y confirm and auto-skips with a hint when Docker is absent; **non-interactive** is opt-in via `--with-memory`, and `--no-mcp` suppresses the offer entirely (wins over `--with-memory`). The offer is never fatal to `init`, and `sync` still never installs MCPs — only `init`'s opt-in offer does, preserving the explicit-install invariant.
 - **ASCII sigils for `crystalium` and `kupo`** (`art/eidolons/{crystalium,kupo}.txt`, 12×6, `art-lint` clean) — the two roster members that lacked tiles.
