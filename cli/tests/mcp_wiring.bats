@@ -1194,3 +1194,51 @@ EOF
   [ "$status" -eq 0 ]
   diff .claude/agents/atlas.md.snap .claude/agents/atlas.md
 }
+
+# ─── W12.x — zero-wire warning for allowlist MCP with no agent files present ─
+#
+# When an allowlist MCP (e.g. crystalium) is wired before any Eidolon agent
+# files exist on disk, mcp_wiring_apply_for_mcp must emit a warning on stderr
+# rather than silently succeeding. Transport MCPs (e.g. junction) must NOT emit
+# this warning because their zero-target result is correct by design.
+
+@test "W12.1: allowlist MCP with no agent files emits 'wired 0 agent files' warning" {
+  # Seed nexus with crystalium catalogue entry (allowlist, grants_to_eidolons: all).
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+
+  # Manifest present (wiring reads it for host/member lists) but NO agent files.
+  seed_manifest_claude
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  " 2>&1
+  [ "$status" -eq 0 ]
+  # Warning must appear on stderr (bats merges stdout+stderr into $output here).
+  [[ "$output" =~ "wired 0 agent files" ]]
+  [[ "$output" =~ "eidolons mcp install crystalium --force" ]]
+}
+
+@test "W12.2: transport MCP (junction) does NOT emit 'wired 0 agent files' warning even with no agent files" {
+  # Junction is wiring_mode: transport. Zero targets is expected — no warning.
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue "$EIDOLONS_NEXUS"
+
+  # Manifest present but NO agent files (same scenario as W12.1).
+  seed_manifest_claude
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp junction
+  " 2>&1
+  [ "$status" -eq 0 ]
+  # Transport MCP must NOT warn about zero agent files.
+  [[ ! "$output" =~ "wired 0 agent files" ]]
+}

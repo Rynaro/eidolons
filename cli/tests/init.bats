@@ -238,6 +238,26 @@ EOF
   [ "$manifest_content_1" = "$manifest_content_2" ]
 }
 
+# ─── MCP offer: non-interactive without --with-memory skips crystalium ───────
+@test "init: --preset full --non-interactive without --with-memory does NOT install crystalium" {
+  # Non-interactive without --with-memory: the offer_crystalium_memory
+  # function must return before touching any MCP installer, so:
+  #   (a) init still exits 0 (or non-0 only due to sync/fake-git, not crystalium)
+  #   (b) no crystalium server entry appears in .mcp.json
+  # Docker is irrelevant on this code path (WITH_MEMORY check fires first).
+  setup_fake_git
+
+  run eidolons init --preset full --hosts claude-code --non-interactive
+  # init writes the manifest before delegating to sync; manifest must exist.
+  [ -f eidolons.yaml ]
+  # No crystalium server entry in .mcp.json (file may not exist at all, or may
+  # exist without a crystalium entry — both are acceptable).
+  if [ -f .mcp.json ]; then
+    run grep -c '"crystalium"' .mcp.json || true
+    [ "${output:-0}" = "0" ]
+  fi
+}
+
 # ─── interactive vendor-confirmation prompt (ui_pick_hosts) ────────────────
 # In interactive mode (no --non-interactive), init.sh always prompts for
 # host confirmation via ui_pick_hosts. Detected hosts become the default

@@ -809,6 +809,18 @@ mcp_wiring_apply_for_mcp() {
   tmp_targets="$(mktemp)"
   mcp_wiring_grant_targets "$mcp_name" > "$tmp_targets" 2>/dev/null || true
 
+  # Warn when an allowlist MCP that grants to Eidolons produced zero targets.
+  # This fires when mcp install is run before any Eidolon members are installed
+  # (no agent files on disk yet). Transport MCPs (e.g. junction) are excluded —
+  # they legitimately produce zero agent-file targets by design.
+  local _wm _grants
+  _wm="$(printf '%s' "$cat_entry" | jq -r '.wiring_mode // "allowlist"' 2>/dev/null || echo allowlist)"
+  _grants="$(printf '%s' "$cat_entry" | jq -r '.grants_to_eidolons // empty' 2>/dev/null || true)"
+  if [ "$_wm" != "transport" ] && [ -n "$_grants" ] && [ ! -s "$tmp_targets" ]; then
+    warn "${mcp_name}: wired 0 agent files — no agent files found on disk yet."
+    warn "  Install Eidolon members first (eidolons init / sync), then run: eidolons mcp install ${mcp_name} --force"
+  fi
+
   local cursor_info_emitted=0
   local opencode_info_emitted=0
   local line host agent_file

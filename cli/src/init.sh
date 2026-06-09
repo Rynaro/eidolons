@@ -25,6 +25,8 @@ MULTI_POINTER=false
 MULTI_POINTER_EXPLICIT=false
 _MP_YES_SEEN=false
 _MP_NO_SEEN=false
+WITH_MEMORY=false
+NO_MCP=false
 
 usage() {
   cat <<EOF
@@ -72,6 +74,12 @@ Options:
                            GEMINI.md, .github/copilot-instructions.md) will
                            be emptied of Eidolon markers during compose.
                            Mutually exclusive with --multi-pointer.
+  --with-memory            (Non-interactive) Install CRYSTALIUM (team memory
+                           backbone) after sync without prompting. Requires
+                           Docker. Ignored if --no-mcp is also set.
+  --no-mcp                 Suppress the CRYSTALIUM offer entirely (both
+                           interactive and non-interactive). --no-mcp wins
+                           over --with-memory.
   -h, --help               Show this help
 
 Behavior:
@@ -105,6 +113,8 @@ while [[ $# -gt 0 ]]; do
     --pointer-targets=*)    POINTER_TARGETS_ARG="${1#*=}"; shift ;;
     --multi-pointer)        MULTI_POINTER=true; MULTI_POINTER_EXPLICIT=true; _MP_YES_SEEN=true; shift ;;
     --no-multi-pointer)     MULTI_POINTER=false; MULTI_POINTER_EXPLICIT=true; _MP_NO_SEEN=true; shift ;;
+    --with-memory)          WITH_MEMORY=true; shift ;;
+    --no-mcp)               NO_MCP=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -461,6 +471,50 @@ ok "$PROJECT_MANIFEST written"
 # No-op when not a git repo. See lib.sh::apply_eidolons_gitignore.
 apply_eidolons_gitignore
 
+# ─── offer_crystalium_memory ──────────────────────────────────────────────
+# Called after sync succeeds. Offers to install CRYSTALIUM (the team memory
+# backbone) if conditions are met. Never fatal to init.
+offer_crystalium_memory() {
+  if [ "$NO_MCP" = "true" ]; then
+    info "Skipping team memory (CRYSTALIUM) — --no-mcp."
+    return 0
+  fi
+
+  # Detect Docker availability.
+  local docker_ok=false
+  if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+    docker_ok=true
+  fi
+
+  if [ "$NON_INTERACTIVE" = "true" ]; then
+    # Non-interactive path.
+    if [ "$WITH_MEMORY" != "true" ]; then
+      info "Team memory (CRYSTALIUM) not installed (pass --with-memory to include it). Install later with: eidolons mcp install crystalium"
+      return 0
+    fi
+    if [ "$docker_ok" != "true" ]; then
+      info "Skipping CRYSTALIUM — Docker unavailable. Install later with: eidolons mcp install crystalium"
+      return 0
+    fi
+    # WITH_MEMORY=true and Docker present → install.
+  else
+    # Interactive path.
+    if [ "$docker_ok" != "true" ]; then
+      info "Team memory (CRYSTALIUM) needs Docker. Install later with: eidolons mcp install crystalium"
+      return 0
+    fi
+    if ! ui_confirm "Install CRYSTALIUM (team memory backbone)?" default-y; then
+      info "Skipped CRYSTALIUM. Install later with: eidolons mcp install crystalium"
+      return 0
+    fi
+  fi
+
+  # Install step — never fatal to init.
+  say "Installing CRYSTALIUM (team memory backbone)"
+  bash "$SELF_DIR/mcp_install.sh" crystalium \
+    || warn "CRYSTALIUM install did not complete. Run 'eidolons mcp install crystalium' to retry."
+}
+
 # ─── Delegate actual install to `eidolons sync` ──────────────────────────
 # init already confirmed the host + dispatch choices interactively — skip
 # sync's pre-install preview to avoid double-prompting. Non-interactive
@@ -469,10 +523,16 @@ apply_eidolons_gitignore
 SYNC_STRICT_FLAG=""
 [[ "$STRICT_HOSTS" == "true" ]] && SYNC_STRICT_FLAG="--strict-hosts"
 say "Running sync to install members"
+SYNC_RC=0
 # shellcheck disable=SC2046
-exec bash "$SELF_DIR/sync.sh" \
+bash "$SELF_DIR/sync.sh" \
   ${NON_INTERACTIVE:+--non-interactive} \
   --yes \
   ${SYNC_STRICT_FLAG} \
   $([ "$VERBOSITY" = "quiet" ] && echo --quiet) \
-  $([ "$VERBOSITY" = "verbose" ] && echo --verbose)
+  $([ "$VERBOSITY" = "verbose" ] && echo --verbose) || SYNC_RC=$?
+
+if [ "$SYNC_RC" -eq 0 ]; then
+  offer_crystalium_memory
+fi
+exit "$SYNC_RC"
