@@ -8,10 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.29.0] — 2026-06-09
+
 ### Changed
 - **Kupo flipped `in_construction` → `shipped` (v1.0.0).** The KEEP-cohort ship-gate eval cleared decisively: **12 tasks × k=3 = 36/36 resolved, task-resolved-rate 1.0, pass^3 1.0** (zero flakiness, zero abstentions) — far above the ~0.20 Haiku→Opus cost-ratio gate, with the v0.1.1 applier-trust fix in effect. Roster `status: shipped`, `versions` pinned to 1.0.0 (attested), added to the `full` preset. Kupo is the first roster Eidolon admitted on a *behavioral* (not documentary) additive-proof. Eval instrument: `evals/kupo-keep-suite.yaml` (12 tasks) + `cli/tests/kupo_eval.bats`; results in `.spectra/research/kupo-eval-results.md`.
 
 ### Added
+- **Kupo registered in the ECL communication layer + `methodology/composition.md` regenerated.** Contributed Kupo's 11 hand-off contracts + the `edit-proposal` per-Eidolon profile to `Rynaro/eidolons-ecl` (released **v2.0.1**, alongside the previously-unreleased `human→*` edges); regenerated the auto-generated `methodology/composition.md` from those contracts via `eidolons-ecl compose-gen` and pinned `composition-drift` CI to ecl `v2.0.1`. Kupo is now wired into the hand-off graph — inbound `DELEGATE` from `spectra/vigil/forge/apivr/atlas` (+ `human` `REQUEST`), outbound verified `PROPOSE` of an `edit-proposal`.
 - kupo v1.0.0 published in the roster with release integrity metadata.
 - kupo v0.1.1 published in the roster with release integrity metadata.
 - **Kupo ship-gate eval (`evals/kupo-keep-suite.yaml` + `cli/tests/kupo_eval.bats`).** 7 KEEP-cohort tasks (import/path fix · rename consistency · lockfile bump · config-key edit · one-line arithmetic · bounded grep-replace · JSON-syntax) — each localized with a NAMED external verifier + gold reference; pure POSIX sh so the smoke is deterministic. Drives `eidolons eval swe`. **Smoke = 7/7 (orchestration proof).** First behavioral run (7 haiku-tier Kupo agents through the real `eidolons sandbox apply` loop) = **6/7 resolved (0.857) ≫ the ~0.20 cost-ratio gate → provisionally net-additive.** The one miss was an incorrect-abstention small-model failure (the agent wrongly doubted the applier existed), not task difficulty — an actionable Kupo `agent.md` fix. Results + path-to-`shipped`: `.spectra/research/kupo-eval-results.md`. (Kupo stays `in_construction` pending a larger held-out cohort + `pass^k`.)
