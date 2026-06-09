@@ -8,8 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.32.0] — 2026-06-09 — Vivi succession lands: loop substrate Stage 1+2 + the default-coder flip
+
 ### Changed (Stage 3b — Vivi takes the default-coder seat)
-- **Vivi is the default coder.** Live `vivi` routing entry with `default_for_class: coder` (activating the dormant V15 tiebreak); chain templates (`plan-before-build`, `decide-then-implement`, `ship-fast`, `forensic-then-fix`) and the presets (`pipeline`, `plan-and-build`, `full`) recompose to `ATLAS → SPECTRA → Vivi → IDG`; the cortex (`EIDOLONS.md`) seats Vivi as `coder (default)` with **APIVR-Δ retained opt-in** (`eidolons add apivr`; named dispatch still routes to it via the +0.5 name bonus). **Measured basis (vivi-measurement §Stage 2):** budget-matched 3-arm on the weak-host adversarial-hard suite — fanout-Vivi pass²=1.00 vs APIVR-Δ 0.67 vs iterate-Vivi 0.67 (ablation isolates the host-adaptive shape); the June-5 weak-host loss did not reproduce (k=1 noise); zero reward-hacks in 63 holdout-gated runs. Vivi stays `in_construction` in the roster until the owner-dispatched v1.0.0 release + Roster Intake land the integrity metadata.
+- **Vivi is the default coder.** Live `vivi` routing entry with `default_for_class: coder` (activating the dormant V15 tiebreak); chain templates (`plan-before-build`, `decide-then-implement`, `ship-fast`, `forensic-then-fix`) and the presets (`pipeline`, `plan-and-build`, `full`) recompose to `ATLAS → SPECTRA → Vivi → IDG`; the cortex (`EIDOLONS.md`) seats Vivi as `coder (default)` with **APIVR-Δ retained opt-in** (`eidolons add apivr`; named dispatch still routes to it via the +0.5 name bonus). **Measured basis (vivi-measurement §Stage 2):** budget-matched 3-arm on the weak-host adversarial-hard suite — fanout-Vivi pass²=1.00 vs APIVR-Δ 0.67 vs iterate-Vivi 0.67 (ablation isolates the host-adaptive shape); the June-5 weak-host loss did not reproduce (k=1 noise); zero reward-hacks in 63 holdout-gated runs. Vivi is **shipped**: v1.0.0 released (attested asset contract) + intaken with release integrity metadata (PR #305).
 
 ### Added
 - vivi v1.0.0 published in the roster with release integrity metadata.
