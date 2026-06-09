@@ -183,3 +183,125 @@ _field() { echo "$output" | jq -r "$1"; }
   # Verify the routing YAML no longer carries the old model_tier field.
   ! grep -q "model_tier:" "$EIDOLONS_ROOT/roster/routing.yaml"
 }
+
+# ── V15 — two-coder routing tiebreak (APIVR-Δ → Vivi succession, Stage 1e) ─────
+# A custom routing fixture with TWO `coder`s (vivi default_for_class + apivr
+# fallback) proves the mechanism the live single-coder roster cannot exercise yet
+# (vivi goes live at Stage 3). The mechanism is dormant in the real roster.
+_two_coder_routing_fixture() {
+  local dir="$1"
+  mkdir -p "$dir/roster"
+  cat > "$dir/roster/routing.yaml" <<'YAML'
+routing_version: "1.0"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  vivi:  { capability_class: coder, model_tier: reasoning-class, default_for_class: coder, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+  apivr: { capability_class: coder, model_tier: speed-class, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+signals: []
+chains: []
+YAML
+}
+
+@test "V15: two coders → a bare coder verb routes to the default_for_class member (Vivi)" {
+  local custom="$BATS_TEST_TMPDIR/two-coder-default"
+  _two_coder_routing_fixture "$custom"
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}
+
+@test "V15: naming the apivr fallback overrides the default → routes to apivr (opt-in)" {
+  local custom="$BATS_TEST_TMPDIR/two-coder-named"
+  _two_coder_routing_fixture "$custom"
+  EIDOLONS_NEXUS="$custom" run eidolons run "apivr implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "apivr" ]
+}
+
+# ── A1.7 — S1.7 host-tier gate (requires_host_tier declarative tiebreak) ──────
+# Uses a variant of the two-coder fixture where vivi declares
+# requires_host_tier: thinking. A manifest with no host_tier (or standard)
+# causes the default to fall back to apivr. host_tier: thinking → vivi wins.
+# A NAMED "vivi" prompt still routes to vivi regardless of host_tier (name bonus).
+
+_two_coder_thinking_fixture() {
+  local dir="$1"
+  mkdir -p "$dir/roster"
+  cat > "$dir/roster/routing.yaml" <<'YAML'
+routing_version: "1.0"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  vivi:  { capability_class: coder, model_tier: reasoning-class, default_for_class: coder, requires_host_tier: thinking, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+  apivr: { capability_class: coder, model_tier: speed-class, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+signals: []
+chains: []
+YAML
+}
+
+# A1.7a: host_tier absent (conservative) → unnamed coder prompt routes to apivr
+@test "A1.7a: host-tier gate — no host_tier in manifest → default routes to apivr (conservative)" {
+  local custom="$BATS_TEST_TMPDIR/thinking-gate-noht"
+  _two_coder_thinking_fixture "$custom"
+  # Manifest has NO host_tier field.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+members:
+  - name: apivr
+    version: "^1.0.0"
+EOF
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "apivr" ]
+}
+
+# A1.7a (standard explicit): host_tier: standard → same conservative result
+@test "A1.7a: host-tier gate — host_tier standard → default routes to apivr" {
+  local custom="$BATS_TEST_TMPDIR/thinking-gate-std"
+  _two_coder_thinking_fixture "$custom"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+host_tier: standard
+members:
+  - name: apivr
+    version: "^1.0.0"
+EOF
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "apivr" ]
+}
+
+# A1.7b: host_tier: thinking → unnamed coder prompt routes to vivi (gate passes)
+@test "A1.7b: host-tier gate — host_tier thinking → default routes to vivi" {
+  local custom="$BATS_TEST_TMPDIR/thinking-gate-thinking"
+  _two_coder_thinking_fixture "$custom"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+host_tier: thinking
+members:
+  - name: vivi
+    version: "^1.0.0"
+EOF
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}
+
+# A1.7c: host_tier: standard + prompt NAMES "vivi" → still routes to vivi (name bonus)
+@test "A1.7c: host-tier gate — standard host + named 'Vivi' prompt → routes to vivi (name bonus overrides gate)" {
+  local custom="$BATS_TEST_TMPDIR/thinking-gate-named"
+  _two_coder_thinking_fixture "$custom"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+host_tier: standard
+members:
+  - name: vivi
+    version: "^1.0.0"
+EOF
+  EIDOLONS_NEXUS="$custom" run eidolons run "vivi implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}

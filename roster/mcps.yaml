@@ -18,17 +18,22 @@ mcps:
       - "Cross-language symbol search inside an MCP-capable host."
       - "ATLAS subagent's per-project codegraph backend."
     related_eidolons: [atlas]
-    grants_to_eidolons: [atlas, kupo]
+    grants_to_eidolons: [atlas, kupo, vivi]
     exposes_tools:
-      glob: "mcp__atlas_aci__*"
+      # Tool namespace is HYPHEN (mcp__atlas-aci__*) — it derives from the .mcp.json
+      # server key "atlas-aci"; the host (Claude Code) exposes tools verbatim as
+      # mcp__atlas-aci__<tool>. ATLAS's commands/aci.sh already emits the hyphen form;
+      # the generic grant driver injects THIS glob, so it must match the real tools or
+      # the grant is inert (the underscore form mcp__atlas_aci__* matched nothing).
+      glob: "mcp__atlas-aci__*"
       list:
-        - mcp__atlas_aci__view_file
-        - mcp__atlas_aci__search_symbol
-        - mcp__atlas_aci__search_text
-        - mcp__atlas_aci__list_dir
-        - mcp__atlas_aci__graph_query
-        - mcp__atlas_aci__test_dry_run
-        - mcp__atlas_aci__memex_read
+        - mcp__atlas-aci__view_file
+        - mcp__atlas-aci__search_symbol
+        - mcp__atlas-aci__search_text
+        - mcp__atlas-aci__list_dir
+        - mcp__atlas-aci__graph_query
+        - mcp__atlas-aci__test_dry_run
+        - mcp__atlas-aci__memex_read
     source:
       type: ghcr
       image: "ghcr.io/rynaro/atlas-aci"

@@ -105,6 +105,20 @@ fi
 
 ROUTING_JSON="$(yaml_to_json "$ROUTING_FILE")"
 
+# Read the project manifest's host_tier declaration (S1.7 / G1).
+# Default null (conservative) when the field is absent or the manifest is missing.
+_HOST_TIER=null
+if [[ -f "$PROJECT_MANIFEST" ]]; then
+  _HOST_TIER="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+    | jq -r '.host_tier // "null"' 2>/dev/null || echo "null")"
+  # Normalise the string "null" that jq emits for missing fields to a JSON null.
+  if [[ "$_HOST_TIER" = "null" ]]; then
+    _HOST_TIER=null
+  else
+    _HOST_TIER="\"${_HOST_TIER}\""
+  fi
+fi
+
 # Lowercase the prompt for deterministic, case-insensitive matching (bash 3.2:
 # use tr, not ${var,,}).
 PROMPT_LC="$(printf '%s' "$PROMPT" | tr '[:upper:]' '[:lower:]')"
@@ -114,7 +128,8 @@ CTX_JSON="$(jq -n \
   --argjson sm "${SURFACE_MODULES:-0}" \
   --argjson tt "$TRANCE_TOKEN" \
   --argjson pf "$PRIOR_FAILURE" \
-  '{surface_files:$sf, surface_modules:$sm, trance_token:$tt, prior_failure:$pf}')"
+  --argjson ht "${_HOST_TIER}" \
+  '{surface_files:$sf, surface_modules:$sm, trance_token:$tt, prior_failure:$pf, host_tier:$ht}')"
 
 # ── The routing program (deterministic; mirrors EIDOLONS.md Steps 1–5) ─────────
 read -r -d '' ROUTE_JQ <<'JQ' || true
@@ -130,6 +145,7 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
     .key as $nm | .value as $v
     | { name: $nm,
         class: $v.capability_class,
+        default_for_class: ($v.default_for_class // null),
         model_tier: ($v.suggested_tier // $v.model_tier // "standard"),
         downstream: ($v.downstream // []),
         refuse: ($v.refuse_verbs // []),
@@ -150,7 +166,23 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
      | from_entries)) as $boost
 | ($s1 | map(. + { score: (.base + ($boost[.name] // 0)) })) as $scored
 | ($scored | sort_by(-.score)) as $ranked
-| $ranked[0] as $top
+# default_for_class tiebreak (V15): among members tied at the TOP score (e.g. two
+# `coder`s — Vivi as default + APIVR-Δ as the conservative fallback), prefer the
+# one whose default_for_class matches its capability class. A NAMED member already
+# wins via the +0.5 name bonus, so "APIVR-Δ, implement X" still routes to APIVR-Δ.
+# No-op when no member declares default_for_class (the single-coder live roster).
+# S1.7 host-gate: when the default_for_class winner declares requires_host_tier
+# and the project's host_tier does NOT match it, fall through to the next-ranked
+# candidate (the conservative coder). A NAMED member still wins via the name bonus
+# (gate only governs the implicit default pick). Default unset → conservative.
+| ($ranked[0].score) as $maxscore
+| ([ $ranked[] | select(.score == $maxscore) ]) as $tied
+| (($tied | map(select(.default_for_class == .class)) | .[0]) // $ranked[0]) as $dflt_top
+| ($R.eidolons[$dflt_top.name].requires_host_tier // null) as $rht
+| (if ($rht != null) and ($rht != $ctx.host_tier) and ($dflt_top.named | not)
+   then ([ $ranked[] | select((.name != $dflt_top.name) and (.score >= ($maxscore * 0.99))) ] | .[0]) // $dflt_top
+   else $dflt_top
+   end) as $top
 | [ $ranked[] | select(.score >= $T.chain_floor) ] as $contenders
 | ([ $contenders[] | .class ] | unique) as $classes
 # Step 4 inputs — flags. Stakes = a stakes-marked signal OR explicit TRANCE token.

@@ -36,7 +36,9 @@
           "loop_native": { "type": "boolean" },
           "trigger_verbs": { "type": "array", "items": { "type": "string" } },
           "refuse_verbs": { "type": "array", "items": { "type": "string" } },
-          "downstream": { "type": "array", "items": { "type": "string" } }
+          "downstream": { "type": "array", "items": { "type": "string" } },
+          "default_for_class": { "type": "string", "description": "Capability class this member is the default for when multiple members share it (two-coder routing tiebreak; the named-Eidolon bonus still overrides)." },
+          "requires_host_tier": { "type": "string", "description": "Optional: the host_tier the project must declare for this member to win the default_for_class tiebreak. When set and the project's host_tier does not match, the routing kernel falls through to the next-ranked candidate. A NAMED member still wins via the name bonus regardless of this gate." }
         }
       }
     },

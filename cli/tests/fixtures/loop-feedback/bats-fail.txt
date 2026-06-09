@@ -1,0 +1,8 @@
+1..3
+not ok 1 addition computes the right total
+# (in test file math.bats, line 3)
+#   `[ "$result" -eq 5 ]' failed
+not ok 2 greeting matches expected string
+# (in test file math.bats, line 7)
+#   `[ "$output" = "world" ]' failed
+ok 3 passing case stays green

@@ -1,0 +1,14 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_________________________ test_running_total_inclusive _________________________
+
+    def test_running_total_inclusive():
+        expected = 15
+>       assert running_total(5) == expected
+E       assert 10 == 15
+E        +  where 10 = running_total(5)
+
+calc_test.py:8: AssertionError
+=========================== short test summary info ============================
+FAILED calc_test.py::test_running_total_inclusive - assert 10 == 15
+1 failed, 1 passed in 0.01s

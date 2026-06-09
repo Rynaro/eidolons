@@ -21,8 +21,8 @@ Usage: eidolons doctor [OPTIONS]
 
 Options:
   --fix         Attempt to auto-repair simple structural issues (lockfile drift,
-                missing host wiring). Read-only for methodology gates (D1..D8).
-  --deep        Run methodology-integrity gates (D1..D8) after the fast checks.
+                missing host wiring). Read-only for methodology gates (D1..D11).
+  --deep        Run methodology-integrity gates (D1..D11) after the fast checks.
                 Required to catch broken outbound links, token-budget overruns,
                 and content drift vs the release manifest.
   -h, --help    Show this help.
@@ -45,6 +45,8 @@ Deep checks (--deep):
   D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
   D8   ECL receiver verify-incoming             every installed receiver Eidolon MUST ship a blocking verify-incoming skill (roster/ecl.yaml; ECL 6.2.2, frontier N3)
   D9   Model frontmatter drift                 managed model: in agent files MUST match lock's effective_model (SKIP when no models block)
+  D10  host-tier gate structural check          when ≥2 coders exist and one requires a host_tier, assert a conservative fallback coder is present (routing tiebreak invariant)
+  D11  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
 EOF
 }
 
@@ -906,6 +908,25 @@ if [[ "$DEEP" == "true" ]]; then
         done <<< "$_deep_members"
       fi
       unset _d9_model_block _d9_active_profile _d9_hosts_csv _d9_host _d9_agent_file _d9_file_model _d9_lock_model _d9_managed
+
+      # D10 — host-tier gate structural check (S1.7, G1)
+      # Project-level check: not per-member. Verifies routing tiebreak invariant
+      # when ≥2 coders exist and one declares requires_host_tier.
+      echo "  D10 — host-tier gate"
+      _d10_rc=0
+      deep_check_host_tier_gate || _d10_rc=$?
+      ERRORS=$((ERRORS + _d10_rc))
+
+      # D11 — coder edit-gate ACI conformance (S1.3, declarative contract)
+      # Per-member: coder-class members MUST declare requires_edit_gate:true in
+      # ACI + reference the lint gate in SPEC.md. Non-coder members are exempt.
+      echo "  D11 — coder edit-gate ACI conformance"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d11_rc=0
+        deep_check_coder_edit_gate "$_dm" || _d11_rc=$?
+        ERRORS=$((ERRORS + _d11_rc))
+      done <<< "$_deep_members"
     fi
 
     # Remedy hint when methodology errors were found.
