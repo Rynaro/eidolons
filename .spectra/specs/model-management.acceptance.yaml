@@ -1,0 +1,99 @@
+# .spectra/specs/model-management.acceptance.yaml
+spec: model-management
+version: 1
+locked_decisions:
+  tier_ladder: [light, standard, deep]
+  vendor_strings_home: roster/model-profiles.yaml      # SOLE home (PD #162)
+  routing_field: suggested_tier                         # migrated from model_tier
+  default_profile: anthropic
+  per_eidolon_assignment: tier
+  escape_hatch: per_member_model_pin
+  ux: [flag_subcommands, interactive_picker]
+  delivery: frontmatter_awk_surgery
+  hosts_written: [claude-code, codex]
+  hosts_noop: [copilot, cursor]
+  managed_sentinel: "# eidolons:managed model"
+  drift_policy:
+    sync: warn_and_preserve_on_handedit
+    explicit_command: clobber
+    doctor: report_only
+  missing_tier_behavior: resolve_up        # over-provision, FORGE-approved
+  single_tier_source_of_truth: roster/routing.yaml
+profiles:
+  anthropic: { applies_to_hosts: [claude-code], tiers: { light: haiku, standard: sonnet, deep: opus } }
+  openai:    { applies_to_hosts: [codex],       tiers: { light: gpt-5-mini, standard: gpt-5, deep: gpt-5 } }
+suggested_tiers:
+  spectra: deep
+  forge: deep
+  vigil: deep
+  atlas: standard
+  apivr: standard          # loop_native:false promotion hook (deep is benchmark-gated)
+  idg: light
+  kupo: light
+  class_default: standard
+resolution_precedence:     # most-specific first
+  - per_member_pin
+  - per_tier_calibration
+  - active_profile
+  - roster_suggested_tier
+  - class_suggested_tier
+  - nexus_default_profile
+new_files:
+  - roster/model-profiles.yaml
+  - schemas/model-profiles.schema.json
+  - cli/src/model.sh
+  - cli/src/lib_model_resolve.sh
+  - cli/src/lib_model_wiring.sh
+  - cli/tests/model_resolve.bats
+  - cli/tests/model_cli.bats
+  - cli/tests/model_wiring.bats
+  - cli/tests/model_profiles.bats
+modified_files:
+  - roster/routing.yaml            # model_tier -> suggested_tier + FORGE defaults
+  - schemas/routing.schema.json    # suggested_tier enum + loop_native
+  - schemas/eidolons.yaml.schema.json   # models block
+  - schemas/eidolons.lock.schema.json   # model provenance
+  - cli/src/run.sh                 # read suggested_tier
+  - cli/eidolons                   # add `model` top-level verb (delegates to model.sh)
+  - cli/src/sync.sh                # invoke model wiring post-wiring
+  - cli/src/doctor.sh              # D-model gate
+  - EIDOLONS.md                    # ladder vocab (vendor-free, I-C3)
+  - methodology/cortex/trance-matrix.md
+  - CHANGELOG.md
+unchanged_by_decision:
+  - schemas/roster-entry.schema.json   # tier stays in routing.yaml, not index.yaml
+cli_surface:
+  - "eidolons model                       -> picker (TTY) | usage (--non-interactive)"
+  - "eidolons model list"
+  - "eidolons model show [<eidolon>]"
+  - "eidolons model use <eidolon>@<tier|model>"
+  - "eidolons model profile <name>"
+  - "eidolons model reset [<eidolon>]"
+exit_codes:
+  ok: 0
+  bad_args_or_unknown: 2
+  resolve_miss: 3
+  frontmatter_write_failed: 4
+doctor_gate:
+  id: D-model
+  skip_when: no_models_block
+  pass: frontmatter_model_eq_lock_effective_model
+  warn: handedit_drift_or_host_inapplicable_managed_line
+  fail: managed_model_neq_lock        # fatal in --deep
+bash_32_traps:
+  - no_declare_A_for_profile_tier_map_use_jq_flat_lookup
+  - no_lowercase_uppercase_param_expansion
+  - host_gating_uses_detected_wired_hosts_not_stale_schema_wire_enum
+out_of_scope:
+  - eiis_contract_change            # future follow-up
+  - opencode_model_support          # pending frontmatter convention confirmation
+  - google_gemini_profile           # extensibility proven, not shipped
+  - gambit_ui_integration
+  - apivr_deep_promotion            # benchmark-gated data flip
+invariants_preserved:
+  - idempotent_sync_repeat_noop
+  - marker_bounded_managed_block
+  - cortex_no_vendor_model_names    # I-C3 + PD #162; cortex.bats stays green
+  - all_logs_to_stderr
+acceptance_criteria_count: 13       # see GIVEN/WHEN/THEN section 8
+complexity_score: 5.5

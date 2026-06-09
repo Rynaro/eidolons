@@ -1436,3 +1436,175 @@ CLAUDEMD
   [[ "$output" =~ "skipped" ]]
   [ "$status" -eq 0 ]
 }
+
+# ─── D9: model frontmatter gate ───────────────────────────────────────────────
+# D9 is only exercised under --deep; without --deep it is SKIP.
+
+_setup_d9_project() {
+  # Minimal project: 1 member (atlas), claude-code host, models block.
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+models:
+  profile: anthropic
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+}
+
+# Seed a lock whose atlas member carries a resolved model.effective_model, so the
+# D9 comparison logic actually runs instead of the no-lock-entry short-circuit.
+# (Without this, every D9 test passes vacuously.) Arg: <effective_model>.
+_seed_lock_with_model() {
+  cat > eidolons.lock <<EOF
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+    model:
+      effective_model: "$1"
+      tier: "standard"
+      profile: "anthropic"
+      source: "roster-tier"
+EOF
+}
+
+# NOTE on these D9 tests: `doctor --deep` returns non-zero here because the stub
+# fixture cannot satisfy the D1..D8 methodology gates (no real agent.md/SPEC.md/
+# skills installed). That non-zero is UNRELATED to D9, so D9 correctness is
+# asserted via its own output lines, not the aggregate exit code.
+
+@test "D9: no models block → gate skips entirely" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  # seed_manifest writes an eidolons.yaml WITHOUT a models: block.
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "no models block" ]]
+  [[ ! "$output" =~ "D9 atlas" ]]
+}
+
+@test "D9: managed model matches lock effective_model → PASS" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+  _seed_lock_with_model "sonnet"
+
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: sonnet
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # Gate logic actually runs (lock has a model entry) → reports a match.
+  [[ "$output" =~ "matches lock" ]]
+  [[ ! "$output" =~ "!= lock effective_model" ]]
+}
+
+@test "D9: managed sentinel present but model differs (drift) → FAIL under --deep" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+  _seed_lock_with_model "sonnet"
+
+  # Managed sentinel + a value that does NOT match the lock's effective_model.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: this-is-a-drifted-value-xyz123
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # D9 must detect the drift SPECIFICALLY (not a vacuous non-zero from other gates).
+  [[ "$output" =~ "!= lock effective_model" ]]
+  [ "$status" -ne 0 ]
+}
+
+@test "D9: hand-authored model (no sentinel) → WARN, not FAIL" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+  _seed_lock_with_model "sonnet"
+
+  # model: present but NO eidolons sentinel (hand-authored).
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+model: hand-authored-model
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # D9 emits a WARN for the unmanaged model: and must NOT emit a drift FAIL.
+  [[ "$output" =~ "hand-authored model" ]]
+  [[ ! "$output" =~ "!= lock effective_model" ]]
+}
+
+@test "D9: agent file without any model: field → skip for that member" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+  _seed_lock_with_model "sonnet"
+
+  # No model: line at all in the agent frontmatter.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # D9 reports no managed line for this member (run sync to write); never a drift FAIL.
+  [[ "$output" =~ "no managed model" ]]
+  [[ ! "$output" =~ "!= lock effective_model" ]]
+}
+
+@test "D9: doctor (without --deep) does not run D9 gate" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # Even with a drift in managed model, plain doctor (no --deep) must not fail.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: this-is-a-drifted-value-xyz123
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor
+  # Without --deep, D9 is not run → no D9 output and no failure from D9.
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "D9 FAIL" ]]
+}

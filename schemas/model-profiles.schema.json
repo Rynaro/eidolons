@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://eidolons.dev/schemas/model-profiles.schema.json",
+  "title": "Eidolons model profiles",
+  "type": "object",
+  "required": ["schema_version", "default_profile", "profiles"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "type": "integer", "const": 1 },
+    "default_profile": { "type": "string", "minLength": 1 },
+    "profiles": {
+      "type": "object",
+      "minProperties": 1,
+      "patternProperties": {
+        "^[a-z][a-z0-9-]*$": {
+          "type": "object",
+          "required": ["tiers"],
+          "additionalProperties": false,
+          "properties": {
+            "description": { "type": "string" },
+            "applies_to_hosts": {
+              "type": "array",
+              "items": { "type": "string", "enum": ["claude-code", "codex"] },
+              "uniqueItems": true
+            },
+            "tiers": {
+              "type": "object",
+              "additionalProperties": false,
+              "minProperties": 1,
+              "properties": {
+                "light":    { "type": "string", "minLength": 1 },
+                "standard": { "type": "string", "minLength": 1 },
+                "deep":     { "type": "string", "minLength": 1 }
+              }
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

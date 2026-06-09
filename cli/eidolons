@@ -70,6 +70,13 @@ Commands:
   sync           Install/update to match eidolons.yaml (idempotent)
   list           List available (from roster) or installed Eidolons
   roster         Show detailed roster information
+  model <sub>    Vendor-neutral model management. Subcommands:
+                   list                     List profiles + tier ladder
+                   show [<eidolon>]         Show resolved models (table or --json)
+                   use <eidolon>@<t|model>  Set tier override or concrete model pin
+                   profile <name>           Switch active profile; rewrites frontmatter
+                   reset [<eidolon>]        Clear overrides (one member or all)
+                 Run 'eidolons model --help' for full usage.
   run            Deterministically route a prompt to the correct Eidolon(s)
                  (mechanical cortex dispatch over roster/routing.yaml; no LLM)
   trace <sub>    Read ECL hand-off telemetry. Subcommands:
@@ -161,6 +168,7 @@ case "$cmd" in
   list|ls)     exec bash "$CLI_SRC/list.sh"    "$@" ;;
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
+  model)       exec bash "$CLI_SRC/model.sh"  "$@" ;;
   trace)       exec bash "$CLI_SRC/trace.sh"   "$@" ;;
   eval)        exec bash "$CLI_SRC/eval.sh"    "$@" ;;
   sandbox)     exec bash "$CLI_SRC/sandbox.sh" "$@" ;;

@@ -153,9 +153,66 @@ restore_cortex_source() {
   grep -q 'TRANCE Activation Gates' "$REAL_CORTEX"
 }
 
-@test "cortex: EIDOLONS.md uses capability-class terms not vendor names" {
+@test "cortex: EIDOLONS.md uses tier ladder vocabulary (light/standard/deep)" {
   REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
-  grep -q 'speed-class\|reasoning-class' "$REAL_CORTEX"
+  # Ladder words must appear somewhere in the cortex.
+  grep -qE 'light|standard|deep' "$REAL_CORTEX"
+}
+
+@test "cortex: EIDOLONS.md has no vendor model strings (profile tier values)" {
+  REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
+  # Vendor model strings from roster/model-profiles.yaml must NOT appear in the cortex.
+  # Check for profile tier values that would leak vendor names.
+  if command -v yq >/dev/null 2>&1; then
+    PROFILES_FILE="$EIDOLONS_ROOT/roster/model-profiles.yaml"
+    # Extract all tier value strings from model-profiles.yaml.
+    _profile_values="$(yq eval '.profiles | to_entries[] | .value.tiers | to_entries[] | .value' "$PROFILES_FILE" 2>/dev/null || true)"
+    # Check that none of these vendor strings appear in EIDOLONS.md.
+    local vendor_found=false
+    while IFS= read -r vstr; do
+      [ -z "$vstr" ] && continue
+      if grep -qF "$vstr" "$REAL_CORTEX" 2>/dev/null; then
+        echo "FAIL: vendor model string '$vstr' found in $REAL_CORTEX" >&2
+        vendor_found=true
+      fi
+    done <<EOF
+$_profile_values
+EOF
+    if [ "$vendor_found" = "true" ]; then
+      return 1
+    fi
+  fi
+}
+
+@test "cortex: trance-matrix.md has no vendor model strings" {
+  TRANCE_MATRIX="$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"
+  if command -v yq >/dev/null 2>&1; then
+    PROFILES_FILE="$EIDOLONS_ROOT/roster/model-profiles.yaml"
+    _profile_values="$(yq eval '.profiles | to_entries[] | .value.tiers | to_entries[] | .value' "$PROFILES_FILE" 2>/dev/null || true)"
+    local vendor_found=false
+    while IFS= read -r vstr; do
+      [ -z "$vstr" ] && continue
+      if grep -qF "$vstr" "$TRANCE_MATRIX" 2>/dev/null; then
+        echo "FAIL: vendor model string '$vstr' found in $TRANCE_MATRIX" >&2
+        vendor_found=true
+      fi
+    done <<EOF
+$_profile_values
+EOF
+    if [ "$vendor_found" = "true" ]; then
+      return 1
+    fi
+  fi
+}
+
+@test "cortex: trance-matrix.md mentions tier ladder terms" {
+  TRANCE_MATRIX="$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"
+  grep -qE 'light|standard|deep' "$TRANCE_MATRIX"
+}
+
+@test "cortex: trance-matrix.md has Model Tiers section" {
+  TRANCE_MATRIX="$EIDOLONS_ROOT/methodology/cortex/trance-matrix.md"
+  grep -q 'Model Tiers' "$TRANCE_MATRIX"
 }
 
 # ─── test: marker-bounded sections coexist with other Eidolons ────────────

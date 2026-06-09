@@ -8,6 +8,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_resolve.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_wiring.sh"
 
 usage() {
   cat <<EOF
@@ -40,6 +44,7 @@ Deep checks (--deep):
   D6   skills/ dual-write SHA parity             MUST match between .eidolons/<n>/skills/*.md and .claude/skills/<n>-<basename>/SKILL.md
   D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
   D8   ECL receiver verify-incoming             every installed receiver Eidolon MUST ship a blocking verify-incoming skill (roster/ecl.yaml; ECL 6.2.2, frontier N3)
+  D9   Model frontmatter drift                 managed model: in agent files MUST match lock's effective_model (SKIP when no models block)
 EOF
 }
 
@@ -818,6 +823,89 @@ if [[ "$DEEP" == "true" ]]; then
         deep_check_verify_incoming_conformance "$_dm" || _d8_rc=$?
         ERRORS=$((ERRORS + _d8_rc))
       done <<< "$_deep_members"
+
+      # D9 — Model frontmatter drift (model management gate)
+      # SKIP when no models block is present in eidolons.yaml.
+      # PASS  — every applicable managed model: == lock effective_model.
+      # WARN  — hand-authored model: without sentinel, or host-inapplicable managed line.
+      # FAIL  — managed model: (sentinel present) != lock effective_model (fatal in --deep).
+      echo "  D9 — Model frontmatter drift"
+      _d9_model_block=false
+      model_resolve_init 2>/dev/null || true
+      if model_has_block 2>/dev/null; then
+        _d9_model_block=true
+      fi
+      if [[ "$_d9_model_block" == "false" ]]; then
+        printf "  %s·%s D9 — no models block in eidolons.yaml — skipping\n" \
+          "${YELLOW:-}" "${RESET:-}"
+      else
+        _d9_active_profile="$(model_active_profile 2>/dev/null || echo 'anthropic')"
+        _d9_hosts_csv="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+          | jq -r '(.hosts.wire // []) | join(",")' 2>/dev/null || true)"
+
+        while IFS= read -r _dm; do
+          [[ -z "$_dm" ]] && continue
+
+          # Resolve expected model from lock.
+          _d9_lock_model="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+            | jq -r --arg n "$_dm" \
+              '(.members // [])[] | select(.name == $n) | .model.effective_model // empty' \
+              2>/dev/null || true)"
+
+          # If lock has no model entry yet, skip (not a fail — just needs sync).
+          if [[ -z "$_d9_lock_model" ]]; then
+            printf "  %s·%s D9 %s — no lock model entry (run 'eidolons sync' or 'eidolons model use')\n" \
+              "${YELLOW:-}" "${RESET:-}" "$_dm"
+            continue
+          fi
+
+          # Check each wired host.
+          for _d9_host in $(printf '%s' "$_d9_hosts_csv" | tr ',' ' '); do
+            [[ -z "$_d9_host" ]] && continue
+            case "$_d9_host" in
+              claude-code) _d9_agent_file=".claude/agents/${_dm}.md" ;;
+              codex)       _d9_agent_file=".codex/agents/${_dm}.md" ;;
+              *)           continue ;;
+            esac
+
+            [[ -f "$_d9_agent_file" ]] || continue
+
+            # Check applies_to_hosts.
+            if ! model_profile_applies_to_host "$_d9_active_profile" "$_d9_host" 2>/dev/null; then
+              # If the file has a managed model block, that's a warning.
+              _d9_managed="$(_model_wiring_read_managed "$_d9_agent_file" 2>/dev/null || true)"
+              if [[ -n "$_d9_managed" ]]; then
+                printf "  %s·%s D9 WARN %s (%s): profile '%s' does not apply but managed model: present\n" \
+                  "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host" "$_d9_active_profile"
+              fi
+              continue
+            fi
+
+            # Read managed model from file.
+            _d9_file_model="$(_model_wiring_read_managed "$_d9_agent_file" 2>/dev/null || true)"
+
+            if [[ -z "$_d9_file_model" ]]; then
+              # No managed line — check for unmanaged.
+              if _model_wiring_has_unmanaged_model "$_d9_agent_file" 2>/dev/null; then
+                printf "  %s·%s D9 WARN %s (%s): hand-authored model: without eidolons sentinel\n" \
+                  "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host"
+              else
+                printf "  %s·%s D9 %s (%s): no managed model: line (run 'eidolons sync' to write)\n" \
+                  "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host"
+              fi
+              continue
+            fi
+
+            # Compare managed value vs lock.
+            if [[ "$_d9_file_model" == "$_d9_lock_model" ]]; then
+              pass "D9 ${_dm} (${_d9_host}): model: matches lock (${_d9_lock_model})"
+            else
+              err "D9 ${_dm} (${_d9_host}): managed model: '${_d9_file_model}' != lock effective_model '${_d9_lock_model}'. Run 'eidolons model use ${_dm}@${_d9_lock_model}' or 'eidolons sync' to fix."
+            fi
+          done
+        done <<< "$_deep_members"
+      fi
+      unset _d9_model_block _d9_active_profile _d9_hosts_csv _d9_host _d9_agent_file _d9_file_model _d9_lock_model _d9_managed
     fi
 
     # Remedy hint when methodology errors were found.

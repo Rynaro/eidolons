@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.31.0] — 2026-06-09
+
+### Added
+- **`eidolons model` — vendor-neutral model management.** Every Eidolon and capability class now has a *suggested* and *default* model, chosen by criteria, that users can calibrate per-project — replacing the previous "harness picks the model blindly" behavior (the concrete `model:` was baked into each Eidolon's external `install.sh`, with ATLAS/FORGE shipping none at all). A vendor-neutral ordered tier ladder **`light < standard < deep`** replaces the binary `model_tier` in `roster/routing.yaml`; the *sole* home for vendor model strings is the new `roster/model-profiles.yaml` (preserving prime-directive #162 — the cortex stays vendor-free). Two profiles ship — **anthropic** (default: light→haiku, standard→sonnet, deep→opus) and **openai** (codex: light→gpt-5-mini, standard/deep→gpt-5); adding more (e.g. google) is pure data. Criteria-derived defaults: SPECTRA/FORGE/VIGIL→deep, ATLAS/APIVR-Δ→standard, IDG/Kupo→light (APIVR-Δ ships standard with an inert `loop_native` promotion hook for a future benchmark-gated bump). The CLI surface — `eidolons model {list,show,use,profile,reset}` plus a bare interactive guided picker (mirroring `ui_pick_hosts`) — lets any user inspect or change the resolution; precedence is most-specific-wins (per-member pin → per-tier calibration → active profile → roster tier → class default). The resolved **effective model** is persisted in `eidolons.lock` and written into host agent frontmatter as an idempotent, sentinel-marked managed block (`# eidolons:managed model`) for **claude-code** and **codex**; **copilot/cursor** are a clean no-op (no per-agent model concept), and a profile that doesn't apply to a wired host is skipped rather than writing an invalid model string. New `eidolons doctor --deep` **D9** gate reports frontmatter-vs-lock drift (PASS/WARN/FAIL, never auto-fix). Decision trail: `.spectra/specs/model-management.md` (+ ATLAS scout + FORGE decision record). See [`docs/model.md`](docs/model.md).
+
 ## [1.30.0] — 2026-06-09
 
 ### Added

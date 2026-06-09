@@ -5,7 +5,9 @@
 > A host LLM reading this file once at session start can route any
 > free-form prompt to the correct Eidolon(s), at the correct tier,
 > in the correct chain. No vendor model names appear here — capability
-> classes only (speed-class, reasoning-class). See §DEEP for extended
+> classes and tier ladder only (`light < standard < deep`). The concrete
+> model per tier is set by the active profile in `roster/model-profiles.yaml`;
+> use `eidolons model` to inspect or change it. See §DEEP for extended
 > tables loaded on demand.
 
 ---
@@ -46,7 +48,7 @@
 selected: [<eidolon>, ...]
 tier: standard | trance
 chain: [{eidolon, role, hand_off_artifact_path, edge_origin}, ...]
-model_tier_per_step: [speed-class | reasoning-class, ...]
+model_tier_per_step: [light | standard | deep, ...]   # suggested tier per step
 confidence: 0..1
 assumptions: [...]       # [GAP]/[DISPUTED] when routing is ambiguous
 clarification_request: <string?>
@@ -72,7 +74,7 @@ refusal_rerouting: <bool>
 
 ## TRANCE Activation Gates (always-loaded)
 
-TRANCE grants: parallel fan-out (max 5 branches), worktree isolation per branch, verifier-cascade wrapping, evaluator-optimizer loop (cap 3 iterations), model-tier upgrade (lead = reasoning-class, workers = speed-class).
+TRANCE grants: parallel fan-out (max 5 branches), worktree isolation per branch, verifier-cascade wrapping, evaluator-optimizer loop (cap 3 iterations), model-tier upgrade (lead = deep, workers = light).
 
 TRANCE is **never** the default. Auto-trigger requires **both** a complexity flag AND a stakes flag. Cost warning emitted at ≥ 5× standard-tier budget.
 
@@ -139,7 +141,7 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 
 - **I-C1** — Marker-bounded sections when embedding into shared host files (`<!-- eidolon:cortex start/end -->`).
 - **I-C2** — No `eval` of routing rules; descriptor table is data, dispatch is interpretive.
-- **I-C3** — Capability classes only: `speed-class`, `reasoning-class`. Never vendor names.
+- **I-C3** — Capability classes + vendor-neutral tiers only (`light < standard < deep`). Never vendor model names.
 - **I-C4** — Always-loaded section ≤ 900 tokens; deep tables in `methodology/cortex/`.
 - **I-C5** — Refusals are immutable; cortex must never request a refused capability of a target Eidolon.
 - **I-C6** — Same prompt + same context + same roster ⇒ same routing decision.
