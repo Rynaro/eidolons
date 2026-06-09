@@ -43,11 +43,11 @@ suites:
     - id: R-003
       category: bugfix
       prompt: "Fix the off-by-one in flowmap_resolve"
-      expect: { decision: dispatch, selected: [apivr], tier: standard }
+      expect: { decision: dispatch, selected: [vivi], tier: standard }
     - id: R-004
       category: implement
       prompt: "implement the retry logic in the worker"
-      expect: { decision: dispatch, selected: [apivr] }
+      expect: { decision: dispatch, selected: [vivi] }
     - id: R-005
       category: planning
       prompt: "spec out the new caching layer"
@@ -71,7 +71,7 @@ suites:
     - id: R-010
       category: chain
       prompt: "design and implement the --json flag for doctor"
-      expect: { decision: chain, selected: [spectra, apivr] }
+      expect: { decision: chain, selected: [spectra, vivi] }
     - id: R-011
       category: chain
       prompt: "I need a spec for refactoring the dispatcher; I don't know the call graph yet"
@@ -79,7 +79,7 @@ suites:
     - id: R-012
       category: refusal
       prompt: "ATLAS, please patch this file"
-      expect: { decision: refusal_reroute, selected: [apivr], refusal_rerouting: true }
+      expect: { decision: refusal_reroute, selected: [vivi], refusal_rerouting: true }
     - id: R-013
       category: clarify
       prompt: "do the thing"
@@ -105,7 +105,7 @@ suites:
     - id: H-002
       category: implement
       prompt: "build the pagination feature for the list endpoint"
-      expect: { decision: dispatch, selected: [apivr] }
+      expect: { decision: dispatch, selected: [vivi] }
     - id: H-003
       category: decision
       prompt: "which approach should we take, optimistic or pessimistic locking?"
