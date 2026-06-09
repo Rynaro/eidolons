@@ -45,21 +45,38 @@ kinds, with this context-budget ceiling, at this trust level".
 | --- | --- | --- | --- | --- | --- | --- |
 | `apivr` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `apivr` | `idg` | PROPOSE, INFORM | apivr-completion-report | 5000 | `standard` | `roster` |
+| `apivr` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | apivr-completion-report | 4000 | `standard` | `roster` |
 | `apivr` | `vigil` | ESCALATE, REQUEST, ACKNOWLEDGE | repair-failed-report | 4000 | `high` | `roster` |
 | `atlas` | `apivr` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `atlas` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
+| `atlas` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | scout-report | 4000 | `standard` | `roster` |
 | `atlas` | `spectra` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `forge` | `apivr` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `atlas` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `idg` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
+| `forge` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | reasoning-report | 4000 | `standard` | `roster` |
 | `forge` | `spectra` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `vigil` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
+| `human` | `apivr` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `atlas` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `forge` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `idg` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `kupo` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `implicit` |
+| `human` | `spectra` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `vigil` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `idg` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
+| `kupo` | `apivr` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `atlas` | INFORM, ESCALATE, REFUSE, ACKNOWLEDGE | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `forge` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `spectra` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `vigil` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `spectra` | `apivr` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
 | `spectra` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
+| `spectra` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | spec | 4000 | `standard` | `roster` |
 | `vigil` | `apivr` | PROPOSE, CRITIQUE, INFORM | root-cause-report | 4000 | `high` | `roster` |
 | `vigil` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `vigil` | `idg` | PROPOSE, INFORM | root-cause-report | 4000 | `standard` | `roster` |
+| `vigil` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | root-cause-report | 4000 | `standard` | `roster` |
 | `vigil` | `spectra` | PROPOSE, INFORM, ESCALATE | root-cause-report | 4000 | `high` | `roster` |
 
 ### Hand-off invariants
@@ -104,6 +121,10 @@ APIVR-Δ consults FORGE during Plan phase when ambiguity or trade-offs surface. 
 
 APIVR-Δ hands off the completion artefact (session log + delta history + completion report) for IDG to chronicle. Listed in roster: apivr.handoffs.downstream contains idg.
 
+### `apivr → kupo`
+
+APIVR DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own apivr-completion-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-apivr. Declared in roster: kupo.handoffs.upstream contains apivr.
+
 ### `apivr → vigil`
 
 APIVR-Δ escalates to VIGIL when the Reflect phase exhausts its 3-failure threshold on the same category. Performative MUST be ESCALATE for the threshold path; REQUEST is reserved for ad-hoc forensic asks that do not cross the threshold. Listed in roster: apivr.handoffs.lateral contains vigil.
@@ -115,6 +136,10 @@ ATLAS hands off directly to APIVR-Δ when SPECTRA is not deployed (partial team)
 ### `atlas → forge`
 
 ATLAS consults FORGE during the Locate or Synthesize phase when a forensic finding or hand-off-target decision has more than one defensible framing — e.g. competing call-graph entry points, ambiguous owner attribution, or a structural choice that downstream consumers (APIVR-Δ or SPECTRA) will see different consequences from. Listed in roster: atlas.handoffs.lateral contains forge. Mirrors apivr-to-forge body shape; FORGE methodology owns the response.
+
+### `atlas → kupo`
+
+ATLAS DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own scout-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-atlas. Declared in roster: kupo.handoffs.upstream contains atlas.
 
 ### `atlas → spectra`
 
@@ -132,6 +157,10 @@ FORGE returns a reasoning report to ATLAS in response to atlas→forge consultat
 
 FORGE returns a reasoning report to IDG in response to idg→forge consultation. Listed in roster: forge.handoffs.lateral contains idg. CRITIQUE is reserved for the REFORGE case where FORGE declines to adjudicate (e.g. because the conflicting sources require a fresh observation rather than reasoning) and returns the question reframed.
 
+### `forge → kupo`
+
+FORGE DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own reasoning-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-forge. Declared in roster: kupo.handoffs.upstream contains forge.
+
 ### `forge → spectra`
 
 FORGE returns a reasoning report to SPECTRA in response to spectra→forge consultation. Listed in roster: forge.handoffs.lateral contains spectra. CRITIQUE is reserved for the REFORGE case where FORGE refuses the scoring frame (e.g. because the rubric dimensions themselves are mis-calibrated for the change in scope) rather than picking a winner.
@@ -140,9 +169,57 @@ FORGE returns a reasoning report to SPECTRA in response to spectra→forge consu
 
 FORGE returns a reasoning report to VIGIL in response to vigil→forge consultation. Listed in roster: forge.handoffs.lateral contains vigil. CRITIQUE is reserved for the REFORGE case where FORGE refuses the blame-target frame — typically when reproduction evidence is too thin for any of VIGIL's hypotheses to be reasoned about, and an extra observation pass is the right next step.
 
+### `human → apivr`
+
+Human-origin edge into APIVR-Δ. The originator may REQUEST APIVR-Δ to implement a feature or run the A→P→I→V→Δ cycle on a spec, INFORM it with additional context (a test case to anchor against, a constraint surfaced after planning), CRITIQUE a prior implementation report or a proposed plan during the Plan phase, REFUSE a proposed artefact, ACKNOWLEDGE a completion report to close a pause-on gate, or ESCALATE a blocker (e.g. "this should route to VIGIL"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → atlas`
+
+Human-origin edge into ATLAS. The originator may REQUEST ATLAS to map a surface or produce a scout-report, INFORM it with additional context (e.g. "the dispatch lives in cli/src/"), CRITIQUE a prior scout-report for revision, REFUSE a proposed scout target or framing, ACKNOWLEDGE a scout-report to close a pause-on gate, or ESCALATE a blocker outside the current chain. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME (rationale per performative: PROPOSE collapses to REQUEST; DECIDE is reserved for an evaluator Eidolon — FORGE — so the audit trail names the deciding role; DELEGATE is reserved for Eidolon-origin task binding; RESUME is emitted by the harness itself when re-entering a trace, not by the human). Authored to support Junction's F-HUMAN-EDGE per Junction spec §5.7; additive to ECL v1.0 with no spec-version bump.
+
+### `human → forge`
+
+Human-origin edge into FORGE. The originator may REQUEST FORGE to perform a quality gate, RFC review, or arbitrate a trade-off, INFORM it with additional context (a counterfactual, an external constraint not surfaced in the originating chain), CRITIQUE a prior reasoning report, REFUSE a proposed decision (FORGE re-runs with the human's REFUSE recorded in the trace), ACKNOWLEDGE a reasoning report, or ESCALATE a blocker. Note that FORGE is itself the evaluator role emitting DECIDE — the human's role here is to feed inputs and accept or reject outputs, never to short-circuit FORGE's own DECIDE. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → idg`
+
+Human-origin edge into IDG. The originator may REQUEST IDG to chronicle a session's artefacts and decisions, INFORM it with additional context (a missing rationale, a corrected attribution), CRITIQUE a prior chronicle for revision, REFUSE a proposed chronicle, ACKNOWLEDGE a finalised chronicle, or ESCALATE a blocker outside the current chain. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → kupo`
+
+Human-origin edge into Kupo. The originator may REQUEST a quick localized, verifier-backed micro-task (rename, import fix, lockfile bump, lint autofix), INFORM additional context, CRITIQUE a prior edit-proposal for revision, REFUSE a target/framing, ACKNOWLEDGE to close a gate, or ESCALATE a blocker. Humans MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME (PROPOSE collapses to REQUEST; DECIDE is reserved for an evaluator Eidolon; DELEGATE is reserved for Eidolon-origin task binding; RESUME is harness-emitted). edge_origin: implicit — a human may invoke the executor directly, outside a roster chain.
+
+### `human → spectra`
+
+Human-origin edge into SPECTRA. The originator may REQUEST SPECTRA to author a decision-ready specification, INFORM it with additional context (a reference doc, an updated requirement, a fact discovered mid-cycle), CRITIQUE a prior spec for revision (tightening a gate, reframing a story), REFUSE a proposed spec, ACKNOWLEDGE a spec to close a pause-on gate before APIVR-Δ proceeds, or ESCALATE a blocker outside the current chain (e.g. "this needs ATLAS first"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → vigil`
+
+Human-origin edge into VIGIL. The originator may REQUEST VIGIL to investigate or patch a defect, INFORM it with additional context (a reproducer, a suspect commit, a log excerpt), CRITIQUE a prior root-cause report for revision, REFUSE a proposed patch, ACKNOWLEDGE a patch or root-cause report to close a pause-on gate, or ESCALATE a blocker outside the current chain. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
 ### `idg → forge`
 
 IDG consults FORGE when a chronicle must adjudicate between conflicting source artefacts — e.g. two upstream Eidolons recorded contradictory decisions for the same change, or a `[DISPUTED]` marker requires reasoned resolution before it can be retired. Listed in roster: idg.handoffs.lateral contains forge. Mirrors apivr-to-forge; FORGE owns the response body.
+
+### `kupo → apivr`
+
+Kupo returns a verified edit-proposal to apivr (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of apivr-to-kupo (roster handoff).
+
+### `kupo → atlas`
+
+Kupo replies to ATLAS with INFORM/ESCALATE/REFUSE/ACKNOWLEDGE only — never PROPOSE, because a read-only scout cannot apply a patch. If ATLAS delegates a quick lookup, Kupo INFORMs the result; if the task requires an applied edit, Kupo ESCALATEs to a write-capable parent. Reverse of atlas-to-kupo (roster).
+
+### `kupo → forge`
+
+Kupo returns a verified edit-proposal to forge (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of forge-to-kupo (roster handoff).
+
+### `kupo → spectra`
+
+Kupo returns a verified edit-proposal to spectra (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of spectra-to-kupo (roster handoff).
+
+### `kupo → vigil`
+
+Kupo returns a verified edit-proposal to vigil (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of vigil-to-kupo (roster handoff).
 
 ### `spectra → apivr`
 
@@ -151,6 +228,10 @@ SPECTRA hands off a decision-ready specification for APIVR-Δ to implement. List
 ### `spectra → forge`
 
 SPECTRA consults FORGE during the Explore or Construct phase when the scoring rubric for two candidate strategies converges within the decision-band noise floor, or when a stakeholder constraint forces a trade-off that the rubric cannot disambiguate. Listed in roster: spectra.handoffs.lateral contains forge. Same lightweight body shape as apivr-to-forge; FORGE owns the response.
+
+### `spectra → kupo`
+
+SPECTRA DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own spec. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-spectra. Declared in roster: kupo.handoffs.upstream contains spectra.
 
 ### `vigil → apivr`
 
@@ -163,6 +244,10 @@ VIGIL consults FORGE during the Graph or Intervene phase when the dependency-gra
 ### `vigil → idg`
 
 VIGIL routes a finalised attribution to IDG when the incident merits chronicling (post-mortem, ADR, runbook update). Listed in roster: vigil.handoffs.lateral contains idg. chronicle_hooks names the documentation surfaces IDG should target.
+
+### `vigil → kupo`
+
+VIGIL DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own root-cause-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-vigil. Declared in roster: kupo.handoffs.upstream contains vigil.
 
 ### `vigil → spectra`
 
