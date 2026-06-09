@@ -38,3 +38,21 @@ The lockfile-bump agent **hallucinated that `eidolons sandbox apply` does not ex
 3. Re-confirm resolved-rate ≥ cost-ratio on the larger cohort → flip status, contribute canonical `contracts/*.yaml` to `eidolons-ecl`.
 
 This is the first time a roster Eidolon has a *behavioral* (not documentary) additive number — exactly the "measure before trust" gate the frontier dossier demanded.
+
+---
+
+## 6. Shipped-gate run (2026-06-08) — CLEARED → flipped to `shipped` v1.0.0
+
+After the v0.1.1 applier-trust fix, the cohort was **expanded 7 → 12** (added: multi-block edit, JSON-value via jq, env-key rename, relative-path fix, typo fix) and run at **k=3** through the real `eidolons sandbox apply` loop (`kupo-shipped-eval` workflow, 36 haiku agents).
+
+| Metric | Result | Gate |
+|---|---|---|
+| Total runs (12 × k=3) | **36 / 36 resolved** | — |
+| Task-resolved-rate | **1.000** | > 0.20 ✓ |
+| **pass^3** (resolved in all 3 runs) | **1.000** | — |
+
+Every task 3/3 — zero flakiness, zero abstentions (the v0.1.1 trust fix held). **Decision: flip `in_construction → shipped`, Kupo v1.0.0.**
+
+**Honest framing (unchanged):** 1.0 is the *expected* result for a well-scoped executor — the tasks are easy *by design* because the scope-guard restricts Kupo to exactly this class. The eval proves the **additive-proof** (Kupo reliably clears its KEEP cohort, consistently), NOT that Kupo is a strong general coder (it isn't, and *refuses* hard tasks). N=12 synthetic is a strong-but-bounded sample; production reliability should keep growing the cohort with real instances over time.
+
+**Remaining follow-up (post-flip):** contribute the 10 canonical `contracts/*.yaml` to `eidolons-ecl` (regenerates `composition.md`); `vivi↔kupo` edges when the Vivi succession lands.

@@ -91,3 +91,54 @@ tasks:
     test: "jq empty data.json"
     gold_fix: |
       printf '{\n  "a": 1,\n  "b": 2\n}\n' > data.json
+
+  - id: keep-multi-block-edit
+    description: "config.sh has two wrong non-adjacent values (MIN=1, MAX=9); the spec needs MIN=0 and MAX=10. Multi-block search/replace, one file. Verifier: grep both."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'MIN=1\nMODE=auto\nMAX=9\n' > config.sh
+      git add -A && git commit -qm "broken: MIN=1/MAX=9 (need 0/10)"
+    test: "grep -q '^MIN=0$' config.sh && grep -q '^MAX=10$' config.sh && grep -q '^MODE=auto$' config.sh"
+    gold_fix: |
+      printf 'MIN=0\nMODE=auto\nMAX=10\n' > config.sh
+
+  - id: keep-json-value-edit
+    description: "pkg.json pins version 1.0.0; the release needs 2.0.0. JSON-aware value edit. Verifier: jq reads the field."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf '{\n  "name": "x",\n  "version": "1.0.0"\n}\n' > pkg.json
+      git add -A && git commit -qm "broken: version 1.0.0 (need 2.0.0)"
+    test: "test \"$(jq -r .version pkg.json)\" = \"2.0.0\""
+    gold_fix: |
+      printf '{\n  "name": "x",\n  "version": "2.0.0"\n}\n' > pkg.json
+
+  - id: keep-env-key-rename
+    description: ".env uses the old key DATABASE_URL; the app reads DB_URL (same value). Rename the key only. Verifier: grep new key present + old key gone."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'DB_HOST=localhost\nDATABASE_URL=postgres://x\n' > .env
+      git add -A && git commit -qm "broken: key DATABASE_URL (app reads DB_URL)"
+    test: "grep -q '^DB_URL=postgres://x$' .env && ! grep -q 'DATABASE_URL' .env"
+    gold_fix: |
+      printf 'DB_HOST=localhost\nDB_URL=postgres://x\n' > .env
+
+  - id: keep-relative-path-fix
+    description: "build.sh cats ./src/version.txt but the file is at ./version.txt. Fix the relative path. Verifier: run + grep output."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf '1.2.3\n' > version.txt
+      printf 'cat ./src/version.txt\n' > build.sh
+      git add -A && git commit -qm "broken: build.sh cats ./src/version.txt (file is ./version.txt)"
+    test: "sh build.sh 2>/dev/null | grep -q '^1.2.3$'"
+    gold_fix: |
+      printf 'cat ./version.txt\n' > build.sh
+
+  - id: keep-typo-fix
+    description: "README.txt has a typo ('teh'); fix it to 'the'. Verifier: the corrected phrase present + the typo gone."
+    setup: |
+      git init -q && git config user.email t@example.com && git config user.name tester
+      printf 'This is teh config file.\n' > README.txt
+      git add -A && git commit -qm "broken: typo 'teh'"
+    test: "grep -q 'the config' README.txt && ! grep -q 'teh' README.txt"
+    gold_fix: |
+      printf 'This is the config file.\n' > README.txt

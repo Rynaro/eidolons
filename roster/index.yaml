@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-09T00:10Z"
+updated_at: "2026-06-09T02:53Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1072,7 +1072,7 @@ eidolons:
   - name: kupo
     display_name: Kupo
     capability_class: executor
-    status: in_construction       # → shipped only after the P5 KEEP-cohort eval-gate proves it net-additive
+    status: shipped               # KEEP-cohort eval cleared 2026-06-08 (12 tasks × k=3 = 36/36; task-resolved 1.0; pass^3 1.0) — flipped from in_construction
     methodology:
       name: KUPO
       version: "1.0"
@@ -1083,9 +1083,9 @@ eidolons:
       repo: Rynaro/Kupo
       default_ref: main
     versions:
-      latest: "0.1.1"
+      latest: "1.0.0"
       pins:
-        stable: "0.1.1"
+        stable: "1.0.0"
       releases:                    # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
         0.1.0:
           tag: v0.1.0
@@ -1101,6 +1101,15 @@ eidolons:
           commit: f61277e69b227ed123587e2d0571852ce4fac0c0
           tree: 2b85b0b14ac3dfab4d67d8335e685dd49b9260e4
           archive_sha256: 7dbeb5fa5579c25d88874c26ce8396616823ecc468ad32b076ebbdb245716489
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.0.0:
+          tag: v1.0.0
+          commit: 8153438d91404c8870ea6ff02b65e988996534e7
+          tree: 23277b16d612a4b74bb8b1a57d893c7e00673841
+          archive_sha256: bc6637954f00a0b54a30ed49bf438b3b6a49341a4cdf63e0186f1c29fe4aec6a
           manifest_sha256:
           provenance:
             github_attestation: true
@@ -1358,8 +1367,8 @@ presets:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [spectra, apivr]
   full:
-    description: "Every shipped Eidolon — pipeline plus lateral specialists (FORGE, VIGIL)."
-    members: [atlas, spectra, apivr, idg, forge, vigil]
+    description: "Every shipped Eidolon — pipeline plus lateral specialists (FORGE, VIGIL) and the Kupo executor."
+    members: [atlas, spectra, apivr, idg, forge, vigil, kupo]
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]
