@@ -1072,7 +1072,7 @@ eidolons:
   - name: kupo
     display_name: Kupo
     capability_class: executor
-    status: shipped               # KEEP-cohort eval cleared 2026-06-08 (12 tasks × k=3 = 36/36; task-resolved 1.0; pass^3 1.0) — flipped from in_construction
+    status: shipped # KEEP-cohort eval cleared 2026-06-08 (12 tasks × k=3 = 36/36; task-resolved 1.0; pass^3 1.0) — flipped from in_construction
     methodology:
       name: KUPO
       version: "1.0"
@@ -1086,7 +1086,7 @@ eidolons:
       latest: "1.0.0"
       pins:
         stable: "1.0.0"
-      releases:                    # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
+      releases: # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
         0.1.0:
           tag: v0.1.0
           commit: 1cad991e35ff793f5f3ba89a71b3bd72601a2666
@@ -1118,8 +1118,8 @@ eidolons:
       target_default: "./.eidolons/kupo"
       standalone: true
     handoffs:
-      upstream: [spectra, vigil, forge, apivr, atlas]   # the Eidolons that may DELEGATE micro-tasks in
-      downstream: []                                     # pure downstream worker — replies only to the delegating parent
+      upstream: [spectra, vigil, forge, apivr, atlas] # the Eidolons that may DELEGATE micro-tasks in
+      downstream: [] # pure downstream worker — replies only to the delegating parent
       lateral: []
     comm:
       envelope_version: "2.0"
@@ -1127,9 +1127,9 @@ eidolons:
       entry: 850
       target: 1800
     security:
-      reads_repo: true             # gathers via atlas-aci
-      reads_network: false         # MCP access is not a network read (universal ACI invariant)
-      writes_repo: false           # NEVER the real tree — PROPOSE-only; the parent applies & commits
+      reads_repo: true # gathers via atlas-aci
+      reads_network: false # MCP access is not a network read (universal ACI invariant)
+      writes_repo: false # NEVER the real tree — PROPOSE-only; the parent applies & commits
       persists: []
     references:
       - "research/kupo-build-dossier.md"
@@ -1354,6 +1354,11 @@ nexus:
         tree: eaf0f7a0176ef7d9c86cd2af2caaec3e5587b3c8
         archive_sha256: 39a3feb27a918ae73f7e11fc63ac67d115817da344fe2bfd414ed61a7cd498cd
         released_at: "2026-06-05T01:07:04Z"
+      1.29.0:
+        commit: 9c24a3a2db19ade6a97f04d05ad363482ed1e774
+        tree: a8a1518919b2e1e8621f4fc89db87f52a794800b
+        archive_sha256: 92dbabd0b3da4e4941a6cf4063f17d93a1e1efe511d261c829e77d88b4f53fbe
+        released_at: "2026-06-09T12:24:56Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:
