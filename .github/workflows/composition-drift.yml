@@ -32,7 +32,7 @@ on:
 # The pinned ECL release tag. Bump this when you accept a new
 # `contracts/` shape from `eidolons-ecl`.
 env:
-  ECL_PINNED_TAG: v1.2.0
+  ECL_PINNED_TAG: v2.0.1
 
 jobs:
   composition-drift:
