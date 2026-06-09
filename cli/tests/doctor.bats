@@ -1436,3 +1436,156 @@ CLAUDEMD
   [[ "$output" =~ "skipped" ]]
   [ "$status" -eq 0 ]
 }
+
+# ─── D9: model frontmatter gate ───────────────────────────────────────────────
+# D9 is only exercised under --deep; without --deep it is SKIP.
+
+_setup_d9_project() {
+  # Minimal project: 1 member (atlas), claude-code host, models block.
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [claude-code]
+models:
+  profile: anthropic
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+}
+
+@test "D9: no models block → gate is SKIP (not mentioned in plain doctor)" {
+  # Without models block, D9 is skipped entirely.
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+
+  run eidolons doctor --deep
+  # Exit code must be 0 (SKIP contributes no error).
+  [ "$status" -eq 0 ]
+  # "Model frontmatter" section must either say "skip" or not appear with errors.
+  # We only assert it doesn't FAIL.
+  [[ ! "$output" =~ "D9 FAIL" ]]
+}
+
+@test "D9: managed model matches resolved model → PASS" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # Write an agent file with a managed sentinel and a correctly-resolved value.
+  # anthropic profile + atlas default (standard) → resolve-test: any non-empty model string.
+  # We first ask what atlas resolves to, then write that into the agent file.
+  local resolved_model
+  if command -v yq >/dev/null 2>&1; then
+    resolved_model="$(bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; PROFILES_JSON=\"\$(yq eval -o json '$EIDOLONS_ROOT/roster/model-profiles.yaml')\"; ROUTING_JSON=\"\$(yq eval -o json '$EIDOLONS_ROOT/roster/routing.yaml')\"; CONSUMER_JSON='{\"models\":{\"profile\":\"anthropic\"}}'; model_resolve_for atlas | cut -f1" 2>/dev/null)"
+  else
+    resolved_model="claude-sonnet-latest"   # fallback fixture
+  fi
+
+  cat > .claude/agents/atlas.md <<AGENTEOF
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: ${resolved_model}
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # D9 PASS or SKIP — must not have D9 FAIL.
+  [[ ! "$output" =~ "D9 FAIL" ]]
+}
+
+@test "D9: managed sentinel present but model differs (drift) → FAIL under --deep" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # Write an agent file with a managed sentinel and a WRONG (drifted) value.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: this-is-a-drifted-value-xyz123
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # D9 must FAIL because the managed value drifted.
+  [[ "$output" =~ "D9" ]]
+  [ "$status" -ne 0 ]
+}
+
+@test "D9: hand-authored model (no sentinel) → WARN only, does not fail" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # Write an agent file with model: but NO sentinel (hand-authored).
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+model: hand-authored-model
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # WARN is non-fatal — exit code must still be 0.
+  [ "$status" -eq 0 ]
+  # Must mention D9 (even if just skipped or warned).
+  [[ "$output" =~ "D9" ]]
+}
+
+@test "D9: agent file without any model: field → SKIP for that member" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # No model: line at all.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor --deep
+  # No model block in this agent → D9 skip for this member; not an error.
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "D9 FAIL" ]]
+}
+
+@test "D9: doctor (without --deep) does not run D9 gate" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  _setup_d9_project
+
+  # Even with a drift in managed model, plain doctor (no --deep) must not fail.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Test
+# eidolons:managed model
+model: this-is-a-drifted-value-xyz123
+---
+
+Body text.
+AGENTEOF
+
+  run eidolons doctor
+  # Without --deep, D9 is not run → no D9 output and no failure from D9.
+  [ "$status" -eq 0 ]
+  [[ ! "$output" =~ "D9 FAIL" ]]
+}

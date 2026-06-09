@@ -134,3 +134,52 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$status" -eq 0 ]
   [ "$(_field '.selected[0]')" = "vigil" ]
 }
+
+# ── model_tier_per_step uses suggested_tier values (WP2 migration) ─────────────
+# The routing kernel reads .suggested_tier from routing.yaml (migrated from
+# .model_tier). model_tier_per_step in the artifact carries tier ladder values.
+
+@test "run: model_tier_per_step is present in --json artifact" {
+  run eidolons run "map the auth flow" --json
+  [ "$status" -eq 0 ]
+  local mtp
+  mtp="$(_field '.model_tier_per_step')"
+  [ -n "$mtp" ] && [ "$mtp" != "null" ]
+}
+
+@test "run: model_tier_per_step values are ladder words (not binary speed/reasoning)" {
+  run eidolons run "map the auth flow" --json
+  [ "$status" -eq 0 ]
+  local mtp
+  mtp="$(_field '.model_tier_per_step | join(",")')"
+  # Must NOT contain old binary class values.
+  [[ ! "$mtp" =~ "speed-class" ]]
+  [[ ! "$mtp" =~ "reasoning-class" ]]
+}
+
+@test "run: atlas dispatch produces standard tier in model_tier_per_step" {
+  run eidolons run "map the auth flow" --json
+  [ "$status" -eq 0 ]
+  # atlas has suggested_tier: standard
+  local tier
+  tier="$(_field '.model_tier_per_step[0]')"
+  [ "$tier" = "standard" ]
+}
+
+@test "run: spectra dispatch produces deep tier in model_tier_per_step" {
+  run eidolons run "spec out the requirements" --json
+  [ "$status" -eq 0 ]
+  # spectra has suggested_tier: deep; selected may be spectra
+  local sel
+  sel="$(_field '.selected[0]')"
+  if [ "$sel" = "spectra" ]; then
+    local tier
+    tier="$(_field '.model_tier_per_step[0]')"
+    [ "$tier" = "deep" ]
+  fi
+}
+
+@test "run: routing data has no model_tier field (migrated to suggested_tier)" {
+  # Verify the routing YAML no longer carries the old model_tier field.
+  ! grep -q "model_tier:" "$EIDOLONS_ROOT/roster/routing.yaml"
+}
