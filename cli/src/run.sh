@@ -130,7 +130,7 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
     .key as $nm | .value as $v
     | { name: $nm,
         class: $v.capability_class,
-        model_tier: $v.model_tier,
+        model_tier: ($v.suggested_tier // $v.model_tier // "standard"),
         downstream: ($v.downstream // []),
         refuse: ($v.refuse_verbs // []),
         raw: ([ $v.trigger_verbs[] | select(. as $t | hasword($prompt; $t)) ] | length),

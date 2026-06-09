@@ -11,9 +11,13 @@
 #
 # Invariant I-C6: same prompt + same context + same routing data ⇒ same routing.
 # Invariant I-C2: this is DATA. The kernel interprets it; there is no eval.
+#
+# Model tiers: the SOLE tier source is this file (single source of truth).
+# Vendor model strings live ONLY in roster/model-profiles.yaml (PD #162).
+# Tier ladder: light < standard < deep.
 
 routing_version: "1.0"
-updated_at: "2026-06-08T00:00Z"
+updated_at: "2026-06-09T00:00Z"
 
 # ─── Gate thresholds (Dispatch Protocol Step 2 / TRANCE Step 4) ─────────────────
 thresholds:
@@ -25,49 +29,60 @@ thresholds:
   surface_files: 25        # large-surface complexity flag (C5)
   surface_modules: 5
 
+# ─── Class-level tier defaults ───────────────────────────────────────────────
+# Used by the model resolver when a given Eidolon has no per-id suggested_tier.
+# 'default' applies to unknown / future capability classes.
+classes:
+  default:
+    suggested_tier: standard
+
 # ─── Per-Eidolon routing descriptors (mirror EIDOLONS.md trigger/refuses) ───────
+# suggested_tier: vendor-neutral tier (light|standard|deep). The active profile
+# in roster/model-profiles.yaml maps tier → concrete model string.
 # score = (# distinct trigger phrases matched in the prompt). Refusal is checked
-# against refuse_verbs. model_tier maps to the speed/reasoning capability class.
+# against refuse_verbs.
 eidolons:
   atlas:
     capability_class: scout
-    model_tier: speed-class
+    suggested_tier: standard
     trigger_verbs: ["map", "trace", "find where", "who calls", "call graph", "list entrypoints", "entrypoints", "audit", "explore", "where is", "scout", "understand the codebase", "make sense of"]
     refuse_verbs: ["implement", "fix", "edit", "write", "commit", "deploy", "migrate", "refactor", "patch"]
     downstream: ["spectra", "apivr", "idg"]
   spectra:
     capability_class: planner
-    model_tier: reasoning-class
+    suggested_tier: deep
     trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
     refuse_verbs: ["implement code", "modify files", "write the code"]
     downstream: ["apivr", "idg"]
   apivr:
     capability_class: coder
-    model_tier: speed-class
+    suggested_tier: standard
+    loop_native: false        # promotion hook: flip to deep is benchmark-GATED
+                              # see project_coder_7_5_augmentation / project_apivr_overhaul
     trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
   idg:
     capability_class: scriber
-    model_tier: speed-class
+    suggested_tier: light
     trigger_verbs: ["document", "adr", "runbook", "chronicle", "synthesize", "record decisions", "write the docs", "changelog narrative"]
     refuse_verbs: ["explore repo", "find calls", "retrieve", "analyze code"]
     downstream: []
   forge:
     capability_class: reasoner
-    model_tier: reasoning-class
+    suggested_tier: deep
     trigger_verbs: ["trade-off", "tradeoff", "which approach", "should we", "ambiguous", "counterfactual", "deliberate", "x or y", "decide between"]
     refuse_verbs: ["implement", "retrieve", "synthesize prose"]
     downstream: []
   vigil:
     capability_class: debugger
-    model_tier: reasoning-class
+    suggested_tier: deep
     trigger_verbs: ["root cause", "flaky", "heisenbug", "regression after", "post-mortem", "postmortem", "why does this fail", "why does it fail"]
     refuse_verbs: ["build new feature", "plan from scratch"]
     downstream: []
   kupo:
     capability_class: executor
-    model_tier: speed-class
+    suggested_tier: light
     # NARROW by design: only clearly-localized micro-task verbs, so the router never
     # poaches APIVR-Δ/Vivi coding work. Kupo is primarily a DELEGATION target (heavier
     # Eidolons hand it micro-tasks); these verbs let it also be dispatched directly.

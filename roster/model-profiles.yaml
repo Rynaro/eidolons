@@ -1,0 +1,28 @@
+# roster/model-profiles.yaml
+# SOLE home for vendor model strings (prime-directive #162).
+# Do NOT put model strings in routing.yaml, index.yaml, EIDOLONS.md, or any
+# cortex file. Adding a new profile is a pure data change — zero code change.
+#
+# Schema: ../schemas/model-profiles.schema.json
+# Consumer override surface: eidolons.yaml `models:` block
+#   models.profile      → switch active profile
+#   models.calibration  → per-tier override within the active profile
+#   models.members.<id>.model → PIN (ignores tier/profile entirely)
+schema_version: 1
+default_profile: anthropic
+
+profiles:
+  anthropic:
+    description: "Anthropic Claude family"
+    applies_to_hosts: [claude-code]
+    tiers:
+      light:    haiku
+      standard: sonnet
+      deep:     opus
+  openai:
+    description: "OpenAI GPT-5 family"
+    applies_to_hosts: [codex]
+    tiers:
+      light:    gpt-5-mini
+      standard: gpt-5
+      deep:     gpt-5
