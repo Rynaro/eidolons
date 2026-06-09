@@ -4,16 +4,25 @@
   "title": "Eidolons ACI Contract",
   "description": "Agent-Computer Interface contract (SWE-agent rubric, R8-02). Sibling to roster/index.yaml; consumed by the `eidolons doctor --deep` D7 gate.",
   "type": "object",
-  "required": ["aci_version", "classes"],
+  "required": [
+    "aci_version",
+    "classes"
+  ],
   "additionalProperties": true,
   "properties": {
-    "aci_version": { "type": "string" },
-    "reference": { "type": "string" },
+    "aci_version": {
+      "type": "string"
+    },
+    "reference": {
+      "type": "string"
+    },
     "universal": {
       "type": "object",
       "additionalProperties": true,
       "properties": {
-        "reads_network": { "type": "boolean" }
+        "reads_network": {
+          "type": "boolean"
+        }
       }
     },
     "classes": {
@@ -23,13 +32,30 @@
         "type": "object",
         "additionalProperties": true,
         "properties": {
-          "read_only": { "type": "boolean" },
-          "reads_repo": { "type": "boolean" },
-          "tool_less": { "type": "boolean" },
-          "requires_edit_gate": { "type": "boolean" },
-          "exempt": { "type": "boolean" },
-          "rationale": { "type": "string" },
-          "bounded_primitives": { "type": "array", "items": { "type": "string" } }
+          "read_only": {
+            "type": "boolean"
+          },
+          "reads_repo": {
+            "type": "boolean"
+          },
+          "tool_less": {
+            "type": "boolean"
+          },
+          "requires_edit_gate": {
+            "type": "boolean"
+          },
+          "exempt": {
+            "type": "boolean"
+          },
+          "rationale": {
+            "type": "string"
+          },
+          "bounded_primitives": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
     },
@@ -38,12 +64,41 @@
       "description": "Substrate <-> loop-native-coder interface (Vivi v4): localized feedback + anti-reward-hacking + pass^k. Per-member conformance; APIVR-Δ (non-loop fallback) need not satisfy it.",
       "additionalProperties": true,
       "properties": {
-        "contract_version": { "type": "string" },
-        "feedback_artifact": { "type": "object", "additionalProperties": true },
-        "anti_reward_hacking": { "type": "object", "additionalProperties": true },
-        "reliability": { "type": "object", "additionalProperties": true },
-        "escalation": { "type": "object", "additionalProperties": true },
-        "host_contingency": { "type": "object", "additionalProperties": true }
+        "contract_version": {
+          "type": "string"
+        },
+        "feedback_artifact": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "anti_reward_hacking": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "reliability": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "escalation": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "host_contingency": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "red_gate": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "fanout_selection": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "judge_gate": {
+          "type": "object",
+          "additionalProperties": true
+        }
       }
     }
   }

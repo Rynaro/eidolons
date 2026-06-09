@@ -575,3 +575,202 @@ SH
   # passk_determinism must flag non-determinism.
   [[ "$(echo "$output" | jq -r '.passk_determinism')" =~ "NON-DETERMINISTIC" ]]
 }
+
+# ── Stage 2: red gate + fanout + judge (red-gate/fanout/judge — coder-7.5) ─────
+@test "S2-red: --require-red blocks a VACUOUS reproduction (passes on base) → final=vacuous-reproduction, exit 3" {
+  _git_project
+  # The "reproduction" passes on the base tree → it cannot anchor a fix.
+  run eidolons sandbox loop --reproduction 'true' --require-red \
+    --fix-hook 'echo fixed > state.txt' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(jq -r '.final' .out/loop.json)" = "vacuous-reproduction" ]
+  [ "$(jq -r '.red_gate' .out/loop.json)" = "vacuous" ]
+  # No fix attempt may run against a vacuous repro test.
+  [ "$(jq -r '.attempts_run' .out/loop.json)" = "0" ]
+  [ -f .out/repair-failed-report.md ]
+  grep -qi "vacuous" .out/repair-failed-report.md
+}
+
+@test "S2-red: --require-red verifies red then the loop proceeds to green (red_gate=verified-red)" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' --require-red \
+    --fix-hook 'echo fixed > state.txt' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.red_gate')" = "verified-red" ]
+}
+
+@test "S2-red: fanout candidates read the verified-red base feedback (attempt 0, phase red-gate)" {
+  _git_project
+  # The candidate proves what feedback it saw by copying it aside. (In iterate
+  # mode attempt 1 legitimately regenerates feedback; the red seed is the shared
+  # base-failure signal for FANOUT candidates.)
+  cat > cand.sh <<'SH'
+cp "$EIDOLONS_SANDBOX_FEEDBACK" fh-saw-feedback.json
+echo fixed > state.txt
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' --require-red \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ -f fh-saw-feedback.json ]
+  [ "$(jq -r '.phase' fh-saw-feedback.json)" = "red-gate" ]
+  [ "$(jq -r '.attempt' fh-saw-feedback.json)" = "0" ]
+}
+
+@test "S2-fanout: selects the first PASSING candidate (candidate 2 of 3) — external selection" {
+  _git_project
+  # Candidate 1 writes a wrong fix; candidate 2 writes the right one.
+  cat > cand.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_CANDIDATE" = "2" ]; then echo fixed > state.txt
+else echo wrong > state.txt; fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fanout 3 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "2" ]
+  [ "$(echo "$output" | jq -r '.attempts_run')" = "2" ]
+  # Survivor's edits remain in the tree; diff-not-apply still holds (no commit).
+  grep -q fixed state.txt
+  [ "$(git rev-list --count HEAD)" = "1" ]
+}
+
+@test "S2-fanout: all candidates fail → final=capped, exit 3, per-candidate diffs kept" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q neverhere state.txt' \
+    --fanout 2 --fix-hook 'echo nope > state.txt' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.final')" = "capped" ]
+  [ "$(echo "$output" | jq -r '.attempts_run')" = "2" ]
+  [ -f .out/candidate-1.diff ]
+  [ -f .out/candidate-2.diff ]
+}
+
+@test "S2-fanout: tree is RESET between candidates (candidate 2 starts from base, not from candidate 1's edits)" {
+  _git_project
+  # Candidate 1 plants junk + fails; candidate 2 fixes. If the tree were not
+  # reset, junk.txt would leak into the survivor's candidate diff.
+  cat > cand.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_CANDIDATE" = "1" ]; then echo junk > junk.txt; echo wrong > state.txt
+else echo fixed > state.txt; fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "2" ]
+  [ ! -f junk.txt ]
+  ! grep -q junk .out/candidate.diff
+}
+
+@test "S2-fanout: every candidate gets FRESH context forced + candidate/fanout env vars" {
+  _git_project
+  cat > cand.sh <<'SH'
+echo "$EIDOLONS_SANDBOX_FRESH_CONTEXT $EIDOLONS_SANDBOX_CANDIDATE $EIDOLONS_SANDBOX_FANOUT" >> env-seen.txt
+echo fixed > state.txt
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  # env-seen.txt is recreated by the surviving candidate after the tree reset.
+  grep -q "true 1 2" env-seen.txt || grep -q "true" env-seen.txt
+}
+
+@test "S2-fanout: candidates share the SAME base-failure feedback (attempt 0; per-candidate failures do not overwrite it)" {
+  _git_project
+  cat > cand.sh <<'SH'
+cp "$EIDOLONS_SANDBOX_FEEDBACK" "feedback-seen-$EIDOLONS_SANDBOX_CANDIDATE.json" 2>/dev/null || true
+echo wrong > state.txt
+SH
+  run eidolons sandbox loop --tests 'grep -q neverhere state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  # Candidate 2 must see attempt-0 (base) feedback, not candidate 1's failure.
+  [ "$(jq -r '.attempt' .out/feedback.json)" = "0" ]
+}
+
+@test "S2-fanout: --fanout without --fix-hook dies" {
+  _git_project
+  run eidolons sandbox loop --tests 'false' --fanout 2 --allow-unsafe-host --out .out --json
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "fanout" ]]
+}
+
+@test "S2-fanout: a reward-hacked candidate is REJECTED, the next candidate can still win" {
+  _git_project
+  echo holdout-broken > holdout-state.txt
+  git add -A && git commit -qm holdout
+  # Candidate 1 games the visible test only; candidate 2 fixes both surfaces.
+  cat > cand.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_CANDIDATE" = "1" ]; then echo fixed > state.txt
+else echo fixed > state.txt; echo holdout-ok > holdout-state.txt; fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --holdout 'grep -q holdout-ok holdout-state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "2" ]
+  [ "$(echo "$output" | jq -r '.attempts[0].rejected')" = "reward-hacked" ]
+}
+
+@test "S2-judge: --judge-hook approves → final=passed, judge=approved" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo fixed > state.txt' --judge-hook 'true' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.judge')" = "approved" ]
+}
+
+@test "S2-judge: --judge-hook rejects → final=judge-rejected + VIGIL hand-off (iterate mode)" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo fixed > state.txt' --judge-hook 'false' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.final')" = "judge-rejected" ]
+  [ "$(echo "$output" | jq -r '.judge')" = "rejected" ]
+  [ -f .out/repair-failed-report.md ]
+  grep -qi "judge" .out/repair-failed-report.md
+}
+
+@test "S2-judge: the judge receives the candidate diff via EIDOLONS_SANDBOX_DIFF" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo fixed > state.txt' \
+    --judge-hook 'grep -q "+fixed" "$EIDOLONS_SANDBOX_DIFF"' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.judge')" = "approved" ]
+}
+
+@test "S2-judge: judge rejection in fanout tries the NEXT candidate" {
+  _git_project
+  # Both candidates make the test pass; the judge rejects diffs that touch the
+  # TRACKED marker.txt (candidate 1 does, candidate 2 does not).
+  echo clean > marker.txt
+  git add -A && git commit -qm marker
+  cat > cand.sh <<'SH'
+echo fixed > state.txt
+if [ "$EIDOLONS_SANDBOX_CANDIDATE" = "1" ]; then echo sneaky > marker.txt; fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' \
+    --judge-hook '! grep -q sneaky "$EIDOLONS_SANDBOX_DIFF"' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "2" ]
+  [ "$(echo "$output" | jq -r '.attempts[0].rejected')" = "judge-rejected" ]
+}
+
+@test "S2: ledger back-compat — fanout/red_gate/judge fields default sanely on a plain loop" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo fixed > state.txt' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.fanout')" = "1" ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "0" ]
+  [ "$(echo "$output" | jq -r '.red_gate')" = "" ]
+  [ "$(echo "$output" | jq -r '.judge')" = "" ]
+}

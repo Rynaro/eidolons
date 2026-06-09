@@ -47,7 +47,8 @@ Usage:
                           [--max-attempts N] [--base <ref>] [--out <dir>]
                           [--protect <glob>] [--regression <cmd>] [--reproduction <cmd>]
                           [--k N] [--lint-hook <cmd>] [--holdout <cmd>]
-                          [--fresh-context] [--allow-unsafe-host] [--json]
+                          [--fresh-context] [--require-red] [--fanout N]
+                          [--judge-hook <cmd>] [--allow-unsafe-host] [--json]
   eidolons sandbox replay <out_dir> [--json]
 
 check   Classify the isolation tier of --via and apply the refusal policy
@@ -78,6 +79,22 @@ replay  READ-ONLY render of a completed loop's artifacts. Reads loop.json from
                                 ONLY after final=passed; failure → reward-hacked.
           --fresh-context       signal to the fix-hook that each retry should use
                                 only localized feedback (no prior transcript).
+          --require-red         RED GATE: verify the reproduction test FAILS on
+                                the base tree BEFORE any fix attempt. A repro
+                                test that already passes is VACUOUS (it cannot
+                                anchor a fix) → final=vacuous-reproduction.
+          --fanout N            parallel-sample-and-select: N INDEPENDENT fresh-
+                                context candidates, each generated from the SAME
+                                base tree + the SAME localized base-failure
+                                feedback (no self-repair iteration); selection is
+                                EXTERNAL — tests + pass^k + holdout + judge pick
+                                the survivor. The weak-host alternative to the
+                                iterate loop (self-repair degrades on weak
+                                hosts). Needs a git repo + --fix-hook.
+          --judge-hook <cmd>    external judge run over a PASSING candidate's
+                                diff (EIDOLONS_SANDBOX_DIFF) before acceptance;
+                                non-zero exit rejects it (layered hack detection
+                                — a sealed holdout alone is insufficient).
         The fix-hook receives EIDOLONS_SANDBOX_FEEDBACK (structured JSON: failing
         markers, file:line loci, full-log path) — localized, not a raw tail.
 
@@ -121,6 +138,9 @@ K=1
 LINT_HOOK=""
 HOLDOUT=""
 FRESH_CONTEXT=false
+REQUIRE_RED=false
+FANOUT=1
+JUDGE_HOOK=""
 TEST_CMD=()
 REPLAY_OUT_DIR=""
 _after_dd=false
@@ -142,6 +162,9 @@ while [[ $# -gt 0 ]]; do
     --lint-hook)         LINT_HOOK="${2:-}"; shift 2 ;;
     --holdout)           HOLDOUT="${2:-}"; shift 2 ;;
     --fresh-context)     FRESH_CONTEXT=true; shift ;;
+    --require-red)       REQUIRE_RED=true; shift ;;
+    --fanout)            FANOUT="${2:-1}"; shift 2 ;;
+    --judge-hook)        JUDGE_HOOK="${2:-}"; shift 2 ;;
     --)                  _after_dd=true; shift ;;
     -h|--help)           usage; exit 0 ;;
     -*)                  die "Unknown option: $1" ;;
@@ -283,6 +306,74 @@ _protect_snapshot() {
   return 0
 }
 
+# ── pass^k re-run verifier: given an initial PASSING result JSON, re-run the
+# eval (K-1) more times. Echoes {flaky:<bool>, passk_runs:[...]}. Used by the
+# fanout path; the iterate path keeps its original inline block. ───────────────
+_passk_verify() {
+  local first="$1" pkr kk fl=false r2 r2p r2rc
+  pkr="$(jq -nc --argjson r "$first" '[{run:1, passed:$r.passed, exit_code:$r.exit_code}]')"
+  kk=1
+  while [[ "$kk" -lt "$K" ]]; do
+    kk=$((kk + 1))
+    r2="$(_eval_once "$OUT_DIR/full-log.txt")"
+    r2p="$(printf '%s' "$r2" | jq -r '.passed')"
+    r2rc="$(printf '%s' "$r2" | jq -r '.exit_code')"
+    pkr="$(printf '%s' "$pkr" | jq -c --argjson ki "$kk" \
+      --argjson rp "$([ "$r2p" = "true" ] && printf 'true' || printf 'false')" \
+      --argjson rc2 "${r2rc:-1}" \
+      '. + [{run:$ki, passed:$rp, exit_code:$rc2}]')"
+    if [[ "$r2p" != "true" ]]; then fl=true; break; fi
+  done
+  jq -nc \
+    --argjson fl "$([ "$fl" = true ] && printf 'true' || printf 'false')" \
+    --argjson pkr "$pkr" '{flaky:$fl, passk_runs:$pkr}'
+  return 0
+}
+
+# ── External judge over a PASSING candidate (layered hack detection: a sealed
+# holdout alone is insufficient — heuristic non-solutions can pass it; a diff-
+# review judge catches what execution filters miss). The judge READS the diff +
+# feedback; it NEVER edits the tree. exit 0 = approved, non-zero = rejected. ───
+_judge_candidate() {
+  local jdiff="$OUT_DIR/judge-candidate.diff" jrc=0
+  if [[ "$have_git" == true ]]; then
+    git diff "${base_sha:-$BASE}" > "$jdiff" 2>/dev/null || git diff > "$jdiff" 2>/dev/null || true
+  else
+    : > "$jdiff"
+  fi
+  # Judge stdout/stderr → judge-log.txt (a chatty LLM judge must never corrupt
+  # the loop's --json ledger on stdout).
+  EIDOLONS_SANDBOX_DIFF="$jdiff" \
+  EIDOLONS_SANDBOX_FEEDBACK="$OUT_DIR/feedback.json" \
+  EIDOLONS_SANDBOX_BASE="$base_sha" \
+  EIDOLONS_SANDBOX_OUT="$OUT_DIR" \
+    bash -c "$JUDGE_HOOK" >"$OUT_DIR/judge-log.txt" 2>&1 || jrc=$?
+  return "$jrc"
+}
+
+# ── Fanout tree reset: every candidate starts from the SAME base tree. Restores
+# tracked files to --base and removes ONLY untracked files a prior candidate
+# created (compared against the pre-fanout snapshot — pre-existing untracked
+# files like runner scripts / the harness's own .swe-test.sh MUST survive).
+# Sandbox artifacts (the --out dir, .eidolons/) survive too. ────────────────────
+_untracked_snapshot() {
+  git ls-files --others --exclude-standard 2>/dev/null | sort > "$OUT_DIR/.untracked-base" || true
+  return 0
+}
+_tree_reset() {
+  git checkout -f "${base_sha:-HEAD}" -- . 2>/dev/null || true
+  [[ -f "$OUT_DIR/.untracked-base" ]] || return 0
+  git ls-files --others --exclude-standard 2>/dev/null | sort \
+    | comm -13 "$OUT_DIR/.untracked-base" - 2>/dev/null \
+    | while IFS= read -r _trf; do
+        case "$_trf" in
+          "$OUT_DIR"/*|.eidolons/*) : ;;
+          *) rm -f "$_trf" ;;
+        esac
+      done
+  return 0
+}
+
 case "$SUB" in
   # ── check: isolation preflight + refusal policy ─────────────────────────────
   check)
@@ -327,6 +418,10 @@ case "$SUB" in
     _assert_isolation
     [[ "$MAX_ATTEMPTS" -ge 1 ]] 2>/dev/null || die "--max-attempts must be >= 1"
     [[ "$K" -ge 1 ]] 2>/dev/null || die "--k must be >= 1"
+    [[ "$FANOUT" -ge 1 ]] 2>/dev/null || die "--fanout must be >= 1"
+    if [[ "$FANOUT" -gt 1 ]]; then
+      [[ -n "$FIX_HOOK" ]] || die "--fanout needs a --fix-hook (the candidate generator)"
+    fi
 
     # Output dir (diff-not-apply artifacts + VIGIL hand-off live here).
     if [[ -z "$OUT_DIR" ]]; then OUT_DIR=".eidolons/sandbox/run-$(date +%Y%m%d-%H%M%S)"; fi
@@ -336,15 +431,173 @@ case "$SUB" in
     if git rev-parse --git-dir >/dev/null 2>&1; then have_git=true; fi
     base_sha=""
     [[ "$have_git" == true ]] && base_sha="$(git rev-parse "$BASE" 2>/dev/null || echo "")"
+    if [[ "$FANOUT" -gt 1 && "$have_git" != true ]]; then
+      die "--fanout needs a git repo (every candidate starts from the same base tree)"
+    fi
 
     # Anti-reward-hacking: baseline signature of the protected anchoring tests.
     protect_baseline="$(_protect_snapshot)"
+
+    # ── Red gate (--require-red): a reproduction test that PASSES on the base
+    # tree is VACUOUS — it does not capture the bug and cannot anchor a fix
+    # (TDFlow: patching is near-solved when the repro test is RIGHT; repro-test
+    # validity is the bottleneck). Verify red FIRST, before any fix attempt. ───
+    red_gate=""
+    if [[ "$REQUIRE_RED" == true ]]; then
+      _red_cmd="${REPRODUCTION:-$TESTS}"
+      [[ -n "$_red_cmd" ]] || die "--require-red needs --reproduction (or --tests)"
+      _red_result="$(_run_in_sandbox "$_red_cmd" "$OUT_DIR/red-gate-log.txt")"
+      if [[ "$(printf '%s' "$_red_result" | jq -r '.passed')" == "true" ]]; then
+        red_gate="vacuous"
+        [[ "$OUT" != "json" ]] && warn "sandbox loop: --require-red FAILED — the reproduction test PASSES on the base tree (vacuous: it cannot anchor a fix)"
+      else
+        red_gate="verified-red"
+        # Seed feedback.json from the verified-red run (attempt 0): the first
+        # fix-hook call / every fanout candidate reads the SAME localized
+        # base-failure signal.
+        printf '%s' "$_red_result" | jq -r '.output_tail' > "$OUT_DIR/last-output.txt"
+        printf '%s' "$_red_result" | jq -c \
+          '{contract_version:"1.0", attempt:0, exit_code:.exit_code, phase:"red-gate",
+            passed:false, flaky:false, failing:.failing, loci:.loci,
+            test_name:(.test_name // []), assertion:(.assertion // []),
+            full_log:"red-gate-log.txt", output_tail:.output_tail}' > "$OUT_DIR/feedback.json"
+      fi
+    fi
 
     attempts="[]"
     final="capped"
     last_flaky=false
     _lint_pending=false
+    selected_candidate=0
+    judge_verdict=""
     n=0
+    if [[ "$red_gate" == "vacuous" ]]; then
+      # Red gate tripped: no fix attempt may run against a vacuous repro test.
+      final="vacuous-reproduction"
+    elif [[ "$FANOUT" -gt 1 ]]; then
+      # ── FANOUT (parallel-sample-and-select): N INDEPENDENT fresh-context
+      # candidates, each generated from the SAME base tree + the SAME localized
+      # base-failure feedback. NO self-repair iteration (feeding failures back
+      # degrades on weak hosts — RLEF/self-repair literature); selection is
+      # EXTERNAL: tests + pass^k + sealed holdout + judge pick the survivor
+      # (R2E-Gym hybrid-verifier selection). ────────────────────────────────────
+      if [[ ! -f "$OUT_DIR/feedback.json" ]]; then
+        # No red gate ran — seed the base-failure feedback with one eval.
+        _seed="$(_eval_once "$OUT_DIR/full-log.txt")"
+        if [[ "$(printf '%s' "$_seed" | jq -r '.passed')" == "true" ]]; then
+          # Nothing to fix: the visible suite already passes on the base tree.
+          final="passed"; n=1
+          attempts="$(printf '%s' "$attempts" | jq --argjson r "$_seed" \
+            '. + [{attempt:1, candidate:0, passed:true, exit_code:$r.exit_code,
+                   duration_s:($r.duration_s // 0), phase:($r.phase // "tests"),
+                   flaky:false, passk_runs:[]}]')"
+        else
+          printf '%s' "$_seed" | jq -r '.output_tail' > "$OUT_DIR/last-output.txt"
+          printf '%s' "$_seed" | jq -c \
+            '{contract_version:"1.0", attempt:0, exit_code:.exit_code, phase:.phase,
+              passed:false, flaky:false, failing:.failing, loci:.loci,
+              test_name:(.test_name // []), assertion:(.assertion // []),
+              full_log:"full-log.txt", output_tail:.output_tail}' > "$OUT_DIR/feedback.json"
+        fi
+      fi
+      _last_reject=""
+      _untracked_snapshot
+      ci=0
+      while [[ "$final" != "passed" && "$ci" -lt "$FANOUT" ]]; do
+        ci=$((ci + 1)); n="$ci"
+        _tree_reset
+        [[ "$OUT" != "json" ]] && warn "sandbox loop: fanout candidate $ci/$FANOUT — invoking --fix-hook (fresh context, base tree)"
+        _fh_rc=0
+        EIDOLONS_SANDBOX_FEEDBACK="$OUT_DIR/feedback.json" \
+        EIDOLONS_SANDBOX_FULL_LOG="$OUT_DIR/full-log.txt" \
+        EIDOLONS_SANDBOX_LAST_OUTPUT="$OUT_DIR/last-output.txt" \
+        EIDOLONS_SANDBOX_ATTEMPT="$ci" \
+        EIDOLONS_SANDBOX_BASE="$base_sha" \
+        EIDOLONS_SANDBOX_FRESH_CONTEXT="true" \
+        EIDOLONS_SANDBOX_CANDIDATE="$ci" \
+        EIDOLONS_SANDBOX_FANOUT="$FANOUT" \
+          bash -c "$FIX_HOOK" >&2 || _fh_rc=$?
+        # fresh-context is FORCED in fanout (candidate independence is the point);
+        # stdout → stderr so a chatty hook never corrupts the --json ledger.
+        [[ "$_fh_rc" -ne 0 && "$OUT" != "json" ]] && warn "sandbox loop: --fix-hook returned $_fh_rc (continuing to evaluate the candidate)"
+        if [[ -n "$PROTECT" ]] && [[ "$(_protect_snapshot)" != "$protect_baseline" ]]; then
+          final="protected-tests-mutated"
+          [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci MUTATED a protected anchoring test (--protect) — ABORT + escalate (anti-reward-hacking)"
+          break
+        fi
+        # Lint gate per candidate: a candidate failing lint is REJECTED outright
+        # (fanout candidates do not self-repair).
+        if [[ -n "$LINT_HOOK" ]]; then
+          _lint_rc=0
+          bash -c "$LINT_HOOK" >"$OUT_DIR/lint-log.txt" 2>&1 || _lint_rc=$?
+          if [[ "$_lint_rc" -ne 0 ]]; then
+            [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci failed the lint gate — REJECTED"
+            attempts="$(printf '%s' "$attempts" | jq --argjson n "$ci" \
+              '. + [{attempt:$n, candidate:$n, passed:false, exit_code:1, duration_s:0,
+                     phase:"lint", flaky:false, passk_runs:[], rejected:"lint"}]')"
+            git diff "${base_sha:-$BASE}" > "$OUT_DIR/candidate-$ci.diff" 2>/dev/null || true
+            continue
+          fi
+        fi
+        result="$(_eval_once "$OUT_DIR/full-log.txt")"
+        passed="$(printf '%s' "$result" | jq -r '.passed')"
+        passk_runs="[]"
+        _cand_flaky=false
+        if [[ "$passed" == "true" && "$K" -gt 1 ]]; then
+          _pk="$(_passk_verify "$result")"
+          passk_runs="$(printf '%s' "$_pk" | jq -c '.passk_runs')"
+          if [[ "$(printf '%s' "$_pk" | jq -r '.flaky')" == "true" ]]; then
+            passed="false"; _cand_flaky=true; _last_reject="flaky"
+            [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci passed once but is FLAKY across k=$K — REJECTED"
+          fi
+        elif [[ "$passed" == "true" ]]; then
+          passk_runs="$(printf '%s' "$result" | jq -c '[{run:1, passed:.passed, exit_code:.exit_code}]')"
+        fi
+        attempts="$(printf '%s' "$attempts" | jq --argjson n "$ci" --argjson r "$result" \
+          --argjson pkruns "$passk_runs" \
+          --argjson fl "$([ "$_cand_flaky" = true ] && printf 'true' || printf 'false')" \
+          '. + [{attempt:$n, candidate:$n, passed:(if $fl then false else $r.passed end),
+                 exit_code:$r.exit_code, duration_s:($r.duration_s // 0),
+                 phase:($r.phase // "tests"), flaky:$fl, passk_runs:$pkruns}]')"
+        if [[ "$passed" == "true" ]]; then
+          # Sealed holdout per candidate: a reward-hacked candidate is REJECTED,
+          # not terminal — another independent candidate may genuinely solve it.
+          if [[ -n "$HOLDOUT" ]]; then
+            _hout_result="$(_eval_holdout "$OUT_DIR/holdout-log.txt")"
+            if [[ "$(printf '%s' "$_hout_result" | jq -r '.passed')" != "true" ]]; then
+              _last_reject="reward-hacked"
+              attempts="$(printf '%s' "$attempts" | jq --argjson i "$ci" \
+                'map(if .attempt == $i then . + {rejected:"reward-hacked"} else . end)')"
+              [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci passed visible tests but FAILED the sealed holdout — REJECTED (reward-hacking)"
+              git diff "${base_sha:-$BASE}" > "$OUT_DIR/candidate-$ci.diff" 2>/dev/null || true
+              continue
+            fi
+          fi
+          if [[ -n "$JUDGE_HOOK" ]]; then
+            if _judge_candidate; then judge_verdict="approved"
+            else
+              judge_verdict="rejected"; _last_reject="judge-rejected"
+              attempts="$(printf '%s' "$attempts" | jq --argjson i "$ci" \
+                'map(if .attempt == $i then . + {rejected:"judge-rejected"} else . end)')"
+              [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci REJECTED by the --judge-hook — trying the next candidate"
+              git diff "${base_sha:-$BASE}" > "$OUT_DIR/candidate-$ci.diff" 2>/dev/null || true
+              continue
+            fi
+          fi
+          final="passed"; selected_candidate="$ci"
+          break
+        fi
+        git diff "${base_sha:-$BASE}" > "$OUT_DIR/candidate-$ci.diff" 2>/dev/null || true
+      done
+      # All candidates exhausted: surface the most informative rejection reason.
+      if [[ "$final" == "capped" && -n "$_last_reject" ]]; then
+        case "$_last_reject" in
+          reward-hacked)  final="reward-hacked" ;;
+          judge-rejected) final="judge-rejected" ;;
+          flaky)          final="flaky" ;;
+        esac
+      fi
+    else
     while [[ "$n" -lt "$MAX_ATTEMPTS" ]]; do
       n=$((n + 1))
       last_flaky=false
@@ -425,6 +678,15 @@ case "$SUB" in
             [[ "$OUT" != "json" ]] && warn "sandbox loop: SEALED HOLDOUT FAILED — visible tests passed but holdout FAILED (reward-hacking / evaluator-gaming) — BLOCKED"
           fi
         fi
+        # External judge gate (layered hack detection): runs only on a candidate
+        # that survived visible tests + pass^k + holdout.
+        if [[ "$final" == "passed" && -n "$JUDGE_HOOK" ]]; then
+          if _judge_candidate; then judge_verdict="approved"
+          else
+            judge_verdict="rejected"; final="judge-rejected"
+            [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate REJECTED by the --judge-hook (suspected non-fix / evaluator-gaming) — BLOCKED"
+          fi
+        fi
         break
       fi
       [[ "$n" -ge "$MAX_ATTEMPTS" ]] && break
@@ -490,6 +752,7 @@ case "$SUB" in
 
     # A capped loop whose last attempt was a blocked flaky green reports `flaky`.
     [[ "$final" == "capped" && "$last_flaky" == "true" ]] && final="flaky"
+    fi
 
     # Candidate diff (diff-not-apply): emit, never commit/merge.
     diff_path=""
@@ -508,6 +771,8 @@ case "$SUB" in
         protected-tests-mutated)  _reason="the --fix-hook MUTATED a protected anchoring test (evaluator-gaming) — ABORTED" ;;
         no_fix_hook)              _reason="no --fix-hook supplied; the loop degraded to a single verify" ;;
         reward-hacked)            _reason="passed the visible suite but FAILED the sealed holdout (evaluator-gaming) — BLOCKED" ;;
+        vacuous-reproduction)     _reason="the reproduction test PASSES on the base tree (--require-red): it does not capture the bug and cannot anchor a fix" ;;
+        judge-rejected)           _reason="the external --judge-hook REJECTED the candidate diff (suspected non-fix / evaluator-gaming) — BLOCKED" ;;
       esac
       {
         echo "# repair-failed-report → VIGIL (forensic-then-fix)"
@@ -545,10 +810,14 @@ case "$SUB" in
       --arg feedback "$OUT_DIR/feedback.json" \
       --arg vigil "$vigil_handoff" --arg out "$OUT_DIR" \
       --argjson passk "$passk_summary" \
+      --argjson fanout "$FANOUT" --argjson selected "$selected_candidate" \
+      --arg red_gate "$red_gate" --arg judge "$judge_verdict" \
       '{final:$final, attempts_run:($attempts|length), max_attempts:$max, k:$k,
         protect:$protect, tier:$tier, base:$base, candidate_diff:$diff,
         feedback:$feedback, vigil_handoff:$vigil, out_dir:$out,
-        merged:false, attempts:$attempts, passk:$passk}')"
+        merged:false, attempts:$attempts, passk:$passk,
+        fanout:$fanout, selected_candidate:$selected,
+        red_gate:$red_gate, judge:$judge}')"
     printf '%s\n' "$ledger" > "$OUT_DIR/loop.json"
 
     # ECL sidecar: loop.json.envelope.json — inform performative, SHA-256 integrity.
