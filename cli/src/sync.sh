@@ -18,6 +18,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib_mcp.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp_wiring.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_resolve.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_wiring.sh"
 
 NON_INTERACTIVE=false
 DRY_RUN=false
@@ -514,6 +518,17 @@ done <<< "$MEMBERS_JSON"
 # Soft failure: individual file errors warn and continue (spec §10.4).
 if [ -f "$(mcp_lockfile)" ]; then
   mcp_wiring_reapply_all
+fi
+
+# ─── Model frontmatter wiring ────────────────────────────────────────────────
+# Apply model: managed blocks to every wired host's agent files AFTER the MCP
+# wiring pass (so model: lands last, on top of all other frontmatter patches).
+# Sync-time drift policy: warn-and-preserve hand-authored model: lines.
+# Skipped when no models block is present in eidolons.yaml (performance fast-path).
+if model_resolve_init 2>/dev/null; then
+  if model_has_block 2>/dev/null; then
+    model_wiring_apply_all 0 2>/dev/null || true
+  fi
 fi
 
 # ─── Append hosts block to lockfile (R3 Block 1) ─────────────────────────
