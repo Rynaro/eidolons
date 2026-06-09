@@ -1,0 +1,7 @@
+
+In deploy.sh line 4:
+  echo "deploying to $targett"
+                     ^------^ SC2154 (warning): targett is referenced but not assigned (did you mean 'target'?).
+
+For more information:
+  https://www.shellcheck.net/wiki/SC2154 -- targett is referenced but not ass...

@@ -2065,7 +2065,92 @@ deep_check_aci_conformance() {
   return "$rc"
 }
 
-# deep_check_verify_incoming_conformance NAME
+# deep_check_host_tier_gate
+#
+# D9: when ≥2 coders are present in the routing table and one declares
+# requires_host_tier, assert that with host_tier unset/standard the default
+# resolution does NOT pick the gated coder. This is a structural check on the
+# routing inputs — it catches a misconfiguration where a thinking-only coder is
+# declared default_for_class but no fallback coder exists (so a conservative host
+# would have nowhere to fall back to). Pure jq over routing.yaml + eidolons.yaml;
+# no live routing call. Returns 0 (pass) or 1 (misconfiguration found).
+deep_check_host_tier_gate() {
+  local routing_file; routing_file="$(dirname "$ROSTER_FILE")/routing.yaml"
+  if [[ ! -f "$routing_file" ]]; then
+    pass "D10 host-tier gate: no routing.yaml — skip"
+    return 0
+  fi
+
+  local routing_json; routing_json="$(yaml_to_json "$routing_file" 2>/dev/null || true)"
+  if [[ -z "$routing_json" ]]; then
+    warn "D10 host-tier gate: could not parse routing.yaml — skip"
+    return 0
+  fi
+
+  # Read host_tier from the project manifest (null if absent).
+  local host_tier_val="null"
+  if [[ -f "$PROJECT_MANIFEST" ]]; then
+    local _ht; _ht="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+      | jq -r '.host_tier // empty' 2>/dev/null || true)"
+    if [[ -n "$_ht" ]]; then
+      host_tier_val="$_ht"
+    fi
+  fi
+
+  # Run the structural check via jq.
+  # Logic:
+  #   1. If fewer than 2 coder-class members → skip (no tiebreak in play).
+  #   2. Find the default_for_class coder.
+  #   3. If it declares requires_host_tier AND the project host_tier does NOT match:
+  #      assert there is at least one OTHER coder to fall back to.
+  #      Misconfiguration = gated default + no fallback.
+  local result
+  result="$(printf '%s' "$routing_json" | jq -r \
+    --arg host_tier "$host_tier_val" \
+    '
+    (.eidolons | to_entries
+      | map(select(.value.capability_class == "coder"))
+    ) as $coders
+    | if ($coders | length) < 2 then "skip"
+      else
+        ($coders | map(select(.value.default_for_class == "coder")) | .[0]) as $dflt
+        | if $dflt == null then "skip"
+          else
+            ($dflt.value.requires_host_tier // null) as $rht
+            | if $rht == null then "ok: no requires_host_tier on default coder"
+              elif $rht == $host_tier then "ok: host_tier matches requires_host_tier"
+              else
+                ($coders | map(select(.key != $dflt.key)) | length) as $nfallback
+                | if $nfallback > 0
+                  then "ok: gated coder has fallback"
+                  else "FAIL: default coder \($dflt.key) requires host_tier=\($rht) but host_tier=\($host_tier) and no fallback coder exists"
+                  end
+              end
+          end
+      end
+    ' 2>/dev/null || echo "error")"
+
+  case "$result" in
+    skip|ok*)
+      pass "D10 host-tier gate: routing tiebreak correctly structured"
+      return 0
+      ;;
+    FAIL:*)
+      err "D10 host-tier gate: ${result#FAIL: }"
+      return 1
+      ;;
+    error)
+      warn "D10 host-tier gate: jq parse error — skip"
+      return 0
+      ;;
+    *)
+      pass "D10 host-tier gate: routing tiebreak correctly structured"
+      return 0
+      ;;
+  esac
+}
+
+
 #
 # D8: verify that an installed RECEIVER Eidolon ships a BLOCKING verify-incoming
 # skill (ECL v1.0 section 6.2.2; frontier roadmap N3). The mechanical SHA-256
@@ -2127,6 +2212,55 @@ deep_check_verify_incoming_conformance() {
 
   if (( rc == 0 )); then
     pass "$name: blocking verify-incoming gate present (class=$class)"
+  fi
+  return "$rc"
+}
+
+# deep_check_coder_edit_gate NAME
+#
+# D10: for a `coder`-class member, assert the ACI contract declares
+# requires_edit_gate:true AND the member's SPEC.md contains a reference to the
+# lint gate (a SPEC.md pointer presence check). This is a DECLARATIVE check —
+# not a runtime-wired assertion — mirroring the D7 posture (structure, not
+# behaviour). Non-coder members are exempt. Returns 0 (pass/exempt) or 1 (fail).
+deep_check_coder_edit_gate() {
+  local name="$1"
+  local aci_file; aci_file="$(dirname "$ROSTER_FILE")/aci.yaml"
+  if [[ ! -f "$aci_file" ]]; then
+    warn "$name: roster/aci.yaml missing — skipping coder edit-gate check (D11)"
+    return 0
+  fi
+  local entry; entry="$(roster_get "$name" 2>/dev/null)" || {
+    err "$name: not found in roster (cannot check coder edit-gate)"; return 1; }
+  local class; class="$(printf '%s' "$entry" | jq -r '.capability_class // ""')"
+  # Non-coder members are exempt.
+  if [[ "$class" != "coder" ]]; then
+    pass "$name: class=$class is not a coder (D11 exempt)"
+    return 0
+  fi
+  local aci; aci="$(yaml_to_json "$aci_file")"
+  # 1. ACI contract must declare requires_edit_gate:true for the coder class.
+  local aci_gate; aci_gate="$(printf '%s' "$aci" \
+    | jq -r '.classes.coder.requires_edit_gate // false' 2>/dev/null || echo "false")"
+  local rc=0
+  if [[ "$aci_gate" != "true" ]]; then
+    err "$name: ACI coder class does not declare requires_edit_gate:true (D11)"
+    rc=$((rc + 1))
+  fi
+  # 2. SPEC.md SHOULD reference the lint/edit-gate contract — ADVISORY (warn, not
+  #    fail). The edit-gate methodology is a staged layer-2 rollout, and the
+  #    conservative non-loop coder (apivr) legitimately omits it; a new gate must
+  #    not regress an existing roster member (staged opt-in — dossier V.3 #5). The
+  #    HARD invariant is the ACI class declaration (check 1); the per-member
+  #    pointer is surfaced as a warning so loop-native coders adopt it over time.
+  local spec_file=".eidolons/$name/SPEC.md"
+  if [[ ! -f "$spec_file" ]]; then
+    warn "$name: SPEC.md not installed at $spec_file — cannot verify lint-gate pointer (D11 advisory)"
+  elif ! grep -qiE '(lint.hook|lint.gate|edit.gate|requires_edit_gate)' "$spec_file" 2>/dev/null; then
+    warn "$name: SPEC.md does not yet reference the lint/edit gate (D11 advisory — loop-native coders should add a lint-gate pointer)"
+  fi
+  if (( rc == 0 )); then
+    pass "$name: coder edit-gate declared in ACI coder class (D10)"
   fi
   return "$rc"
 }

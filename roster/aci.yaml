@@ -42,6 +42,7 @@ classes:
     requires_edit_gate: true   # MUST declare a lint/compile + test-anchored Verify before commit (rubric, layer-2)
     rationale: "Brownfield implementer; edits gated by a per-edit lint/compile and test-anchored Verify (SWE-agent edit-with-linter)."
     bounded_primitives: ["lint-gated edits", "paginated view", "match-only search", "success-on-empty-output feedback"]
+    loop_native: "per-member: a loop-native coder (Vivi) MUST satisfy loop_contract below; APIVR-Δ is the non-loop conservative fallback and need not."
   executor:
     read_only: true            # never writes the REAL tree — emits a verified edit-proposal; the parent applies (like debugger's verified-patch.diff)
     reads_repo: true
@@ -64,3 +65,65 @@ classes:
   memory:
     exempt: true               # MCP-mediated substrate; access is enforced server-side, not via roster repo-tool security
     rationale: "Tier-gated MCP chokepoint; not a repo-tool-surface class."
+
+# ─── Loop contract — substrate (`eidolons sandbox loop`) ↔ loop-native coder ────
+# The closed edit-run-test loop and a loop-native coder (Vivi; APIVR-Δ as the
+# conservative control) communicate through this contract. Evidence: execution-
+# feedback loops are the dominant lever, but pay off only with LOCALIZED feedback
+# (Tyen et al. — a model fixes an error when told WHERE it is, not from a raw
+# tail) and only behind anti-reward-hacking guards (loops AMPLIFY evaluator-gaming
+# — a structural equilibrium, not a one-time check). Added 2026-06 for the
+# APIVR-Δ → Vivi succession; rationale in DOSSIER-APIVR-OVERHAUL-2026-06.md.
+# Per-member conformance: Vivi satisfies it; APIVR-Δ (non-loop fallback) does not.
+loop_contract:
+  contract_version: "1.0"
+  # The substrate writes a structured feedback artefact each failing iteration
+  # (replacing the un-localized `tail -n 20`); the coder consumes it via the env
+  # var below. The substrate does best-effort pattern extraction; the coder does
+  # the deep parse. The FULL log is always preserved (never only a tail).
+  feedback_artifact:
+    path_env: "EIDOLONS_SANDBOX_FEEDBACK"   # JSON file path exported to --fix-hook
+    fields:
+      exit_code: "test command exit code"
+      failing: "best-effort extracted failing-test markers (ids / FAIL / Error / assertion lines)"
+      loci: "file:line frames where extractable"
+      full_log: "path to the COMPLETE captured output — never just a tail"
+      output_tail: "last N lines; fallback only"
+  # All mechanical, substrate-enforced (Prime Directive D3 — mechanical-over-prompt).
+  anti_reward_hacking:
+    test_set_immutability:
+      flag: "--protect <glob>"               # caller declares the anchoring tests
+      rule: "hash protected files before/after each --fix-hook call; on change → ABORT + ECL repair-failed-report to VIGIL"
+    ordering:
+      flags: ["--regression <cmd>", "--reproduction <cmd>"]   # optional split of --tests
+      rule: "regression-first THEN reproduction; passing only the new test (not regression) FAILS"
+    forbid: ["editing anchoring tests", "always-pass shims", "reading future commits / gold patches"]
+    sealed_holdout:
+      flag: "--holdout <cmd>"                # caller declares the sealed oracle suite
+      rule: "holdout command is NEVER exported to the fix-hook env (sealed by construction); run ONLY after final=passed; failure → final=reward-hacked + ECL repair-failed-report to VIGIL"
+      guarantee: "the fix-hook cannot read, enumerate, or predict the holdout command — it is never in EIDOLONS_SANDBOX_FEEDBACK, FULL_LOG, or any env var passed to the fix-hook"
+      new_terminal_state: "reward-hacked — visible tests passed but holdout failed; evaluator-gaming caught; BLOCKED"
+  reliability:
+    passk_per_iteration:
+      flag: "--k <n>"
+      rule: "a green candidate must pass k re-runs INSIDE the loop; a non-deterministic pass is flaky → BLOCKED, not accepted"
+  # Stage 2 (2026-06): red gate + fanout + judge — the three evidence-backed
+  # levers from the coder-7.5 measurement round (TDFlow repro-test-validity;
+  # R2E-Gym hybrid-verifier selection; EvilGenie layered hack detection).
+  red_gate:
+    flag: "--require-red"
+    rule: "the reproduction test MUST FAIL on the base tree BEFORE any fix attempt; a repro that already passes is VACUOUS → final=vacuous-reproduction + ECL repair-failed-report (TDFlow: repro-test validity, not patching, is the bottleneck)"
+    seed: "the verified-red run seeds feedback.json (attempt 0, phase red-gate) — the shared localized base-failure signal"
+  fanout_selection:
+    flag: "--fanout <n>"
+    rule: "N INDEPENDENT fresh-context candidates, each generated from the SAME base tree + the SAME base-failure feedback (NO self-repair iteration — it degrades on weak hosts, RLEF); selection is EXTERNAL: tests + pass^k + sealed holdout + judge pick the survivor (R2E-Gym hybrid selection)"
+    env: ["EIDOLONS_SANDBOX_CANDIDATE", "EIDOLONS_SANDBOX_FANOUT"]
+    guarantee: "fresh-context is FORCED per candidate; the tree is reset to base between candidates (pre-existing untracked files survive); per-candidate diffs are kept (candidate-<i>.diff)"
+    intended_for: "weak / standard-tier hosts where the iterate loop is the wrong shape; the host-adaptive coder picks fanout vs iterate by host tier"
+  judge_gate:
+    flag: "--judge-hook <cmd>"
+    rule: "an external judge runs over a candidate that survived visible tests + pass^k + holdout (diff via EIDOLONS_SANDBOX_DIFF); non-zero exit → judge-rejected (iterate: terminal; fanout: next candidate). Layered hack detection — a sealed holdout alone is insufficient (EvilGenie: heuristic non-solutions pass holdouts; zero-shot LLM judges caught all hacking strategies)"
+  escalation:
+    rule: "methodology ≤3-same-category counter (authority) OR substrate --max-attempts (ceiling) — whichever trips first → ECL repair-failed-report to VIGIL (existing kind; closed 10-performative set preserved)"
+  host_contingency:
+    note: "the loop's gain belongs to an RL-trained / loop-competent host; a methodology EXPLOITS it, never adds it. APIVR-Δ (non-loop) is the documented fallback for loop-incompetent hosts and governance-maximal contexts. Stage 2: on weak hosts the loop-native coder switches the SHAPE (--fanout N --max-attempts 1, parallel-sample-and-select) instead of falling off the loop entirely."

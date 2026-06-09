@@ -533,6 +533,43 @@ eidolons:
       - "research/papers/correctbench.md"
       - "research/papers/reflexion.md"
       - "research/production-patterns.md#failure-recovery"
+  - name: vivi
+    display_name: "Vivi"
+    capability_class: coder
+    status: in_construction          # successor-in-progress; default-coder flip gated on the Track-B measurement
+    methodology:
+      name: "Vivi"
+      version: "1.0"
+      cycle: "A→P→I→V→Δ/R"
+      summary: "Loop-native coding. Closed, autonomous, bounded edit-run-test loop (localized feedback, fresh-context retry, anti-reward-hacking, pass^k); loop-native successor to APIVR-Δ, inheriting its discipline spine. APIVR-Δ retained as the conservative opt-in fallback."
+    source:
+      type: github
+      repo: Rynaro/Vivi
+      default_ref: main
+    versions:
+      latest: "0.1.0"
+      pins:
+        stable: "0.1.0"
+    install:
+      target_default: "./.eidolons/vivi"
+      standalone: true
+    handoffs:
+      upstream: [atlas, spectra]
+      downstream: [idg]
+      lateral: [forge, vigil]
+    comm:
+      envelope_version: "2.0"
+    working_set_tokens:
+      entry: 2000
+      target: 4500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: true
+      persists: [".eidolons/vivi/memories/"]
+    references:
+      - "DESIGN-RATIONALE.md (succession decisions D1-D7)"
+      - ".spectra/research/apivr-overhaul-digest.md"
   - name: idg
     display_name: IDG
     capability_class: scriber
