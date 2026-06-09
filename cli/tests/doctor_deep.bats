@@ -453,7 +453,7 @@ JSON
   # The important assertion is that the gate runs without crashing.
 }
 
-@test "DD-24: D10 advisory — coder member SPEC.md missing lint-gate pointer WARNS (not a hard fail)" {
+@test "DD-24: D11 advisory — coder member SPEC.md missing lint-gate pointer WARNS (not a hard fail)" {
   # Use a custom EIDOLONS_NEXUS with a coder entry that lacks the lint pointer
   local custom_nexus="$BATS_TEST_TMPDIR/dd24-nexus"
   _dd19_nexus_two_coders "$custom_nexus"
@@ -461,7 +461,7 @@ JSON
   scaffold_full vivi
   write_agent_md vivi 5
   # SPEC.md deliberately has NO lint/edit-gate reference. NOTE: the prose must not
-  # contain the substrings the D10 grep matches — `lint.hook` (ERE `.` = any char)
+  # contain the substrings the D11 grep matches — `lint.hook` (ERE `.` = any char)
   # would match a literal "lint hook", so avoid the words lint/edit-gate entirely
   # (this accidental match passed vacuously on darwin via apivr's side-effect but
   # failed on ubuntu — capture-live/verify-cross-platform lesson).
@@ -489,12 +489,12 @@ EOF
 JSON
 
   # vivi is a coder (in_construction) in the copied roster. A missing lint-gate
-  # pointer is ADVISORY (staged opt-in): D10 must emit a warning, NOT a hard error —
+  # pointer is ADVISORY (staged opt-in): D11 must emit a warning, NOT a hard error —
   # a new gate must not regress an existing coder. The ACI class-declaration check
   # (the hard invariant) stays green.
   EIDOLONS_NEXUS="$custom_nexus" run eidolons doctor --deep
   [[ "$output" =~ "D11 — coder edit-gate ACI conformance" ]]
-  [[ "$output" =~ "D10 advisory" ]]
+  [[ "$output" =~ "D11 advisory" ]]
   # the advisory must NOT raise a hard D11 edit-gate error for the missing pointer
   ! [[ "$output" =~ "does not reference the lint/edit gate (D11 —" ]]
 }
