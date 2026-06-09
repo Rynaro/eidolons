@@ -54,11 +54,21 @@ eidolons:
     trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
     refuse_verbs: ["implement code", "modify files", "write the code"]
     downstream: ["apivr", "idg"]
+  vivi:
+    capability_class: coder
+    suggested_tier: standard
+    loop_native: true         # drives `eidolons sandbox loop`; host-adaptive shape
+                              # (iterate on thinking hosts / fanout on standard hosts)
+    default_for_class: coder  # Stage 3b — the default coder seat (measurement-validated:
+                              # fanout pass^2 1.00 vs APIVR-Δ 0.67, weak-host adversarial suite)
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
+    refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
+    downstream: ["idg"]
   apivr:
     capability_class: coder
     suggested_tier: standard
-    loop_native: false        # promotion hook: flip to deep is benchmark-GATED
-                              # see project_coder_7_5_augmentation / project_apivr_overhaul
+    loop_native: false        # conservative non-loop fallback; opt-in (`eidolons add apivr`);
+                              # named dispatch still routes to it (the +0.5 name bonus)
     trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
@@ -108,8 +118,8 @@ signals:
     note: "prior failed APIVR-Δ attempt → VIGIL (V5)"
   - id: greenfield
     match: ["greenfield", "from scratch", "brand new project", "novel architecture"]
-    boost: { apivr: -0.4 }
-    note: "APIVR-Δ refuses greenfield"
+    boost: { vivi: -0.4, apivr: -0.4 }
+    note: "the coder class refuses greenfield (Vivi and APIVR-Δ alike)"
   - id: no_spec_yet
     match: ["don't have a spec", "no spec yet", "i don't know the call graph", "not sure what to build"]
     boost: { spectra: 0.2 }
@@ -125,11 +135,11 @@ signals:
 # most specific (longest requires_classes) matching template.
 chains:
   - name: plan-before-build
-    steps: ["atlas", "spectra", "apivr", "idg"]
+    steps: ["atlas", "spectra", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]
     when: "Unfamiliar code + multi-component change"
   - name: decide-then-implement
-    steps: ["forge", "spectra", "apivr"]
+    steps: ["forge", "spectra", "vivi"]
     requires_classes: ["reasoner", "coder"]
     when: "Should we use X or Y, then build it"
   - name: audit-without-touching
@@ -137,11 +147,11 @@ chains:
     requires_classes: ["scout", "scriber"]
     when: "Audit/explain/review with no write intent"
   - name: ship-fast
-    steps: ["spectra", "apivr"]
+    steps: ["spectra", "vivi"]
     requires_classes: ["planner", "coder"]
     when: "Known terrain, scoped feature"
   - name: forensic-then-fix
-    steps: ["vigil", "apivr"]
+    steps: ["vigil", "vivi"]
     requires_classes: ["debugger", "coder"]
     when: "Bug with reproduction + verified patch"
   - name: scout-then-spec

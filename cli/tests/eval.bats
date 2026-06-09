@@ -111,7 +111,7 @@ suites:
 YML
   run eidolons eval routing --suite-file "$bad" --json
   [ "$status" -eq 0 ]
-  # the router sends a fix to apivr, not idg — so this mislabelled task is a miss
+  # the router sends a fix to vivi (default coder), not idg — a mislabelled miss
   [ "$(echo "$output" | jq -r '.passed')" = "0" ]
-  [ "$(echo "$output" | jq -r '.failures[0].actual.selected[0]')" = "apivr" ]
+  [ "$(echo "$output" | jq -r '.failures[0].actual.selected[0]')" = "vivi" ]
 }

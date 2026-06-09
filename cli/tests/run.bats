@@ -54,12 +54,12 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$(_field '.selected[1]')" = "spectra" ]
 }
 
-# ── V4 — brownfield bug fix → APIVR-Δ standard; "flowmap" must NOT hit ATLAS ──
-@test "V4: fix off-by-one in flowmap_resolve routes to APIVR (no false ATLAS match)" {
+# ── V4 — brownfield bug fix → Vivi (default coder); "flowmap" must NOT hit ATLAS ──
+@test "V4: fix off-by-one in flowmap_resolve routes to Vivi (no false ATLAS match)" {
   run eidolons run "Fix the off-by-one in flowmap_resolve" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "dispatch" ]
-  [ "$(_field '.selected[0]')" = "apivr" ]
+  [ "$(_field '.selected[0]')" = "vivi" ]
   # word-boundary: atlas raw score must be 0 (no "map" inside "flowmap")
   [ "$(echo "$output" | jq -r '.selected | length')" = "1" ]
 }
@@ -72,13 +72,13 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$(_field '.selected[0]')" = "forge" ]
 }
 
-# ── V8 — design + implement → SPECTRA → APIVR-Δ chain ─────────────────────────
-@test "V8: design and implement the --json flag routes to SPECTRA then APIVR chain" {
+# ── V8 — design + implement → SPECTRA → Vivi chain ────────────────────────────
+@test "V8: design and implement the --json flag routes to SPECTRA then Vivi chain" {
   run eidolons run "design and implement the --json flag for doctor" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "chain" ]
   [ "$(_field '.selected[0]')" = "spectra" ]
-  [ "$(_field '.selected[-1]')" = "apivr" ]
+  [ "$(_field '.selected[-1]')" = "vivi" ]
 }
 
 # ── V9 — stack trace → VIGIL fast-path ────────────────────────────────────────
@@ -89,12 +89,12 @@ _field() { echo "$output" | jq -r "$1"; }
 }
 
 # ── V11 — named Eidolon would refuse → reroute (refusal immutability) ──────────
-@test "V11: ATLAS please patch this file triggers refusal reroute to APIVR" {
+@test "V11: ATLAS please patch this file triggers refusal reroute to Vivi (default coder)" {
   run eidolons run "ATLAS, please patch this file" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "refusal_reroute" ]
   [ "$(_field '.refusal_rerouting')" = "true" ]
-  [ "$(_field '.selected[0]')" = "apivr" ]
+  [ "$(_field '.selected[0]')" = "vivi" ]
   # ATLAS must NEVER be the selected writer
   [ "$(echo "$output" | jq -r '.selected | index("atlas")')" = "null" ]
 }

@@ -16,9 +16,10 @@
 
 | Name | Capability class | Trigger verbs | Refuses | Hands off to |
 |------|-----------------|---------------|---------|--------------|
-| **ATLAS** | scout | map, trace, find where, who calls, build call graph, list entrypoints, audit (read-only) | implement, fix, edit, write, commit | SPECTRA, APIVR-Δ, IDG |
-| **SPECTRA** | planner | spec, plan, decompose, clarify requirements, GIVEN/WHEN/THEN, decision-ready | implement code, modify files | APIVR-Δ, IDG |
-| **APIVR-Δ** | coder | implement, build, fix, extend, wire up, make tests pass | design from scratch, novel architecture | IDG |
+| **ATLAS** | scout | map, trace, find where, who calls, build call graph, list entrypoints, audit (read-only) | implement, fix, edit, write, commit | SPECTRA, Vivi, IDG |
+| **SPECTRA** | planner | spec, plan, decompose, clarify requirements, GIVEN/WHEN/THEN, decision-ready | implement code, modify files | Vivi, IDG |
+| **Vivi** | coder (default) | implement, build, fix, extend, wire up, make tests pass — loop-native: drives `eidolons sandbox loop`, host-adaptive (iterate/fanout) | design from scratch, novel architecture | IDG |
+| **APIVR-Δ** | coder (opt-in fallback) | named dispatch only ("APIVR-Δ, …"); conservative non-loop posture (`eidolons add apivr`) | design from scratch, novel architecture | IDG |
 | **IDG** | scriber | document, ADR, runbook, chronicle, synthesize, record decisions | explore repo, find calls, retrieve | (terminal) |
 | **FORGE** | reasoner | trade-off, which approach, ambiguous, counterfactual, deliberate | implement, retrieve, synthesize prose | (lateral consultant) |
 | **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X, post-mortem, why does this fail | build new feature, plan from scratch | (lateral specialist) |
@@ -61,13 +62,13 @@ refusal_rerouting: <bool>
 
 | Template | Steps | When |
 |----------|-------|------|
-| **plan-before-build** | ATLAS → SPECTRA → APIVR-Δ → IDG | Unfamiliar code + multi-component change |
+| **plan-before-build** | ATLAS → SPECTRA → Vivi → IDG | Unfamiliar code + multi-component change |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
-| **ship-fast** | SPECTRA → APIVR-Δ | Known terrain, scoped feature |
-| **direct-implementation-bypass** | ATLAS → APIVR-Δ (skip SPECTRA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
-| **decide-then-implement** | FORGE → SPECTRA → APIVR-Δ | "Should we use X or Y, then build it" |
-| **forensic-then-fix** | VIGIL → APIVR-Δ | Bug with reproduction + verified patch suggestion |
-| **failed-attempt-recovery** | (prior APIVR-Δ failure) → VIGIL → APIVR-Δ | Conversation shows prior APIVR-Δ Reflect-exhaustion |
+| **ship-fast** | SPECTRA → Vivi | Known terrain, scoped feature |
+| **direct-implementation-bypass** | ATLAS → Vivi (skip SPECTRA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
+| **decide-then-implement** | FORGE → SPECTRA → Vivi | "Should we use X or Y, then build it" |
+| **forensic-then-fix** | VIGIL → Vivi | Bug with reproduction + verified patch suggestion |
+| **failed-attempt-recovery** | (prior coder failure) → VIGIL → Vivi | Conversation shows prior coder Reflect-exhaustion |
 | **decision-only** | FORGE | No code touching; deliberation emitting verdict + assumptions |
 
 ---
@@ -83,7 +84,7 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 | G1 — Discovery scatter | ATLAS | Surface > 25 files OR > 5 modules → scatter sub-agents per module, aggregate via Abstract phase |
 | G2 — Hard-decision consistency | FORGE | ≥ 3 plausible alternatives AND (high-stakes flag OR explicit TRANCE token) → N=3 reasoning traces, majority-vote |
 | G3 — Spec evaluator-optimizer | SPECTRA | Complexity ≥ 7/12 AND (high-stakes OR ambiguous reqs) → generator + evaluator, max 3 iterations |
-| G4 — Parallel implementation | APIVR-Δ | SPECTRA emitted > 1 independent story AND budget bounded → one APIVR-Δ per track, worktree isolation |
+| G4 — Parallel implementation | Vivi | SPECTRA emitted > 1 independent story AND budget bounded → one Vivi per track, worktree isolation |
 | G5 — Doc parallel synthesis | IDG | Large source artifact set AND topological order allows parallelism → per-section parallel, CHT per section, one-revision cap preserved |
 | G6 — Forensic counterfactuals | VIGIL | ≥ 2 plausible root-cause hypotheses AND bisect surface allows independent testing → parallel hypothesis tests on isolated bisects |
 
@@ -97,9 +98,9 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 |--------|--------|--------|
 | Stack trace, panic, "still failing after retry" | +0.3 | VIGIL |
 | Surface > 25 files or 5 modules | +0.2 | ATLAS-TRANCE |
-| "Greenfield", "from scratch", "novel" | −0.3 | APIVR-Δ (it refuses greenfield) |
+| "Greenfield", "from scratch", "novel" | −0.3 | the coder class (Vivi and APIVR-Δ refuse greenfield) |
 | "I don't have a spec yet" | +0.2 | SPECTRA |
-| Prior failed APIVR-Δ attempt in conversation | +0.4 | VIGIL |
+| Prior failed coder attempt in conversation | +0.4 | VIGIL |
 | Eidolon named explicitly in prompt | +0.5 | that Eidolon (still check refusal table) |
 | Multiple SDLC phases ("scout and spec and build") | chain trigger | (see Chain Templates) |
 
