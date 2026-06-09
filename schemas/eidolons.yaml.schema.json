@@ -16,7 +16,7 @@
       "properties": {
         "wire": {
           "type": "array",
-          "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] },
+          "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "codex", "raw"] },
           "description": "Hosts to wire during install/sync. Auto-detected during init if omitted."
         },
         "shared_dispatch": {
@@ -71,6 +71,50 @@
         "pipeline": {
           "type": "array",
           "items": { "type": "string" }
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "Consumer-side model configuration: active profile, per-tier calibration overrides, and per-member tier/pin overrides.",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Active profile name (must exist in roster/model-profiles.yaml). Defaults to roster default_profile."
+        },
+        "calibration": {
+          "type": "object",
+          "description": "Per-tier model override within the active profile.",
+          "additionalProperties": false,
+          "properties": {
+            "light":    { "type": "string", "minLength": 1 },
+            "standard": { "type": "string", "minLength": 1 },
+            "deep":     { "type": "string", "minLength": 1 }
+          }
+        },
+        "members": {
+          "type": "object",
+          "description": "Per-member tier override and/or concrete model pin.",
+          "patternProperties": {
+            "^[a-z][a-z0-9-]*$": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tier": {
+                  "type": "string",
+                  "enum": ["light", "standard", "deep"],
+                  "description": "Per-member tier override (still resolves via profile/calibration)."
+                },
+                "model": {
+                  "type": "string",
+                  "minLength": 1,
+                  "description": "Concrete model PIN — highest precedence. Ignores tier/profile/calibration entirely."
+                }
+              }
+            }
+          }
         }
       }
     }

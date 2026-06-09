@@ -28,14 +28,25 @@
       "minProperties": 1,
       "additionalProperties": {
         "type": "object",
-        "required": ["capability_class", "model_tier", "trigger_verbs", "refuse_verbs"],
+        "required": ["capability_class", "suggested_tier", "trigger_verbs", "refuse_verbs"],
         "additionalProperties": true,
         "properties": {
           "capability_class": { "type": "string" },
-          "model_tier": { "type": "string", "enum": ["speed-class", "reasoning-class"] },
+          "suggested_tier": { "type": "string", "enum": ["light", "standard", "deep"] },
+          "loop_native": { "type": "boolean" },
           "trigger_verbs": { "type": "array", "items": { "type": "string" } },
           "refuse_verbs": { "type": "array", "items": { "type": "string" } },
           "downstream": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "classes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "suggested_tier": { "type": "string", "enum": ["light", "standard", "deep"] }
         }
       }
     },

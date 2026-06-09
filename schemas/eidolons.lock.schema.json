@@ -39,7 +39,7 @@
           "target":   { "type": "string" },
           "hosts_wired": {
             "type": "array",
-            "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "raw"] }
+            "items": { "enum": ["claude-code", "copilot", "cursor", "opencode", "codex", "raw"] }
           },
           "manifest_missing": { "type": "boolean" },
           "comm": {
@@ -52,6 +52,21 @@
               }
             },
             "additionalProperties": false
+          },
+          "model": {
+            "type": "object",
+            "description": "Resolved model provenance for this member. Written by eidolons model / sync.",
+            "additionalProperties": false,
+            "required": ["effective_model", "tier", "profile", "source"],
+            "properties": {
+              "effective_model": { "type": "string", "minLength": 1 },
+              "tier": { "type": "string", "enum": ["light", "standard", "deep"] },
+              "profile": { "type": "string", "minLength": 1 },
+              "source": {
+                "type": "string",
+                "enum": ["pin", "calibration", "profile", "roster-tier", "class-default"]
+              }
+            }
           }
         }
       }
