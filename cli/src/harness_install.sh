@@ -228,48 +228,63 @@ for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
 done
 
 # ── Wire claude-code settings.json ────────────────────────────────────────
-_settings_patched=false
+# Spec R2: append our entries to each event array only if not already present.
+# Never replace sibling events or other entries (FINDING-1 fix).
 if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   mkdir -p .claude
   SETTINGS_JSON=".claude/settings.json"
 
-  # Build the hooks block JSON.
   _ups_cmd="$HARNESS_SHIM_DIR/claude-code-UserPromptSubmit.sh"
   _ss_cmd="$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
-  _hooks_json="$(jq -n \
-    --arg ups "$_ups_cmd" \
-    --arg ss "$_ss_cmd" \
-    '{
-      "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-      "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
-    }')"
 
   if [[ ! -f "$SETTINGS_JSON" ]]; then
-    # Fresh file — write with only the hooks block.
-    printf '%s\n' "{}" | jq --argjson h "$_hooks_json" '.hooks = $h' > "$SETTINGS_JSON"
+    # Fresh file — write with only our hooks entries.
+    jq -n \
+      --arg ups "$_ups_cmd" \
+      --arg ss "$_ss_cmd" \
+      '{"hooks": {
+          "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
+          "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+       }}' > "$SETTINGS_JSON"
     ok "Wrote .claude/settings.json with hooks block"
-    _settings_patched=true
   else
-    # Existing file — validate JSON, then merge (preserving all sibling keys).
+    # Existing file — surgical append: for each event, add our entry only if
+    # no entry with our command already exists; create event array if absent.
     if ! jq empty "$SETTINGS_JSON" 2>/dev/null; then
       warn ".claude/settings.json is not valid JSON — skipping hooks merge (manual merge required)"
     else
       _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
-      _merged="$(jq --argjson h "$_hooks_json" '.hooks = $h' "$SETTINGS_JSON")"
+      _merged="$(jq \
+        --arg ups "$_ups_cmd" \
+        --arg ss "$_ss_cmd" \
+        '
+        # Append UserPromptSubmit entry only if command not already present.
+        .hooks.UserPromptSubmit = (
+          (.hooks.UserPromptSubmit // []) as $arr |
+          if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
+          else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
+          end
+        ) |
+        # Append SessionStart entry only if command not already present.
+        .hooks.SessionStart = (
+          (.hooks.SessionStart // []) as $arr |
+          if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
+          else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+          end
+        )
+        ' "$SETTINGS_JSON")"
       _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
       if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
         printf '%s\n' "$_merged" > "$SETTINGS_JSON"
-        ok "Merged hooks block into .claude/settings.json"
-        _settings_patched=true
+        ok "Merged hooks entries into .claude/settings.json"
       else
-        info ".claude/settings.json already has identical hooks block (no-op)"
+        info ".claude/settings.json already has identical hooks entries (no-op)"
       fi
     fi
   fi
 fi
 
 # ── Wire codex hooks.json ──────────────────────────────────────────────────
-_codex_patched=false
 if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
   mkdir -p .codex
   CODEX_HOOKS=".codex/hooks.json"
@@ -286,14 +301,12 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
   if [[ ! -f "$CODEX_HOOKS" ]]; then
     printf '%s\n' "$_codex_json" > "$CODEX_HOOKS"
     ok "Wrote .codex/hooks.json"
-    _codex_patched=true
   else
     _existing_codex="$(jq -cS . "$CODEX_HOOKS" 2>/dev/null || echo "")"
     _new_codex="$(printf '%s' "$_codex_json" | jq -cS . 2>/dev/null || echo "")"
     if [[ "$_existing_codex" != "$_new_codex" ]]; then
       printf '%s\n' "$_codex_json" > "$CODEX_HOOKS"
       ok "Overwrote .codex/hooks.json"
-      _codex_patched=true
     else
       info ".codex/hooks.json already up-to-date (no-op)"
     fi
@@ -302,7 +315,7 @@ fi
 
 # ── Update eidolons.lock harness key ──────────────────────────────────────
 if [[ -f "$PROJECT_LOCK" ]]; then
-  # Build the harness YAML block.
+  # Build the harness YAML block (no run-state fields — FINDING-2 fix).
   _hosts_yaml=""
   for _h in $(printf '%s' "$_hosts_wired_sorted" | tr ',' ' '); do
     [[ -z "$_h" ]] && continue
@@ -317,30 +330,35 @@ if [[ -f "$PROJECT_LOCK" ]]; then
 "
   done
 
-  # Read existing lock, strip any existing harness: block, append new one.
-  # Use a Python one-liner (bash 3.2 safe: no sed multi-line tricks).
-  _lock_no_harness="$(python3 - "$PROJECT_LOCK" <<'PY'
-import sys, re
-content = open(sys.argv[1]).read()
-# Remove existing harness: block (starts at "^harness:" up to next top-level key or EOF)
-content = re.sub(r'^harness:.*?(?=^\w|\Z)', '', content, flags=re.MULTILINE|re.DOTALL)
-sys.stdout.write(content.rstrip('\n') + '\n')
-PY
-)"
+  # Build the new harness block text.
+  _new_harness_block="$(printf 'harness:\n  schema_version: 1\n  hosts_wired:\n%s  shim_paths:\n%s' \
+    "$_hosts_yaml" "$_shims_yaml")"
 
-  {
-    printf '%s\n' "$_lock_no_harness"
-    printf 'harness:\n'
-    printf '  schema_version: 1\n'
-    printf '  settings_json_patched: %s\n' "$_settings_patched"
-    printf '  codex_hooks_json_patched: %s\n' "$_codex_patched"
-    printf '  hosts_wired:\n'
-    printf '%s' "$_hosts_yaml"
-    printf '  shim_paths:\n'
-    printf '%s' "$_shims_yaml"
-  } > "${PROJECT_LOCK}.harness.tmp"
-  mv "${PROJECT_LOCK}.harness.tmp" "$PROJECT_LOCK"
-  ok "Updated eidolons.lock with harness: key"
+  # Read existing lock, strip any existing harness: block using awk (FINDING-3 fix).
+  # awk prints lines, suppresses from /^harness:/ until the next top-level key or EOF.
+  _lock_no_harness="$(awk '
+    /^harness:/ { skip=1; next }
+    skip && /^[^[:space:]]/ { skip=0 }
+    !skip { print }
+  ' "$PROJECT_LOCK" | sed -e 's/[[:space:]]*$//' | awk 'NR==1{p=$0; next} /^$/{if(p!="") print p; p=""; next} {if(p!="") print p; p=$0} END{if(p!="") print p}')"
+
+  # No-op check: compare new harness block against existing one in lock (FINDING-2 fix).
+  _existing_harness_block="$(awk '
+    /^harness:/ { skip=1; print; next }
+    skip && /^[^[:space:]]/ { skip=0 }
+    skip { print }
+  ' "$PROJECT_LOCK")"
+
+  if [[ "$_existing_harness_block" = "$_new_harness_block" ]]; then
+    info "eidolons.lock harness: block unchanged (no-op)"
+  else
+    {
+      printf '%s\n' "$_lock_no_harness"
+      printf '%s\n' "$_new_harness_block"
+    } > "${PROJECT_LOCK}.harness.tmp"
+    mv "${PROJECT_LOCK}.harness.tmp" "$PROJECT_LOCK"
+    ok "Updated eidolons.lock with harness: key"
+  fi
 else
   warn "eidolons.lock not found — harness: key not written. Run 'eidolons sync' first."
 fi

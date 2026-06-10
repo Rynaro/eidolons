@@ -4,11 +4,15 @@
 #
 # Reverses `eidolons harness install`:
 #   - Removes .eidolons/harness/hooks/ shim files
-#   - Removes the "hooks" key from .claude/settings.json (jq-delete)
+#   - Removes only our hook entries from .claude/settings.json (jq-filter)
 #   - Removes .codex/hooks.json (if present and eidolons-written)
 #   - Removes the harness: key from eidolons.lock
 #
-# Keys NOT added by eidolons harness remain intact in settings.json.
+# Spec R2 (FINDING-1): only eidolons-written entries are removed from hooks
+# arrays; entries added by other tools are preserved byte-identically.
+# Event keys are deleted only when their array becomes empty.
+# The hooks key is deleted only when it becomes an empty object.
+#
 # Bash 3.2 safe: no declare -A, no ${var,,}, no readarray, no &>>.
 
 set -euo pipefail
@@ -29,7 +33,7 @@ Options:
 
 Removes:
   - .eidolons/harness/hooks/*.sh  (shim scripts)
-  - hooks key from .claude/settings.json
+  - Our hook entries from .claude/settings.json (other entries preserved)
   - .codex/hooks.json (if present)
   - harness: key from eidolons.lock
 EOF
@@ -73,20 +77,47 @@ if [[ -d "$HARNESS_SHIM_DIR" ]]; then
   fi
 fi
 
-# ── Remove hooks from .claude/settings.json ───────────────────────────────
+# ── Remove our hook entries from .claude/settings.json ────────────────────
+# Spec R2 (FINDING-1): filter each event array to drop only entries whose
+# hooks[].command matches our shim paths. Delete an event key only when its
+# array becomes empty. Delete the hooks key only when it becomes {}.
+# All other keys and entries are preserved byte-identically.
 SETTINGS_JSON=".claude/settings.json"
 if [[ -f "$SETTINGS_JSON" ]]; then
   if jq empty "$SETTINGS_JSON" 2>/dev/null; then
-    # Check if hooks key exists before removing.
     _has_hooks="$(jq -r 'if has("hooks") then "yes" else "no" end' "$SETTINGS_JSON" 2>/dev/null || echo "no")"
     if [[ "$_has_hooks" == "yes" ]]; then
+      _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
+      # Our shim commands match the pattern ".eidolons/harness/hooks/claude-code-*.sh".
+      # jq: for each event array, filter out entries whose nested command matches our path prefix.
+      # An entry is "ours" if any of its hooks[].command starts with HARNESS_SHIM_DIR.
+      _shim_prefix="$HARNESS_SHIM_DIR/"
       _tmp="$(mktemp)"
-      if jq 'del(.hooks)' "$SETTINGS_JSON" > "$_tmp" 2>/dev/null; then
-        mv "$_tmp" "$SETTINGS_JSON"
-        ok "Removed hooks key from .claude/settings.json (other keys preserved)"
+      jq \
+        --arg prefix "$_shim_prefix" \
+        '
+        # Helper: true if an entry has any hooks[].command starting with $prefix
+        def is_ours(entry):
+          (entry.hooks? // [] | map(.command? // "") | any(startswith($prefix)));
+
+        # Filter each event array; delete event key if array becomes empty.
+        if has("hooks") then
+          .hooks = (
+            .hooks | to_entries | map(
+              .value = (.value | map(select(is_ours(.) | not))) |
+              select(.value | length > 0)
+            ) | from_entries
+          ) |
+          # Delete hooks key entirely if it becomes an empty object.
+          if (.hooks | length) == 0 then del(.hooks) else . end
+        else .
+        end
+        ' "$SETTINGS_JSON" > "$_tmp" 2>/dev/null && mv "$_tmp" "$SETTINGS_JSON" || rm -f "$_tmp"
+      _after_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
+      if [[ "$_existing_canonical" != "$_after_canonical" ]]; then
+        ok "Removed eidolons hook entries from .claude/settings.json (other keys preserved)"
       else
-        rm -f "$_tmp"
-        warn "jq del(.hooks) failed — .claude/settings.json not modified"
+        info ".claude/settings.json had no eidolons hook entries to remove"
       fi
     else
       info ".claude/settings.json has no hooks key (already removed or never wired)"
@@ -103,15 +134,14 @@ if [[ -f "$CODEX_HOOKS" ]]; then
   ok "Removed .codex/hooks.json"
 fi
 
-# ── Remove harness: key from eidolons.lock ────────────────────────────────
+# ── Remove harness: key from eidolons.lock (awk — FINDING-3 fix) ─────────
 if [[ -f "$PROJECT_LOCK" ]]; then
-  _lock_no_harness="$(python3 - "$PROJECT_LOCK" <<'PY'
-import sys, re
-content = open(sys.argv[1]).read()
-content = re.sub(r'^harness:.*?(?=^\w|\Z)', '', content, flags=re.MULTILINE|re.DOTALL)
-sys.stdout.write(content.rstrip('\n') + '\n')
-PY
-)"
+  # awk: suppress lines from /^harness:/ until next top-level key or EOF.
+  _lock_no_harness="$(awk '
+    /^harness:/ { skip=1; next }
+    skip && /^[^[:space:]]/ { skip=0 }
+    !skip { print }
+  ' "$PROJECT_LOCK")"
   printf '%s\n' "$_lock_no_harness" > "$PROJECT_LOCK"
   ok "Removed harness: key from eidolons.lock"
 fi

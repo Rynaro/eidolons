@@ -48,8 +48,6 @@ members:
     hosts_wired: ["claude-code"]
 harness:
   schema_version: 1
-  settings_json_patched: true
-  codex_hooks_json_patched: false
   hosts_wired:
 $hosts_yaml  shim_paths:
 $shims_yaml
@@ -152,11 +150,15 @@ JSTUB
   run eidolons harness install --hosts claude-code --non-interactive
   [ "$status" -eq 0 ]
   [ -f ".claude/settings.json" ]
-  _before="$(jq -cS . .claude/settings.json)"
+  _before_settings="$(jq -cS . .claude/settings.json)"
+  # Capture a copy of the lockfile after first run.
+  cp eidolons.lock eidolons.lock.first
   run eidolons harness install --hosts claude-code --non-interactive
   [ "$status" -eq 0 ]
-  _after="$(jq -cS . .claude/settings.json)"
-  [ "$_before" = "$_after" ]
+  _after_settings="$(jq -cS . .claude/settings.json)"
+  [ "$_before_settings" = "$_after_settings" ]
+  # Lockfile must be byte-identical between runs (FINDING-2: no run-state flags).
+  cmp -s eidolons.lock.first eidolons.lock
 }
 
 # ─── R2-AC3: sibling-key preservation ─────────────────────────────────────────
@@ -200,6 +202,79 @@ JSTUB
   # Shim files must be deleted.
   [ ! -f ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
   [ ! -f ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+}
+
+# ─── FINDING-1: sibling hooks preserved through install+remove cycle ──────────
+# Pre-populates settings.json with:
+#   (a) a permissions block
+#   (b) a pre-existing hooks.PreToolUse entry from "another tool"
+#   (c) a pre-existing hooks.UserPromptSubmit entry with a different command
+# After install+remove, all three must survive byte-identically (jq -cS compare).
+
+@test "harness: sibling hooks survive full install+remove cycle (FINDING-1)" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude
+
+  # Write settings.json with sibling content that eidolons must not touch.
+  cat > .claude/settings.json <<'JSON'
+{
+  "permissions": {"allow": ["Bash(*)", "Read(*)", "Write(*)"]},
+  "theme": "dark",
+  "hooks": {
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "/usr/local/bin/other-tool.sh"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "/usr/local/bin/other-ups.sh"}]}]
+  }
+}
+JSON
+
+  # Capture canonical representation of the sibling content only.
+  _before_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  _before_theme="$(jq -cS '.theme' .claude/settings.json)"
+  _before_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  _before_other_ups="$(jq -cS '[.hooks.UserPromptSubmit[] | select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")]' .claude/settings.json)"
+
+  # Install — our entries should be appended, not replacing siblings.
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+
+  # (a) permissions block must be unchanged.
+  _after_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  [ "$_before_permissions" = "$_after_permissions" ]
+
+  # (b) PreToolUse entry from other tool must be unchanged.
+  _after_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  [ "$_before_pretooluse" = "$_after_pretooluse" ]
+
+  # (c) The other UserPromptSubmit entry must still be present.
+  _other_ups_present="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")) | length' .claude/settings.json)"
+  [ "$_other_ups_present" = "1" ]
+
+  # Our entry must also be present in UserPromptSubmit.
+  _our_ups_present="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command | test(".eidolons/harness/hooks"))) | length' .claude/settings.json)"
+  [ "$_our_ups_present" = "1" ]
+
+  # Remove — only our entries should be removed; siblings must survive.
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+
+  # (a) permissions must still be present and unchanged.
+  _final_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  [ "$_before_permissions" = "$_final_permissions" ]
+
+  # (b) PreToolUse entry must still be present.
+  _final_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  [ "$_before_pretooluse" = "$_final_pretooluse" ]
+
+  # (c) Other UserPromptSubmit entry must still be present.
+  _other_ups_final="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")) | length' .claude/settings.json)"
+  [ "$_other_ups_final" = "1" ]
+
+  # Our eidolons entries must be gone.
+  _our_ups_final="$(jq -r '(.hooks.UserPromptSubmit // []) | map(select(.hooks[]?.command | strings | test(".eidolons/harness/hooks"))) | length' .claude/settings.json)"
+  [ "$_our_ups_final" = "0" ]
+  _our_ss_final="$(jq -r '(.hooks.SessionStart // []) | length' .claude/settings.json)"
+  [ "$_our_ss_final" = "0" ]
 }
 
 # ─── R2-AC5: harness status ────────────────────────────────────────────────────
