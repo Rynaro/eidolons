@@ -42,6 +42,23 @@ eidolons mcp install atlas-aci --force   # reinstall even if already present
 Install is **idempotent**: a second run with the same version is a no-op.
 The lockfile's `installed_at` field is NOT updated on no-op runs.
 
+**Multi-host write targets:** `eidolons mcp install` writes to multiple host
+configuration files depending on which hosts are wired in `eidolons.yaml`:
+
+| Target file | Written when |
+|---|---|
+| `.mcp.json` | Always |
+| `.cursor/mcp.json` | cursor ∈ `hosts.wire` |
+| `.codex/config.toml` (managed `[mcp_servers.<name>]` section) | codex ∈ `hosts.wire` |
+
+All writes are idempotent: jq-merge for JSON targets, marker-bounded
+managed-section rewrite for TOML. Sibling entries in `.cursor/mcp.json`
+are preserved. User content outside the `# eidolon:mcp start/end` markers
+in `.codex/config.toml` is preserved. The lockfile `hosts_wired` array
+reflects the actual files written (no aspirational entries). [ASSUMPTION A3]:
+codex project-scope `mcp_servers` is assumed allowed; verify with
+`eidolons doctor` once confirmed.
+
 ### Refresh
 
 Re-fetch the artefact (re-pull the image / re-download the binary) without
@@ -59,12 +76,14 @@ eidolons mcp uninstall atlas-aci
 eidolons mcp uninstall junction
 ```
 
-For `oci-image` MCPs: host wiring (`.mcp.json`, `.cursor/mcp.json`) is
-cleaned up; the Docker image itself is **not** removed (may be shared with
-other projects); `.atlas/memex/codegraph.db` is **never** deleted.
+For `oci-image` MCPs: host wiring (`.mcp.json`, `.cursor/mcp.json`,
+`.codex/config.toml` managed section) is cleaned up; the Docker image
+itself is **not** removed (may be shared with other projects);
+`.atlas/memex/codegraph.db` is **never** deleted.
 
-For `binary` MCPs: the binary cache (`~/.eidolons/cache/junction@*/`) and
-the marker dir (`.eidolons/harness/`) are removed.
+For `binary` MCPs: the binary cache (`~/.eidolons/cache/junction@*/`),
+the marker dir (`.eidolons/harness/`), and any `.cursor/mcp.json` /
+`.codex/config.toml` entries are removed.
 
 ### Upgrade
 
@@ -125,9 +144,8 @@ mcps:
     target: ".mcp.json"
     hosts_wired:
       - ".mcp.json"
-      - ".cursor/mcp.json"
-      - ".github/agents/atlas.agent.md"
-      - ".codex/config.toml"
+      - ".codex/config.toml"    # only present when codex ∈ hosts.wire
+      - ".cursor/mcp.json"      # only present when cursor ∈ hosts.wire
     installed_at: "2026-05-19T18:55:00Z"
   - name: junction
     kind: binary
@@ -139,7 +157,8 @@ mcps:
       value: ""
     target: "$EIDOLONS_HOME/cache/junction@0.2.0/junction"
     hosts_wired:
-      - ".eidolons/harness/manifest.json"
+      - ".mcp.json"
+      - ".cursor/mcp.json"      # only present when cursor ∈ hosts.wire
     installed_at: "2026-05-19T18:56:00Z"
 ```
 

@@ -318,24 +318,37 @@ a routing artifact — with no changes to the developer's workflow.
 host-dialect hook JSON. Adding a new host means writing a new shim and adapter
 template; the kernel is unchanged.
 
-**Per-host tier table (Phase 1 — T3 inject tier):**
+**Per-host effective-tier ladder (Phase 2):**
 
-| Host | Tier | Mechanism |
-|---|---|---|
-| claude-code | T3 | `UserPromptSubmit` + `SessionStart` hooks; `additionalContext` inject |
-| codex | T3 | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) |
+| Host | Tier | Mechanism | Notes |
+|---|---|---|---|
+| claude-code | T3 | `UserPromptSubmit` + `SessionStart` hooks; `additionalContext` inject | Full route-inject |
+| codex | T3 | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) | Route-inject; schema unverified |
+| copilot | T2 | `.github/hooks/eidolons.json` + best-effort `sessionStart` shim | `additionalContext` may be silently dropped (upstream bug #2142); no `userPromptSubmitted` hook (copilot-cli#1139) |
+| cursor | T2 | `.cursor/rules/eidolons-cortex.mdc` (always-applied) + `AGENTS.md` dispatch-pointer | Static-only; cursor hook context-injection runtime-broken through v2.4.7 |
+| opencode | T1 | Not yet wired | P3 — gate-only floor |
 
-**INJECT-only default:** In Phase 1, all hooks inject context only (`additionalContext`).
+**Cursor note:** cursor hooks (`additional_context`) are runtime-broken through Cursor v2.4.7 (multiple forum reports). P2 ships only static surfaces (`.mdc` + AGENTS.md pointer). Revisit when upstream fixes the regression.
+
+**Copilot note:** `sessionStart` `additionalContext` is tracked as silently dropped by the Copilot CLI (issue #2142, closed without fix note). The harness adapter is best-effort; install prints the caveat. Per-prompt injection is impossible (`userPromptSubmitted` output is unprocessed, copilot-cli#1139).
+
+**INJECT-only default:** All hooks inject context only (`additionalContext`).
 No `PreToolUse` blocking hooks. No exit code 2. The harness never interrupts a tool call.
 
 **Fail-open invariant:** Shim scripts are designed to exit 0 with empty stdout on any error.
 The host's context window is never corrupted by harness failure.
 
-**Opt-in:** `eidolons sync` and `eidolons init` never invoke harness wiring. Only an
-explicit `eidolons harness install` adds hooks. Once installed, `sync` refreshes shim
-contents from the current template (never adds new wiring).
+**Opt-in surface map:**
 
-Full specification: `.spectra/harness-mechanization/spec.md`
+| Surface | Trigger | Requires `harness install`? |
+|---|---|---|
+| Cursor `.mdc` + AGENTS.md pointer | `eidolons sync` | No |
+| `.cursor/mcp.json` | `eidolons mcp install` | No |
+| `.codex/config.toml` mcp_servers | `eidolons mcp install` | No |
+| Copilot `sessionStart` adapter | `eidolons harness install --hosts copilot` | Yes |
+| Claude-code / Codex hooks | `eidolons harness install` | Yes |
+
+Full specification: `.spectra/harness-mechanization/spec.md` (P1) + `.spectra/harness-mechanization/spec-p2.md` (P2)
 
 ---
 
