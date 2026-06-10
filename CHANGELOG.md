@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- apivr v3.7.0 published in the roster with release integrity metadata.
 - spectra v4.9.0 published in the roster with release integrity metadata.
 - atlas v1.12.0 published in the roster with release integrity metadata.
 - **Release-template stamp gate** (`eidolon-release-template.yml`). A new "Verify in-tree version stamps" step runs immediately after checkout, before tests or tagging. It asserts that `install.sh` declares `EIDOLON_VERSION="<version>"` (tolerates a `readonly` prefix) and that `CHANGELOG.md` contains a `## [<version>]` heading; on failure it prints the offending file, the expected version, and what was found, then exits 1. Fixes the root cause of version-stamp drift: releases were tagged without verifying that in-tree stamps matched the dispatched version.
