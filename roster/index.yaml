@@ -238,7 +238,7 @@ eidolons:
     status: shipped
     methodology:
       name: SPECTRA
-      version: "4.2"
+      version: "4.9"
       cycle: "S→P→E→C→T→R→A"
       summary: "Decision-ready specifications. Scoring rubrics, validation gates, GIVEN/WHEN/THEN stories."
     source:
@@ -622,7 +622,7 @@ eidolons:
     status: shipped
     methodology:
       name: IDG
-      version: "1.1"
+      version: "1.8"
       cycle: "I→D→G"
       summary: "Documentation synthesis. Structured markers, CHT verification, provenance-first."
     source:
@@ -787,7 +787,7 @@ eidolons:
     status: shipped
     methodology:
       name: FORGE
-      version: "1.2"
+      version: "1.9"
       cycle: "F→O→R→G→E"
       summary: "Deep reasoning for ambiguity, trade-offs, counterfactuals, novel problems."
     source:

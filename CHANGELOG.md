@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.33.0] — 2026-06-10 — Consistency campaign: release stamp gate + canonical skill template across the roster
+
+### Changed
+- **Roster `methodology.version` refreshed** for the members whose repos track it against the release version: SPECTRA `4.2 → 4.9`, IDG `1.1 → 1.8`, FORGE `1.2 → 1.9` (ATLAS, VIGIL, Vivi, Kupo, APIVR-Δ keep their frozen methodology versions by documented design).
+
 ### Added
 - vigil v1.6.0 published in the roster with release integrity metadata.
 - kupo v1.1.0 published in the roster with release integrity metadata.
