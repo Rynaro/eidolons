@@ -191,7 +191,9 @@ case "$cmd" in
         _harness_first="${1:-}"
         if [ -n "$_harness_first" ] && [ "${_harness_first#-}" = "$_harness_first" ] \
            && printf '%s' "$_harness_first" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
-          printf 'error: bare semver argument to `harness install` is no longer supported.\n' >&2
+          if [ "${EIDOLONS_SUPPRESS_DEPRECATED:-0}" != "1" ]; then
+            printf 'DEPRECATED: bare semver argument to `harness install` is no longer supported.\n' >&2
+          fi
           printf 'Migration: eidolons mcp install junction@%s\n' "$_harness_first" >&2
           printf 'Note: `eidolons harness install` now wires host hooks; see `eidolons harness --help`.\n' >&2
           exit 1

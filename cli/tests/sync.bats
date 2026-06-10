@@ -187,7 +187,7 @@ EOF
   done
 
   # Vendor-specific phrasing — each file has its own pointer body.
-  grep -qF "TRANCE complexity signal" CLAUDE.md            # Claude pointer
+  grep -qF "non-trivial prompt" CLAUDE.md                   # Claude pointer (R3: unconditional)
   grep -qF "agent dispatch table and methodology" GEMINI.md # Gemini pointer (shorter form)
   grep -qF "canonical agent instructions live in" .github/copilot-instructions.md
 }
@@ -202,7 +202,7 @@ EOF
 
   [ -f AGENTS.md ]
   grep -qF "<!-- eidolon:dispatch-pointer start -->" AGENTS.md
-  grep -qF "TRANCE complexity signal" AGENTS.md
+  grep -qF "non-trivial prompt" AGENTS.md  # R3: unconditional text
 }
 
 # G-A1.1 cont.b — AGENTS.md NOT written when NOT in pointer_targets.
@@ -301,7 +301,7 @@ cortex body line 2'
 
   # Each block's body is intact.
   grep -qF "cortex body line 1" CLAUDE.md
-  grep -qF "TRANCE complexity signal" CLAUDE.md
+  grep -qF "non-trivial prompt" CLAUDE.md  # R3: unconditional dispatch pointer text
 
   # Exactly one start marker per block.
   [ "$(grep -cF 'eidolon:cortex start'           CLAUDE.md)" = "1" ]
