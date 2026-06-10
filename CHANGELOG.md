@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- vivi v1.1.1 published in the roster with release integrity metadata.
+
 ## [1.33.0] — 2026-06-10 — Consistency campaign: release stamp gate + canonical skill template across the roster
 
 ### Changed
