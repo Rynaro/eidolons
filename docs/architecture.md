@@ -307,6 +307,38 @@ version is retained.
 
 ---
 
+## Harness Layer
+
+The harness layer wires host-native hook surfaces to the routing kernel so every
+prompt submitted inside a supported AI coding host is automatically enriched with
+a routing artifact — with no changes to the developer's workflow.
+
+**Kernel + adapters architecture:** `eidolons run` is the vendor-neutral kernel.
+`cli/src/harness_hook.sh` is a thin adapter that wraps the routing artifact in the
+host-dialect hook JSON. Adding a new host means writing a new shim and adapter
+template; the kernel is unchanged.
+
+**Per-host tier table (Phase 1 — T3 inject tier):**
+
+| Host | Tier | Mechanism |
+|---|---|---|
+| claude-code | T3 | `UserPromptSubmit` + `SessionStart` hooks; `additionalContext` inject |
+| codex | T3 | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) |
+
+**INJECT-only default:** In Phase 1, all hooks inject context only (`additionalContext`).
+No `PreToolUse` blocking hooks. No exit code 2. The harness never interrupts a tool call.
+
+**Fail-open invariant:** Shim scripts are designed to exit 0 with empty stdout on any error.
+The host's context window is never corrupted by harness failure.
+
+**Opt-in:** `eidolons sync` and `eidolons init` never invoke harness wiring. Only an
+explicit `eidolons harness install` adds hooks. Once installed, `sync` refreshes shim
+contents from the current template (never adds new wiring).
+
+Full specification: `.spectra/harness-mechanization/spec.md`
+
+---
+
 ## Related
 
 - [`../README.md`](../README.md) — nexus front door
