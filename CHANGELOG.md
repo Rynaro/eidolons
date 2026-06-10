@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Added
+- vigil v1.6.0 published in the roster with release integrity metadata.
 - kupo v1.1.0 published in the roster with release integrity metadata.
 - forge v1.9.0 published in the roster with release integrity metadata.
 - idg v1.8.0 published in the roster with release integrity metadata.
