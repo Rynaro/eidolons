@@ -134,6 +134,14 @@ if [[ -f "$CODEX_HOOKS" ]]; then
   ok "Removed .codex/hooks.json"
 fi
 
+# ── Remove .github/hooks/eidolons.json (copilot sessionStart adapter) ────
+COPILOT_HOOKS_FILE=".github/hooks/eidolons.json"
+if [[ -f "$COPILOT_HOOKS_FILE" ]]; then
+  rm -f "$COPILOT_HOOKS_FILE"
+  rmdir ".github/hooks" 2>/dev/null || true
+  ok "Removed .github/hooks/eidolons.json"
+fi
+
 # ── Remove harness: key from eidolons.lock (awk — FINDING-3 fix) ─────────
 if [[ -f "$PROJECT_LOCK" ]]; then
   # awk: suppress lines from /^harness:/ until next top-level key or EOF.
