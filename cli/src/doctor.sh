@@ -34,6 +34,7 @@ Checks:
   - Each installed Eidolon's install.manifest.json is valid
   - Host dispatch files exist for every host listed in eidolons.yaml
   - Release-integrity status per lock entry (verified / legacy / missing)
+  - Agent files missing explicit tools: line (warn — inherits ALL tools)
 
 Deep checks (--deep):
   D1   agent.md token budget                    MUST <= 1000 tokens
@@ -724,6 +725,52 @@ if [[ "$_r5_drift_count" -eq 0 ]]; then
   pass "no wired vendor file marker drift detected"
 fi
 unset _r5_hosts_csv _r5_pt_csv _r5_strict _r5_drift_count _r5_vfile _r5_vhost _R5_VENDOR_HOST_MAP
+
+# ─── Check 15: Agent files missing explicit tools: line ─────────────────────
+# Warn-only (non-fatal): for each installed member whose .claude/agents/<name>.md
+# exists and has no `tools:` line in frontmatter, remind that the agent inherits
+# ALL tools (Claude Code semantics) and that the upstream template should ship an
+# explicit allowlist. This is the scenario that the MCP wiring driver now skips
+# instead of synthesizing a crystalium-only allowlist (FORGE decision D2).
+#
+# ERRORS not incremented — purely advisory.
+ui_section_out "Agent tools: line coverage"
+
+_c15_claude_wired=false
+if [[ -f "$PROJECT_MANIFEST" ]]; then
+  if yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+       | jq -e '.hosts.wire | index("claude-code")' >/dev/null 2>&1; then
+    _c15_claude_wired=true
+  fi
+fi
+
+_c15_warned=false
+if [[ "$_c15_claude_wired" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
+  _c15_members="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+    | jq -r '(.members // [])[].name' 2>/dev/null || true)"
+  while IFS= read -r _c15_m; do
+    [[ -n "$_c15_m" ]] || continue
+    _c15_agent=".claude/agents/${_c15_m}.md"
+    [[ -f "$_c15_agent" ]] || continue
+    # Check for tools: line in frontmatter (between first and second ---).
+    _c15_has_tools="$(awk '
+      /^---$/ { fc++; if (fc==1) { in_fm=1; next } if (fc==2) { exit } }
+      in_fm && /^tools:[[:space:]]/ { print "1"; exit }
+    ' "$_c15_agent" 2>/dev/null || true)"
+    if [[ "${_c15_has_tools:-}" != "1" ]]; then
+      warn "${_c15_agent}: no tools: line — agent inherits ALL tools (Claude Code semantics)."
+      warn "  The upstream ${_c15_m} template should ship an explicit tools: allowlist."
+      warn "  MCP wiring will skip allowlist injection for this agent until a tools: line is present."
+      _c15_warned=true
+    fi
+  done <<< "$_c15_members"
+  unset _c15_members _c15_m _c15_agent _c15_has_tools
+fi
+
+if [[ "$_c15_warned" == "false" ]]; then
+  pass "All installed claude-code agent files have an explicit tools: line"
+fi
+unset _c15_claude_wired _c15_warned
 
 # ─── Methodology integrity (--deep) ─────────────────────────────────────
 # D1..D7 run only when --deep is passed. The fast checks (1..14) always run
