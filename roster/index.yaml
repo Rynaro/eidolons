@@ -994,7 +994,7 @@ eidolons:
     handoffs:
       upstream: [] # lateral consultant — called by any member
       downstream: []
-      lateral: [atlas, spectra, apivr, idg, vigil]
+      lateral: [atlas, spectra, vivi, apivr, idg, vigil]
     comm:
       envelope_version: "2.0"
     working_set_tokens:
@@ -1163,9 +1163,9 @@ eidolons:
       target_default: "./.eidolons/vigil"
       standalone: true
     handoffs:
-      upstream: [] # lateral specialist — invoked via APIVR-Δ escalation, user, or orchestrator
+      upstream: [] # lateral specialist — invoked via coder escalation (Vivi/APIVR-Δ), user, or orchestrator
       downstream: []
-      lateral: [atlas, spectra, apivr, idg, forge]
+      lateral: [atlas, spectra, vivi, apivr, idg, forge]
     comm:
       envelope_version: "2.0"
     working_set_tokens:
@@ -1318,7 +1318,7 @@ eidolons:
       target_default: "./.eidolons/kupo"
       standalone: true
     handoffs:
-      upstream: [spectra, vigil, forge, apivr, atlas] # the Eidolons that may DELEGATE micro-tasks in
+      upstream: [spectra, vigil, forge, vivi, apivr, atlas] # the Eidolons that may DELEGATE micro-tasks in
       downstream: [] # pure downstream worker — replies only to the delegating parent
       lateral: []
     comm:

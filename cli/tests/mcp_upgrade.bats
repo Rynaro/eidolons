@@ -6,7 +6,7 @@
 
 load helpers
 
-FAKE_JUNCTION_VERSION="0.2.0"
+FAKE_JUNCTION_VERSION="0.3.0"
 
 setup_fake_curl_and_gh_for_upgrade() {
   local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
@@ -19,7 +19,7 @@ DEST="${JUNCTION_INSTALL_DIR:-/usr/local/bin}"
 mkdir -p "$DEST"
 cat > "$DEST/junction" <<'JBIN'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "--version" ]]; then echo "junction 0.2.0"; exit 0; fi
+if [[ "${1:-}" == "--version" ]]; then echo "junction 0.3.0"; exit 0; fi
 echo "stub: $*"
 JBIN
 chmod +x "$DEST/junction"
@@ -93,7 +93,7 @@ EOF
 @test "mcp upgrade S16 no-op: installed_at unchanged when already at stable" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_upgrade
-  # Seed at the catalogue stable version (0.2.0).
+  # Seed at the catalogue stable version (0.3.0).
   seed_junction_lock_at_version "$FAKE_JUNCTION_VERSION"
   before_ts="$(grep 'installed_at' eidolons.mcp.lock | head -1)"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
@@ -106,12 +106,12 @@ EOF
 @test "mcp upgrade S15: upgrades when behind catalogue stable" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_upgrade
-  # Seed at an older version (0.1.0); catalogue stable is 0.2.0.
+  # Seed at an older version (0.1.0); catalogue stable is 0.3.0.
   seed_junction_lock_at_version "0.1.0"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
   [ "$status" -eq 0 ]
   # After upgrade, lockfile should reference stable version.
-  result="$(grep -c '0.2.0' eidolons.mcp.lock || true)"
+  result="$(grep -c '0.3.0' eidolons.mcp.lock || true)"
   [ "$result" -gt 0 ]
 }
 
@@ -287,10 +287,10 @@ SHIM
 
 @test "U-DOWN: upgrade name@ver downgrade rejected (exit 1)" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  # Seed at stable (0.2.0) then attempt a downgrade. We can't go lower than
-  # 0.2.0 in the catalogue, so we craft this by seeding a higher version
+  # Seed at stable (0.3.0) then attempt a downgrade. We can't go lower than
+  # 0.3.0 in the catalogue, so we craft this by seeding a higher version
   # in the lockfile (as if a future version were installed).
-  local cache_dir="$EIDOLONS_HOME/cache/junction@0.2.0"
+  local cache_dir="$EIDOLONS_HOME/cache/junction@0.3.0"
   mkdir -p "$cache_dir"
   cat > "$cache_dir/junction" <<'JSTUB'
 #!/usr/bin/env bash
@@ -319,14 +319,14 @@ mcps:
 EOF
 
   # Attempt upgrade to a catalogue-published version that is lower.
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.2.0"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.3.0"
   [ "$status" -eq 1 ]
   [[ "$output" =~ "older than" ]]
 }
 
 @test "U-DOWN: downgrade rejection message suggests mcp use" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  local cache_dir="$EIDOLONS_HOME/cache/junction@0.2.0"
+  local cache_dir="$EIDOLONS_HOME/cache/junction@0.3.0"
   mkdir -p "$cache_dir"
   cat > "$cache_dir/junction" <<'JSTUB'
 #!/usr/bin/env bash
@@ -353,7 +353,7 @@ mcps:
     installed_at: "2026-05-01T00:00:00Z"
 EOF
 
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.2.0"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.3.0"
   [ "$status" -eq 1 ]
   # Must suggest 'eidolons mcp use' for downgrade.
   [[ "$output" =~ "mcp use" ]]
@@ -361,7 +361,7 @@ EOF
 
 @test "U-DOWN: lockfile unchanged after rejected downgrade" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  local cache_dir="$EIDOLONS_HOME/cache/junction@0.2.0"
+  local cache_dir="$EIDOLONS_HOME/cache/junction@0.3.0"
   mkdir -p "$cache_dir"
   cat > "$cache_dir/junction" <<'JSTUB'
 #!/usr/bin/env bash
@@ -390,7 +390,7 @@ EOF
 
   local before
   before="$(cat eidolons.mcp.lock)"
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.2.0"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction@0.3.0"
   [ "$status" -eq 1 ]
   local after
   after="$(cat eidolons.mcp.lock)"
@@ -399,7 +399,7 @@ EOF
 
 @test "MUTEX: upgrade --all name@ver exits 2" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" --all "junction@0.2.0"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" --all "junction@0.3.0"
   [ "$status" -eq 2 ]
 }
 
@@ -414,11 +414,11 @@ EOF
 @test "regression: upgrade <name> (no @ver) still chases pins.stable" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_upgrade
-  # Seed at older version; no @ver → should upgrade to stable (0.2.0).
+  # Seed at older version; no @ver → should upgrade to stable (0.3.0).
   seed_junction_lock_at_version "0.1.0"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
   [ "$status" -eq 0 ]
-  result="$(grep -c '0.2.0' eidolons.mcp.lock || true)"
+  result="$(grep -c '0.3.0' eidolons.mcp.lock || true)"
   [ "$result" -gt 0 ]
 }
 
