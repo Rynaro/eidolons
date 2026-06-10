@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **junction published at 0.3.0 in the MCP catalogue** (was 0.2.0). Junction v0.3.0 re-vendors the ECL contract set at v2.0.2 (45 contracts): adds the 11 Kupo executor edges and the 10 Vivi succession edges + vivi profiles. Closes the L3 `edge not declared — searched "forge-to-vivi.yaml"` rejection for the roster's default coder seat (gap G1 from the tooling allowlist campaign).
+- **Roster hand-off graph synced with the ECL v2.0.2 edge set**: `kupo.handoffs.upstream` now includes `vivi` (the default coder may DELEGATE micro-tasks, mirroring `vivi-to-kupo.yaml`); `forge.handoffs.lateral` and `vigil.handoffs.lateral` now include `vivi` (mirroring `vivi-to-forge.yaml` / `vivi-to-vigil.yaml`); VIGIL's escalation comment updated from the APIVR-Δ-era wording to the coder-class wording.
+
 ## [1.34.0] — 2026-06-10 — Tooling allowlist campaign: sane per-Eidolon tool grants
 
 ### Added
