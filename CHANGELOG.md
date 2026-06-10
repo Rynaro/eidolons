@@ -8,9 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.33.1] — 2026-06-10 — Vivi 1.1.1 intake + campaign record
 
 ### Added
-- vivi v1.1.1 published in the roster with release integrity metadata.
+- vivi v1.1.1 published in the roster with release integrity metadata (SPEC.md invariant I-11 — lint-gated edits — clearing the `doctor --deep` D11 advisory).
+- **Campaign record** (`docs/campaigns/consistency-2026-06.md`) — the full version-stamp-hygiene + canonical-SKILL-template campaign spec (FORGE decisions D1–D4, stamp policy, skill template, per-repo briefs) with its shipped outcome and the VIGIL EIIS-M14 vendored-schema lesson.
 
 ## [1.33.0] — 2026-06-10 — Consistency campaign: release stamp gate + canonical skill template across the roster
 
