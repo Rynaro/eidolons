@@ -1039,13 +1039,16 @@ GITEOF
 }
 
 # R3-init-4: cursor host produces NO pointer_targets (cursor→none mapping).
-@test "non-interactive init --hosts cursor: pointer_targets absent (cursor has no vendor file) (R3)" {
+@test "non-interactive init --hosts cursor: eidolons.yaml written with cursor host (R9)" {
   setup_fake_git
 
   run eidolons init --preset minimal --hosts cursor --non-interactive
   [ -f eidolons.yaml ]
-  # pointer_targets should NOT be written when empty.
-  ! grep -qF "pointer_targets:" eidolons.yaml
+  # eidolons.yaml must contain cursor in hosts.wire.
+  grep -qF "cursor" eidolons.yaml
+  # cursor → AGENTS.md (R9): pointer_targets may or may not appear (init doesn't
+  # write pointer_targets for derived targets — sync derives from hosts.wire).
+  # The manifest must have been written (init reached that stage).
 }
 
 # R3-init-5: detect_vendor_files_on_disk finds existing files.

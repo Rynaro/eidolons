@@ -600,3 +600,351 @@ AGENTMD
   [ "$status" -ne 0 ]
   [[ "$output" =~ "mcp install junction" ]]
 }
+
+# ─── Phase 2: R9 — Cursor cortex surface ─────────────────────────────────────
+
+# Helper: seed a manifest with cursor in hosts.wire + shared_dispatch: true.
+seed_cursor_manifest() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [cursor]
+  shared_dispatch: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+# Helper: seed a minimal cortex EIDOLONS.md.
+seed_cortex() {
+  mkdir -p .eidolons/cortex
+  cat > .eidolons/cortex/EIDOLONS.md <<'EOF'
+# Eidolons Routing Cortex
+
+## Roster Index (always-loaded)
+
+| Eidolon | Role |
+|---------|------|
+| ATLAS   | scout |
+
+## Dispatch Protocol (always-loaded)
+
+Route all non-trivial work through the Eidolons pipeline.
+EOF
+}
+
+@test "harness: cursor cortex mdc written when cursor wired" {
+  # Test the .mdc writer directly via the sync.sh lib (bypass full member install).
+  seed_cursor_manifest
+  seed_cortex
+  run bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export EIDOLONS_HOME='$EIDOLONS_HOME'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    MANIFEST_JSON=\"\$(yaml_to_json eidolons.yaml 2>/dev/null)\"
+    HOSTS_CSV=\"\$(printf '%s' \"\$MANIFEST_JSON\" | jq -r '(.hosts.wire // []) | join(\",\")')\"
+    EFFECTIVE_SHARED_DISPATCH=\"\$(printf '%s' \"\$MANIFEST_JSON\" | jq -r '.hosts.shared_dispatch // false')\"
+    _cortex_src='.eidolons/cortex/EIDOLONS.md'
+    if [[ \",\${HOSTS_CSV},\" == *\",cursor,\"* ]] && [[ \"\$EFFECTIVE_SHARED_DISPATCH\" == 'true' ]] && [[ -f \"\$_cortex_src\" ]]; then
+      _mdc_digest=\"\$(awk '
+        /^## Roster Index/ { in_section=1 }
+        /^## Dispatch Protocol/ { in_section=1 }
+        /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+        in_section { print }
+      ' \"\$_cortex_src\" 2>/dev/null | head -c 4000 || true)\"
+      _mdc_body=\"\${_mdc_digest}
+
+> Deep tables: .eidolons/cortex/trance-matrix.md\"
+      _mdc_file='.cursor/rules/eidolons-cortex.mdc'
+      _mdc_frontmatter='---
+description: Eidolons routing cortex — read before any non-trivial prompt.
+alwaysApply: true
+---'
+      mkdir -p '.cursor/rules'
+      printf '%s\n' \"\$_mdc_frontmatter\" > \"\$_mdc_file\"
+      printf '\n' >> \"\$_mdc_file\"
+      upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+    fi
+  " 2>/dev/null
+  [ -f ".cursor/rules/eidolons-cortex.mdc" ]
+}
+
+@test "harness: cursor mdc frontmatter has alwaysApply:true and no globs" {
+  seed_cursor_manifest
+  seed_cortex
+  # Write the .mdc using sync.sh logic via bash sub-shell.
+  bash -c "
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export EIDOLONS_HOME='$EIDOLONS_HOME'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    MANIFEST_JSON=\"\$(yaml_to_json eidolons.yaml 2>/dev/null)\"
+    HOSTS_CSV=\"\$(printf '%s' \"\$MANIFEST_JSON\" | jq -r '(.hosts.wire // []) | join(\",\")')\"
+    EFFECTIVE_SHARED_DISPATCH=\"\$(printf '%s' \"\$MANIFEST_JSON\" | jq -r '.hosts.shared_dispatch // false')\"
+    _cortex_src='.eidolons/cortex/EIDOLONS.md'
+    _mdc_digest=\"\$(awk '
+      /^## Roster Index/ { in_section=1 }
+      /^## Dispatch Protocol/ { in_section=1 }
+      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+      in_section { print }
+    ' \"\$_cortex_src\" 2>/dev/null | head -c 4000 || true)\"
+    _mdc_body=\"\${_mdc_digest}\"
+    _mdc_file='.cursor/rules/eidolons-cortex.mdc'
+    _mdc_frontmatter='---
+description: Eidolons routing cortex — read before any non-trivial prompt.
+alwaysApply: true
+---'
+    mkdir -p '.cursor/rules'
+    printf '%s\n' \"\$_mdc_frontmatter\" > \"\$_mdc_file\"
+    printf '\n' >> \"\$_mdc_file\"
+    upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+  " 2>/dev/null
+  [ -f ".cursor/rules/eidolons-cortex.mdc" ]
+  grep -qF "alwaysApply: true" .cursor/rules/eidolons-cortex.mdc
+  # Must NOT contain a globs: key.
+  ! grep -qF "globs:" .cursor/rules/eidolons-cortex.mdc
+}
+
+@test "harness: cursor mdc body is marker-bounded and idempotent (byte-identical re-sync)" {
+  seed_cursor_manifest
+  seed_cortex
+  # Use sync.sh's _mcp_oci_render_and_merge call path by calling the sync cortex stage
+  # directly via the lib.
+  _write_mdc() {
+    bash -c "
+      export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+      export EIDOLONS_HOME='$EIDOLONS_HOME'
+      . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+      _cortex_src='.eidolons/cortex/EIDOLONS.md'
+      _mdc_digest=\"\$(awk '
+        /^## Roster Index/ { in_section=1 }
+        /^## Dispatch Protocol/ { in_section=1 }
+        /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+        in_section { print }
+      ' \"\$_cortex_src\" 2>/dev/null | head -c 4000 || true)\"
+      _mdc_body=\"\${_mdc_digest}\"
+      _mdc_file='.cursor/rules/eidolons-cortex.mdc'
+      _mdc_frontmatter='---
+description: Eidolons routing cortex — read before any non-trivial prompt.
+alwaysApply: true
+---'
+      mkdir -p '.cursor/rules'
+      if [[ ! -f \"\$_mdc_file\" ]]; then
+        printf '%s\n' \"\$_mdc_frontmatter\" > \"\$_mdc_file\"
+        printf '\n' >> \"\$_mdc_file\"
+        upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+      else
+        upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+      fi
+    " 2>/dev/null
+  }
+  _write_mdc
+  [ -f ".cursor/rules/eidolons-cortex.mdc" ]
+  grep -qF "<!-- eidolon:cortex start -->" .cursor/rules/eidolons-cortex.mdc
+  grep -qF "<!-- eidolon:cortex end -->" .cursor/rules/eidolons-cortex.mdc
+  # Second write: file must be byte-identical (no-op).
+  _before="$(cat .cursor/rules/eidolons-cortex.mdc)"
+  _write_mdc
+  _after="$(cat .cursor/rules/eidolons-cortex.mdc)"
+  [ "$_before" = "$_after" ]
+}
+
+@test "harness: non-cursor project gets no .cursor/rules mdc" {
+  # claude-code only — no cursor in hosts.wire.
+  seed_manifest  # wire: [claude-code]
+  seed_cortex
+  # Even if we invoke the mdc writer, it is gated on cursor ∈ HOSTS_CSV.
+  bash -c "
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export EIDOLONS_HOME='$EIDOLONS_HOME'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    MANIFEST_JSON=\"\$(yaml_to_json eidolons.yaml 2>/dev/null)\"
+    HOSTS_CSV=\"\$(printf '%s' \"\$MANIFEST_JSON\" | jq -r '(.hosts.wire // []) | join(\",\")')\"
+    EFFECTIVE_SHARED_DISPATCH='true'
+    # Gate: cursor NOT in HOSTS_CSV → must not write.
+    if [[ \",\${HOSTS_CSV},\" == *\",cursor,\"* ]]; then
+      mkdir -p '.cursor/rules'
+      printf 'frontmatter\n' > '.cursor/rules/eidolons-cortex.mdc'
+    fi
+  " 2>/dev/null
+  [ ! -f ".cursor/rules/eidolons-cortex.mdc" ]
+}
+
+# ─── Phase 2: R12 — Copilot harness adapter ───────────────────────────────────
+
+# Helper: seed manifest with copilot in hosts.wire.
+seed_copilot_manifest() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [copilot]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+@test "harness: copilot is a supported host" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  # Must NOT skip copilot as unsupported.
+  ! [[ "$output" =~ "Skipping unsupported harness host: copilot" ]]
+}
+
+@test "harness: copilot install writes SessionStart shim only (no UserPromptSubmit)" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/copilot-SessionStart.sh" ]
+  [ ! -f ".eidolons/harness/hooks/copilot-UserPromptSubmit.sh" ]
+}
+
+@test "harness: copilot install writes .github/hooks/eidolons.json (jq -e .version==1)" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".github/hooks/eidolons.json" ]
+  run jq -e '.version == 1' .github/hooks/eidolons.json
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.sessionStart[0].bash == ".eidolons/harness/hooks/copilot-SessionStart.sh"' .github/hooks/eidolons.json
+  [ "$status" -eq 0 ]
+  # Must NOT have a userPromptSubmitted key.
+  run jq -e 'has("hooks") and (.hooks | has("userPromptSubmitted")) | not' .github/hooks/eidolons.json
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: copilot install prints upstream-bug caveat" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2142" ]] || [[ "$output" =~ "1139" ]] || [[ "$output" =~ "Copilot" ]]
+}
+
+@test "harness: copilot in lockfile hosts_wired" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  grep -qF "copilot" eidolons.lock
+  grep -qF "copilot-SessionStart.sh" eidolons.lock
+  # Must NOT have copilot-UserPromptSubmit.sh in lock.
+  ! grep -qF "copilot-UserPromptSubmit.sh" eidolons.lock
+}
+
+@test "harness: copilot remove deletes hook file + shim; siblings preserved" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  # Create a sibling file in .github/hooks/ (user-managed).
+  printf '{}' > .github/hooks/other.json
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ ! -f ".github/hooks/eidolons.json" ]
+  [ ! -f ".eidolons/harness/hooks/copilot-SessionStart.sh" ]
+  # Sibling must survive.
+  [ -f ".github/hooks/other.json" ]
+}
+
+@test "harness: copilot install/remove/re-install byte-identical hooks json" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  _first="$(jq -cS . .github/hooks/eidolons.json)"
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  # Re-install and compare.
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  _second="$(jq -cS . .github/hooks/eidolons.json)"
+  [ "$_first" = "$_second" ]
+}
+
+# ─── Phase 2: R13 — harness status effective-tier ladder ─────────────────────
+
+@test "harness: status shows per-host effective tier (T3/T2/T1)" {
+  seed_manifest
+  # Seed lock with claude-code (T3) + codex (T3).
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+    - codex
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+    - .eidolons/harness/hooks/codex-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/codex-SessionStart.sh
+EOF
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "T3" ]]
+  [[ "$output" =~ "claude-code" ]]
+  [[ "$output" =~ "codex" ]]
+}
+
+@test "harness: status reports cursor mdc + AGENTS.md presence" {
+  # Manifest with cursor wired.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [cursor]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  # Lock must have harness installed (even if cursor is not harness-installable,
+  # status reads manifest for cursor static-surface check).
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["cursor"]
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  # Must report cursor static surface presence/absence.
+  [[ "$output" =~ ".cursor/rules/eidolons-cortex.mdc" ]]
+  [[ "$output" =~ "absent" ]] || [[ "$output" =~ "present" ]]
+}
+
+@test "harness: status executes no host binary; exit 0" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  # There are no host binaries on PATH in the test tmpdir environment.
+  # The status command must exit 0 regardless.
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+}

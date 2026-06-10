@@ -213,12 +213,16 @@ EOF
 
 # R5-mig-8: hoisted_from is [] when pointer_targets=[] and no vendor files have markers.
 @test "v1.8.0 migration: lock hoisted_from is empty array when no sources (R5)" {
-  # Manifest with explicit empty pointer_targets and no host-derived fallback.
-  # cursor host has no vendor pointer file (maps to nothing), so _compose_sources = empty.
+  # Manifest with explicit pointer_targets and no Eidolon-content marker files on disk.
+  # Using explicit pointer_targets=[CLAUDE.md] but no CLAUDE.md exists on disk with markers:
+  # Phase 1 seeds _compose_sources from pointer_targets, but compose_eidolons_md will find
+  # no content — hoisted_from reflects actual seeded sources. However, to get truly empty
+  # hoisted_from we need POINTER_TARGETS_CSV to be empty.
+  # With hosts.wire: [] and no pointer_targets, derive returns empty → hoisted_from: [].
   cat > eidolons.yaml <<'YAML'
 version: 1
 hosts:
-  wire: [cursor]
+  wire: []
   shared_dispatch: false
   strict: false
   pointer_targets: []

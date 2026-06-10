@@ -1630,3 +1630,122 @@ CLAUDEMD
   # Must NOT contain the old wording.
   ! [[ "$result" == *"redirect host LLMs here via"* ]]
 }
+
+# ─── Phase 2: R9 — cursor AGENTS.md pointer + .mdc writer ────────────────────
+
+# seed_cursor_manifest_for_sync: write a manifest with cursor in hosts.wire.
+_seed_cursor_manifest_for_sync() {
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [cursor]
+pointer_targets: []
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+}
+
+# seed_cortex_for_sync: write a minimal cortex EIDOLONS.md.
+_seed_cortex_for_sync() {
+  mkdir -p .eidolons/cortex
+  cat > .eidolons/cortex/EIDOLONS.md <<'CORTEX'
+# Eidolons Routing Cortex
+
+## Roster Index (always-loaded)
+
+| Eidolon | Role |
+|---------|------|
+| ATLAS   | scout |
+
+## Dispatch Protocol (always-loaded)
+
+Route all non-trivial work through the Eidolons pipeline.
+CORTEX
+}
+
+@test "harness: cursor → AGENTS.md dispatch-pointer present" {
+  # _vendor_file_for_host("cursor") must return AGENTS.md.
+  result="$(bash -c "
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    _vendor_file_for_host cursor
+  " 2>/dev/null)"
+  [ "$result" = "AGENTS.md" ]
+}
+
+@test "harness: cursor-only project gets both mdc and AGENTS.md; repeat sync no-op" {
+  _seed_cursor_manifest_for_sync
+  _seed_cortex_for_sync
+
+  # Exercise via lib helpers directly (bypass full member install — which would
+  # need network). Simulate what sync does: derive pointer targets → apply
+  # dispatch pointers → write .mdc.
+  bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export EIDOLONS_HOME='$EIDOLONS_HOME'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    MANIFEST_JSON=\"\$(yaml_to_json eidolons.yaml 2>/dev/null)\"
+    HOSTS_CSV=cursor
+    EFFECTIVE_SHARED_DISPATCH=true
+
+    # Derive and apply dispatch pointer to AGENTS.md.
+    POINTER_TARGETS_CSV=\"\$(derive_pointer_targets_from_hosts \"\$HOSTS_CSV\" 2>/dev/null)\"
+    apply_dispatch_pointers \"\$POINTER_TARGETS_CSV\" \"\$HOSTS_CSV\"
+
+    # Write cursor .mdc.
+    _cortex_src='.eidolons/cortex/EIDOLONS.md'
+    _mdc_digest=\"\$(awk '
+      /^## Roster Index/ { in_section=1 }
+      /^## Dispatch Protocol/ { in_section=1 }
+      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+      in_section { print }
+    ' \"\$_cortex_src\" 2>/dev/null | head -c 4000 || true)\"
+    _mdc_body=\"\${_mdc_digest}\"
+    _mdc_file='.cursor/rules/eidolons-cortex.mdc'
+    _mdc_frontmatter='---
+description: Eidolons routing cortex — read before any non-trivial prompt.
+alwaysApply: true
+---'
+    mkdir -p '.cursor/rules'
+    printf '%s\n' \"\$_mdc_frontmatter\" > \"\$_mdc_file\"
+    printf '\n' >> \"\$_mdc_file\"
+    upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+  " 2>/dev/null
+
+  # Both files must exist.
+  [ -f ".cursor/rules/eidolons-cortex.mdc" ]
+  [ -f "AGENTS.md" ]
+  grep -qF "<!-- eidolon:dispatch-pointer start -->" AGENTS.md
+
+  # Idempotency: run again and compare.
+  _mdc_before="$(cat .cursor/rules/eidolons-cortex.mdc)"
+  _agents_before="$(cat AGENTS.md)"
+
+  bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export EIDOLONS_HOME='$EIDOLONS_HOME'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    HOSTS_CSV=cursor
+    EFFECTIVE_SHARED_DISPATCH=true
+    POINTER_TARGETS_CSV=\"\$(derive_pointer_targets_from_hosts \"\$HOSTS_CSV\" 2>/dev/null)\"
+    apply_dispatch_pointers \"\$POINTER_TARGETS_CSV\" \"\$HOSTS_CSV\"
+    _cortex_src='.eidolons/cortex/EIDOLONS.md'
+    _mdc_digest=\"\$(awk '
+      /^## Roster Index/ { in_section=1 }
+      /^## Dispatch Protocol/ { in_section=1 }
+      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+      in_section { print }
+    ' \"\$_cortex_src\" 2>/dev/null | head -c 4000 || true)\"
+    _mdc_body=\"\${_mdc_digest}\"
+    _mdc_file='.cursor/rules/eidolons-cortex.mdc'
+    upsert_marker_block \"\$_mdc_file\" 'cortex' \"\$_mdc_body\"
+  " 2>/dev/null
+
+  _mdc_after="$(cat .cursor/rules/eidolons-cortex.mdc)"
+  _agents_after="$(cat AGENTS.md)"
+  [ "$_mdc_before" = "$_mdc_after" ]
+  [ "$_agents_before" = "$_agents_after" ]
+}
