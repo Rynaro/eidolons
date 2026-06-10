@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **MCP wiring: never synthesize `tools:` allowlist on agents without one** (`cli/src/lib_mcp_wiring.sh`). Strategy (c) previously inserted `tools: mcp__X__*` when no `tools:` line existed in a claude-code agent's frontmatter, silently converting an inherit-all agent into a strict MCP-only allowlist — starving SPECTRA, IDG, FORGE, VIGIL, and Kupo of Read/Edit/Bash/etc. New behaviour: when no `tools:` line is present, leave the file unchanged except for updating the `x-eidolons-mcp-wired` sentinel (idempotency anchor), and emit a warning to stderr (`agent file has no tools: line — inherits all tools; skipping allowlist injection`). Strategy (d) for codex receives the same fix (codex block-seq absence → skip+warn) for consistency, as codex inherit-all semantics could not be verified. Strategies (a) CSV-append and (b) none-replace are unchanged.
+- **`eidolons doctor` Check 15** — non-fatal warning gate: for each installed member whose `.claude/agents/<name>.md` exists and has no `tools:` line in frontmatter, warns that the agent inherits ALL tools (Claude Code semantics) and that the upstream template should ship an explicit allowlist. Does not increment the error counter (warn-only, exit code unaffected).
+
 ## [1.33.1] — 2026-06-10 — Vivi 1.1.1 intake + campaign record
 
 ### Added

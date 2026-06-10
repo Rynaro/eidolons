@@ -18,8 +18,10 @@
 # Patching strategies per host:
 #   (a) claude-code CSV append   — existing `tools: A, B` → append `, mcp__X__*`
 #   (b) claude-code none-replace — `tools: none` → `tools: mcp__X__*`
-#   (c) claude-code insert       — no `tools:` line → insert before closing `---`
+#   (c) claude-code skip+warn    — no `tools:` line → leave file unchanged (inherit-all),
+#                                  update sentinel, emit warning to stderr
 #   (d) codex block-seq append   — `tools:\n  - A` → append `  - mcp__X__*` item
+#                                  (no tools: block → skip+warn, same as (c))
 #
 # Idempotency anchor: `x-eidolons-mcp-wired: [<sorted mcp names>]` in frontmatter.
 #
@@ -189,6 +191,12 @@ _mcp_wiring_remove_from_sentinel() {
 # _mcp_wiring_patch_claude_code FILE MCP_GLOB MCP_NAME → patch claude-code agent file.
 # Handles strategies (a), (b), (c), and sentinel upsert.
 # Atomic: writes to tmpfile then mv.
+#
+# Strategy (c) — no tools: line:
+#   Under Claude Code semantics, no tools: line = inherit-all tools.
+#   Inserting one would convert the agent to a strict MCP-only allowlist,
+#   starving it of Read/Edit/Bash/etc. Instead: update only the sentinel,
+#   leave the tools surface unchanged, and emit a warning to stderr.
 _mcp_wiring_patch_claude_code() {
   local file="$1"
   local glob="$2"
@@ -205,6 +213,49 @@ _mcp_wiring_patch_claude_code() {
   local new_sentinel
   new_sentinel="$(_mcp_wiring_build_sentinel "$existing_csv" "$mcp_name")"
 
+  # Detect whether a tools: line is present in the frontmatter.
+  local has_tools_line
+  has_tools_line="$(awk '
+    /^---$/ { fc++; if (fc==1) { in_fm=1; next } if (fc==2) { exit } }
+    in_fm && /^tools:[[:space:]]/ { print "1"; exit }
+  ' "$file" || true)"
+
+  # Strategy (c): no tools: line — inherit-all semantics. Do NOT insert one.
+  # Only update the sentinel so idempotency is preserved, then warn.
+  if [ "${has_tools_line:-}" != "1" ]; then
+    # Emit warning to stderr (use warn helper if available, else printf).
+    if command -v warn >/dev/null 2>&1; then
+      warn "agent file has no tools: line — inherits all tools; skipping allowlist injection (${file})"
+    else
+      printf 'WARNING: agent file has no tools: line — inherits all tools; skipping allowlist injection (%s)\n' "$file" >&2
+    fi
+    # Still update the sentinel so we don't re-warn on every sync.
+    local tmpfile
+    tmpfile="$(mktemp)"
+    awk -v new_sentinel="$new_sentinel" '
+    BEGIN { fence_count=0; in_front=0; sentinel_done=0 }
+    /^---$/ {
+      fence_count++
+      if (fence_count == 1) { in_front=1; print; next }
+      if (fence_count == 2) {
+        if (!sentinel_done) {
+          print "x-eidolons-mcp-wired: [" new_sentinel "]"
+          sentinel_done=1
+        }
+        in_front=0; print; next
+      }
+    }
+    in_front && /^x-eidolons-mcp-wired:/ {
+      print "x-eidolons-mcp-wired: [" new_sentinel "]"
+      sentinel_done=1
+      next
+    }
+    { print }
+    ' "$file" > "$tmpfile"
+    mv "$tmpfile" "$file"
+    return 0
+  fi
+
   local tmpfile
   tmpfile="$(mktemp)"
 
@@ -217,9 +268,6 @@ _mcp_wiring_patch_claude_code() {
     in_front = 0
     tools_done = 0
     sentinel_done = 0
-    second_fence_line = ""
-    # Buffer frontmatter lines so we can insert tools: before closing ---
-    buf_count = 0
   }
   /^---$/ {
     fence_count++
@@ -229,12 +277,7 @@ _mcp_wiring_patch_claude_code() {
       next
     }
     if (fence_count == 2) {
-      # Before closing ---, check if we need to insert tools: (strategy c)
-      if (!tools_done) {
-        print "tools: " glob
-        tools_done = 1
-      }
-      # Upsert sentinel
+      # Upsert sentinel before closing --- (tools: already handled inline above)
       if (!sentinel_done) {
         print "x-eidolons-mcp-wired: [" new_sentinel "]"
         sentinel_done = 1
@@ -339,6 +382,12 @@ _mcp_wiring_unpatch_claude_code() {
 }
 
 # _mcp_wiring_patch_codex FILE MCP_GLOB MCP_NAME → patch codex agent file (strategy d).
+#
+# Strategy (d) — no tools: block:
+#   Codex tools: block semantics when absent are unverified. Applying the same
+#   conservative rule as strategy (c): if no tools: block exists, do NOT insert
+#   one (could starve the agent of all tools). Instead update only the sentinel
+#   and emit a warning to stderr.
 _mcp_wiring_patch_codex() {
   local file="$1"
   local glob="$2"
@@ -354,11 +403,51 @@ _mcp_wiring_patch_codex() {
   local new_sentinel
   new_sentinel="$(_mcp_wiring_build_sentinel "$existing_csv" "$mcp_name")"
 
+  # Detect whether a tools: block-sequence header exists in the frontmatter.
+  local has_tools_block
+  has_tools_block="$(awk '
+    /^---$/ { fc++; if (fc==1) { in_fm=1; next } if (fc==2) { exit } }
+    in_fm && /^tools:$/ { print "1"; exit }
+  ' "$file" || true)"
+
+  # No tools: block — skip injection, warn, update sentinel only.
+  if [ "${has_tools_block:-}" != "1" ]; then
+    if command -v warn >/dev/null 2>&1; then
+      warn "agent file has no tools: line — inherits all tools; skipping allowlist injection (${file})"
+    else
+      printf 'WARNING: agent file has no tools: line — inherits all tools; skipping allowlist injection (%s)\n' "$file" >&2
+    fi
+    local tmpfile
+    tmpfile="$(mktemp)"
+    awk -v new_sentinel="$new_sentinel" '
+    BEGIN { fence_count=0; in_front=0; sentinel_done=0 }
+    /^---$/ {
+      fence_count++
+      if (fence_count == 1) { in_front=1; print; next }
+      if (fence_count == 2) {
+        if (!sentinel_done) {
+          print "x-eidolons-mcp-wired: [" new_sentinel "]"
+          sentinel_done=1
+        }
+        in_front=0; print; next
+      }
+    }
+    in_front && /^x-eidolons-mcp-wired:/ {
+      print "x-eidolons-mcp-wired: [" new_sentinel "]"
+      sentinel_done=1
+      next
+    }
+    { print }
+    ' "$file" > "$tmpfile"
+    mv "$tmpfile" "$file"
+    return 0
+  fi
+
   local tmpfile
   tmpfile="$(mktemp)"
 
   # For codex, tools: is a YAML block sequence. We append a new item after the
-  # last `  - ` entry in the tools block. If no tools: block, we insert one before ---.
+  # last `  - ` entry in the tools block.
   awk -v glob="$glob" -v mcp_name="$mcp_name" -v new_sentinel="$new_sentinel" '
   BEGIN {
     fence_count = 0
@@ -418,12 +507,6 @@ _mcp_wiring_patch_codex() {
 
     # Now emit with modifications
     for (i=0; i<line_count; i++) {
-      if (i == second_fence && !tools_done) {
-        # Need to insert tools block before closing ---
-        print "tools:"
-        print "  - " glob
-        tools_done = 1
-      }
       if (i == second_fence && !sentinel_done) {
         print "x-eidolons-mcp-wired: [" new_sentinel "]"
         sentinel_done = 1
@@ -441,11 +524,7 @@ _mcp_wiring_patch_codex() {
       }
       print lines[i]
     }
-    # If we never found a closing fence (malformed file), still emit sentinel/tools
-    if (!tools_done) {
-      print "tools:"
-      print "  - " glob
-    }
+    # If we never found a closing fence (malformed file), still emit sentinel
     if (!sentinel_done) {
       print "x-eidolons-mcp-wired: [" new_sentinel "]"
     }

@@ -1608,3 +1608,108 @@ AGENTEOF
   [ "$status" -eq 0 ]
   [[ ! "$output" =~ "D9 FAIL" ]]
 }
+
+# ─── Check 15: Agent tools: line coverage ─────────────────────────────────────
+# Non-fatal warn: installed member's .claude/agents/<name>.md has no tools: line
+# in frontmatter → warn about inherit-all semantics and MCP skip.
+# ERRORS not incremented (exit code stays 0).
+
+_seed_check15_base_with_tools() {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  # Agent file WITH an explicit tools: line.
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Scout agent.
+tools: Read, Grep, Glob, mcp__crystalium__*
+---
+
+# atlas body.
+AGENTEOF
+}
+
+_seed_check15_base_no_tools() {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  # Agent file WITHOUT a tools: line (inherit-all pattern).
+  cat > .claude/agents/atlas.md <<'AGENTEOF'
+---
+name: atlas
+description: Scout agent.
+methodology: ATLAS
+---
+
+# atlas body.
+AGENTEOF
+}
+
+@test "Check 15: agent with explicit tools: line — no warning emitted" {
+  _seed_check15_base_with_tools
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Agent tools: line coverage" ]]
+  # Pass message — no warnings about missing tools: line.
+  [[ "$output" =~ "All installed claude-code agent files have an explicit tools: line" ]]
+  # No warn about inherit-all.
+  [[ ! "$output" =~ "inherits ALL tools" ]]
+}
+
+@test "Check 15: agent missing tools: line — warning emitted but exit code stays 0" {
+  _seed_check15_base_no_tools
+
+  run eidolons doctor
+  # Warn-only — ERRORS not incremented → exit 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "Agent tools: line coverage" ]]
+  # Warning text must appear.
+  [[ "$output" =~ "inherits ALL tools" ]]
+  [[ "$output" =~ ".claude/agents/atlas.md" ]]
+  # Remedy hint for upstream template.
+  [[ "$output" =~ "upstream atlas template should ship an explicit tools: allowlist" ]] || \
+    [[ "$output" =~ "explicit allowlist" ]]
+  # Check that MCP wiring skip note is present.
+  [[ "$output" =~ "MCP wiring will skip" ]] || [[ "$output" =~ "skipping allowlist injection" ]] || \
+    [[ "$output" =~ "until a tools: line is present" ]]
+}
+
+@test "Check 15: skipped when hosts.wire does not include claude-code" {
+  # codex-only project — Check 15 is only for claude-code host.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  echo "---" > .codex/agents/atlas.md
+
+  run eidolons doctor
+  [ "$status" -eq 0 ]
+  # The codex-only project should not warn about missing tools: in agent files.
+  [[ ! "$output" =~ "inherits ALL tools" ]]
+  # Pass message should appear.
+  [[ "$output" =~ "All installed claude-code agent files have an explicit tools: line" ]]
+}
+
+@test "Check 15: agent file absent — silently skipped (member installed but no agent file yet)" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  # No .claude/agents/atlas.md — absent means not installed on that host yet.
+
+  run eidolons doctor
+  # doctor exits non-zero due to Check 2 (.claude/agents/atlas.md missing) but
+  # Check 15 itself should NOT warn about tools: when the file is simply absent.
+  [[ ! "$output" =~ "inherits ALL tools" ]]
+}

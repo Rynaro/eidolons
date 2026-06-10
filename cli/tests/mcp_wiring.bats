@@ -891,7 +891,7 @@ EOF
 
 # ─── Additional unit tests for lib internals ─────────────────────────────────
 
-@test "lib: strategy (c) insert — no tools: line in safety-net stub gets tools: inserted" {
+@test "lib: strategy (c) skip+warn — no tools: line in safety-net stub: file unchanged except sentinel, warning emitted" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -907,17 +907,31 @@ EOF
   sed -i.bak 's/^name: stub/name: atlas/' .claude/agents/atlas.md
   rm -f .claude/agents/atlas.md.bak
 
+  # Snapshot the content lines that carry semantic information (no tools: line present).
+  # We verify these are NOT modified by the wiring pass.
+  local body_before
+  body_before="$(grep -v '^x-eidolons-mcp-wired:' .claude/agents/atlas.md)"
+
   seed_junction_lock
 
   # Call the low-level patch directly (bypasses transport gate in apply_for_mcp).
   run bash -c "
     $(_source_wiring_libs)
-    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__*
+    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__* 2>&1
   "
   [ "$status" -eq 0 ]
 
-  # tools: line should now exist and contain the glob.
-  grep -q '^tools: mcp__atlas_aci__\*' .claude/agents/atlas.md
+  # tools: line MUST NOT be synthesized — no tools: line means inherit-all.
+  ! grep -q '^tools:' .claude/agents/atlas.md
+
+  # mcp glob MUST NOT appear anywhere in the file body.
+  ! grep -q 'mcp__atlas_aci__' .claude/agents/atlas.md
+
+  # Sentinel MUST be written (idempotency anchor for future runs).
+  grep -q 'x-eidolons-mcp-wired:.*atlas-aci' .claude/agents/atlas.md
+
+  # Warning MUST be emitted on stderr (captured in $output via 2>&1).
+  [[ "$output" =~ "no tools: line" ]] || [[ "$output" =~ "skipping allowlist injection" ]]
 }
 
 @test "lib: sentinel sorted alphabetically when two MCPs are wired" {
@@ -1365,4 +1379,165 @@ EOF
   diff .claude/agents/apivr.md.before .claude/agents/apivr.md
   # atlas.md still gets the glob.
   grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
+}
+
+# ─── B1.x — strategy (c) skip+warn: no tools: line in claude-code agent ─────
+#
+# When crystalium (grants_to_eidolons: all) wires an agent that has NO tools:
+# line, the driver must NOT synthesize one (would convert inherit-all to a
+# strict crystalium-only allowlist). Instead: update sentinel only + warn.
+
+# Seed a codex agent file with NO tools: block.
+seed_codex_agent_no_tools() {
+  local name="${1:-stub}"
+  mkdir -p ".codex/agents"
+  cat > ".codex/agents/${name}.md" <<EOF
+---
+name: ${name}
+description: Codex safety-net stub with no tools block.
+model: gpt-5
+---
+
+# ${name} codex stub body.
+EOF
+}
+
+@test "B1.1: crystalium + claude-code agent with no tools: line — NO tools: synthesized, warning emitted, sentinel written" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+
+  # Create an agent file with NO tools: line (inherit-all pattern used by
+  # SPECTRA/IDG/FORGE/VIGIL/Kupo upstream templates).
+  mkdir -p ".claude/agents"
+  cat > ".claude/agents/spectra.md" <<'AGENTEOF'
+---
+name: spectra
+description: Planner agent.
+methodology: SPECTRA
+methodology_version: "4.0"
+role: Planner
+handoffs: []
+---
+
+# spectra body.
+AGENTEOF
+
+  # Snapshot body lines (excluding sentinel) before wiring.
+  local body_before
+  body_before="$(grep -v '^x-eidolons-mcp-wired:' .claude/agents/spectra.md)"
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium 2>&1
+  "
+  [ "$status" -eq 0 ]
+
+  # No tools: line must be synthesized.
+  ! grep -q '^tools:' .claude/agents/spectra.md
+
+  # mcp glob must NOT appear in the file.
+  ! grep -q 'mcp__crystalium__' .claude/agents/spectra.md
+
+  # Sentinel MUST be written (idempotency).
+  grep -q 'x-eidolons-mcp-wired:.*crystalium' .claude/agents/spectra.md
+
+  # Warning must mention the no tools: line situation.
+  [[ "$output" =~ "no tools: line" ]] || [[ "$output" =~ "skipping allowlist injection" ]]
+
+  # Body lines (non-sentinel) must be unchanged.
+  local body_after
+  body_after="$(grep -v '^x-eidolons-mcp-wired:' .claude/agents/spectra.md)"
+  [ "$body_before" = "$body_after" ]
+}
+
+@test "B1.2: strategy (c) skip+warn is idempotent — second apply_for_mcp produces no diff (sentinel already present)" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+
+  mkdir -p ".claude/agents"
+  cat > ".claude/agents/spectra.md" <<'AGENTEOF'
+---
+name: spectra
+description: Planner agent.
+---
+
+# spectra body.
+AGENTEOF
+
+  # First apply.
+  bash -c "$(_source_wiring_libs); mcp_wiring_apply_for_mcp crystalium" 2>/dev/null
+  cp .claude/agents/spectra.md .claude/agents/spectra.md.snap
+
+  # Second apply — must be byte-identical.
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_apply_for_mcp crystalium
+  "
+  [ "$status" -eq 0 ]
+  diff .claude/agents/spectra.md.snap .claude/agents/spectra.md
+}
+
+@test "B1.3: strategy (d) codex skip+warn — no tools: block in codex agent → no tools: synthesized, warning emitted" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue_with_crystalium "$EIDOLONS_NEXUS"
+
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+members:
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+
+  # Codex agent with NO tools: block.
+  seed_codex_agent_no_tools "spectra"
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_patch_agent_file codex .codex/agents/spectra.md crystalium mcp__crystalium__* 2>&1
+  "
+  [ "$status" -eq 0 ]
+
+  # No tools: block must NOT be synthesized.
+  ! grep -q '^tools:' .codex/agents/spectra.md
+
+  # mcp glob must NOT appear in the file.
+  ! grep -q 'mcp__crystalium__' .codex/agents/spectra.md
+
+  # Sentinel MUST be written.
+  grep -q 'x-eidolons-mcp-wired:.*crystalium' .codex/agents/spectra.md
+
+  # Warning emitted.
+  [[ "$output" =~ "no tools: line" ]] || [[ "$output" =~ "skipping allowlist injection" ]]
 }
