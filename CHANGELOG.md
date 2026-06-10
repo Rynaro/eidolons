@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.34.0] — 2026-06-10 — Tooling allowlist campaign: sane per-Eidolon tool grants
 
 ### Added
 - apivr v3.7.1 published in the roster with release integrity metadata.
