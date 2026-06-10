@@ -60,6 +60,9 @@ TRANCE_TOKEN=false
 PRIOR_FAILURE=false
 VERIFY_ENVELOPE=""
 VERIFY_MODE="${EIDOLONS_ECL_VERIFY_MODE:-warn}"
+HOOK_HOST=""
+HOOK_SESSION_START=false
+HOOK_STDIN=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -71,6 +74,9 @@ while [[ $# -gt 0 ]]; do
     --prior-failure)   PRIOR_FAILURE=true; shift ;;
     --verify)          VERIFY_ENVELOPE="${2:-}"; shift 2 ;;
     --verify-block)    VERIFY_MODE="block"; shift ;;
+    --hook)            HOOK_HOST="${2:-}"; shift 2 ;;
+    --session-start)   HOOK_SESSION_START=true; shift ;;
+    --stdin)           HOOK_STDIN=true; shift ;;
     -h|--help)         usage; exit 0 ;;
     --)                shift; PROMPT="${PROMPT}${PROMPT:+ }$*"; break ;;
     -*)                die "Unknown option: $1 (see 'eidolons run --help')" ;;
@@ -78,7 +84,31 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# ── Hook: session-start mode (no prompt required) ──────────────────────────
+if [[ -n "$HOOK_HOST" && "$HOOK_SESSION_START" == "true" ]]; then
+  export HOOK_HOST HOOK_MODE="session_start" HOOK_EVENT_NAME="SessionStart"
+  export ARTIFACT_JSON="" PROMPT HOOK_STDIN_INPUT=""
+  bash "$SELF_DIR/harness_hook.sh"
+  exit 0
+fi
+
+# ── Hook: stdin mode — read prompt from event JSON on stdin ───────────────
+HOOK_STDIN_INPUT=""
+if [[ -n "$HOOK_HOST" && "$HOOK_STDIN" == "true" ]]; then
+  HOOK_STDIN_INPUT="$(cat 2>/dev/null || true)"
+  if command -v jq >/dev/null 2>&1 && [[ -n "$HOOK_STDIN_INPUT" ]]; then
+    _stdin_prompt="$(printf '%s' "$HOOK_STDIN_INPUT" | jq -r '.prompt // empty' 2>/dev/null || true)"
+    if [[ -n "$_stdin_prompt" ]]; then
+      PROMPT="$_stdin_prompt"
+    fi
+  fi
+fi
+
 if [[ -z "${PROMPT// }" ]]; then
+  if [[ -n "$HOOK_HOST" ]]; then
+    # Hook mode with no prompt — silently exit 0 (fail-open).
+    exit 0
+  fi
   die "No prompt given. Usage: eidolons run \"<prompt>\""
 fi
 
@@ -282,6 +312,14 @@ if [[ "$EXPLAIN" == "1" ]]; then
     printf '%sscores%s  (prompt: %s)\n' "${BOLD:-}" "${RESET:-}" "$PROMPT"
     printf '%s' "$ARTIFACT" | jq -r '._scores[] | "  \(.name)\t\(.score)\t(raw=\(.raw)\(if .named then ", named" else "" end))"'
   } >&2
+fi
+
+# ── Hook mode: delegate to harness_hook.sh for host-dialect JSON ──────────
+if [[ -n "$HOOK_HOST" ]]; then
+  export HOOK_HOST HOOK_MODE="run" HOOK_EVENT_NAME="UserPromptSubmit"
+  export ARTIFACT_JSON="$ARTIFACT" PROMPT HOOK_STDIN_INPUT
+  bash "$SELF_DIR/harness_hook.sh"
+  exit 0
 fi
 
 if [[ "$OUT" == "json" ]]; then

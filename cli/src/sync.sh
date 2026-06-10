@@ -824,6 +824,19 @@ else
   fi
 fi
 
+# ─── Harness shim refresh ────────────────────────────────────────────────
+# If harness is installed (harness.schema_version present in lock), refresh
+# shim contents from the current template. Does NOT install if absent (opt-in).
+_harness_installed="$(jq -r '.harness.schema_version // "absent"' "$PROJECT_LOCK" 2>/dev/null || echo "absent")"
+if [[ "$_harness_installed" != "absent" ]]; then
+  if [[ "$DRY_RUN" == "true" ]]; then
+    info "  [dry-run] would refresh harness shims (harness installed, schema_version=$_harness_installed)"
+  else
+    bash "$SELF_DIR/harness_install.sh" --refresh-shims-only || true
+  fi
+fi
+unset _harness_installed
+
 # ─── MCP lockfile drift (warn-only; never installs per NG3) ─────────────
 # Surfaces any MCP entries in eidolons.mcp.lock so the operator knows they
 # are present, but does NOT install, upgrade, or touch them.  MCP install
