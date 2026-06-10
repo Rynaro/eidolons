@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- vivi v1.1.2 published in the roster with release integrity metadata.
 - atlas v1.12.1 published in the roster with release integrity metadata.
 - kupo v1.1.1 published in the roster with release integrity metadata.
 - vigil v1.6.1 published in the roster with release integrity metadata.
