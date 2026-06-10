@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **Release-template stamp gate** (`eidolon-release-template.yml`). A new "Verify in-tree version stamps" step runs immediately after checkout, before tests or tagging. It asserts that `install.sh` declares `EIDOLON_VERSION="<version>"` (tolerates a `readonly` prefix) and that `CHANGELOG.md` contains a `## [<version>]` heading; on failure it prints the offending file, the expected version, and what was found, then exits 1. Fixes the root cause of version-stamp drift: releases were tagged without verifying that in-tree stamps matched the dispatched version.
+- **Shared pre-flight checker** (`scripts/check-eidolon-stamps.sh`). Runnable against any member checkout before dispatching a release (`scripts/check-eidolon-stamps.sh <eidolon-dir> <version>`). Checks five stamps: `install.sh` `EIDOLON_VERSION`, `CHANGELOG.md` heading, `agent.md` frontmatter `version:`, `AGENTS.md` frontmatter `version:`, and `SPEC.md` first-10-lines header. Each prints `[PASS]`/`[FAIL]`/`[NOTE]` to stderr; exits nonzero if any fail. Bash 3.2 compatible; shellcheck `-S error` clean.
+
+### Changed
+- **README member table refreshed** to current shipped versions: ATLAS 1.11.0, SPECTRA 4.8.0, APIVR-Δ 3.6.0, IDG 1.7.0, FORGE 1.8.0, VIGIL 1.5.0 (was 1.9.0 / 4.6.0 / 3.4.0 / 1.5.0 / 1.6.0 / 1.4.0 — two release cycles stale).
+
 ## [1.32.1] — 2026-06-09
 
 ### Added
