@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-10T16:39Z"
+updated_at: "2026-06-10T17:07Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -574,9 +574,9 @@ eidolons:
       repo: Rynaro/Vivi
       default_ref: main
     versions:
-      latest: "1.1.0"
+      latest: "1.1.1"
       pins:
-        stable: "1.1.0"
+        stable: "1.1.1"
       releases:
         1.0.0:
           tag: v1.0.0
@@ -592,6 +592,15 @@ eidolons:
           commit: 1044f8f2ab7928c40a2fb2999ea2e4ecb8f151ae
           tree: c7fd43bcc19603e399ce59fe0e3aceaa3c5ee437
           archive_sha256: e9f048040d1464140eed5606d5879519e2959673954d8613aa24405ff3fbac8e
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.1.1:
+          tag: v1.1.1
+          commit: d4a83ab477c45e5db4f8e987527f4844287f13ee
+          tree: 9f51aecde8a002f4f779e3434009489bba070607
+          archive_sha256: d940226207e81d9c555d012c5c12eb563ab2b58d2566fcfeeed3ddfce489d585
           manifest_sha256:
           provenance:
             github_attestation: true
