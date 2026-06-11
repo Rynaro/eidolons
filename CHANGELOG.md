@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
-## [Unreleased]
+## [1.37.0] — 2026-06-11 — GAP-2: mechanical memory pre-flight
 
 ### Changed
 - **crystalium published at 1.4.0 in the MCP catalogue** (was 1.3.0). v1.4.0 ships the one-shot `recall` CLI subcommand (BM25 fast path, pure-JSON stdout) consumed by `eidolons memory preflight` for the GAP-2 mechanical memory pre-flight, plus the `index` Redactor regression fix. Multi-arch digest `sha256:77816705…` pinned.
