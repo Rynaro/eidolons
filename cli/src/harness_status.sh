@@ -56,6 +56,9 @@ _hosts_json="$(printf '%s' "$_lock_json" | jq -r '(.harness.hosts_wired // [])[]
 _shims_json="$(printf '%s' "$_lock_json" | jq -r '(.harness.shim_paths // [])[]' 2>/dev/null || echo "")"
 _settings_patched="$(printf '%s' "$_lock_json" | jq -r '.harness.settings_json_patched // false' 2>/dev/null || echo "false")"
 _codex_patched="$(printf '%s' "$_lock_json" | jq -r '.harness.codex_hooks_json_patched // false' 2>/dev/null || echo "false")"
+_strict_wired="$(printf '%s' "$_lock_json" | jq -r '(.harness.strict // []) | join(",")' 2>/dev/null || echo "")"
+_strict_modes="$(printf '%s' "$_lock_json" | jq -c '.harness.strict_modes // {}' 2>/dev/null || echo '{}')"
+_protect_globs_count="$(printf '%s' "$_lock_json" | jq -r '(.harness.protect // []) | length' 2>/dev/null || echo "0")"
 
 # _harness_effective_tier HOST → "T3", "T2", or "T1" to stdout + rationale to stderr
 # Read-only case-based lookup; no host binary executed (AC-R13-3).
@@ -89,13 +92,31 @@ while IFS= read -r _host; do
   [[ -z "$_host" ]] && continue
   _tier="$(_harness_effective_tier "$_host")"
   _rationale="$(_harness_tier_rationale "$_host")"
-  printf '    - %s  (tier: %s — %s)\n' "$_host" "$_tier" "$_rationale"
+  # Show strict mode modifier if wired.
+  _enforcement="inject-only"
+  if printf '%s' ",$_strict_wired," | grep -q ",$_host,"; then
+    _smode="$(printf '%s' "$_strict_modes" | jq -r --arg h "$_host" '.[$h] // "block"' 2>/dev/null || echo "block")"
+    _enforcement="strict:${_smode}"
+  fi
+  printf '    - %s  %s  [%s] — %s\n' "$_host" "$_tier" "$_enforcement" "$_rationale"
 done <<EOF
 $_hosts_json
 EOF
 
+printf '  strict wired:          %s\n' "${_strict_wired:-(none)}"
+printf '  protected-globs count: %s\n' "$_protect_globs_count"
 printf '  settings.json patched: %s\n' "$_settings_patched"
 printf '  codex hooks.json patched: %s\n' "$_codex_patched"
+
+# Report refusals for any hosts in the wire set that got strict refused.
+_manifest_hosts_status=""
+if [[ -f "$PROJECT_MANIFEST" ]]; then
+  _manifest_hosts_status="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
+    | jq -r '(.hosts.wire // []) | join(",")' 2>/dev/null || echo "")"
+fi
+if printf '%s' ",$_manifest_hosts_status," | grep -q ",cursor,"; then
+  printf '  strict refusal: cursor — out of P3 scope (beforeSubmitPrompt persist-in-context bug)\n'
+fi
 
 printf '  shim paths:\n'
 while IFS= read -r _shim; do
