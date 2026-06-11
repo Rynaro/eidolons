@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `feat(harness)`: `eidolons harness install|remove|status` verb family — mechanical hook wiring for claude-code and codex. Writes host shims under `.eidolons/harness/hooks/`, merges hooks block into `.claude/settings.json` (jq-canonical, idempotent, sibling-key-safe), writes `.codex/hooks.json` (ASSUMPTION A1). Opt-in: init/sync never invoke it.
+- `feat(run)`: `--hook <host>` output mode on `eidolons run`. Emits host-dialect `hookSpecificOutput` JSON for non-trivial prompts; empty stdout for clarify/trivial. `--session-start` emits cortex digest. `--stdin` reads prompt from event JSON `.prompt` field. ≤300ms latency target (pure bash+jq, no network).
+
+### Fixed
+- `fix(dispatch-pointer)`: Remove lexical gate from footer text (R3). "Read that file first before responding to any prompt that mentions an Eidolon or matches a TRANCE complexity signal" replaced with "Read that file before any non-trivial prompt — this is the default operating mode, not an opt-in."
+- `fix(sync)`: Add `.codex/agents/<name>.toml` safety-net stub when codex is in hosts.wire and the file is absent (G10 — Codex only reads `.toml`, not `.md`). Never overwrites existing stubs.
+- `fix(sync)`: Add `.github/agents/<name>.agent.md` safety-net stub when copilot is in hosts.wire and the file is absent (G3/G8). Never overwrites existing stubs.
+
 ## [1.35.0] — 2026-06-10 — ECL gap G1 closed: junction 0.3.0 + Vivi succession edges
 
 ### Changed

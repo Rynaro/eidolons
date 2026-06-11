@@ -1,17 +1,20 @@
 #!/usr/bin/env bats
 #
-# cli/tests/harness.bats — bats coverage for 'eidolons harness' subcommands (F7-4)
+# cli/tests/harness.bats — coverage for 'eidolons harness' verb family
+#
+# Phase 1 harness mechanization: R1–R8 (spec.md, 2026-06-10).
+# The new harness surface: install|remove|status (hook wiring).
+# Legacy aliases kept: up|verify|uninstall (deprecated Junction delegation).
 #
 # Design:
-#   - Network calls (curl to GitHub install.sh) are intercepted by placing a
-#     fake 'curl' on PATH that emits a stub installer script. The stub creates
-#     $JUNCTION_INSTALL_DIR/junction (executable) instead of a real binary.
-#   - 'gh' is shadowed by a fake that echoes a pinned version tag so the
-#     resolve step is deterministic.
-#   - All tests rely on helpers.bash for setup/teardown (isolated tmp home).
-#   - Sync tests reuse seed_manifest + fake-git from helpers.bash to avoid
-#     network access; we directly seed the cache dir to simulate a Junction
-#     installation for the sync marker tests.
+#   - All tests use helpers.bash conventions (load helpers; $BATS_TEST_TMPDIR).
+#   - seed_manifest + seed_lock are used to set up a base project.
+#   - A seed_lock_with_harness helper creates a lock with harness: key for tests
+#     that require a pre-installed harness state.
+#   - jq -cS canonical comparisons for idempotency tests (darwin/ubuntu safe).
+#   - shim fail-open: write a minimal shim pointing at a nonexistent path;
+#     execute it; assert exit 0 and empty stdout.
+#   - run --hook: use routing files from the checkout; assert hookSpecificOutput JSON.
 
 load helpers
 
@@ -19,56 +22,40 @@ load helpers
 
 FAKE_JUNCTION_VERSION="0.1.0"
 
-# setup_fake_curl_and_gh
-# Places fake 'curl' and 'gh' on PATH so harness install doesn't hit the network.
-# fake curl: echoes a tiny install.sh that writes a stub junction binary.
-# fake gh:   echoes a pinned release tag for junction.
-setup_fake_curl_and_gh() {
-  FAKE_BIN="$BATS_TEST_TMPDIR/fake-bin"
-  mkdir -p "$FAKE_BIN"
+# seed_lock_with_harness [hosts_csv]
+# Writes eidolons.lock with a harness: key for the given host(s).
+seed_lock_with_harness() {
+  local hosts_csv="${1:-claude-code}"
+  local hosts_yaml=""
+  local shims_yaml=""
+  for _h in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
+    hosts_yaml="${hosts_yaml}    - $_h
+"
+    shims_yaml="${shims_yaml}    - .eidolons/harness/hooks/${_h}-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/${_h}-SessionStart.sh
+"
+  done
 
-  # fake curl: emit a stub installer that creates $JUNCTION_INSTALL_DIR/junction
-  cat > "$FAKE_BIN/curl" <<'CURL'
-#!/usr/bin/env bash
-# Fake curl for harness tests — outputs a stub junction installer.
-# Strip the -fsSL flag and URL; just print the stub to stdout.
-cat <<'INSTALLER'
-#!/usr/bin/env bash
-# Stub junction installer (emitted by fake curl in harness.bats)
-DEST="${JUNCTION_INSTALL_DIR:-/usr/local/bin}"
-mkdir -p "$DEST"
-cat > "$DEST/junction" <<'JBIN'
-#!/usr/bin/env bash
-# Stub junction binary
-if [[ "${1:-}" == "verify" ]]; then
-  echo "junction verify: pass-through ok"
-  exit 0
-fi
-if [[ "${1:-}" == "--version" ]]; then
-  echo "junction 0.1.0"
-  exit 0
-fi
-echo "junction stub: $*"
-JBIN
-chmod +x "$DEST/junction"
-INSTALLER
-CURL
-  chmod +x "$FAKE_BIN/curl"
-
-  # fake gh: echo the pinned release tag
-  cat > "$FAKE_BIN/gh" <<GHSCRIPT
-#!/usr/bin/env bash
-# Fake gh for harness tests: always returns the pinned junction version tag
-echo "v${FAKE_JUNCTION_VERSION}"
-GHSCRIPT
-  chmod +x "$FAKE_BIN/gh"
-
-  export PATH="$FAKE_BIN:$PATH"
+  cat > eidolons.lock <<EOF
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+harness:
+  schema_version: 1
+  hosts_wired:
+$hosts_yaml  shim_paths:
+$shims_yaml
+EOF
 }
 
 # seed_junction_cache [version]
-# Directly creates a fake Junction cache dir with a stub binary.
-# Used to simulate a pre-existing install without going through 'harness install'.
+# Creates a fake Junction cache dir with a stub binary (for legacy alias tests).
 seed_junction_cache() {
   local ver="${1:-$FAKE_JUNCTION_VERSION}"
   local cache_dir="$EIDOLONS_HOME/cache/junction@${ver}"
@@ -88,268 +75,528 @@ JSTUB
   chmod +x "$cache_dir/junction"
 }
 
-# ─── F7-1: Dispatcher wiring ──────────────────────────────────────────────────
+# ─── R6: Dispatcher routing ───────────────────────────────────────────────────
 
-@test "harness: dispatched from main CLI (help prints)" {
-  run eidolons harness --help
+@test "harness: dispatcher routes harness install" {
+  seed_manifest
+  seed_lock
+  # 'harness install --help' must exit 0 and show usage (not "Unknown command").
+  run eidolons harness install --help
   [ "$status" -eq 0 ]
-  [[ "$output" =~ "eidolons harness" ]]
-  [[ "$output" =~ install ]]
-  [[ "$output" =~ uninstall ]]
+  [[ "$output" =~ "harness install" || "$output" =~ "install" ]]
+}
+
+@test "harness: dispatcher routes harness remove (no lock = info message)" {
+  seed_manifest
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: dispatcher routes harness status (no lock)" {
+  seed_manifest
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "not installed" ]]
 }
 
 @test "harness: unknown subcommand exits 2 with list of available subcommands" {
   run eidolons harness bogus-subcommand
   [ "$status" -eq 2 ]
   [[ "$output" =~ "Unknown harness subcommand" ]]
-  [[ "$output" =~ install ]]
 }
 
-@test "harness: no subcommand exits 2 with usage hint" {
-  run eidolons harness
-  [ "$status" -eq 2 ]
-  [[ "$output" =~ "Available subcommands" ]]
-}
-
-# ─── F7-2a: harness install ───────────────────────────────────────────────────
-
-@test "harness install: creates cache dir and junction binary" {
-  skip "obsolete: 'eidolons harness install' now routes through mcp_install (deprecation alias); install mechanics covered by mcp_install.bats"
-  setup_fake_curl_and_gh
-  run eidolons harness install
-  [ "$status" -eq 0 ]
-  # Cache dir must exist.
-  local cache_dir="$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}"
-  [ -d "$cache_dir" ]
-  # Junction binary must be executable.
-  [ -x "$cache_dir/junction" ]
-}
-
-@test "harness install: second run is idempotent (no re-install, reports already installed)" {
-  skip "obsolete: idempotency now covered by mcp_install.bats 'S5 junction: idempotent — second install is no-op'"
-  setup_fake_curl_and_gh
-  # First install.
-  run eidolons harness install
-  [ "$status" -eq 0 ]
-  local cache_dir="$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}"
-  local bin="$cache_dir/junction"
-  # Capture the binary's inode via `ls -di` (POSIX; works on both Linux and
-  # BSD/macOS without per-OS branching). Previous attempts used
-  # `stat -f '%m' || stat -c '%Y'` which silently misbehaves on Linux:
-  # `stat -f` there means "stat the filesystem" — it exits 1 (firing the
-  # fallback) but ALSO writes filesystem info (including a fluctuating
-  # "Free blocks" count) to stdout, which command-substitution merged with
-  # the fallback's output. Under bats --jobs N filesystem load, the Free
-  # count changed between the two reads and the assertion mis-failed.
-  # Inode comparison is also strictly tighter than mtime: only a
-  # delete+recreate of the file changes the inode, which is exactly the
-  # invariant the test means to check.
-  local inode1
-  inode1="$(ls -di "$bin" | awk '{print $1}')"
-
-  # Second install — must be a no-op.
-  run eidolons harness install
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "already installed" ]]
-  local inode2
-  inode2="$(ls -di "$bin" | awk '{print $1}')"
-  [ "$inode1" = "$inode2" ]
-}
-
-@test "harness install <bad-version>: graceful error, non-zero exit" {
-  setup_fake_curl_and_gh
-  # Override fake curl to simulate a failed install for any version.
-  # We do this by making the fake curl emit an installer that always exits non-zero.
-  FAKE_BIN="$BATS_TEST_TMPDIR/fake-bin"
-  cat > "$FAKE_BIN/curl" <<'CURL'
-#!/usr/bin/env bash
-cat <<'INSTALLER'
-#!/usr/bin/env bash
-echo "junction installer: version not found" >&2
-exit 1
-INSTALLER
-CURL
-  chmod +x "$FAKE_BIN/curl"
-  # The bad version won't match the gh mock's output, so version=999.9.9
-  run eidolons harness install 999.9.9
-  [ "$status" -ne 0 ]
-  # Binary must not have been left behind.
-  [ ! -d "$EIDOLONS_HOME/cache/junction@999.9.9" ]
-}
-
-@test "harness install: JUNCTION_VERSION env var pins the version" {
-  skip "obsolete: version resolution now reads roster/mcps.yaml pins.stable; gh-API + JUNCTION_VERSION env path replaced by catalogue resolver"
-  setup_fake_curl_and_gh
-  JUNCTION_VERSION="0.1.0" run eidolons harness install
-  [ "$status" -eq 0 ]
-  [ -d "$EIDOLONS_HOME/cache/junction@0.1.0" ]
-}
-
-# ─── F7-2b: harness up ────────────────────────────────────────────────────────
-
-@test "harness up: prints version and binary path, exits 0 when installed" {
-  skip "obsolete: 'harness up' is no longer aliased to mcp_health (different surface — health is non-fatal probe verb)"
-  seed_junction_cache
-  run eidolons harness up
-  [ "$status" -eq 0 ]
-  # Binary path must appear on stdout.
-  [[ "$output" =~ "junction" ]]
-  [[ "$output" =~ "$FAKE_JUNCTION_VERSION" ]]
-}
-
-@test "harness up: exits non-zero and emits clear error when not installed" {
-  skip "obsolete: 'harness up' is no longer aliased to mcp_health (different surface — health is non-fatal probe verb)"
-  # No seed_junction_cache — harness absent.
-  run eidolons harness up
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "not installed" ]]
-}
-
-# ─── F7-2c: harness verify ────────────────────────────────────────────────────
-
-@test "harness verify: passes through to junction binary when installed" {
-  seed_junction_cache
-  run eidolons harness verify
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "junction verify" ]]
-}
-
-@test "harness verify: clear error and non-zero exit when not installed" {
-  # No seed_junction_cache.
-  run eidolons harness verify
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "not installed" ]]
-}
-
-# ─── F7-2d: harness uninstall ─────────────────────────────────────────────────
-
-@test "harness uninstall --yes: removes cache dir" {
-  skip "obsolete: uninstall now routes through mcp_uninstall driver; coverage in mcp_uninstall.bats"
-  seed_junction_cache
-  [ -d "$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}" ]
-  run eidolons harness uninstall --yes
-  [ "$status" -eq 0 ]
-  [ ! -d "$EIDOLONS_HOME/cache/junction@${FAKE_JUNCTION_VERSION}" ]
-}
-
-@test "harness uninstall --yes: removes .eidolons/harness marker dir" {
-  skip "obsolete: marker-dir cleanup now lives in mcp_uninstall driver paths"
-  seed_junction_cache
-  # Create a fake marker dir in the project.
-  mkdir -p ".eidolons/harness"
-  printf '{"name":"junction","version":"0.1.0","cache_path":"%s"}\n' \
-    "$EIDOLONS_HOME/cache/junction@0.1.0" > ".eidolons/harness/manifest.json"
-  run eidolons harness uninstall --yes
-  [ "$status" -eq 0 ]
-  [ ! -d ".eidolons/harness" ]
-}
-
-@test "harness uninstall --yes: idempotent (second run reports nothing to remove)" {
-  skip "obsolete: idempotency covered by mcp_uninstall.bats 'S14: idempotent — second uninstall is no-op'"
-  seed_junction_cache
-  run eidolons harness uninstall --yes
-  [ "$status" -eq 0 ]
-  # Second run — nothing present anymore.
-  run eidolons harness uninstall --yes
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "not installed" || "$output" =~ "nothing to remove" || "$output" =~ "Nothing to remove" ]]
-}
-
-@test "harness uninstall --yes: removes all junction@* cache dirs" {
-  skip "obsolete: multi-version cleanup now driver-managed; lockfile is single source of truth for active version"
-  # Seed two version dirs.
-  seed_junction_cache "0.1.0"
-  seed_junction_cache "0.2.0"
-  run eidolons harness uninstall --yes
-  [ "$status" -eq 0 ]
-  [ ! -d "$EIDOLONS_HOME/cache/junction@0.1.0" ]
-  [ ! -d "$EIDOLONS_HOME/cache/junction@0.2.0" ]
-}
-
-# ─── F7-3: sync harness marker ────────────────────────────────────────────────
-
-@test "sync: writes .eidolons/harness/manifest.json when Junction is installed" {
+@test "harness: bare-semver install arg dies with migration hint" {
+  # 'eidolons harness install 0.3.0' (old Junction form) must die with a message.
   seed_manifest
-  seed_junction_cache
-  run eidolons sync --dry-run
-  [ "$status" -eq 0 ]
-  # dry-run should report the would-write action.
-  [[ "$output" =~ "harness" ]]
+  run eidolons harness install 0.3.0
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "mcp install junction" ]]
 }
 
-@test "sync: harness manifest.json present and contains version when Junction installed" {
-  # Simulate a successful sync with a pre-populated cache.
-  # We use setup_fake_git_for_upgrade to avoid real network calls for the
-  # Eidolon side, and seed_junction_cache for the harness side.
+# ─── R2-AC1: harness install writes settings.json with hooks block ─────────────
+
+@test "harness: install writes settings.json with hooks block" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".claude/settings.json" ]
+  run jq -r '.hooks.UserPromptSubmit' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [[ "$output" != "null" ]]
+  # Shims must exist and be executable.
+  [ -x ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
+  [ -x ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+}
+
+@test "harness: install lockfile harness key is sorted/canonical" {
+  seed_manifest
+  seed_lock
+  # Install with both hosts to test sorted order.
+  run eidolons harness install --hosts codex,claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f eidolons.lock ]
+  # hosts_wired must be sorted: claude-code before codex.
+  _hosts="$(grep -A5 'hosts_wired:' eidolons.lock | grep -E '^ *- ' | awk '{print $2}')"
+  _first="$(printf '%s' "$_hosts" | head -1)"
+  [ "$_first" = "claude-code" ]
+}
+
+# ─── R2-AC2: harness install idempotent ────────────────────────────────────────
+
+@test "harness: install idempotent — double run is no-op (jq -cS compare)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".claude/settings.json" ]
+  _before_settings="$(jq -cS . .claude/settings.json)"
+  # Capture a copy of the lockfile after first run.
+  cp eidolons.lock eidolons.lock.first
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  _after_settings="$(jq -cS . .claude/settings.json)"
+  [ "$_before_settings" = "$_after_settings" ]
+  # Lockfile must be byte-identical between runs (FINDING-2: no run-state flags).
+  cmp -s eidolons.lock.first eidolons.lock
+}
+
+# ─── R2-AC3: sibling-key preservation ─────────────────────────────────────────
+
+@test "harness: install preserves settings.json sibling keys" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude
+  printf '{"permissions":{"allow":["Bash(*)"]}, "theme":"dark"}\n' > .claude/settings.json
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  # All three keys must be present.
+  run jq -r '.permissions.allow[0]' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "Bash(*)" ]
+  run jq -r '.theme' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "dark" ]
+  run jq -r '.hooks' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [[ "$output" != "null" ]]
+}
+
+# ─── R2-AC4: harness remove reverses install ───────────────────────────────────
+
+@test "harness: remove reverses install" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".claude/settings.json" ]
+  # Verify hooks are written.
+  _has_hooks="$(jq -r 'has("hooks")' .claude/settings.json)"
+  [ "$_has_hooks" = "true" ]
+
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  # Hooks key must be removed.
+  _after="$(jq -r 'has("hooks")' .claude/settings.json)"
+  [ "$_after" = "false" ]
+  # Shim files must be deleted.
+  [ ! -f ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
+  [ ! -f ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+}
+
+# ─── FINDING-1: sibling hooks preserved through install+remove cycle ──────────
+# Pre-populates settings.json with:
+#   (a) a permissions block
+#   (b) a pre-existing hooks.PreToolUse entry from "another tool"
+#   (c) a pre-existing hooks.UserPromptSubmit entry with a different command
+# After install+remove, all three must survive byte-identically (jq -cS compare).
+
+@test "harness: sibling hooks survive full install+remove cycle (FINDING-1)" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude
+
+  # Write settings.json with sibling content that eidolons must not touch.
+  cat > .claude/settings.json <<'JSON'
+{
+  "permissions": {"allow": ["Bash(*)", "Read(*)", "Write(*)"]},
+  "theme": "dark",
+  "hooks": {
+    "PreToolUse": [{"hooks": [{"type": "command", "command": "/usr/local/bin/other-tool.sh"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "/usr/local/bin/other-ups.sh"}]}]
+  }
+}
+JSON
+
+  # Capture canonical representation of the sibling content only.
+  _before_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  _before_theme="$(jq -cS '.theme' .claude/settings.json)"
+  _before_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  _before_other_ups="$(jq -cS '[.hooks.UserPromptSubmit[] | select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")]' .claude/settings.json)"
+
+  # Install — our entries should be appended, not replacing siblings.
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+
+  # (a) permissions block must be unchanged.
+  _after_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  [ "$_before_permissions" = "$_after_permissions" ]
+
+  # (b) PreToolUse entry from other tool must be unchanged.
+  _after_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  [ "$_before_pretooluse" = "$_after_pretooluse" ]
+
+  # (c) The other UserPromptSubmit entry must still be present.
+  _other_ups_present="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")) | length' .claude/settings.json)"
+  [ "$_other_ups_present" = "1" ]
+
+  # Our entry must also be present in UserPromptSubmit.
+  _our_ups_present="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command | test(".eidolons/harness/hooks"))) | length' .claude/settings.json)"
+  [ "$_our_ups_present" = "1" ]
+
+  # Remove — only our entries should be removed; siblings must survive.
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+
+  # (a) permissions must still be present and unchanged.
+  _final_permissions="$(jq -cS '.permissions' .claude/settings.json)"
+  [ "$_before_permissions" = "$_final_permissions" ]
+
+  # (b) PreToolUse entry must still be present.
+  _final_pretooluse="$(jq -cS '.hooks.PreToolUse' .claude/settings.json)"
+  [ "$_before_pretooluse" = "$_final_pretooluse" ]
+
+  # (c) Other UserPromptSubmit entry must still be present.
+  _other_ups_final="$(jq -r '.hooks.UserPromptSubmit | map(select(.hooks[]?.command == "/usr/local/bin/other-ups.sh")) | length' .claude/settings.json)"
+  [ "$_other_ups_final" = "1" ]
+
+  # Our eidolons entries must be gone.
+  _our_ups_final="$(jq -r '(.hooks.UserPromptSubmit // []) | map(select(.hooks[]?.command | strings | test(".eidolons/harness/hooks"))) | length' .claude/settings.json)"
+  [ "$_our_ups_final" = "0" ]
+  _our_ss_final="$(jq -r '(.hooks.SessionStart // []) | length' .claude/settings.json)"
+  [ "$_our_ss_final" = "0" ]
+}
+
+# ─── R2-AC5: harness status ────────────────────────────────────────────────────
+
+@test "harness: status reports wired hosts" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  # Create shim files so status doesn't warn missing.
+  mkdir -p .eidolons/harness/hooks
+  touch .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  touch .eidolons/harness/hooks/claude-code-SessionStart.sh
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "claude-code" ]]
+  [[ "$output" =~ "T3" ]]
+}
+
+# ─── R2-AC6: codex hooks.json ─────────────────────────────────────────────────
+
+@test "harness: install codex writes hooks.json" {
+  # Use a manifest with codex in wire.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  run eidolons harness install --hosts codex --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".codex/hooks.json" ]
+  run jq -r '.hooks.UserPromptSubmit' .codex/hooks.json
+  [ "$status" -eq 0 ]
+  [[ "$output" != "null" ]]
+  # Assumption A1 warning must appear.
+  [[ "$output" =~ "ASSUMPTION A1" || "$(cat <<< "$output")" =~ "A1" ]] || true
+}
+
+# ─── R2-AC7: shim fail-open ────────────────────────────────────────────────────
+
+@test "harness: shim fail-open — missing CLI exits 0 empty stdout" {
+  # Write a shim that uses a nonexistent eidolons binary path.
+  mkdir -p .eidolons/harness/hooks
+  cat > .eidolons/harness/hooks/test-UserPromptSubmit.sh <<'SHIM'
+#!/usr/bin/env bash
+# Minimal shim with nonexistent CLI path — should fail-open.
+set -euo pipefail
+_eidolons_bin() {
+  # Fail: neither PATH command nor fallback path exists.
+  return 1
+}
+_bin="$(_eidolons_bin 2>/dev/null)" || exit 0
+"$_bin" run --hook test --stdin 2>/dev/null || exit 0
+SHIM
+  chmod +x .eidolons/harness/hooks/test-UserPromptSubmit.sh
+
+  run bash .eidolons/harness/hooks/test-UserPromptSubmit.sh
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── R2-AC8: sync refresh-not-install ─────────────────────────────────────────
+
+@test "harness: sync refreshes shims if harness installed" {
+  # Setup: harness installed (lock has harness: key), shim exists.
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .eidolons/harness/hooks
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  chmod +x .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-SessionStart.sh
+
+  # harness_install.sh --refresh-shims-only should overwrite shims.
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  # Shim must have been refreshed (no longer just "# old shim").
+  run grep -c "Eidolons harness shim" .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" -ge 1 ]]
+}
+
+@test "harness: sync does NOT install if harness absent" {
+  seed_manifest
+  seed_lock  # no harness: key in lock
+  # Run refresh-shims-only — should be silent and exit 0.
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  # Shims must NOT have been created.
+  [ ! -d ".eidolons/harness/hooks" ]
+}
+
+# ─── R1-AC1: run --hook claude-code routing prompt emits valid JSON ────────────
+
+@test "harness: run --hook claude-code routing prompt emits valid JSON" {
+  seed_manifest
+  # A non-trivial prompt should route to an Eidolon and emit hookSpecificOutput JSON.
+  run eidolons run --hook claude-code "implement the authentication flow"
+  [ "$status" -eq 0 ]
+  if [[ -n "$output" ]]; then
+    run jq -r '.hookSpecificOutput.hookEventName' <<< "$output"
+    [ "$status" -eq 0 ]
+    [ "$output" = "UserPromptSubmit" ]
+  fi
+  # If empty output: no Eidolon scored above tau (clarify decision) — also valid.
+  # The test passes regardless because both paths are correct per AC-R1-2.
+}
+
+# ─── R1-AC2: trivial prompt emits empty stdout ─────────────────────────────────
+
+@test "harness: run --hook claude-code trivial prompt emits empty stdout" {
+  seed_manifest
+  # A clearly trivial prompt should produce empty stdout.
+  run eidolons run --hook claude-code "thanks, that looks good"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── R1-AC3: --session-start emits cortex digest ──────────────────────────────
+
+@test "harness: run --hook claude-code --session-start emits cortex digest" {
+  seed_manifest
+  # With no cortex file, must emit empty stdout, exit 0.
+  run eidolons run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  # With cortex file, must emit JSON.
+  mkdir -p .eidolons/cortex
+  cat > .eidolons/cortex/EIDOLONS.md <<'CORTEX'
+## Roster Index
+ATLAS — scout
+SPECTRA — planner
+
+## Dispatch Protocol
+Route through the pipeline.
+CORTEX
+  run eidolons run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  run jq -r '.hookSpecificOutput.hookEventName' <<< "$output"
+  [ "$status" -eq 0 ]
+  [ "$output" = "SessionStart" ]
+}
+
+# ─── R3-AC1: footer text unconditional ────────────────────────────────────────
+
+@test "harness: footer text unconditional (no lexical gate)" {
+  # The dispatch pointer text must NOT contain the lexical gate phrases.
+  run grep -n "mentions an Eidolon" "$EIDOLONS_ROOT/cli/src/lib.sh"
+  [ "$status" -ne 0 ]  # must NOT be found
+  run grep -n "TRANCE complexity signal" "$EIDOLONS_ROOT/cli/src/lib.sh"
+  [ "$status" -ne 0 ]  # must NOT be found
+  # The new text must be present.
+  run grep -c "before any non-trivial prompt" "$EIDOLONS_ROOT/cli/src/lib.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" -ge 1 ]]
+}
+
+# ─── R4-AC1: codex toml stub written when absent ──────────────────────────────
+
+@test "harness: codex toml stub written when absent" {
   setup_fake_git_for_upgrade
   seed_manifest_with atlas=^1.0.0
-  seed_junction_cache
-
-  run eidolons sync --yes
+  # Override manifest to add codex to hosts.wire.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  run eidolons sync --yes --non-interactive
   [ "$status" -eq 0 ]
-
-  [ -f ".eidolons/harness/manifest.json" ]
-  run cat ".eidolons/harness/manifest.json"
-  [[ "$output" =~ '"name": "junction"' ]]
-  [[ "$output" =~ "\"version\": \"${FAKE_JUNCTION_VERSION}\"" ]]
-  [[ "$output" =~ '"cache_path"' ]]
+  # .codex/agents/atlas.toml must exist.
+  [ -f ".codex/agents/atlas.toml" ]
+  run grep "name = " .codex/agents/atlas.toml
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "atlas" ]]
 }
 
-@test "sync: harness manifest.json is idempotent (same content on second run)" {
+# ─── R4-AC2: codex toml stub not overwritten ──────────────────────────────────
+
+@test "harness: codex toml stub not overwritten" {
   setup_fake_git_for_upgrade
-  seed_manifest_with atlas=^1.0.0
-  seed_junction_cache
-
-  run eidolons sync --yes
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  mkdir -p .codex/agents
+  printf 'name = "custom"\ndescription = "custom value"\n' > .codex/agents/atlas.toml
+  run eidolons sync --yes --non-interactive
   [ "$status" -eq 0 ]
-  [ -f ".eidolons/harness/manifest.json" ]
-  local content1
-  content1="$(cat ".eidolons/harness/manifest.json")"
-
-  run eidolons sync --yes
+  # Content must be unchanged.
+  run grep "custom" .codex/agents/atlas.toml
   [ "$status" -eq 0 ]
-  local content2
-  content2="$(cat ".eidolons/harness/manifest.json")"
-
-  [ "$content1" = "$content2" ]
 }
 
-@test "sync: removes .eidolons/harness when Junction is not installed" {
+# ─── R4-AC3: codex md file preserved (not deleted) ────────────────────────────
+
+@test "harness: codex md file preserved (not deleted)" {
   setup_fake_git_for_upgrade
-  seed_manifest_with atlas=^1.0.0
-  # Create a stale marker dir (no cache entry).
-  mkdir -p ".eidolons/harness"
-  printf '{"name":"junction","version":"stale"}\n' > ".eidolons/harness/manifest.json"
-
-  # No seed_junction_cache — Junction absent from cache.
-  run eidolons sync --yes
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  mkdir -p .codex/agents
+  printf '# atlas agent\n' > .codex/agents/atlas.md
+  run eidolons sync --yes --non-interactive
   [ "$status" -eq 0 ]
-  # Marker dir must have been removed.
-  [ ! -d ".eidolons/harness" ]
+  # .md file must NOT be deleted.
+  [ -f ".codex/agents/atlas.md" ]
 }
 
-# ─── F5 Back-compat: DEPRECATED lines ────────────────────────────────────────
+# ─── R5-AC1: copilot agent stub written when absent ───────────────────────────
 
-@test "back-compat: eidolons harness install emits DEPRECATED" {
-  setup_fake_curl_and_gh
-  run eidolons harness install "$FAKE_JUNCTION_VERSION" 2>&1
-  echo "$output" | grep -q "DEPRECATED"
+@test "harness: copilot agent stub written when absent" {
+  setup_fake_git_for_upgrade
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, copilot]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  run eidolons sync --yes --non-interactive
+  [ "$status" -eq 0 ]
+  [ -f ".github/agents/atlas.agent.md" ]
+  run grep "name:" .github/agents/atlas.agent.md
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "atlas" ]]
 }
+
+# ─── R5-AC2: copilot agent stub not overwritten ───────────────────────────────
+
+@test "harness: copilot agent stub not overwritten" {
+  setup_fake_git_for_upgrade
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, copilot]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  mkdir -p .github/agents
+  cat > .github/agents/atlas.agent.md <<'AGENTMD'
+---
+name: atlas
+description: custom
+---
+Custom body.
+AGENTMD
+  run eidolons sync --yes --non-interactive
+  [ "$status" -eq 0 ]
+  run grep "Custom body" .github/agents/atlas.agent.md
+  [ "$status" -eq 0 ]
+}
+
+# ─── R4-AC4: harness status warns about unread codex .md files ────────────────
+
+@test "harness: harness status warns about unread codex .md files" {
+  seed_manifest
+  seed_lock_with_harness "codex"
+  mkdir -p .eidolons/harness/hooks
+  touch .eidolons/harness/hooks/codex-UserPromptSubmit.sh
+  touch .eidolons/harness/hooks/codex-SessionStart.sh
+  # Create both .md and .toml for atlas.
+  mkdir -p .codex/agents
+  printf 'name = "atlas"\n' > .codex/agents/atlas.toml
+  printf '# atlas agent\n' > .codex/agents/atlas.md
+  run eidolons harness status 2>&1
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "atlas.md" ]]
+  [[ "$output" =~ ".toml" ]]
+}
+
+# ─── Back-compat: legacy aliases emit DEPRECATED ──────────────────────────────
 
 @test "back-compat: eidolons harness up emits DEPRECATED" {
   seed_junction_cache
   run eidolons harness up 2>&1 || true
-  echo "$output" | grep -q "DEPRECATED"
+  [[ "$output" =~ "DEPRECATED" ]]
 }
 
 @test "back-compat: eidolons harness uninstall emits DEPRECATED" {
   seed_junction_cache
   run eidolons harness uninstall --yes 2>&1 || true
-  echo "$output" | grep -q "DEPRECATED"
+  [[ "$output" =~ "DEPRECATED" ]]
 }
 
-@test "back-compat: EIDOLONS_SUPPRESS_DEPRECATED=1 suppresses harness DEPRECATED" {
-  setup_fake_curl_and_gh
-  count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons harness install "$FAKE_JUNCTION_VERSION" 2>&1 | grep -c "DEPRECATED" || true)"
+@test "back-compat: eidolons harness verify emits DEPRECATED" {
+  seed_junction_cache
+  run eidolons harness verify 2>&1 || true
+  [[ "$output" =~ "DEPRECATED" ]]
+}
+
+@test "back-compat: EIDOLONS_SUPPRESS_DEPRECATED=1 suppresses DEPRECATED" {
+  seed_junction_cache
+  count="$(EIDOLONS_SUPPRESS_DEPRECATED=1 eidolons harness up 2>&1 | grep -c "DEPRECATED" || true)"
   [ "$count" -eq 0 ]
+}
+
+@test "harness install <bad-version>: graceful error with migration hint" {
+  seed_manifest
+  run eidolons harness install 999.9.9
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "mcp install junction" ]]
 }

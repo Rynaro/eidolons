@@ -111,9 +111,13 @@ Commands:
                    health [<name>|--all]    Run health probes
                    run <name> [<args>]      Pass-through to runnable MCP binary
                  Run 'eidolons mcp --help' for full usage.
-  harness <sub>  [DEPRECATED] Manage Junction. Use 'eidolons mcp <verb> junction'.
-                 Subcommands: install, up, verify, uninstall.
-                 Run 'eidolons harness --help' for options.
+  harness <sub>  Wire host hooks for routing-context injection (claude-code, codex).
+                   install [--hosts <h>]   Install hook shims + settings wiring
+                   remove                  Remove hook shims + settings wiring
+                   status                  Show wired hosts, tier, and shim paths
+                 Legacy aliases (deprecated, removal v3.0.0):
+                   up|verify|uninstall     Delegate to 'eidolons mcp <verb> junction'
+                 Run 'eidolons harness --help' for full usage.
   verify         Verify installed Eidolon release integrity
   verify-release Layer 2 integrity: compare installed Eidolons against
                  fresh re-derivation from upstream-pinned release
@@ -178,39 +182,49 @@ case "$cmd" in
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)
     _harness_sub="${1:-}"
-    # Emit DEPRECATED notice for all harness subcommands.
-    _deprecated_alias "eidolons harness <sub>" "eidolons mcp <verb> junction"
+    [ $# -gt 0 ] && shift
     case "$_harness_sub" in
+      # ── New hook-wiring family ────────────────────────────────────────
       install)
-        shift
-        _harness_ver="${1:-}"
-        if [ -n "$_harness_ver" ] && [ "${_harness_ver#-}" = "$_harness_ver" ]; then
-          shift
-          exec bash "$CLI_SRC/mcp_install.sh" "junction@${_harness_ver}" "$@"
-        else
-          exec bash "$CLI_SRC/mcp_install.sh" "junction" "$@"
+        # Bare-semver arg (e.g. `harness install 0.3.0`) was the old
+        # Junction-install form. Die with a migration hint.
+        _harness_first="${1:-}"
+        if [ -n "$_harness_first" ] && [ "${_harness_first#-}" = "$_harness_first" ] \
+           && printf '%s' "$_harness_first" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+          if [ "${EIDOLONS_SUPPRESS_DEPRECATED:-0}" != "1" ]; then
+            printf 'DEPRECATED: bare semver argument to `harness install` is no longer supported.\n' >&2
+          fi
+          printf 'Migration: eidolons mcp install junction@%s\n' "$_harness_first" >&2
+          printf 'Note: `eidolons harness install` now wires host hooks; see `eidolons harness --help`.\n' >&2
+          exit 1
         fi
+        exec bash "$CLI_SRC/harness_install.sh" "$@"
         ;;
+      remove)   exec bash "$CLI_SRC/harness_remove.sh"  "$@" ;;
+      status)   exec bash "$CLI_SRC/harness_status.sh"  "$@" ;;
+      # ── Legacy Junction aliases (deprecated; removal v3.0.0) ─────────
       up)
-        shift
+        _deprecated_alias "eidolons harness up" "eidolons mcp health junction"
         exec bash "$CLI_SRC/mcp_health.sh" "junction" "$@"
         ;;
       verify)
-        shift
+        _deprecated_alias "eidolons harness verify" "eidolons mcp run junction verify"
         exec bash "$CLI_SRC/mcp_run.sh" "junction" "verify" "$@"
         ;;
       uninstall)
-        shift
+        _deprecated_alias "eidolons harness uninstall" "eidolons mcp uninstall junction"
         exec bash "$CLI_SRC/mcp_uninstall.sh" "junction" "$@"
         ;;
       -h|--help|help)
-        exec bash "$CLI_SRC/harness.sh" "$@"
+        exec bash "$CLI_SRC/harness_install.sh" --help
         ;;
       "")
-        exec bash "$CLI_SRC/harness.sh"
+        exec bash "$CLI_SRC/harness_install.sh" --help
         ;;
       *)
-        exec bash "$CLI_SRC/harness.sh" "$@"
+        printf 'Unknown harness subcommand: %s\n' "$_harness_sub" >&2
+        printf 'Available: install remove status (also: up verify uninstall [deprecated])\n' >&2
+        exit 2
         ;;
     esac
     ;;

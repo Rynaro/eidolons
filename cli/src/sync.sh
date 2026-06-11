@@ -432,6 +432,40 @@ STUB
     info "  wrote .claude/agents/$name.md (nexus safety net)"
   fi
 
+  # ─── codex safety net (.toml) — G10 ──────────────────────────────────
+  # Codex reads ONLY .codex/agents/*.toml — the .md files written by per-Eidolon
+  # installers are never read (G10). Write a minimal .toml stub when absent.
+  # Never overwrite an existing .toml (installer owns it post-creation).
+  # [ASSUMPTION A2]: flat key-value TOML without section header is valid for Codex.
+  if [[ ",$HOSTS_CSV," == *",codex,"* ]] && [[ ! -f ".codex/agents/$name.toml" ]]; then
+    mkdir -p .codex/agents
+    display="$(echo "$entry" | jq -r '.display_name // .name')"
+    summary="$(echo "$entry" | jq -r '.methodology.summary // ""')"
+    printf 'name = "%s"\n' "$name" > ".codex/agents/$name.toml"
+    printf 'description = "%s"\n' "$display — $summary" >> ".codex/agents/$name.toml"
+    printf 'instructions = "See .eidolons/%s/agent.md for the full methodology."\n' "$name" \
+      >> ".codex/agents/$name.toml"
+    info "  wrote .codex/agents/$name.toml (nexus safety net, G10)"
+  fi
+
+  # ─── copilot safety net (.agent.md) — G3/G8 ─────────────────────────
+  # Copilot custom agents require .github/agents/<name>.agent.md (YAML frontmatter).
+  # Per-Eidolon installers do not write this today (G8). Write a stub when absent.
+  if [[ ",$HOSTS_CSV," == *",copilot,"* ]] && [[ ! -f ".github/agents/$name.agent.md" ]]; then
+    mkdir -p .github/agents
+    display="$(echo "$entry" | jq -r '.display_name // .name')"
+    summary="$(echo "$entry" | jq -r '.methodology.summary // ""')"
+    cat > ".github/agents/$name.agent.md" <<AGENTMD
+---
+name: $name
+description: $display — $summary
+---
+
+See .eidolons/$name/agent.md for the full methodology.
+AGENTMD
+    info "  wrote .github/agents/$name.agent.md (nexus safety net, G3/G8)"
+  fi
+
   # Override install.manifest.json's version field with the actual git tag
   # shipped. Per-Eidolon installers hardcode EIDOLON_VERSION and don't bump
   # on patch releases (ships as "1.0.0" even when the tag is v1.0.3),
@@ -789,6 +823,19 @@ else
     fi
   fi
 fi
+
+# ─── Harness shim refresh ────────────────────────────────────────────────
+# If harness is installed (harness.schema_version present in lock), refresh
+# shim contents from the current template. Does NOT install if absent (opt-in).
+_harness_installed="$(jq -r '.harness.schema_version // "absent"' "$PROJECT_LOCK" 2>/dev/null || echo "absent")"
+if [[ "$_harness_installed" != "absent" ]]; then
+  if [[ "$DRY_RUN" == "true" ]]; then
+    info "  [dry-run] would refresh harness shims (harness installed, schema_version=$_harness_installed)"
+  else
+    bash "$SELF_DIR/harness_install.sh" --refresh-shims-only || true
+  fi
+fi
+unset _harness_installed
 
 # ─── MCP lockfile drift (warn-only; never installs per NG3) ─────────────
 # Surfaces any MCP entries in eidolons.mcp.lock so the operator knows they
