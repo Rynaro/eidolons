@@ -709,6 +709,104 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+# ─── R16: OpenCode MCP registration ─────────────────────────────────────────
+
+@test "mcp: oci install writes opencode.json mcp entry (type local, flattened command) when opencode wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  seed_manifest_with_hosts "opencode"
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+  [ "$status" -eq 0 ]
+  [ -f "opencode.json" ]
+  run bash -c "jq -e '.mcp.crystalium.type == \"local\"' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.crystalium.command | type == \"array\"' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.crystalium.command[0] == \"docker\"' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.crystalium.enabled == true' opencode.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: binary install writes opencode.json mcp entry when opencode wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "opencode"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ -f "opencode.json" ]
+  run bash -c "jq -e '.mcp.junction.type == \"local\"' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.junction.command | type == \"array\"' opencode.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: opencode.json not written when opencode not wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "claude-code"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ ! -f "opencode.json" ]
+}
+
+@test "mcp: opencode.json merge preserves siblings (agent, mcp.other); repeat install no-op (jq -cS)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "opencode"
+  # Pre-seed opencode.json with sibling keys.
+  printf '{"agent":{"custom":{"model":"gpt-4"}},"mcp":{"other-tool":{"type":"local","command":["stub"],"enabled":true}}}\n' > opencode.json
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  # junction added.
+  run bash -c "jq -e '.mcp.junction' opencode.json"
+  [ "$status" -eq 0 ]
+  # sibling mcp entry preserved.
+  run bash -c "jq -e '.mcp[\"other-tool\"]' opencode.json"
+  [ "$status" -eq 0 ]
+  # agent key preserved.
+  run bash -c "jq -e '.agent.custom.model == \"gpt-4\"' opencode.json"
+  [ "$status" -eq 0 ]
+  # Repeat install: byte-identical (jq -cS no-op).
+  _before="$(jq -cS . opencode.json)"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  _after="$(jq -cS . opencode.json)"
+  [ "$_before" = "$_after" ]
+}
+
+@test "mcp: lockfile hosts_wired gains opencode.json only when opencode wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "opencode"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1 && yaml_to_json eidolons.mcp.lock | jq -e '.mcps[0].hosts_wired | any(. == \"opencode.json\")'"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: uninstall removes only our mcp.<name> from opencode.json" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "opencode"
+  # Pre-seed opencode.json with sibling.
+  printf '{"mcp":{"sibling":{"type":"local","command":["other"],"enabled":true}}}\n' > opencode.json
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.junction' opencode.json"
+  [ "$status" -eq 0 ]
+  # Uninstall junction.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_uninstall.sh" junction
+  [ "$status" -eq 0 ]
+  # junction removed; sibling preserved.
+  run bash -c "jq -e '.mcp.junction // empty | length == 0' opencode.json 2>/dev/null || jq 'has(\"mcp\") and (.mcp | has(\"junction\") | not)' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.sibling' opencode.json"
+  [ "$status" -eq 0 ]
+}
+
 # ─── PR-11: mcp install skip-guards — EIDOLONS_NEXUS prevents fetch ──────
 
 @test "PR-11: mcp install does NOT fetch when EIDOLONS_NEXUS is set (skip-guard)" {
