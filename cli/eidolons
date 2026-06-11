@@ -111,6 +111,11 @@ Commands:
                    health [<name>|--all]    Run health probes
                    run <name> [<args>]      Pass-through to runnable MCP binary
                  Run 'eidolons mcp --help' for full usage.
+  memory <sub>   Mechanical memory pre-flight (GAP-2). Subcommands:
+                   preflight [--query --ttl --no-cache --timeout]
+                             One-shot crystalium recall; emits compact digest.
+                             Stdout IS the digest; all failures = empty/exit-0.
+                 Run 'eidolons memory --help' for full usage.
   harness <sub>  Wire host hooks for routing-context injection (claude-code, codex).
                    install [--hosts <h>]   Install hook shims + settings wiring
                    remove                  Remove hook shims + settings wiring
@@ -279,6 +284,16 @@ case "$cmd" in
         echo "Run 'eidolons mcp --help' for available subcommands." >&2
         exit 2
         ;;
+    esac
+    ;;
+  memory)
+    _memory_sub="${1:-}"
+    [ $# -gt 0 ] && shift
+    case "$_memory_sub" in
+      preflight) exec bash "$CLI_SRC/memory.sh" preflight "$@" ;;
+      -h|--help|help|"") exec bash "$CLI_SRC/memory.sh" --help ;;
+      *) printf 'Unknown memory subcommand: %s\n' "$_memory_sub" >&2
+         printf 'Available: preflight\n' >&2; exit 2 ;;
     esac
     ;;
   version|--version|-v)

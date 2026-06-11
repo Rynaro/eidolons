@@ -185,6 +185,50 @@ skipped entirely when `eidolons.yaml` is missing.
 
 ---
 
+## `eidolons memory`
+
+Mechanical memory pre-flight (GAP-2). Surfaces prior project context from CRYSTALIUM into the SessionStart harness injection.
+
+```
+eidolons memory preflight [--query <s>] [--ttl <sec>] [--no-cache] [--timeout <sec>]
+```
+
+### `eidolons memory preflight`
+
+Runs a bounded one-shot CRYSTALIUM recall (out-of-MCP-session path) and emits a compact injectable digest. **Stdout IS the digest and nothing else.** All failure paths emit empty stdout and exit 0.
+
+| Flag | Purpose |
+|------|---------|
+| `--query <s>` | Recall query. Default: `"project <slug> recent context"` (deterministic slug from `basename(PWD)` → lowercase → alnum-hyphen). Stable → TTL cache key is stable. |
+| `--ttl <sec>` | Cache TTL in seconds. Default: 900 (15 min). Env: `EIDOLONS_MEMORY_PREFLIGHT_TTL`. |
+| `--no-cache` | Bypass cache read AND write. Always runs live; never persists the result. |
+| `--timeout <sec>` | Docker kill timeout in seconds. Default: 8. Env: `EIDOLONS_MEMORY_PREFLIGHT_TIMEOUT`. |
+
+**Docker args source:** reads `.mcp.json` `mcpServers.crystalium.args` (the already-rendered invocation). Transforms:
+- Strips `-i` (interactive stdin flag — one-shot needs no stdin).
+- Strips `--name <value>` pair (avoids collision with the running `crystalium-<slug>` serve container).
+- Replaces trailing `python -m crystalium serve` with `python -m crystalium recall --query Q --scope-project SLUG --k 5 --format json`.
+- Keeps image ref, `-v` volume, `-e CRYSTALIUM_*` env, `--cap-drop ALL`, `--security-opt` verbatim.
+
+**TTL cache:** `.eidolons/harness/cache/preflight.json` — shape `{cached_at, query, digest}`. Cache HIT when `(now - cached_at) < ttl AND query == default_query`. Cache is project-local; stale entries rerun docker automatically.
+
+**Timeout:** prefers `timeout(1)` if available (Linux/coreutils); falls back to background-watcher idiom (bash 3.2 safe) when absent (macOS default shell).
+
+**Crystalium-present gate:** both `.mcp.json mcpServers.crystalium` AND `eidolons.mcp.lock name: crystalium` must be present. Either absent → empty stdout, exit 0.
+
+**Digest format:** one `[layer/trust_tier] summary` line per record, truncated at 1500 chars.
+
+**SessionStart arm:** `eidolons memory preflight` is called automatically from `harness_hook.sh` session_start mode (R28). Activates on `eidolons upgrade self`; no `harness install --force` needed. The digest is appended to `additionalContext` under a `## Prior project memory (CRYSTALIUM recall)` heading.
+
+**Environment:**
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `EIDOLONS_MEMORY_PREFLIGHT_TTL` | 900 | Cache TTL override (seconds) |
+| `EIDOLONS_MEMORY_PREFLIGHT_TIMEOUT` | 8 | Docker kill timeout override (seconds) |
+
+---
+
 ## `eidolons harness`
 
 Mechanical hook wiring — writes host-native hook shims so every prompt submitted inside a supported AI coding host is automatically enriched with routing context.
