@@ -48,6 +48,7 @@ Deep checks (--deep):
   D9   Model frontmatter drift                 managed model: in agent files MUST match lock's effective_model (SKIP when no models block)
   D10  host-tier gate structural check          when ≥2 coders exist and one requires a host_tier, assert a conservative fallback coder is present (routing tiebreak invariant)
   D11  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
+  D12  harness lock⇄files consistency           shims exist+exec, settings/hooks/opencode.json valid+entries present, strict surfaces only on verified-sound hosts, effective-tier report
 EOF
 }
 
@@ -974,6 +975,14 @@ if [[ "$DEEP" == "true" ]]; then
         deep_check_coder_edit_gate "$_dm" || _d11_rc=$?
         ERRORS=$((ERRORS + _d11_rc))
       done <<< "$_deep_members"
+
+      # D12 — harness lock⇄files consistency (R22)
+      # Project-level gate: lock claims ⇄ on-disk surfaces + effective-tier report.
+      # D12 is NOT D10 (D10/D11 are shipped; D12 is the next free number).
+      echo "  D12 — harness lock⇄files consistency"
+      _d12_rc=0
+      deep_check_harness_consistency || _d12_rc=$?
+      ERRORS=$((ERRORS + _d12_rc))
     fi
 
     # Remedy hint when methodology errors were found.

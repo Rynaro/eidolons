@@ -2150,6 +2150,175 @@ deep_check_host_tier_gate() {
   esac
 }
 
+#
+# D12: harness lock⇄files consistency (R22, P3)
+# Project-level gate: verifies that the lockfile's harness: claims match
+# the on-disk surfaces (shims exist+exec, settings/hooks entries present,
+# strict surfaces only on verified-sound hosts, effective-tier report).
+# Returns the error count (0 = pass, ≥1 = fatal).
+# Bash 3.2 safe: no declare -A, no readarray.
+deep_check_harness_consistency() {
+  local lock_json
+  lock_json="$(yaml_to_json "${PROJECT_LOCK:-eidolons.lock}" 2>/dev/null || echo '{}')"
+  local schema
+  schema="$(printf '%s' "$lock_json" | jq -r '.harness.schema_version // "absent"' 2>/dev/null || echo "absent")"
+
+  if [[ "$schema" == "absent" ]]; then
+    pass "D12 harness: not installed (skip)"
+    return 0
+  fi
+
+  local rc=0
+
+  # schema_version must be 1.
+  if [[ "$schema" != "1" ]]; then
+    err "D12 harness.schema_version != 1 ($schema)"
+    rc=$((rc + 1))
+  fi
+
+  # Every shim_path must exist and be executable.
+  local _shim_line
+  while IFS= read -r _shim_line; do
+    [[ -z "$_shim_line" ]] && continue
+    if [[ ! -f "$_shim_line" ]]; then
+      err "D12 shim missing: $_shim_line (lock claims it but file absent)"
+      rc=$((rc + 1))
+    elif [[ ! -x "$_shim_line" ]]; then
+      err "D12 shim not executable: $_shim_line"
+      rc=$((rc + 1))
+    fi
+  done < <(printf '%s' "$lock_json" | jq -r '(.harness.shim_paths // [])[]' 2>/dev/null)
+
+  # Check wired hosts for their config files.
+  local _hosts_wired
+  _hosts_wired="$(printf '%s' "$lock_json" | jq -r '(.harness.hosts_wired // []) | join(",")' 2>/dev/null || echo "")"
+
+  if printf '%s' ",$_hosts_wired," | grep -q ",claude-code,"; then
+    local settings_json=".claude/settings.json"
+    if [[ ! -f "$settings_json" ]]; then
+      err "D12 .claude/settings.json missing — claude-code wired but settings absent"
+      rc=$((rc + 1))
+    elif ! jq empty "$settings_json" 2>/dev/null; then
+      err "D12 .claude/settings.json is not valid JSON"
+      rc=$((rc + 1))
+    else
+      local _ups_check
+      _ups_check="$(jq -r '(.hooks.UserPromptSubmit // []) | map(.hooks[]?.command? // "") | map(select(startswith(".eidolons/harness/"))) | length' "$settings_json" 2>/dev/null || echo "0")"
+      if [[ "$_ups_check" == "0" ]]; then
+        err "D12 .claude/settings.json missing eidolons UserPromptSubmit entry"
+        rc=$((rc + 1))
+      fi
+    fi
+  fi
+
+  if printf '%s' ",$_hosts_wired," | grep -q ",codex,"; then
+    local codex_hooks=".codex/hooks.json"
+    if [[ ! -f "$codex_hooks" ]]; then
+      err "D12 .codex/hooks.json missing — codex wired but hooks file absent"
+      rc=$((rc + 1))
+    elif ! jq empty "$codex_hooks" 2>/dev/null; then
+      err "D12 .codex/hooks.json is not valid JSON"
+      rc=$((rc + 1))
+    fi
+  fi
+
+  if [[ -f "opencode.json" ]] && ! jq empty "opencode.json" 2>/dev/null; then
+    err "D12 opencode.json is not valid JSON"
+    rc=$((rc + 1))
+  fi
+
+  # Strict soundness: verify strict list contains only supported hosts.
+  local _strict_wired
+  _strict_wired="$(printf '%s' "$lock_json" | jq -r '(.harness.strict // []) | join(",")' 2>/dev/null || echo "")"
+  local _strict_modes
+  _strict_modes="$(printf '%s' "$lock_json" | jq -c '.harness.strict_modes // {}' 2>/dev/null || echo '{}')"
+
+  local _sh
+  for _sh in $(printf '%s' "$_strict_wired" | tr ',' ' '); do
+    [[ -z "$_sh" ]] && continue
+    case "$_sh" in
+      claude-code|codex)
+        # Verified-sound hard-block or protected-globs-only — accepted.
+        ;;
+      opencode)
+        # Advisory only — must be recorded as advisory in strict_modes.
+        local _oc_mode
+        _oc_mode="$(printf '%s' "$_strict_modes" | jq -r '.opencode // "absent"' 2>/dev/null || echo "absent")"
+        if [[ "$_oc_mode" != "advisory" ]]; then
+          err "D12 opencode in strict[] but strict_modes.opencode != advisory ($__oc_mode) — unsound hard-block record"
+          rc=$((rc + 1))
+        fi
+        ;;
+      cursor)
+        err "D12 cursor in strict[] — cursor strict is out of P3 scope; remove with 'eidolons harness remove && eidolons harness install'"
+        rc=$((rc + 1))
+        ;;
+      *)
+        err "D12 unknown host in strict[]: $_sh"
+        rc=$((rc + 1))
+        ;;
+    esac
+
+    # Orphan strict shim check (WARN: host in strict[] but PreToolUse shim absent).
+    local _ptu_shim=".eidolons/harness/hooks/${_sh}-PreToolUse.sh"
+    case "$_sh" in
+      claude-code|codex)
+        if [[ ! -f "$_ptu_shim" ]]; then
+          warn "D12 orphan strict: $_sh in strict[] but PreToolUse shim absent ($_ptu_shim)"
+        fi
+        ;;
+    esac
+  done
+
+  # Orphan shim check: PreToolUse shim on disk but host NOT in strict[].
+  for _h in claude-code codex; do
+    local _shim=".eidolons/harness/hooks/${_h}-PreToolUse.sh"
+    if [[ -f "$_shim" ]]; then
+      if ! printf '%s' ",$_strict_wired," | grep -q ",$_h,"; then
+        warn "D12 orphan PreToolUse shim: ${_shim} present but $_h not in strict[] — run 'eidolons harness remove' to clean up"
+      fi
+    fi
+  done
+
+  # opencode plugin only-when-strict (WARN on violation, AC-R22-4).
+  local _plugin=".opencode/plugins/eidolons.js"
+  if [[ -f "$_plugin" ]]; then
+    if ! printf '%s' ",$_strict_wired," | grep -q ",opencode,"; then
+      warn "D12 orphan opencode plugin: $_plugin present but opencode not strict-wired — run 'eidolons harness remove' or re-install with --strict"
+    fi
+  fi
+  if printf '%s' ",$_strict_wired," | grep -q ",opencode,"; then
+    if [[ ! -f "$_plugin" ]]; then
+      warn "D12 opencode strict-advisory recorded but plugin absent ($_plugin) — run 'eidolons harness install --strict'"
+    fi
+  fi
+
+  # Effective-tier report (informational — never fatal, AC-R22-5).
+  local _tier_host _tier _mode
+  for _tier_host in $(printf '%s' "$_hosts_wired" | tr ',' ' '); do
+    [[ -z "$_tier_host" ]] && continue
+    case "$_tier_host" in
+      claude-code) _tier="T3" ;;
+      codex)       _tier="T3" ;;
+      copilot)     _tier="T2" ;;
+      cursor)      _tier="T2" ;;
+      opencode)    _tier="T1" ;;
+      *)           _tier="T?" ;;
+    esac
+    _mode="inject-only"
+    if printf '%s' ",$_strict_wired," | grep -q ",$_tier_host,"; then
+      local _m
+      _m="$(printf '%s' "$_strict_modes" | jq -r --arg h "$_tier_host" '.[$h] // "block"' 2>/dev/null || echo "block")"
+      _mode="strict:${_m}"
+    fi
+    pass "D12 effective-tier: $_tier_host $_tier [$_mode]"
+  done
+
+  if [[ "$rc" -eq 0 ]]; then
+    pass "D12 harness lock⇄files consistent"
+  fi
+  return "$rc"
+}
 
 #
 # D8: verify that an installed RECEIVER Eidolon ships a BLOCKING verify-incoming
