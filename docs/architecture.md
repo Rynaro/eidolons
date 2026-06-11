@@ -318,21 +318,27 @@ a routing artifact — with no changes to the developer's workflow.
 host-dialect hook JSON. Adding a new host means writing a new shim and adapter
 template; the kernel is unchanged.
 
-**Per-host effective-tier ladder (Phase 2):**
+**Per-host effective-tier ladder (Phase 3):**
 
-| Host | Tier | Mechanism | Notes |
-|---|---|---|---|
-| claude-code | T3 | `UserPromptSubmit` + `SessionStart` hooks; `additionalContext` inject | Full route-inject |
-| codex | T3 | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) | Route-inject; schema unverified |
-| copilot | T2 | `.github/hooks/eidolons.json` + best-effort `sessionStart` shim | `additionalContext` may be silently dropped (upstream bug #2142); no `userPromptSubmitted` hook (copilot-cli#1139) |
-| cursor | T2 | `.cursor/rules/eidolons-cortex.mdc` (always-applied) + `AGENTS.md` dispatch-pointer | Static-only; cursor hook context-injection runtime-broken through v2.4.7 |
-| opencode | T1 | Not yet wired | P3 — gate-only floor |
+| Host | Tier | Strict tier | Mechanism | Notes |
+|---|---|---|---|---|
+| claude-code | T3 | block (`PreToolUse` deny) | `UserPromptSubmit` + `SessionStart` + optional `PreToolUse`; `additionalContext` inject | Full route-inject; `--strict` adds file-edit blocking shim |
+| codex | T3 | advisory (protected-glob deny) | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) | Route-inject; `--strict` adds codex `PreToolUse` shim for protected-glob paths only |
+| copilot | T2 | — (not available) | `.github/hooks/eidolons.json` + best-effort `sessionStart` shim | `additionalContext` may be silently dropped (upstream bug #2142); no `userPromptSubmitted` hook (copilot-cli#1139) |
+| cursor | T2 | refused by CLI | `.cursor/rules/eidolons-cortex.mdc` (always-applied) + `AGENTS.md` dispatch-pointer | Static-only; cursor `beforeSubmitPrompt` has a persist-in-context bug — strict surfaces are unsound |
+| opencode | T1 | advisory (plugin gate) | `opencode.json` MCP registration + `agent.<member>.permission.task` gate + optional `.opencode/plugins/eidolons.js` | `--strict opencode` writes advisory plugin (caveat: `#5894` subagent bypass) |
 
-**Cursor note:** cursor hooks (`additional_context`) are runtime-broken through Cursor v2.4.7 (multiple forum reports). P2 ships only static surfaces (`.mdc` + AGENTS.md pointer). Revisit when upstream fixes the regression.
+**Cursor note:** cursor hooks (`additional_context`) are runtime-broken through Cursor v2.4.7 (multiple forum reports). P2 ships only static surfaces (`.mdc` + AGENTS.md pointer). `--strict cursor` is refused by the CLI with an explanation (FORGE degradation-rule 4).
 
 **Copilot note:** `sessionStart` `additionalContext` is tracked as silently dropped by the Copilot CLI (issue #2142, closed without fix note). The harness adapter is best-effort; install prints the caveat. Per-prompt injection is impossible (`userPromptSubmitted` output is unprocessed, copilot-cli#1139).
 
-**INJECT-only default:** All hooks inject context only (`additionalContext`).
+**Strict tier (Phase 3):** `eidolons harness install --strict [--hosts HOST,...]` adds a `PreToolUse` shim layer on top of the base inject tier. Two enforcement modes:
+- `block` (claude-code): shim exits 0 with `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}`. Subagent invocations (agent_id present) are allowed through (delegate-or-deny pattern). Protected globs deny in all contexts including subagents.
+- `advisory` (codex, opencode): deny payload emitted or plugin throws, but the host may ignore it. Protected-glob denials are structural (codex PreToolUse); opencode `tool.execute.before` is soft (caveat #5894: opencode-ai/opencode#5894 subagent bypass).
+
+**`#16952` guard:** Both the UPS shim template and `eidolons run` include a guard that exits 0 immediately when the incoming prompt is a task-completion notification (`"Agent ... completed"` or `<task-notification>` suffix). This prevents double-routing on subagent hand-off completions (Claude Code issue #16952).
+
+**INJECT-only default:** The base tier (no `--strict`) injects context only (`additionalContext`).
 No `PreToolUse` blocking hooks. No exit code 2. The harness never interrupts a tool call.
 
 **Fail-open invariant:** Shim scripts are designed to exit 0 with empty stdout on any error.
@@ -345,10 +351,15 @@ The host's context window is never corrupted by harness failure.
 | Cursor `.mdc` + AGENTS.md pointer | `eidolons sync` | No |
 | `.cursor/mcp.json` | `eidolons mcp install` | No |
 | `.codex/config.toml` mcp_servers | `eidolons mcp install` | No |
+| `opencode.json` MCP entry | `eidolons mcp install` | No |
+| `opencode.json` `agent.<m>.permission.task` gate | `eidolons sync` | No |
 | Copilot `sessionStart` adapter | `eidolons harness install --hosts copilot` | Yes |
 | Claude-code / Codex hooks | `eidolons harness install` | Yes |
+| Claude-code `PreToolUse` block shim | `eidolons harness install --strict` | Yes |
+| Codex `PreToolUse` advisory shim | `eidolons harness install --strict --hosts codex` | Yes |
+| OpenCode advisory plugin | `eidolons harness install --strict --hosts opencode` | Yes |
 
-Full specification: `.spectra/harness-mechanization/spec.md` (P1) + `.spectra/harness-mechanization/spec-p2.md` (P2)
+Full specification: `.spectra/harness-mechanization/spec.md` (P1) + `.spectra/harness-mechanization/spec-p2.md` (P2) + `.spectra/harness-mechanization/spec-p3.md` (P3)
 
 ---
 
