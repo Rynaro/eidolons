@@ -102,6 +102,13 @@ if [[ -n "$HOOK_HOST" && "$HOOK_STDIN" == "true" ]]; then
       PROMPT="$_stdin_prompt"
     fi
   fi
+  # R21 / #16952 kernel backstop: skip routing when the extracted prompt is a
+  # task-completion notification. Defense-in-depth — primary guard is the UPS shim;
+  # this protects a directly-invoked kernel call. Conservative, fail-open heuristic.
+  case "$PROMPT" in
+    "Agent "*" completed"*) exit 0 ;;
+    *"<task-notification>"*) exit 0 ;;
+  esac
 fi
 
 if [[ -z "${PROMPT// }" ]]; then
