@@ -352,17 +352,30 @@ DSHIM
   [ "$status" -eq 0 ]
   [ -f "$argv_log" ]
   _argv="$(cat "$argv_log")"
-  # Must NOT contain bare -i flag.
-  # Note: -i could appear as part of another arg like --cap-drop; check for standalone.
+
+  # ── PREFIX shape: argv must begin "run --rm" (not "run run --rm") ──────────
+  # The fake docker receives $* so word 1 must be "run" and word 2 must be "--rm".
+  # This pins against the doubled-run bug where the header hardcoded "exec docker run"
+  # while args already started with "run".
+  _first_word="$(printf '%s' "$_argv" | awk '{print $1}')"
+  _second_word="$(printf '%s' "$_argv" | awk '{print $2}')"
+  [ "$_first_word" = "run" ]
+  [ "$_second_word" = "--rm" ]
+
+  # ── Negative assertions with position awareness ────────────────────────────
+  # Must NOT contain bare -i flag (standalone, not part of another flag).
   ! printf '%s' "$_argv" | grep -qE '(^| )-i( |$)'
   # Must NOT contain --name (which would be followed by the serve container name).
   ! printf '%s' "$_argv" | grep -q -- '--name'
-  # Must contain "recall" subcommand.
-  [[ "$_argv" =~ "recall" ]]
-  # Must contain --format json.
-  [[ "$_argv" =~ "--format" ]]
-  # Must NOT contain "serve".
+  # Must NOT contain "serve" (replaced by recall subcommand).
   ! [[ "$_argv" =~ " serve" ]]
+
+  # ── Must contain recall subcommand and flags ───────────────────────────────
+  [[ "$_argv" =~ "recall" ]]
+  [[ "$_argv" =~ "--format" ]]
+  [[ "$_argv" =~ "json" ]]
+  [[ "$_argv" =~ "--scope-project" ]]
+  [[ "$_argv" =~ "--query" ]]
 }
 
 # ─── digest format + 1500-char cap ────────────────────────────────────────────

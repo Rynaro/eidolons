@@ -180,7 +180,10 @@ _docker_script="$(mktemp)"
 trap 'rm -f "$_docker_script"' EXIT
 
 # Write the script header.
-printf '#!/usr/bin/env bash\nexec docker run' > "$_docker_script"
+# Use the command from .mcp.json (typically "docker"); args already begin with "run".
+_docker_cmd="$(jq -r '.mcpServers.crystalium.command // "docker"' "$PROJECT_ROOT/.mcp.json" 2>/dev/null)"
+: "${_docker_cmd:=docker}"
+printf '#!/usr/bin/env bash\nexec %s' "$_docker_cmd" > "$_docker_script"
 
 # Use jq to output each arg on its own line and process with a state machine.
 _skip_next=0
