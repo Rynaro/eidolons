@@ -1009,10 +1009,13 @@ EOF
   [ -f ".opencode/plugins/eidolons.js" ]
   run grep -i "5894" .opencode/plugins/eidolons.js
   [ "$status" -eq 0 ]
-  run grep "strict:" eidolons.lock
+  # strict: is a multi-line YAML block; the host name is on the NEXT line after the key.
+  # Use -A1 so both the key line and the host line appear in output.
+  run grep -A 1 '^  strict:' eidolons.lock
   [ "$status" -eq 0 ]
   [[ "$output" =~ "opencode" ]]
-  run grep "advisory" eidolons.lock
+  # strict_modes indents host as "    opencode: advisory" — match the full literal line.
+  run grep '    opencode: advisory' eidolons.lock
   [ "$status" -eq 0 ]
 }
 
@@ -1211,29 +1214,55 @@ EOF
   [ "$status" -eq 0 ]
   local shim=".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"
   [ -f "$shim" ]
-  # Completion-shaped prompt: the shim must exit 0 with empty stdout.
+
+  # ── Fail-open half: shim must exit 0 even when no eidolons binary is reachable.
+  # Point EIDOLONS_HOME at an empty dir so _eidolons_bin() returns 1.
+  _empty_home="$BATS_TEST_TMPDIR/empty-home"
+  mkdir -p "$_empty_home"
   COMPLETION_JSON='{"prompt":"Agent spectra completed: analysis done."}'
-  run bash -c "printf '%s' '$COMPLETION_JSON' | $shim"
+  run bash -c "EIDOLONS_HOME='$_empty_home' printf '%s' '$COMPLETION_JSON' | EIDOLONS_HOME='$_empty_home' bash '$shim'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
-  # task-notification shape.
+  # task-notification shape (also fail-open).
   NOTIF_JSON='{"prompt":"some text <task-notification> more text"}'
-  run bash -c "printf '%s' '$NOTIF_JSON' | $shim"
+  run bash -c "EIDOLONS_HOME='$_empty_home' printf '%s' '$NOTIF_JSON' | EIDOLONS_HOME='$_empty_home' bash '$shim'"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
+
+  # ── Routing half: a real non-trivial prompt must produce non-empty hookSpecificOutput JSON.
+  # Wire EIDOLONS_HOME so the shim's _eidolons_bin fallback resolves to the checkout CLI.
+  _wired_home="$BATS_TEST_TMPDIR/wired-home"
+  mkdir -p "$_wired_home/nexus/cli"
+  ln -sf "$EIDOLONS_ROOT/cli/eidolons" "$_wired_home/nexus/cli/eidolons"
+  ROUTING_JSON='{"prompt":"implement the authentication flow for the API"}'
+  run bash -c "
+    export EIDOLONS_HOME='$_wired_home'
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    printf '%s' '$ROUTING_JSON' | bash '$shim'
+  "
+  [ "$status" -eq 0 ]
+  # Output must be non-empty hookSpecificOutput JSON when routing fires.
+  if [[ -n "$output" ]]; then
+    run jq -r '.hookSpecificOutput.hookEventName' <<< "$output"
+    [ "$status" -eq 0 ]
+    [ "$output" = "UserPromptSubmit" ]
+  fi
+  # If empty: no Eidolon scored above tau (clarify/pass-through) — also valid per R1.
 }
 
 @test "ups-guard: run.sh --stdin completion-shaped prompt exits 0 empty (kernel backstop)" {
   seed_manifest
   seed_lock
   # run --hook in stdin mode with a completion-shaped JSON should exit 0 silently.
+  # Use the checkout CLI explicitly — 'eidolons' is a helpers.bash shell function,
+  # invisible inside bash -c child shells. EIDOLONS_NEXUS is already exported by setup.
   COMPLETION_JSON='{"prompt":"Agent vivi completed: done."}'
-  run bash -c "printf '%s' '$COMPLETION_JSON' | eidolons run --hook claude-code --stdin"
+  run bash -c "printf '%s' '$COMPLETION_JSON' | bash '$EIDOLONS_ROOT/cli/eidolons' run --hook claude-code --stdin"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
   # task-notification shape.
   NOTIF_JSON='{"prompt":"<task-notification>"}'
-  run bash -c "printf '%s' '$NOTIF_JSON' | eidolons run --hook claude-code --stdin"
+  run bash -c "printf '%s' '$NOTIF_JSON' | bash '$EIDOLONS_ROOT/cli/eidolons' run --hook claude-code --stdin"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
