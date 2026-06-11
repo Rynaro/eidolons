@@ -229,7 +229,7 @@ GLOBS
   # 2) Delegate-or-deny: agent_id ABSENT => main loop => deny.
   _aid="$(printf '%s' "$_in" | jq -r '.agent_id // empty' 2>/dev/null)" || _aid=""
   if [[ -z "$_aid" ]]; then
-    _deny "direct edits from the main loop are denied. Delegate this edit to a coder Eidolon (Vivi) per the routing artifact. Re-issue the edit from within the delegated subagent."
+    _deny "direct edits from the main loop are denied. Delegate this edit to a coder Eidolon (Vivi) per the routing artifact. Re-issue the edit from within the delegated subagent"
     return 0
   fi
   return 0
