@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **crystalium published at 1.4.0 in the MCP catalogue** (was 1.3.0). v1.4.0 ships the one-shot `recall` CLI subcommand (BM25 fast path, pure-JSON stdout) consumed by `eidolons memory preflight` for the GAP-2 mechanical memory pre-flight, plus the `index` Redactor regression fix. Multi-arch digest `sha256:77816705…` pinned.
+
 ### Added
 - crystalium v1.4.0 published in the roster with release integrity metadata.
 - `feat(memory)`: `eidolons memory preflight` verb (`cli/src/memory.sh` + two-place dispatcher entry). One-shot crystalium recall at SessionStart: reads `.mcp.json` `mcpServers.crystalium.args` as the docker-args source, strips `-i` and `--name <value>`, replaces `serve` with `python -m crystalium recall --format json`; deterministic default query `"project <slug> recent context"`; TTL-cached at `.eidolons/harness/cache/preflight.json` (default 900s, env `EIDOLONS_MEMORY_PREFLIGHT_TTL`); 8s timeout (env `EIDOLONS_MEMORY_PREFLIGHT_TIMEOUT`) via `timeout(1)` if available, else background-watcher idiom (bash 3.2 safe). **Every failure path** (no docker, crystalium absent, old image without `recall` subcommand, timeout, malformed JSON) emits empty stdout, exit 0. Stdout IS the `[layer/tier] summary` digest, ≤1500 chars.

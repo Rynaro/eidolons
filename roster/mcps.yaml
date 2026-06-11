@@ -135,9 +135,9 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.3.0"
+      latest: "1.4.0"
       pins:
-        stable: "1.3.0"
+        stable: "1.4.0"
       releases:
         "0.1.0":
           digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
@@ -155,6 +155,11 @@ mcps:
           # + T2 ablations (EVB + pattern-completion earned ON) + kuzu max_db_size cap.
           digest: "sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894"
           released_at: "2026-06-05T00:00:00Z"
+        "1.4.0":
+          # Multi-arch index (linux/amd64 + linux/arm64). One-shot `recall` CLI
+          # for out-of-band memory pre-flight (GAP-2) + index Redactor fix.
+          digest: "sha256:778167053c55cea71c1f6d7a12f8a11d904c00715aaa72ac47aec90b3d3fdf2f"
+          released_at: "2026-06-11T00:00:00Z"
     install:
       hosts_wired:
         - ".mcp.json"
