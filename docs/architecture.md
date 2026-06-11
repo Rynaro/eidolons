@@ -359,7 +359,27 @@ The host's context window is never corrupted by harness failure.
 | Codex `PreToolUse` advisory shim | `eidolons harness install --strict --hosts codex` | Yes |
 | OpenCode advisory plugin | `eidolons harness install --strict --hosts opencode` | Yes |
 
-Full specification: `.spectra/harness-mechanization/spec.md` (P1) + `.spectra/harness-mechanization/spec-p2.md` (P2) + `.spectra/harness-mechanization/spec-p3.md` (P3)
+Full specification: `.spectra/harness-mechanization/spec.md` (P1) + `.spectra/harness-mechanization/spec-p2.md` (P2) + `.spectra/harness-mechanization/spec-p3.md` (P3) + `.spectra/harness-mechanization/spec-gap2.md` (GAP-2)
+
+### Memory spine (GAP-2)
+
+The harness injects **routing** (P1–P3) AND **memory** (GAP-2) on the same SessionStart spine. Memory recall is out-of-band — a one-shot `docker run ... python -m crystalium recall` invocation, NOT the MCP `serve` transport (which may not be running at SessionStart). The result is appended to the same `additionalContext` block as the cortex digest.
+
+**Architecture:** `harness_hook.sh` session_start mode, after building the cortex digest, calls `eidolons memory preflight` (a short-lived process; no recursion — `memory preflight` never calls `run`). The preflight verb:
+
+1. Reads `.mcp.json` `mcpServers.crystalium.args` — the fully-resolved docker invocation already rendered by `eidolons mcp install`.
+2. Transforms it: strips `-i` and `--name <value>`, replaces `serve` with `recall --query Q --scope-project SLUG --k 5 --format json`.
+3. Runs the resulting `docker run` with an 8s timeout.
+4. Transforms the `RecallResult` JSON into `[layer/tier] summary` lines (≤1500 chars).
+5. Returns the digest as plain stdout; caches at `.eidolons/harness/cache/preflight.json` (TTL 900s).
+
+**Recall chokepoint preserved (P0):** the one-shot CLI passes `caller_tier` through `Aetheryte.recall`'s `assert_tier_allowed` at `retrieve.py:219` (universally allowed — never raises). The out-of-band path is not a bypass.
+
+**GAP-2 [REVERSAL-CONDITION] resolved positive:** the FORGE harness verdict named GAP-2 as blocked pending an out-of-band recall path. The `recall` Click subcommand (crystalium v1.4.0, R24) is that path. The condition is met.
+
+**Fail-open invariant (P0):** every failure path (no docker, crystalium absent or too old to have `recall`, timeout, malformed JSON) emits empty stdout, exit 0. The cortex digest is never blocked by a memory failure. The `|| true` guard in `harness_hook.sh` is the final backstop.
+
+**Runtime gate:** activates at shim runtime, not install time. Installing crystalium (`eidolons mcp install crystalium`) after `harness install` makes the next SessionStart include memory — no `harness install --force` needed. The arm lives in the nexus-shipped `harness_hook.sh`; it activates on `eidolons upgrade self`.
 
 ---
 

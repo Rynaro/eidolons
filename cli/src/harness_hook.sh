@@ -66,6 +66,27 @@ _main() {
       return 0
     fi
 
+    # ── Memory pre-flight (GAP-2): append crystalium recall digest ──────────
+    # Runtime-gated: 'memory preflight' self-skips (empty stdout) when
+    # crystalium is absent from .mcp.json / eidolons.mcp.lock, or docker is
+    # unavailable, or on any error/timeout. NEVER blocks: failure = empty.
+    local mem_digest=""
+    local _mem_bin=""
+    if _mem_bin="$(command -v eidolons 2>/dev/null)"; then
+      mem_digest="$("$_mem_bin" memory preflight 2>/dev/null || true)"
+    else
+      _mem_bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+      if [[ -x "$_mem_bin" ]]; then
+        mem_digest="$("$_mem_bin" memory preflight 2>/dev/null || true)"
+      fi
+    fi
+    if [[ -n "$mem_digest" ]]; then
+      cortex_digest="${cortex_digest}
+
+## Prior project memory (CRYSTALIUM recall)
+${mem_digest}"
+    fi
+
     # Emit JSON.
     jq -n \
       --arg en "SessionStart" \

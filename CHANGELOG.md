@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
+## [Unreleased] — GAP-2: mechanical memory pre-flight
+
+### Added
+- `feat(memory)`: `eidolons memory preflight` verb (`cli/src/memory.sh` + two-place dispatcher entry). One-shot crystalium recall at SessionStart: reads `.mcp.json` `mcpServers.crystalium.args` as the docker-args source, strips `-i` and `--name <value>`, replaces `serve` with `python -m crystalium recall --format json`; deterministic default query `"project <slug> recent context"`; TTL-cached at `.eidolons/harness/cache/preflight.json` (default 900s, env `EIDOLONS_MEMORY_PREFLIGHT_TTL`); 8s timeout (env `EIDOLONS_MEMORY_PREFLIGHT_TIMEOUT`) via `timeout(1)` if available, else background-watcher idiom (bash 3.2 safe). **Every failure path** (no docker, crystalium absent, old image without `recall` subcommand, timeout, malformed JSON) emits empty stdout, exit 0. Stdout IS the `[layer/tier] summary` digest, ≤1500 chars.
+- `feat(harness)`: SessionStart shim arm (GAP-2, R28) in `harness_hook.sh` session_start mode. After the cortex digest, calls `eidolons memory preflight` and, when non-empty, appends a `## Prior project memory (CRYSTALIUM recall)` section to `additionalContext`. Runtime-gated: crystalium absent → silent skip; fail-open: preflight error/timeout → cortex digest unaffected. Activates on `eidolons upgrade self` (not `harness install`); covers claude-code, codex, and copilot in one edit. Re-pin crystalium catalogue → v1.4.0 (separate PR after image publishes).
+
 ## [1.36.0] — 2026-06-11 — Harness mechanization: mechanical routing layer across all five hosts
 
 ### Added

@@ -1306,3 +1306,96 @@ EOF
   [[ "$output" =~ "D12" ]]
   [[ "$output" =~ "cursor" ]]
 }
+
+# ─── GAP-2 R28: SessionStart memory spine ────────────────────────────────────
+
+# Helper: put a fake eidolons on PATH that intercepts 'memory preflight'
+# and delegates everything else to the real checkout CLI.
+# FAKE_PREFLIGHT_OUTPUT — what preflight prints to stdout (default: empty).
+# FAKE_PREFLIGHT_EXIT   — preflight exit code (default: 0).
+setup_fake_eidolons_for_memory() {
+  local preflight_out="${FAKE_PREFLIGHT_OUTPUT:-}"
+  local preflight_exit="${FAKE_PREFLIGHT_EXIT:-0}"
+  local fake_bin="$BATS_TEST_TMPDIR/fake-eidolons-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/eidolons" <<STUB
+#!/usr/bin/env bash
+# Fake eidolons stub for GAP-2 memory preflight tests.
+if [ "\${1:-}" = "memory" ] && [ "\${2:-}" = "preflight" ]; then
+  printf '%s' "$preflight_out"
+  exit "$preflight_exit"
+fi
+# Delegate everything else to the real checkout CLI.
+exec bash "$EIDOLONS_ROOT/cli/eidolons" "\$@"
+STUB
+  chmod +x "$fake_bin/eidolons"
+  # Prepend to PATH so command -v eidolons finds this stub first.
+  export PATH="$fake_bin:$PATH"
+}
+
+@test "harness: session_start appends memory digest when preflight non-empty (AC-R28-1)" {
+  seed_manifest
+  seed_cortex
+  # Stub eidolons memory preflight to return a digest.
+  export FAKE_PREFLIGHT_OUTPUT="[semantic/T1] Prior spec: harness mechanization shipped"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  # additionalContext must contain the cortex digest.
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Roster Index" ]]
+  # AND the memory section.
+  [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+  [[ "$_ctx" =~ "[semantic/T1]" ]]
+  [[ "$_ctx" =~ "Prior spec: harness mechanization shipped" ]]
+}
+
+@test "harness: session_start cortex-only when preflight empty (AC-R28-2)" {
+  seed_manifest
+  seed_cortex
+  # Stub eidolons memory preflight to return empty.
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  # Must have cortex content.
+  [[ "$_ctx" =~ "Roster Index" ]]
+  # Must NOT have memory section heading (no empty heading).
+  ! [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+}
+
+@test "harness: session_start codex parity — memory digest in additionalContext (AC-R28-4)" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT="[episodic/T1] Codex parity check"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook codex --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+  [[ "$_ctx" =~ "Codex parity check" ]]
+}
+
+@test "harness: session_start fail-open when preflight errors (AC-R28-6)" {
+  seed_manifest
+  seed_cortex
+  # Stub eidolons memory preflight to exit non-zero.
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="1"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  # Cortex digest still emits — fail-open.
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Roster Index" ]]
+  # No memory section — graceful skip.
+  ! [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+}
