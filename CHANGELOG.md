@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
-## [Unreleased]
+## [1.36.0] — 2026-06-11 — Harness mechanization: mechanical routing layer across all five hosts
 
 ### Added
 - `feat(harness)`: `eidolons harness install|remove|status` verb family — mechanical hook wiring for claude-code and codex. Writes host shims under `.eidolons/harness/hooks/`, merges hooks block into `.claude/settings.json` (jq-canonical, idempotent, sibling-key-safe), writes `.codex/hooks.json` (ASSUMPTION A1). Opt-in: init/sync never invoke it.
