@@ -531,6 +531,184 @@ SHIM
   [ "$before_ts" = "$after_ts" ]
 }
 
+# ─── Phase 2: R10 — cursor .cursor/mcp.json + R11 .codex/config.toml ────────
+
+# Helper: seed manifest with given hosts.
+seed_manifest_with_hosts() {
+  local hosts_csv="$1"
+  local hosts_yaml=""
+  for _h in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
+    hosts_yaml="${hosts_yaml}  - ${_h}
+"
+  done
+  cat > eidolons.yaml <<EOF
+version: 1
+hosts:
+  wire:
+${hosts_yaml}members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+@test "mcp: binary install writes .cursor/mcp.json when cursor wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "cursor"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/mcp.json" ]
+  run bash -c "jq -e '.mcpServers.junction' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: .cursor/mcp.json not written when cursor not wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "claude-code"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ ! -f ".cursor/mcp.json" ]
+}
+
+@test "mcp: .cursor/mcp.json merge preserves sibling servers; repeat install no-op (jq -cS)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "cursor"
+  # Pre-seed .cursor/mcp.json with a sibling user server.
+  mkdir -p .cursor
+  printf '{"mcpServers":{"user-server":{"command":"stub"}}}\n' > .cursor/mcp.json
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  # Both junction and the sibling must be present.
+  run bash -c "jq -e '.mcpServers.junction' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcpServers[\"user-server\"]' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+  # Repeat install: byte-identical (jq -cS no-op).
+  _before="$(jq -cS . .cursor/mcp.json)"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  _after="$(jq -cS . .cursor/mcp.json)"
+  [ "$_before" = "$_after" ]
+}
+
+@test "mcp: lockfile hosts_wired truthful (omits .cursor/mcp.json when cursor absent)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "claude-code"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ -f "eidolons.mcp.lock" ]
+  # hosts_wired must only contain .mcp.json (cursor not wired).
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1 && yaml_to_json eidolons.mcp.lock | jq -e '.mcps[0].hosts_wired | map(select(. == \".cursor/mcp.json\")) | length == 0'"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: uninstall removes only our entry from .cursor/mcp.json" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "cursor"
+  # Pre-seed .cursor/mcp.json with a sibling.
+  mkdir -p .cursor
+  printf '{"mcpServers":{"sibling":{"command":"other-tool"}}}\n' > .cursor/mcp.json
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  # Both present.
+  run bash -c "jq -e '.mcpServers.junction' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+  # Uninstall junction.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_uninstall.sh" junction
+  [ "$status" -eq 0 ]
+  # junction removed; sibling preserved.
+  run bash -c "jq -e '.mcpServers.junction // empty | length == 0' .cursor/mcp.json 2>/dev/null || jq 'has(\"mcpServers\") and (.mcpServers | has(\"junction\") | not)' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcpServers.sibling' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: codex config.toml managed section created when codex wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "codex"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ -f ".codex/config.toml" ]
+  grep -qF "# eidolon:mcp start" .codex/config.toml
+  grep -qF "# eidolon:mcp end" .codex/config.toml
+  grep -qF "[mcp_servers.junction]" .codex/config.toml
+}
+
+@test "mcp: codex config.toml rewrite preserves content outside markers" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "codex"
+  # Pre-seed .codex/config.toml with user content.
+  mkdir -p .codex
+  printf '[profiles.default]\nmodel = "codex-mini"\n\n' > .codex/config.toml
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  # User content must be preserved.
+  grep -qF '[profiles.default]' .codex/config.toml
+  grep -qF 'model = "codex-mini"' .codex/config.toml
+  # Managed section must also be present.
+  grep -qF '# eidolon:mcp start' .codex/config.toml
+  grep -qF '[mcp_servers.junction]' .codex/config.toml
+}
+
+@test "mcp: codex config.toml repeat install byte-identical" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "codex"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ -f ".codex/config.toml" ]
+  _before="$(cat .codex/config.toml)"
+  # Second install (same version, no --force).
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  _after="$(cat .codex/config.toml)"
+  [ "$_before" = "$_after" ]
+}
+
+@test "mcp: codex config.toml not written when codex not wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "claude-code"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  [ ! -f ".codex/config.toml" ]
+}
+
+@test "mcp: uninstall removes mcp_servers table from codex managed section" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "codex"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  grep -qF "[mcp_servers.junction]" .codex/config.toml
+  # Uninstall.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_uninstall.sh" junction
+  [ "$status" -eq 0 ]
+  # The managed section or config.toml should not contain junction entry.
+  ! grep -qF "[mcp_servers.junction]" .codex/config.toml 2>/dev/null || true
+}
+
+# OCI driver cursor test (R10-1).
+@test "mcp: oci install writes .cursor/mcp.json when cursor wired" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  seed_manifest_with_hosts "cursor"
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/mcp.json" ]
+  run bash -c "jq -e '.mcpServers.crystalium' .cursor/mcp.json"
+  [ "$status" -eq 0 ]
+}
+
 # ─── PR-11: mcp install skip-guards — EIDOLONS_NEXUS prevents fetch ──────
 
 @test "PR-11: mcp install does NOT fetch when EIDOLONS_NEXUS is set (skip-guard)" {

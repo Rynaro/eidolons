@@ -29,7 +29,7 @@ Usage: eidolons harness install [OPTIONS]
 
 Options:
   --hosts <csv>        Comma-separated list of hosts to wire (default: from eidolons.yaml)
-                       Supported: claude-code, codex
+                       Supported: claude-code, codex, copilot
   --force              Overwrite shims and re-merge settings even if already installed
   --non-interactive    Skip confirmation prompts (for CI / scripted use)
   --refresh-shims-only Re-render shim contents only; no lock or settings changes
@@ -45,6 +45,7 @@ Examples:
   eidolons harness install                    # wire hosts from eidolons.yaml
   eidolons harness install --hosts claude-code
   eidolons harness install --hosts claude-code,codex
+  eidolons harness install --hosts copilot    # best-effort sessionStart adapter
   eidolons harness install --force            # overwrite existing shims
 EOF
 }
@@ -76,11 +77,11 @@ else
 fi
 
 # Filter to supported harness hosts only.
-_supported_hosts="claude-code,codex"
+_supported_hosts="claude-code,codex,copilot"
 _resolved_hosts=""
 for _h in $(printf '%s' "$WIRE_HOSTS" | tr ',' ' '); do
   case "$_h" in
-    claude-code|codex)
+    claude-code|codex|copilot)
       if [[ -z "$_resolved_hosts" ]]; then _resolved_hosts="$_h"; else _resolved_hosts="$_resolved_hosts,$_h"; fi
       ;;
     *)
@@ -178,9 +179,15 @@ if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
   mkdir -p "$HARNESS_SHIM_DIR"
   for _host in $(printf '%s' "$_lock_hosts" | tr ',' ' '); do
     [[ -z "$_host" ]] && continue
-    _write_shim "$_host" "UserPromptSubmit"
-    _write_shim "$_host" "SessionStart"
-    info "  refreshed shims for $_host"
+    # Copilot: SessionStart only (no UserPromptSubmit — copilot-cli#1139).
+    if [[ "$_host" == "copilot" ]]; then
+      _write_shim "$_host" "SessionStart"
+      info "  refreshed SessionStart shim for $_host"
+    else
+      _write_shim "$_host" "UserPromptSubmit"
+      _write_shim "$_host" "SessionStart"
+      info "  refreshed shims for $_host"
+    fi
   done
   ok "Harness shims refreshed"
   exit 0
@@ -209,17 +216,30 @@ _hosts_sorted="$(printf '%s' "$WIRE_HOSTS" | tr ',' '\n' | sort | tr '\n' ',' | 
 for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
   [[ -z "$_host" ]] && continue
 
-  _write_shim "$_host" "UserPromptSubmit"
-  _write_shim "$_host" "SessionStart"
-  info "  wrote shims for $_host"
-
-  _ups_path="$HARNESS_SHIM_DIR/${_host}-UserPromptSubmit.sh"
-  _ss_path="$HARNESS_SHIM_DIR/${_host}-SessionStart.sh"
-  if [[ -z "$_shim_paths" ]]; then
-    _shim_paths="$_ups_path,$_ss_path"
+  # Copilot: SessionStart only (userPromptSubmitted output is unprocessed — per-prompt
+  # injection impossible, copilot-cli#1139). All other hosts get both shims.
+  if [[ "$_host" == "copilot" ]]; then
+    _write_shim "$_host" "SessionStart"
+    info "  wrote SessionStart shim for $_host (SessionStart-only; see caveat below)"
+    _ss_path="$HARNESS_SHIM_DIR/${_host}-SessionStart.sh"
+    if [[ -z "$_shim_paths" ]]; then
+      _shim_paths="$_ss_path"
+    else
+      _shim_paths="$_shim_paths,$_ss_path"
+    fi
   else
-    _shim_paths="$_shim_paths,$_ups_path,$_ss_path"
+    _write_shim "$_host" "UserPromptSubmit"
+    _write_shim "$_host" "SessionStart"
+    info "  wrote shims for $_host"
+    _ups_path="$HARNESS_SHIM_DIR/${_host}-UserPromptSubmit.sh"
+    _ss_path="$HARNESS_SHIM_DIR/${_host}-SessionStart.sh"
+    if [[ -z "$_shim_paths" ]]; then
+      _shim_paths="$_ups_path,$_ss_path"
+    else
+      _shim_paths="$_shim_paths,$_ups_path,$_ss_path"
+    fi
   fi
+
   if [[ -z "$_hosts_wired_sorted" ]]; then
     _hosts_wired_sorted="$_host"
   else
@@ -281,6 +301,28 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         info ".claude/settings.json already has identical hooks entries (no-op)"
       fi
     fi
+  fi
+fi
+
+# ── Wire copilot .github/hooks/eidolons.json ─────────────────────────────
+# Best-effort sessionStart adapter (R12). Wholly eidolons-owned file.
+# sibling .github/hooks/*.json files (user-managed) are not touched.
+if printf '%s' ",$_hosts_wired_sorted," | grep -q ",copilot,"; then
+  warn "Copilot sessionStart additionalContext may be dropped by the Copilot CLI (upstream bug #2142); the cloud-agent path is unverified. Per-prompt injection is not possible (userPromptSubmitted output is unprocessed, copilot-cli#1139)."
+  mkdir -p .github/hooks
+  COPILOT_HOOKS=".github/hooks/eidolons.json"
+  _copilot_ss_cmd="$HARNESS_SHIM_DIR/copilot-SessionStart.sh"
+  _copilot_json="$(jq -n \
+    --arg ss "$_copilot_ss_cmd" \
+    '{"version": 1, "hooks": {"sessionStart": [{"type": "command", "bash": $ss, "timeoutSec": 10}]}}')"
+
+  _existing_copilot="$(jq -cS . "$COPILOT_HOOKS" 2>/dev/null || echo "")"
+  _new_copilot="$(printf '%s' "$_copilot_json" | jq -cS . 2>/dev/null || echo "")"
+  if [[ "$_existing_copilot" != "$_new_copilot" ]]; then
+    printf '%s\n' "$_copilot_json" > "$COPILOT_HOOKS"
+    ok "Wrote .github/hooks/eidolons.json"
+  else
+    info ".github/hooks/eidolons.json already up-to-date (no-op)"
   fi
 fi
 

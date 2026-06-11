@@ -1324,7 +1324,7 @@ _vendor_file_for_host() {
     copilot)     echo ".github/copilot-instructions.md" ;;
     gemini)      echo "GEMINI.md" ;;
     opencode)    echo "AGENTS.md" ;;
-    cursor)      echo "" ;;
+    cursor)      echo "AGENTS.md" ;;
     *)           echo "" ;;
   esac
 }

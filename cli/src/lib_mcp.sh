@@ -498,6 +498,208 @@ mcp_driver_oci_image_pull() {
   return 1
 }
 
+# _mcp_host_is_wired HOST [PROJECT_ROOT]
+# Returns 0 (true) if HOST is in hosts.wire of eidolons.yaml in PROJECT_ROOT.
+# PROJECT_ROOT defaults to $(pwd). Bash 3.2 safe.
+_mcp_host_is_wired() {
+  local host="$1"
+  local project_root="${2:-$(pwd)}"
+  local manifest="${project_root}/eidolons.yaml"
+  if [ ! -f "$manifest" ]; then
+    return 1
+  fi
+  yaml_to_json "$manifest" \
+    | jq -e --arg h "$host" '(.hosts.wire // []) | any(. == $h)' \
+    >/dev/null 2>&1
+}
+
+# _mcp_merge_into_json_file RENDERED TARGET_FILE NAME
+# Idempotent jq-merge of a rendered MCP JSON entry into a target JSON file.
+# RENDERED is a JSON string (mcpServers top-level). TARGET_FILE is the path.
+# NAME is for logging only.
+# Merge semantics:
+#   - Missing file → write fresh file (normalised through jq for canonical form).
+#   - Present valid JSON → jq-merge: existing mcpServers preserved + new entry added.
+#   - Present invalid JSON → warn + skip (soft-fail, no data loss).
+# Bash 3.2 compatible.
+_mcp_merge_into_json_file() {
+  local rendered="$1"
+  local target="$2"
+  local name="$3"
+  local tmp
+  tmp="$(mktemp)"
+
+  if [ ! -f "$target" ]; then
+    if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$target"
+      ok "${name} entry written at ${target}"
+    else
+      rm -f "$tmp"
+      warn "jq failed to normalise ${name} template — skipping ${target} write"
+    fi
+    return 0
+  fi
+
+  if ! jq empty "$target" 2>/dev/null; then
+    rm -f "$tmp"
+    warn "${target} is not valid JSON — skipping ${name} server registration (manual merge required)"
+    return 0
+  fi
+
+  if printf '%s\n' "$rendered" \
+    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
+        - "$target" \
+    > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$target"
+    ok "${name} entry merged into ${target}"
+  else
+    rm -f "$tmp"
+    warn "jq merge failed for ${target} — skipping ${name} server registration"
+  fi
+}
+
+# _mcp_codex_config_toml_merge NAME PROJECT_ROOT RENDERED_JSON
+# Writes/updates the [mcp_servers.<name>] table in .codex/config.toml using
+# a marker-bounded managed-section rewrite (no TOML parser).
+# Markers: # eidolon:mcp start / # eidolon:mcp end
+# Rebuild-from-lock strategy: reads all installed MCPs from eidolons.mcp.lock
+# and regenerates the full managed section (AC-R11-3, R11-6).
+# Only called when codex is in hosts.wire.
+# Bash 3.2 compatible.
+_mcp_codex_config_toml_merge() {
+  local name="$1"
+  local project_root="$2"
+  local rendered_json="$3"
+
+  local toml_file="${project_root}/.codex/config.toml"
+  mkdir -p "${project_root}/.codex"
+
+  # Print [ASSUMPTION A3] info at install time.
+  info "  [ASSUMPTION A3] .codex/config.toml project-scope mcp_servers assumed allowed; verify with 'eidolons doctor'"
+
+  # Build the managed section content from ALL installed MCPs (rebuild-from-lock).
+  # This handles multi-MCP coexistence and makes uninstall trivially correct.
+  local lock_file="${project_root}/eidolons.mcp.lock"
+  local section_body=""
+
+  # First, build the entry for the current MCP being installed from rendered_json.
+  # We build a map of name→rendered for all installed MCPs.
+  # For the current install, use rendered_json directly.
+  # For other already-installed MCPs, read from the lockfile target (.mcp.json)
+  # and re-derive from the template. Since we only have rendered_json for the
+  # current MCP, we read all installed names from the lock and derive their
+  # TOML tables from the lockfile info (command + args).
+
+  # Helper: build a single TOML table block for mcp_servers entry.
+  # Uses jq to extract command/args/env from the rendered JSON.
+  _build_toml_table_for_rendered() {
+    local mcp_name="$1"
+    local rjson="$2"
+    local entry_json
+    entry_json="$(printf '%s' "$rjson" | jq -c --arg n "$mcp_name" '.mcpServers[$n] // empty' 2>/dev/null)"
+    if [ -z "$entry_json" ]; then
+      return 0
+    fi
+    local cmd args_json
+    cmd="$(printf '%s' "$entry_json" | jq -r '.command // ""' 2>/dev/null)"
+    args_json="$(printf '%s' "$entry_json" | jq -c '.args // []' 2>/dev/null)"
+    local env_json
+    env_json="$(printf '%s' "$entry_json" | jq -c '.env // empty' 2>/dev/null)"
+
+    printf '[mcp_servers.%s]\n' "$mcp_name"
+    printf 'command = "%s"\n' "$cmd"
+    printf 'args = %s\n' "$args_json"
+    if [ -n "$env_json" ] && [ "$env_json" != "null" ]; then
+      printf 'env = %s\n' "$env_json"
+    fi
+    printf '\n'
+  }
+
+  # Build table for the current MCP (always use freshly rendered JSON).
+  local current_table
+  current_table="$(_build_toml_table_for_rendered "$name" "$rendered_json")"
+
+  # Build tables for all other already-installed MCPs from lockfile.
+  local other_tables=""
+  if [ -f "$lock_file" ]; then
+    local other_names
+    other_names="$(yaml_to_json "$lock_file" 2>/dev/null \
+      | jq -r --arg n "$name" '.mcps // [] | map(select(.name != $n)) | .[].name' 2>/dev/null || true)"
+    for _oname in $other_names; do
+      [ -z "$_oname" ] && continue
+      # Read the other MCP's .mcp.json entry from the project's .mcp.json.
+      local other_mcp_json="${project_root}/.mcp.json"
+      if [ -f "$other_mcp_json" ]; then
+        local other_entry_json
+        other_entry_json="$(jq -c --arg n "$_oname" '.mcpServers[$n] // empty' "$other_mcp_json" 2>/dev/null || true)"
+        if [ -n "$other_entry_json" ] && [ "$other_entry_json" != "null" ]; then
+          # Wrap as mcpServers object for the helper.
+          local other_rendered
+          other_rendered="$(jq -n --arg n "$_oname" --argjson e "$other_entry_json" '{mcpServers: {($n): $e}}')"
+          local other_table
+          other_table="$(_build_toml_table_for_rendered "$_oname" "$other_rendered")"
+          if [ -n "$other_table" ]; then
+            other_tables="${other_tables}${other_table}"
+          fi
+        fi
+      fi
+    done
+  fi
+
+  section_body="${current_table}${other_tables}"
+
+  # Strip trailing newline from section body for clean marker placement.
+  local new_section
+  new_section="# eidolon:mcp start
+${section_body}# eidolon:mcp end"
+
+  if [ ! -f "$toml_file" ]; then
+    printf '%s\n' "$new_section" > "$toml_file"
+    ok "${name} .codex/config.toml managed section written"
+    return 0
+  fi
+
+  # File exists: check for existing markers.
+  if grep -qF "# eidolon:mcp start" "$toml_file" 2>/dev/null; then
+    # Rebuild-from-markers: replace the marker-bounded region with new_section.
+    local tmp_toml
+    tmp_toml="$(mktemp)"
+    awk '
+      /^# eidolon:mcp start/ { skip=1; next }
+      /^# eidolon:mcp end/ { skip=0; next }
+      !skip { print }
+    ' "$toml_file" > "$tmp_toml"
+
+    # Build final file: user content + new section.
+    # Determine if user content has trailing newline.
+    local user_content
+    user_content="$(cat "$tmp_toml")"
+    rm -f "$tmp_toml"
+
+    local final_content
+    if [ -n "$user_content" ]; then
+      final_content="${user_content}
+${new_section}"
+    else
+      final_content="$new_section"
+    fi
+
+    # Idempotency check.
+    local existing_content
+    existing_content="$(cat "$toml_file")"
+    if [ "$existing_content" = "$final_content" ]; then
+      info ".codex/config.toml managed section unchanged (no-op)"
+    else
+      printf '%s\n' "$final_content" > "$toml_file"
+      ok "${name} .codex/config.toml managed section updated"
+    fi
+  else
+    # No markers yet: append the new section.
+    printf '\n%s\n' "$new_section" >> "$toml_file"
+    ok "${name} .codex/config.toml managed section appended"
+  fi
+}
+
 # _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH
 # Internal helper: renders a template with placeholder substitution and
 # jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
@@ -549,41 +751,18 @@ _mcp_oci_render_and_merge() {
     -e "s|__HOME__|${HOME}|g" \
     "$tmpl")"
 
-  local mcp_json tmp
-  mcp_json="${project_root}/.mcp.json"
-  tmp="$(mktemp)"
+  # Write .mcp.json (primary target).
+  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}"
 
-  if [ ! -f "$mcp_json" ]; then
-    # Fresh file — normalise through jq for canonical form (atomic write, INV-1).
-    if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
-      mv "$tmp" "$mcp_json"
-      ok "${name} .mcp.json entry written at ${mcp_json}"
-    else
-      rm -f "$tmp"
-      warn "jq failed to normalise ${name} template — skipping .mcp.json write"
-    fi
-    return 0
+  # Write .cursor/mcp.json when cursor is in hosts.wire (R10).
+  if _mcp_host_is_wired "cursor" "$project_root"; then
+    mkdir -p "${project_root}/.cursor"
+    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor"
   fi
 
-  # Pre-existing file — validate JSON before touching (soft-fail, no data loss).
-  if ! jq empty "$mcp_json" 2>/dev/null; then
-    rm -f "$tmp"
-    warn ".mcp.json at ${mcp_json} is not valid JSON — skipping ${name} server registration (manual merge required)"
-    return 0
-  fi
-
-  # jq-merge: keep all existing mcpServers; add/update the new entry.
-  # .[0] = rendered template (new entry), .[1] = existing file.
-  # The + operator merges objects: existing keys preserved, new entry added/updated.
-  if printf '%s\n' "$rendered" \
-    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
-        - "$mcp_json" \
-    > "$tmp" 2>/dev/null; then
-    mv "$tmp" "$mcp_json"
-    ok "${name} .mcp.json entry merged into ${mcp_json}"
-  else
-    rm -f "$tmp"
-    warn "jq merge failed for ${mcp_json} — skipping ${name} server registration"
+  # Write .codex/config.toml managed section when codex is in hosts.wire (R11).
+  if _mcp_host_is_wired "codex" "$project_root"; then
+    _mcp_codex_config_toml_merge "$name" "$project_root" "$rendered"
   fi
 }
 
@@ -689,10 +868,23 @@ mcp_driver_oci_image_install() {
   fi
 
   # Build and upsert lockfile entry.
-  local source_image_lf installed_at hosts_wired
+  local source_image_lf installed_at
   source_image_lf="$(mcp_catalogue_get_field "$name" '.source.image')"
   installed_at="$(_mcp_now)"
-  hosts_wired='[".mcp.json",".cursor/mcp.json",".github/agents/*",".codex/config.toml"]'
+
+  # Derive hosts_wired from actual writes (R10 AC-4): always .mcp.json;
+  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired.
+  # Drop the aspirational .github/agents/* entry (no writer exists — it was a lie).
+  local _hw_json
+  _hw_json='[".mcp.json"]'
+  if _mcp_host_is_wired "cursor" "$project_root"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".cursor/mcp.json"]')"
+  fi
+  if _mcp_host_is_wired "codex" "$project_root"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".codex/config.toml"]')"
+  fi
+  # Sort for canonical order.
+  _hw_json="$(printf '%s' "$_hw_json" | jq 'sort')"
 
   local entry
   entry="$(jq -n \
@@ -703,7 +895,7 @@ mcp_driver_oci_image_install() {
     --arg algo "oci-digest" \
     --arg digv "${digest:-}" \
     --arg tgt ".mcp.json" \
-    --argjson hw "$hosts_wired" \
+    --argjson hw "$_hw_json" \
     --arg iat "$installed_at" \
     '{
       name: $nm,
@@ -1049,7 +1241,7 @@ _mcp_binary_merge_mcp_json() {
   local project_root="$3"
 
   # Locate and render the template.
-  local tmpl rendered mcp_json tmp
+  local tmpl rendered
   tmpl="${_LIB_MCP_DIR}/../templates/mcp/junction.mcp.json.tmpl"
   if [ ! -f "$tmpl" ]; then
     warn "_mcp_binary_merge_mcp_json: template not found at ${tmpl} — skipping .mcp.json write"
@@ -1059,43 +1251,18 @@ _mcp_binary_merge_mcp_json() {
   # Render: substitute __JUNCTION_BIN__ with the resolved binary path (INV-3: sed, no eval).
   rendered="$(sed -e "s|__JUNCTION_BIN__|${bin}|g" "$tmpl")"
 
-  mcp_json="${project_root}/.mcp.json"
+  # Write .mcp.json (primary target).
+  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}"
 
-  # Use jq for all writes — ensures consistent (canonical) JSON formatting so that
-  # the fresh-file first write and subsequent idempotent merges produce byte-identical
-  # output (INV-1). Never use printf/echo to write raw JSON to the target file.
-  tmp="$(mktemp)"
-  if [ ! -f "$mcp_json" ]; then
-    # Fresh file — normalise through jq to canonical form (atomic write).
-    if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
-      mv "$tmp" "$mcp_json"
-      ok "junction .mcp.json entry written at ${mcp_json}"
-    else
-      rm -f "$tmp"
-      warn "jq failed to normalise junction template — skipping .mcp.json write"
-    fi
-    return 0
+  # Write .cursor/mcp.json when cursor is in hosts.wire (R10).
+  if _mcp_host_is_wired "cursor" "$project_root"; then
+    mkdir -p "${project_root}/.cursor"
+    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor"
   fi
 
-  # Pre-existing file — validate JSON before touching (INV-2, AC4).
-  if ! jq empty "$mcp_json" 2>/dev/null; then
-    rm -f "$tmp"
-    warn ".mcp.json at ${mcp_json} is not valid JSON — skipping junction server registration (manual merge required)"
-    return 0
-  fi
-
-  # Merge: keep all existing mcpServers; add/update the junction entry (INV-2).
-  # jq -s slurps both stdin and the file; .[0] = new entry, .[1] = existing file.
-  # The + operator on objects merges: existing keys preserved, junction added/updated.
-  if printf '%s\n' "$rendered" \
-    | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
-        - "$mcp_json" \
-    > "$tmp" 2>/dev/null; then
-    mv "$tmp" "$mcp_json"
-    ok "junction .mcp.json entry merged into ${mcp_json}"
-  else
-    rm -f "$tmp"
-    warn "jq merge failed for ${mcp_json} — skipping junction server registration"
+  # Write .codex/config.toml managed section when codex is in hosts.wire (R11).
+  if _mcp_host_is_wired "codex" "$project_root"; then
+    _mcp_codex_config_toml_merge "$name" "$project_root" "$rendered"
   fi
 }
 
@@ -1210,7 +1377,17 @@ _mcp_binary_upsert_lock() {
     target="$cache_dir"
   fi
 
-  local hosts_wired='[".eidolons/harness/manifest.json", ".mcp.json"]'
+  # Derive hosts_wired from actual writes (R10 AC-4): always .mcp.json;
+  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired.
+  local _hw_json
+  _hw_json='[".mcp.json"]'
+  if _mcp_host_is_wired "cursor"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".cursor/mcp.json"]')"
+  fi
+  if _mcp_host_is_wired "codex"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".codex/config.toml"]')"
+  fi
+  _hw_json="$(printf '%s' "$_hw_json" | jq 'sort')"
 
   local entry
   entry="$(jq -n \
@@ -1219,7 +1396,7 @@ _mcp_binary_upsert_lock() {
     --arg ver "$version" \
     --arg repo "$source_repo" \
     --arg tgt "$target" \
-    --argjson hw "$hosts_wired" \
+    --argjson hw "$_hw_json" \
     --arg iat "$installed_at" \
     '{
       name: $nm,
@@ -1290,12 +1467,92 @@ mcp_driver_binary_uninstall() {
   if [ -f "$mcp_json" ] && command -v jq >/dev/null 2>&1; then
     local tmp
     tmp="$(mktemp)"
-    if jq 'del(.mcpServers["junction"])' "$mcp_json" > "$tmp" 2>/dev/null; then
+    if jq 'del(.mcpServers["'"${name}"'"])' "$mcp_json" > "$tmp" 2>/dev/null; then
       mv "$tmp" "$mcp_json"
-      info "Removed junction from .mcp.json"
+      info "Removed ${name} from .mcp.json"
     else
       rm -f "$tmp"
       warn "Could not parse .mcp.json — manual cleanup may be required"
+    fi
+  fi
+
+  # Remove from .cursor/mcp.json if present (R10 AC-5, binary symmetric).
+  local cursor_mcp="./.cursor/mcp.json"
+  if [ -f "$cursor_mcp" ] && command -v jq >/dev/null 2>&1; then
+    local tmp2
+    tmp2="$(mktemp)"
+    if jq 'del(.mcpServers["'"${name}"'"])' "$cursor_mcp" > "$tmp2" 2>/dev/null; then
+      mv "$tmp2" "$cursor_mcp"
+      info "Removed ${name} from .cursor/mcp.json"
+    else
+      rm -f "$tmp2"
+    fi
+  fi
+
+  # Remove from .codex/config.toml managed section if present (R11 AC-6).
+  local codex_toml="./.codex/config.toml"
+  if [ -f "$codex_toml" ] && grep -qF "# eidolon:mcp start" "$codex_toml" 2>/dev/null; then
+    # Rebuild managed section without this MCP: read remaining MCPs from lockfile
+    # (before the remove), strip our entry from the mcp.json and re-run the helper.
+    # Simpler: strip the entire managed section and re-write without the removed MCP.
+    # Since we're about to remove the lockfile entry, rebuild from current lock minus this name.
+    local tmp_toml
+    tmp_toml="$(mktemp)"
+    awk '
+      /^# eidolon:mcp start/ { skip=1; next }
+      /^# eidolon:mcp end/ { skip=0; next }
+      !skip { print }
+    ' "$codex_toml" > "$tmp_toml"
+    local user_content
+    user_content="$(cat "$tmp_toml")"
+    rm -f "$tmp_toml"
+    # Check if any other MCPs remain in lockfile (excluding current name).
+    local remaining_mcps
+    remaining_mcps="$(yaml_to_json "$(mcp_lockfile)" 2>/dev/null \
+      | jq -r --arg n "$name" '.mcps // [] | map(select(.name != $n)) | .[].name' 2>/dev/null || true)"
+    if [ -z "$remaining_mcps" ]; then
+      # No other MCPs: just strip the managed section.
+      if [ -n "$user_content" ]; then
+        printf '%s\n' "$user_content" > "$codex_toml"
+      else
+        rm -f "$codex_toml"
+      fi
+      info "Removed ${name} managed section from .codex/config.toml"
+    else
+      # Other MCPs remain: rebuild section from their .mcp.json entries.
+      local other_section=""
+      for _oname in $remaining_mcps; do
+        [ -z "$_oname" ] && continue
+        local other_entry
+        other_entry="$(jq -c --arg n "$_oname" '.mcpServers[$n] // empty' "./.mcp.json" 2>/dev/null || true)"
+        if [ -n "$other_entry" ] && [ "$other_entry" != "null" ]; then
+          local other_rendered
+          other_rendered="$(jq -n --arg n "$_oname" --argjson e "$other_entry" '{mcpServers: {($n): $e}}')"
+          local cmd args_json env_json
+          cmd="$(printf '%s' "$other_entry" | jq -r '.command // ""')"
+          args_json="$(printf '%s' "$other_entry" | jq -c '.args // []')"
+          env_json="$(printf '%s' "$other_entry" | jq -c '.env // empty' 2>/dev/null || true)"
+          other_section="${other_section}[mcp_servers.${_oname}]
+command = \"${cmd}\"
+args = ${args_json}
+"
+          if [ -n "$env_json" ] && [ "$env_json" != "null" ]; then
+            other_section="${other_section}env = ${env_json}
+"
+          fi
+          other_section="${other_section}
+"
+        fi
+      done
+      local new_section
+      new_section="# eidolon:mcp start
+${other_section}# eidolon:mcp end"
+      if [ -n "$user_content" ]; then
+        printf '%s\n%s\n' "$user_content" "$new_section" > "$codex_toml"
+      else
+        printf '%s\n' "$new_section" > "$codex_toml"
+      fi
+      info "Updated .codex/config.toml managed section (removed ${name})"
     fi
   fi
 

@@ -737,6 +737,65 @@ else
   info "Shared dispatch off — skipping cortex host-doc injection"
 fi
 
+# ─── Cursor cortex surface: .cursor/rules/eidolons-cortex.mdc (R9 / G4) ──
+# Written when cursor ∈ hosts.wire AND shared-dispatch is on.
+# Uses the same digest awk as harness_hook.sh (Roster Index + Dispatch Protocol).
+# The .mdc file is NOT a pointer_targets vendor file; it is cursor-specific and
+# gated directly on cursor ∈ HOSTS_CSV. The closed pointer-target whitelist is
+# unchanged.
+if [[ "$DRY_RUN" == "true" ]]; then
+  if [[ ",${HOSTS_CSV}," == *",cursor,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+    info "  [dry-run] would write .cursor/rules/eidolons-cortex.mdc (cursor wired)"
+  fi
+elif [[ ",${HOSTS_CSV}," == *",cursor,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+  _cortex_src=".eidolons/cortex/EIDOLONS.md"
+  if [[ -f "$_cortex_src" ]]; then
+    # Extract Roster Index and Dispatch Protocol sections (mirrors harness_hook.sh:53-58).
+    _mdc_digest="$(awk '
+      /^## Roster Index/ { in_section=1 }
+      /^## Dispatch Protocol/ { in_section=1 }
+      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
+      in_section { print }
+    ' "$_cortex_src" 2>/dev/null | head -c 4000 || true)"
+
+    if [[ -z "$_mdc_digest" ]]; then
+      _mdc_digest="$(head -c 4000 "$_cortex_src" 2>/dev/null || true)"
+    fi
+
+    _mdc_body="${_mdc_digest}
+
+> Deep tables: \`.eidolons/cortex/trance-matrix.md\`, \`.eidolons/cortex/handoff-graph.md\`, \`.eidolons/cortex/validation-gates.md\`"
+
+    mkdir -p ".cursor/rules"
+    _mdc_file=".cursor/rules/eidolons-cortex.mdc"
+    _mdc_frontmatter="---
+description: Eidolons routing cortex — read before any non-trivial prompt.
+alwaysApply: true
+---"
+
+    if [[ ! -f "$_mdc_file" ]]; then
+      # Write fresh: frontmatter + markers + body.
+      printf '%s\n' "$_mdc_frontmatter" > "$_mdc_file"
+      printf '\n' >> "$_mdc_file"
+      upsert_marker_block "$_mdc_file" "cortex" "$_mdc_body"
+      ok "Wrote .cursor/rules/eidolons-cortex.mdc"
+    else
+      # File exists: upsert_marker_block rewrites only the marker interior.
+      # Check idempotency: compare before/after.
+      _mdc_before="$(cat "$_mdc_file" 2>/dev/null || echo "")"
+      upsert_marker_block "$_mdc_file" "cortex" "$_mdc_body"
+      _mdc_after="$(cat "$_mdc_file" 2>/dev/null || echo "")"
+      if [[ "$_mdc_before" == "$_mdc_after" ]]; then
+        info ".cursor/rules/eidolons-cortex.mdc unchanged (no-op)"
+      else
+        ok "Updated .cursor/rules/eidolons-cortex.mdc"
+      fi
+    fi
+  else
+    info "  cursor wired but .eidolons/cortex/EIDOLONS.md absent — skipping .mdc write (run sync again after cortex is installed)"
+  fi
+fi
+
 # ─── EIDOLONS.md composition pass (B1 / R3 Block 2 + Block 8) ───────────
 # Hoist per-eidolon marker blocks from pointer_targets sources into EIDOLONS.md.
 # Sources are derived from POINTER_TARGETS_CSV (v1.7.0+). Legacy <name>-pointer
