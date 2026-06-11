@@ -185,6 +185,101 @@ skipped entirely when `eidolons.yaml` is missing.
 
 ---
 
+## `eidolons harness`
+
+Mechanical hook wiring — writes host-native hook shims so every prompt submitted inside a supported AI coding host is automatically enriched with routing context.
+
+```
+eidolons harness install [--hosts HOST,...] [--strict] [--force]
+eidolons harness remove
+eidolons harness status
+eidolons harness run --hook <host> [--session-start] [--stdin] [--verify] [--verify-block]
+```
+
+### `eidolons harness install`
+
+Writes shim scripts under `.eidolons/harness/hooks/` and merges hooks blocks into host config files.
+
+| Flag | Purpose |
+|------|---------|
+| `--hosts HOST,...` | Comma-separated host subset (`claude-code`, `codex`, `copilot`, `cursor`, `opencode`). Default: all hosts in `eidolons.yaml hosts.wire`. |
+| `--strict` | Enable the strict enforcement tier (see below). |
+| `--protect GLOB` | Add a file-glob to the protected set. May be repeated. Protected globs are denied in ALL contexts including subagents. |
+| `--force` | Overwrite existing shims even when already up-to-date. |
+
+**Base tier (default):** writes `UserPromptSubmit.sh` + `SessionStart.sh` shims for claude-code and codex; `sessionStart` shim for copilot. Merges a hooks block into `.claude/settings.json` (claude-code) and `.codex/hooks.json` (codex). Cursor and opencode receive no base shims (their surfaces ride `eidolons sync` and `eidolons mcp install`).
+
+**Strict tier (`--strict`):** adds a `PreToolUse` shim layer on top of the base tier.
+
+| Host | Strict mode | Shim output | Caveat |
+|------|-------------|-------------|--------|
+| claude-code | `block` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` (exit 0) | Subagent invocations (agent_id present in event JSON) are allowed through — delegate-or-deny. Protected globs deny in ALL contexts. |
+| codex | `advisory` | `{"decision":"block","reason":"..."}` (exit 0) | Protected-glob denials only; host may still proceed. |
+| opencode | `advisory` | Plugin `.opencode/plugins/eidolons.js` throws on edit tools | Caveat: opencode#5894 subagent bypass — plugin not invoked for subagent calls. |
+| cursor | refused | CLI prints reason and exits non-zero | `beforeSubmitPrompt` persist-in-context bug makes strict surfaces unsound (FORGE degradation-rule 4). |
+| copilot | — | Not available | No `PreToolUse`-equivalent hook in copilot. |
+
+**`#16952` guard:** The UPS shim and `eidolons run` both exit 0 immediately when the prompt is a task-completion notification (`"Agent ... completed"` shape or `<task-notification>` suffix). This prevents double-routing on subagent hand-off completions (Claude Code issue #16952).
+
+**Idempotency:** repeat runs produce byte-identical output (lock + shim files). Use `--force` to re-write even when shims appear current.
+
+**Lock record (`eidolons.lock harness:`):**
+
+```yaml
+harness:
+  schema_version: "1"
+  hosts_wired: [claude-code, ...]
+  shim_paths: [.eidolons/harness/hooks/claude-code/UserPromptSubmit.sh, ...]
+  settings_json_patched: true
+  codex_hooks_json_patched: true
+  strict: [claude-code]          # present only when --strict used
+  strict_modes:                  # present only when --strict used
+    claude-code: block
+  protect: ["src/**", ...]       # present only when --protect used
+```
+
+### `eidolons harness remove`
+
+Reverses `harness install`: removes shim files, reverts the settings/hooks JSON merges, removes the opencode advisory plugin if present, and clears the `harness:` key from `eidolons.lock`. Preserves all sibling keys in merged JSON files.
+
+### `eidolons harness status`
+
+Read-only report of the current harness state. Reads `eidolons.lock` and performs existence checks on shim files.
+
+- Reports per-host effective tier and enforcement mode (`[inject-only]`, `[strict:block]`, `[strict:advisory]`).
+- Lists strict-refused hosts (e.g., cursor in manifest wire set).
+- Reports shim presence (`[present]` / `[MISSING]`).
+- Reports cursor static surfaces (`.mdc` + AGENTS.md dispatch-pointer) when cursor is in `hosts.wire`.
+- Warns about `.codex/agents/<name>.md` files (Codex only reads `.toml` — G10).
+
+### `eidolons harness run`
+
+Vendor-neutral routing kernel. Reads a prompt and emits a host-dialect hook artifact.
+
+| Flag | Purpose |
+|------|---------|
+| `--hook HOST` | Output mode: wrap routing artifact in HOST-dialect `hookSpecificOutput` JSON. |
+| `--session-start` | Emit cortex digest (used by `SessionStart` shims). |
+| `--stdin` | Read prompt from event JSON `.prompt` field on stdin instead of positional arg. |
+| `--verify` | Verify the ECL envelope on an incoming hand-off before routing (warn mode). |
+| `--verify-block` | Same as `--verify` but exit 3 on tampered payload. |
+
+### `doctor --deep` D12 gate
+
+`eidolons doctor --deep` includes gate **D12 — harness lock⇄files consistency**:
+
+- Reads `harness.shim_paths` from the lock and asserts every shim exists and is executable.
+- Asserts `settings.json` valid JSON + UserPromptSubmit entry present (when claude-code wired).
+- Asserts `codex hooks.json` valid JSON (when codex wired).
+- Asserts `opencode.json` valid JSON (when opencode wired).
+- Asserts strict hosts never include cursor (unsound surface).
+- Warns on orphan shims (exist on disk but not in lock) and advisory plugin without strict record.
+- Skips entirely when `harness.schema_version` is absent from the lock.
+
+Exit 0 when D12 passes or skips; the harness error counter increments on FATAL items.
+
+---
+
 ## `eidolons model`
 
 Vendor-neutral model management: assign each Eidolon a tier (`light < standard < deep`), pick a vendor profile, and let the nexus resolve and write the concrete `model:` into host agent frontmatter.

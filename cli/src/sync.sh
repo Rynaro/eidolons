@@ -796,6 +796,125 @@ alwaysApply: true
   fi
 fi
 
+# ─── OpenCode permission.task gates: agent.<member>.permission.task (R17) ─
+# Written when opencode ∈ hosts.wire AND shared-dispatch is on.
+# Encodes the hand-off graph as last-match-wins permission.task rules:
+#   agent.<M>.permission.task = { "*": "deny", <downstream>: "allow", "kupo": "allow" }
+# Only eidolons-member agents are written/reconciled; non-member agent keys untouched.
+# [NOTE-P3-1]: roster handoffs.downstream lists 'apivr' slug verbatim; no remap to 'vivi'.
+# Bash 3.2 safe: jq loop; no declare -A.
+if [[ "$DRY_RUN" == "true" ]]; then
+  if [[ ",${HOSTS_CSV}," == *",opencode,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+    info "  [dry-run] would write opencode.json agent.<member>.permission.task gates (opencode wired)"
+  fi
+elif [[ ",${HOSTS_CSV}," == *",opencode,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+  _oc_json="opencode.json"
+
+  # Read the roster JSON once (read-whole-roster, not per-member roster_get to avoid die).
+  _roster_json="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null || echo '{}')"
+
+  # Build the roster name set (for our-members-only reconciliation — AC-R17-4).
+  _roster_names="$(printf '%s' "$_roster_json" | jq -r '[.eidolons[].name] | join(" ")' 2>/dev/null || echo "")"
+
+  # Build patch: for each installed member, derive allowed targets and build task rule.
+  _oc_patch='{"agent":{}}'
+  while IFS= read -r _oc_member_json; do
+    [[ -z "$_oc_member_json" ]] && continue
+    _oc_m="$(printf '%s' "$_oc_member_json" | jq -r '.name' 2>/dev/null)" || continue
+    [[ -z "$_oc_m" ]] && continue
+
+    # Get downstream targets from roster (default [] if absent/missing).
+    _oc_downstream="$(printf '%s' "$_roster_json" \
+      | jq -r --arg m "$_oc_m" \
+          '[.eidolons[] | select(.name == $m) | .handoffs.downstream[]?] | join(" ")' \
+          2>/dev/null || echo "")"
+
+    # Build allowed array = downstream ∪ {kupo}, deduped.
+    _oc_allowed_arr="kupo"
+    for _oc_t in $_oc_downstream; do
+      [[ -z "$_oc_t" ]] && continue
+      # Dedup: skip kupo if already there, skip duplicates.
+      case " $_oc_allowed_arr " in
+        *" $_oc_t "*) : ;;
+        *) _oc_allowed_arr="$_oc_allowed_arr $_oc_t" ;;
+      esac
+    done
+
+    # Build task rule JSON: {"*":"deny"} + {target:"allow"} for each target.
+    # jq: $split is space-delimited; build allow object via reduce.
+    _oc_task="$(printf '%s' "$_oc_allowed_arr" \
+      | jq -Rc 'split(" ") |
+          {"*":"deny"} + (reduce .[] as $t ({}; . + {($t):"allow"}))' 2>/dev/null)" \
+      || _oc_task='{"*":"deny","kupo":"allow"}'
+
+    # Merge into patch under agent.<member>.permission.task.
+    _oc_patch="$(printf '%s\n%s' "$_oc_patch" \
+      "{\"agent\":{\"${_oc_m}\":{\"permission\":{\"task\":${_oc_task}}}}}" \
+      | jq -s '.[0] * .[1]' 2>/dev/null || echo "$_oc_patch")"
+  done <<EOF
+$(printf '%s\n' "$MEMBERS_JSON")
+EOF
+
+  # Reconcile: remove stale eidolons-member agent entries (AC-R17-4).
+  # For any key K in agent{} that is in the roster name set BUT not in current members,
+  # delete agent.<K>.permission.task (and agent.<K> if it becomes empty).
+  _oc_current_members="$(printf '%s\n' "$MEMBERS_JSON" | jq -r '.name' 2>/dev/null | tr '\n' ' ')"
+
+  # Apply patch + reconcile to opencode.json.
+  if [ ! -f "$_oc_json" ]; then
+    # Fresh file: write patch directly.
+    _oc_before=""
+    _oc_result="$(printf '%s' "$_oc_patch" | jq '.' 2>/dev/null || echo "")"
+  else
+    if ! jq empty "$_oc_json" 2>/dev/null; then
+      warn "opencode.json is not valid JSON — skipping permission.task write"
+      _oc_result=""
+    else
+      _oc_before="$(jq -cS . "$_oc_json" 2>/dev/null || echo "")"
+      # Apply patch (deep merge via *), then reconcile stale member gates.
+      _oc_result="$(jq -n \
+        --argjson base "$(cat "$_oc_json")" \
+        --argjson patch "$_oc_patch" \
+        --arg roster_names "$_roster_names" \
+        --arg current "$_oc_current_members" \
+        '($base * $patch) |
+         # Reconcile: for each agent key that is a roster slug and NOT in current members,
+         # delete its permission.task (and the agent key if it becomes empty).
+         if has("agent") then
+           .agent = (
+             .agent | to_entries | map(
+               .key as $k |
+               ( ($roster_names | split(" ") | any(. == $k)) and
+                 ($current | split(" ") | any(. == $k) | not)
+               ) as $stale |
+               if $stale then
+                 .value = (.value | del(.permission.task)) |
+                 if (.value | length) == 0 then empty else . end
+               else .
+               end
+             ) | from_entries
+           )
+         else .
+         end' 2>/dev/null || echo "")"
+    fi
+  fi
+
+  if [ -n "$_oc_result" ]; then
+    _oc_result_canonical="$(printf '%s' "$_oc_result" | jq -cS . 2>/dev/null || echo "")"
+    _oc_existing_canonical="$([ -f "$_oc_json" ] && jq -cS . "$_oc_json" 2>/dev/null || echo "")"
+    if [[ "$_oc_result_canonical" == "$_oc_existing_canonical" ]]; then
+      info "opencode.json agent permission.task unchanged (no-op)"
+    else
+      printf '%s\n' "$_oc_result" > "$_oc_json"
+      ok "Wrote opencode.json agent.<member>.permission.task gates"
+    fi
+  fi
+
+  unset _oc_json _roster_json _roster_names _oc_patch _oc_member_json _oc_m \
+        _oc_downstream _oc_allowed_arr _oc_t _oc_task _oc_current_members \
+        _oc_before _oc_result _oc_result_canonical _oc_existing_canonical
+fi
+
 # ─── EIDOLONS.md composition pass (B1 / R3 Block 2 + Block 8) ───────────
 # Hoist per-eidolon marker blocks from pointer_targets sources into EIDOLONS.md.
 # Sources are derived from POINTER_TARGETS_CSV (v1.7.0+). Legacy <name>-pointer

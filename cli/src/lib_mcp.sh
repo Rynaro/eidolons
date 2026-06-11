@@ -558,6 +558,67 @@ _mcp_merge_into_json_file() {
   fi
 }
 
+# _mcp_merge_into_opencode_json RENDERED TARGET_FILE NAME
+# Idempotent jq-merge of a rendered MCP JSON entry into opencode.json under the
+# top-level "mcp" key. OpenCode's local-MCP shape differs from .mcp.json:
+#   opencode.json: { "mcp": { "<name>": { "type": "local",
+#                                         "command": ["<cmd>","<arg>",...],
+#                                         "enabled": true } } }
+# The RENDERED JSON uses the standard mcpServers shape; this function transforms it.
+# All sibling keys (agent, permission, plugin, model, mcp.<other>) are preserved.
+# Bash 3.2 compatible.
+_mcp_merge_into_opencode_json() {
+  local rendered="$1"
+  local target="$2"
+  local name="$3"
+  local tmp
+  tmp="$(mktemp)"
+
+  # Build the transformed entry: command array = [.command] + (.args // []).
+  local entry_json
+  entry_json="$(printf '%s\n' "$rendered" \
+    | jq -c --arg n "$name" \
+        '.mcpServers[$n] as $s |
+         {type:"local",
+          command:([$s.command] + ($s.args // [])),
+          enabled:true}' 2>/dev/null)" || {
+    rm -f "$tmp"
+    warn "_mcp_merge_into_opencode_json: jq failed to transform ${name} entry — skipping ${target} write"
+    return 0
+  }
+
+  if [ ! -f "$target" ]; then
+    # Fresh file — write the mcp object directly.
+    if printf '%s\n' "{\"mcp\":{\"${name}\":${entry_json}}}" | jq '.' > "$tmp" 2>/dev/null; then
+      mv "$tmp" "$target"
+      ok "${name} entry written at ${target} (opencode)"
+    else
+      rm -f "$tmp"
+      warn "jq failed to write ${target} (opencode) — skipping"
+    fi
+    return 0
+  fi
+
+  if ! jq empty "$target" 2>/dev/null; then
+    rm -f "$tmp"
+    warn "${target} is not valid JSON — skipping ${name} opencode registration (manual merge required)"
+    return 0
+  fi
+
+  # Merge: preserve all sibling keys; update only .mcp[$name].
+  if printf '%s\n' "$entry_json" \
+    | jq -s --arg n "$name" \
+        '.[1].mcp = ((.[1].mcp // {}) + {($n): .[0]}) | .[1]' \
+        - "$target" \
+    > "$tmp" 2>/dev/null; then
+    mv "$tmp" "$target"
+    ok "${name} entry merged into ${target} (opencode)"
+  else
+    rm -f "$tmp"
+    warn "jq merge failed for ${target} (opencode) — skipping ${name} registration"
+  fi
+}
+
 # _mcp_codex_config_toml_merge NAME PROJECT_ROOT RENDERED_JSON
 # Writes/updates the [mcp_servers.<name>] table in .codex/config.toml using
 # a marker-bounded managed-section rewrite (no TOML parser).
@@ -764,6 +825,11 @@ _mcp_oci_render_and_merge() {
   if _mcp_host_is_wired "codex" "$project_root"; then
     _mcp_codex_config_toml_merge "$name" "$project_root" "$rendered"
   fi
+
+  # Write opencode.json under .mcp key when opencode is in hosts.wire (R16).
+  if _mcp_host_is_wired "opencode" "$project_root"; then
+    _mcp_merge_into_opencode_json "$rendered" "${project_root}/opencode.json" "${name}"
+  fi
 }
 
 # mcp_driver_oci_image_install NAME VERSION [--force] [--project-root PATH]
@@ -873,7 +939,8 @@ mcp_driver_oci_image_install() {
   installed_at="$(_mcp_now)"
 
   # Derive hosts_wired from actual writes (R10 AC-4): always .mcp.json;
-  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired.
+  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired;
+  # append opencode.json iff opencode wired (R16 AC-4).
   # Drop the aspirational .github/agents/* entry (no writer exists — it was a lie).
   local _hw_json
   _hw_json='[".mcp.json"]'
@@ -882,6 +949,9 @@ mcp_driver_oci_image_install() {
   fi
   if _mcp_host_is_wired "codex" "$project_root"; then
     _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".codex/config.toml"]')"
+  fi
+  if _mcp_host_is_wired "opencode" "$project_root"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + ["opencode.json"]')"
   fi
   # Sort for canonical order.
   _hw_json="$(printf '%s' "$_hw_json" | jq 'sort')"
@@ -1018,6 +1088,19 @@ mcp_driver_oci_image_uninstall() {
       info "Removed ${name} from .cursor/mcp.json"
     else
       rm -f "$tmp2"
+    fi
+  fi
+
+  # Remove from opencode.json if present (R16 AC-5: delete only .mcp[$name]).
+  local opencode_json="${project_root}/opencode.json"
+  if [ -f "$opencode_json" ] && command -v jq >/dev/null 2>&1; then
+    local tmp_oc
+    tmp_oc="$(mktemp)"
+    if jq 'del(.mcp["'"${name}"'"])' "$opencode_json" > "$tmp_oc" 2>/dev/null; then
+      mv "$tmp_oc" "$opencode_json"
+      info "Removed ${name} from opencode.json"
+    else
+      rm -f "$tmp_oc"
     fi
   fi
 
@@ -1264,6 +1347,11 @@ _mcp_binary_merge_mcp_json() {
   if _mcp_host_is_wired "codex" "$project_root"; then
     _mcp_codex_config_toml_merge "$name" "$project_root" "$rendered"
   fi
+
+  # Write opencode.json under .mcp key when opencode is in hosts.wire (R16).
+  if _mcp_host_is_wired "opencode" "$project_root"; then
+    _mcp_merge_into_opencode_json "$rendered" "${project_root}/opencode.json" "${name}"
+  fi
 }
 
 # mcp_driver_binary_install NAME VERSION [--force]
@@ -1378,7 +1466,8 @@ _mcp_binary_upsert_lock() {
   fi
 
   # Derive hosts_wired from actual writes (R10 AC-4): always .mcp.json;
-  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired.
+  # append .cursor/mcp.json iff cursor wired; append .codex/config.toml iff codex wired;
+  # append opencode.json iff opencode wired (R16 AC-4).
   local _hw_json
   _hw_json='[".mcp.json"]'
   if _mcp_host_is_wired "cursor"; then
@@ -1386,6 +1475,9 @@ _mcp_binary_upsert_lock() {
   fi
   if _mcp_host_is_wired "codex"; then
     _hw_json="$(printf '%s' "$_hw_json" | jq '. + [".codex/config.toml"]')"
+  fi
+  if _mcp_host_is_wired "opencode"; then
+    _hw_json="$(printf '%s' "$_hw_json" | jq '. + ["opencode.json"]')"
   fi
   _hw_json="$(printf '%s' "$_hw_json" | jq 'sort')"
 
@@ -1486,6 +1578,19 @@ mcp_driver_binary_uninstall() {
       info "Removed ${name} from .cursor/mcp.json"
     else
       rm -f "$tmp2"
+    fi
+  fi
+
+  # Remove from opencode.json if present (R16 AC-5: delete only .mcp[$name]).
+  local opencode_json="./opencode.json"
+  if [ -f "$opencode_json" ] && command -v jq >/dev/null 2>&1; then
+    local tmp_oc2
+    tmp_oc2="$(mktemp)"
+    if jq 'del(.mcp["'"${name}"'"])' "$opencode_json" > "$tmp_oc2" 2>/dev/null; then
+      mv "$tmp_oc2" "$opencode_json"
+      info "Removed ${name} from opencode.json"
+    else
+      rm -f "$tmp_oc2"
     fi
   fi
 

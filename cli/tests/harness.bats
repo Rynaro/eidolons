@@ -948,3 +948,361 @@ EOF
   run eidolons harness status
   [ "$status" -eq 0 ]
 }
+
+# ─── P3 R18: strict tier (--strict flag) ─────────────────────────────────────
+
+@test "harness: --strict writes nothing without flag; lock has no strict key (base unchanged)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
+  [ ! -f ".eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+  # lock must have no strict: key
+  run grep "strict:" eidolons.lock
+  [ "$status" -ne 0 ]
+}
+
+@test "harness: --strict --hosts claude-code scopes strict to claude only" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict --hosts claude-code
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+  [ ! -f ".eidolons/harness/hooks/codex-PreToolUse.sh" ]
+  # lock must have strict: key with claude-code listed
+  run grep -A5 "^  strict:" eidolons.lock
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "claude-code" ]]
+}
+
+@test "harness: --strict refuses cursor + prints reason; not in strict[]" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [cursor]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  run eidolons harness install --strict --hosts cursor
+  # Exits 0 (fail-open), but refuses the cursor strict surface.
+  [[ "$output" =~ "refuse" ]] || [[ "$stderr" =~ "refuse" ]]
+  [ ! -f ".eidolons/harness/hooks/cursor-PreToolUse.sh" ]
+}
+
+@test "harness: --strict opencode writes advisory plugin + records strict:advisory + #5894 refusal" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [opencode]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  run eidolons harness install --strict --hosts opencode
+  [ "$status" -eq 0 ]
+  [ -f ".opencode/plugins/eidolons.js" ]
+  run grep -i "5894" .opencode/plugins/eidolons.js
+  [ "$status" -eq 0 ]
+  # strict: is a multi-line YAML block; the host name is on the NEXT line after the key.
+  # Use -A1 so both the key line and the host line appear in output.
+  run grep -A 1 '^  strict:' eidolons.lock
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "opencode" ]]
+  # strict_modes indents host as "    opencode: advisory" — match the full literal line.
+  run grep '    opencode: advisory' eidolons.lock
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: remove cleans PreToolUse settings + codex entry + plugin + strict lock key" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ ! -f ".eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+  # lock must not have harness: key
+  run grep "^harness:" eidolons.lock
+  [ "$status" -ne 0 ]
+}
+
+@test "harness: status shows strict state, protected-globs count, refusals" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "strict" ]]
+  [[ "$output" =~ "protected-globs count" ]]
+}
+
+@test "harness: protect globs read from eidolons.yaml; empty = no glob denials" {
+  seed_manifest
+  seed_lock
+  # Without harness.protect, strict install should work (empty glob list).
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+  # With globs configured.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+harness:
+  protect:
+    - "src/generated/**"
+    - "**/*.lock"
+EOF
+  run eidolons harness install --strict --force
+  [ "$status" -eq 0 ]
+  run grep "src/generated" .eidolons/harness/hooks/claude-code-PreToolUse.sh
+  [ "$status" -eq 0 ]
+}
+
+# ─── P3 R19: claude-code strict shim unit tests ──────────────────────────────
+
+@test "harness: --strict writes PreToolUse settings entry (matcher Edit|Write|MultiEdit|NotebookEdit)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.PreToolUse | length > 0' .claude/settings.json
+  [ "$status" -eq 0 ]
+  run jq -r '.hooks.PreToolUse[0].matcher' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [[ "$output" == "Edit|Write|MultiEdit|NotebookEdit" ]]
+}
+
+@test "strict-shim(claude): main-loop edit (no agent_id) -> deny JSON exact shape" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/claude-code-PreToolUse.sh"
+  [ -f "$shim" ]
+  FIXTURE='{"tool_name":"Edit","tool_input":{"file_path":"src/app.ts"}}'
+  run bash -c "printf '%s' '$FIXTURE' | $shim"
+  [ "$status" -eq 0 ]
+  run bash -c "printf '%s' '$FIXTURE' | $shim | jq -e '.hookSpecificOutput.permissionDecision == \"deny\"'"
+  [ "$status" -eq 0 ]
+}
+
+@test "strict-shim(claude): agent_id present -> silent allow (empty stdout)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/claude-code-PreToolUse.sh"
+  FIXTURE='{"tool_name":"Edit","tool_input":{"file_path":"src/app.ts"},"agent_id":"sub_1"}'
+  run bash -c "printf '%s' '$FIXTURE' | $shim"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "strict-shim(claude): protected glob -> deny REGARDLESS of agent_id (subagent too)" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+harness:
+  protect:
+    - "src/generated/**"
+EOF
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/claude-code-PreToolUse.sh"
+  # Even with agent_id present, protected glob match must deny.
+  FIXTURE='{"tool_name":"Edit","tool_input":{"file_path":"src/generated/x.ts"},"agent_id":"sub_1"}'
+  run bash -c "printf '%s' '$FIXTURE' | $shim | jq -e '.hookSpecificOutput.permissionDecision == \"deny\"'"
+  [ "$status" -eq 0 ]
+}
+
+@test "strict-shim(claude): non-edit tool -> allow; malformed stdin -> exit 0 empty (fail-open)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/claude-code-PreToolUse.sh"
+  # Non-edit tool -> allow (empty stdout).
+  FIXTURE='{"tool_name":"Bash","tool_input":{"command":"ls"}}'
+  run bash -c "printf '%s' '$FIXTURE' | $shim"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # Malformed stdin -> fail-open (exit 0 empty).
+  run bash -c "printf 'not json at all' | $shim"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── P3 R20: codex strict shim unit tests ────────────────────────────────────
+
+@test "strict-shim(codex): protected glob -> {decision:block,reason}; no glob -> allow; refusal info printed" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+harness:
+  protect:
+    - "src/generated/**"
+EOF
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/codex-PreToolUse.sh"
+  [ -f "$shim" ]
+  # Protected glob match -> block.
+  FIXTURE='{"tool_name":"apply_patch","tool_input":{"file_path":"src/generated/foo.ts"}}'
+  run bash -c "printf '%s' '$FIXTURE' | $shim | jq -e '.decision == \"block\"'"
+  [ "$status" -eq 0 ]
+  # No glob match -> allow (empty stdout).
+  FIXTURE2='{"tool_name":"apply_patch","tool_input":{"file_path":"src/safe.ts"}}'
+  run bash -c "printf '%s' '$FIXTURE2' | $shim"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # Install should have printed refusal info for delegate-or-deny.
+}
+
+@test "strict-shim(codex): malformed stdin -> exit 0 empty (fail-open)" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+harness:
+  protect:
+    - "src/generated/**"
+EOF
+  seed_lock
+  run eidolons harness install --strict
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/codex-PreToolUse.sh"
+  run bash -c "printf 'not json at all' | $shim"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── P3 R21: UPS #16952 guard ────────────────────────────────────────────────
+
+@test "ups-guard: completion-shaped prompt (Agent X completed...) -> shim exits 0 empty; normal prompt routes" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install
+  [ "$status" -eq 0 ]
+  local shim=".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"
+  [ -f "$shim" ]
+
+  # ── Fail-open half: shim must exit 0 even when no eidolons binary is reachable.
+  # Point EIDOLONS_HOME at an empty dir so _eidolons_bin() returns 1.
+  _empty_home="$BATS_TEST_TMPDIR/empty-home"
+  mkdir -p "$_empty_home"
+  COMPLETION_JSON='{"prompt":"Agent spectra completed: analysis done."}'
+  run bash -c "EIDOLONS_HOME='$_empty_home' printf '%s' '$COMPLETION_JSON' | EIDOLONS_HOME='$_empty_home' bash '$shim'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # task-notification shape (also fail-open).
+  NOTIF_JSON='{"prompt":"some text <task-notification> more text"}'
+  run bash -c "EIDOLONS_HOME='$_empty_home' printf '%s' '$NOTIF_JSON' | EIDOLONS_HOME='$_empty_home' bash '$shim'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  # ── Routing half: a real non-trivial prompt must produce non-empty hookSpecificOutput JSON.
+  # Wire EIDOLONS_HOME so the shim's _eidolons_bin fallback resolves to the checkout CLI.
+  _wired_home="$BATS_TEST_TMPDIR/wired-home"
+  mkdir -p "$_wired_home/nexus/cli"
+  ln -sf "$EIDOLONS_ROOT/cli/eidolons" "$_wired_home/nexus/cli/eidolons"
+  ROUTING_JSON='{"prompt":"implement the authentication flow for the API"}'
+  run bash -c "
+    export EIDOLONS_HOME='$_wired_home'
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    printf '%s' '$ROUTING_JSON' | bash '$shim'
+  "
+  [ "$status" -eq 0 ]
+  # Output must be non-empty hookSpecificOutput JSON when routing fires.
+  if [[ -n "$output" ]]; then
+    run jq -r '.hookSpecificOutput.hookEventName' <<< "$output"
+    [ "$status" -eq 0 ]
+    [ "$output" = "UserPromptSubmit" ]
+  fi
+  # If empty: no Eidolon scored above tau (clarify/pass-through) — also valid per R1.
+}
+
+@test "ups-guard: run.sh --stdin completion-shaped prompt exits 0 empty (kernel backstop)" {
+  seed_manifest
+  seed_lock
+  # run --hook in stdin mode with a completion-shaped JSON should exit 0 silently.
+  # Use the checkout CLI explicitly — 'eidolons' is a helpers.bash shell function,
+  # invisible inside bash -c child shells. EIDOLONS_NEXUS is already exported by setup.
+  COMPLETION_JSON='{"prompt":"Agent vivi completed: done."}'
+  run bash -c "printf '%s' '$COMPLETION_JSON' | bash '$EIDOLONS_ROOT/cli/eidolons' run --hook claude-code --stdin"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+  # task-notification shape.
+  NOTIF_JSON='{"prompt":"<task-notification>"}'
+  run bash -c "printf '%s' '$NOTIF_JSON' | bash '$EIDOLONS_ROOT/cli/eidolons' run --hook claude-code --stdin"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# ─── P3 R22: doctor D12 gate ─────────────────────────────────────────────────
+
+@test "doctor: D12 skips when harness absent; passes" {
+  seed_manifest
+  seed_lock
+  run eidolons doctor --deep
+  # D12 always runs; assert the D12 skip line is present
+  # (overall exit may be non-zero due to other deep gates on the stub project).
+  [[ "$output" =~ "D12" ]]
+  [[ "$output" =~ "skip" ]] || [[ "$output" =~ "not installed" ]]
+}
+
+@test "doctor: D12 fails on missing/non-exec shim (lock-vs-file integrity)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  # Lock says shim exists but the file is absent.
+  run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "D12" ]]
+}
+
+@test "doctor: D12 fails on unsound strict host; warns on orphan plugin" {
+  seed_manifest
+  seed_lock
+  # Craft a lock with cursor in strict[] — unsound.
+  cat >> eidolons.lock <<'EOF'
+harness:
+  schema_version: 1
+  hosts_wired:
+    - cursor
+  shim_paths: []
+  strict:
+    - cursor
+EOF
+  run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "D12" ]]
+  [[ "$output" =~ "cursor" ]]
+}

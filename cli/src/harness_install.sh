@@ -30,6 +30,11 @@ Usage: eidolons harness install [OPTIONS]
 Options:
   --hosts <csv>        Comma-separated list of hosts to wire (default: from eidolons.yaml)
                        Supported: claude-code, codex, copilot
+  --strict             Enable strict tool-boundary BLOCK tier (opt-in; lock-recorded).
+                       Sound on: claude-code (delegate-or-deny + protected-globs),
+                                 codex (protected-globs only; delegate-or-deny refused).
+                       Advisory plugin on: opencode (tool.execute.before; #5894 caveat).
+                       Refused on: cursor (out of P3 scope).
   --force              Overwrite shims and re-merge settings even if already installed
   --non-interactive    Skip confirmation prompts (for CI / scripted use)
   --refresh-shims-only Re-render shim contents only; no lock or settings changes
@@ -54,6 +59,7 @@ HOSTS_ARG=""
 FORCE=false
 NON_INTERACTIVE=false
 REFRESH_SHIMS_ONLY=false
+STRICT=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -61,6 +67,7 @@ while [[ $# -gt 0 ]]; do
     --force)          FORCE=true; shift ;;
     --non-interactive) NON_INTERACTIVE=true; shift ;;
     --refresh-shims-only) REFRESH_SHIMS_ONLY=true; shift ;;
+    --strict)         STRICT=true; shift ;;
     -h|--help)        usage; exit 0 ;;
     *)                die "Unknown option: $1 (see 'eidolons harness install --help')" ;;
   esac
@@ -77,11 +84,11 @@ else
 fi
 
 # Filter to supported harness hosts only.
-_supported_hosts="claude-code,codex,copilot"
+_supported_hosts="claude-code,codex,copilot,cursor,opencode"
 _resolved_hosts=""
 for _h in $(printf '%s' "$WIRE_HOSTS" | tr ',' ' '); do
   case "$_h" in
-    claude-code|codex|copilot)
+    claude-code|codex|copilot|cursor|opencode)
       if [[ -z "$_resolved_hosts" ]]; then _resolved_hosts="$_h"; else _resolved_hosts="$_resolved_hosts,$_h"; fi
       ;;
     *)
@@ -130,12 +137,15 @@ SHIM
     sed -i '' "s/SESSION_HOST/${host}/g" "$shim_path" 2>/dev/null \
       || sed -i "s/SESSION_HOST/${host}/g" "$shim_path"
   else
-    # UserPromptSubmit shim
+    # UserPromptSubmit shim (includes R21 #16952 guard)
     cat > "$shim_path" <<'SHIM'
 #!/usr/bin/env bash
 # Eidolons harness shim — UserPromptSubmit
 # FAIL-OPEN: any error → exit 0, no stdout output.
 # Stdout IS the hook context payload — only write when routing succeeds.
+# R21: #16952 guard — skip kernel when prompt is a task-completion notification.
+# (Claude bug: UserPromptSubmit also fires on Task/subagent completion; conservative
+#  best-effort heuristic; fail-open: false-positive = one skipped inject, harmless.)
 set -euo pipefail
 
 _eidolons_bin() {
@@ -158,10 +168,144 @@ else
   _prompt=""
 fi
 [[ -n "$_prompt" ]] || exit 0
+# #16952 guard: skip kernel when the prompt is a task-completion notification.
+case "$_prompt" in
+  "Agent "*" completed"*) exit 0 ;;
+  *"<task-notification>"*) exit 0 ;;
+esac
 "$_bin" run --hook UPS_HOST --stdin <<< "$_input" 2>/dev/null || exit 0
 SHIM
     sed -i '' "s/UPS_HOST/${host}/g" "$shim_path" 2>/dev/null \
       || sed -i "s/UPS_HOST/${host}/g" "$shim_path"
+  fi
+
+  chmod +x "$shim_path"
+}
+
+# _write_pretooluse_shim HOST PROTECT_GLOBS_CONTENT
+# Writes the strict PreToolUse deny shim for HOST (claude-code or codex).
+# PROTECT_GLOBS_CONTENT is a newline-joined list of glob patterns (may be empty).
+_write_pretooluse_shim() {
+  local host="$1"
+  local protect_globs="$2"
+  local shim_path="$HARNESS_SHIM_DIR/${host}-PreToolUse.sh"
+
+  if [[ "$host" == "claude-code" ]]; then
+    cat > "$shim_path" <<'SHIM'
+#!/usr/bin/env bash
+# Eidolons strict-tier shim — claude-code PreToolUse
+# Stateless delegate-or-deny + protected-globs deny (anti-reward-hack).
+# Rule order: (1) protected-glob check FIRST (denies in ALL contexts, including subagents);
+#             (2) delegate-or-deny: agent_id ABSENT => main loop => deny.
+# FAIL-OPEN: any error/malformed stdin => exit 0 empty (allow). ONLY deny paths emit deny.
+# Deny shape (verified): hookSpecificOutput.permissionDecision:"deny" + permissionDecisionReason.
+set -euo pipefail
+
+_deny() {
+  jq -n --arg r "Eidolons strict tier: $1." \
+    '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"deny",permissionDecisionReason:$r}}'
+}
+
+_main() {
+  command -v jq >/dev/null 2>&1 || return 0
+  _in="$(cat 2>/dev/null)" || return 0
+  [[ -n "$_in" ]] || return 0
+  _tool="$(printf '%s' "$_in" | jq -r '.tool_name // empty' 2>/dev/null)" || return 0
+  case "$_tool" in Edit|Write|MultiEdit|NotebookEdit) : ;; *) return 0 ;; esac
+  _fp="$(printf '%s' "$_in" | jq -r '.tool_input.file_path // empty' 2>/dev/null)" || _fp=""
+  # 1) Protected-glob check FIRST (denies in ALL contexts — anti-reward-hack).
+  if [[ -n "$_fp" ]]; then
+    while IFS= read -r _g; do
+      [[ -z "$_g" ]] && continue
+      # Normalize /**  to /* so bash case * matches recursively (A4 verified).
+      _gn="${_g%/**}/*"
+      case "$_fp" in
+        "$_g"|$_gn) _deny "$_fp matches protected glob $_g"; return 0 ;;
+      esac
+    done <<'GLOBS'
+PROTECT_GLOBS_PLACEHOLDER
+GLOBS
+  fi
+  # 2) Delegate-or-deny: agent_id ABSENT => main loop => deny.
+  _aid="$(printf '%s' "$_in" | jq -r '.agent_id // empty' 2>/dev/null)" || _aid=""
+  if [[ -z "$_aid" ]]; then
+    _deny "direct edits from the main loop are denied. Delegate this edit to a coder Eidolon (Vivi) per the routing artifact. Re-issue the edit from within the delegated subagent"
+    return 0
+  fi
+  return 0
+}
+_main 2>/dev/null || true
+SHIM
+    # Replace PROTECT_GLOBS_PLACEHOLDER with actual globs.
+    # Use python3-free line-by-line approach: read the shim, emit lines,
+    # replace the placeholder line with the globs content.
+    local tmp_shim
+    tmp_shim="$(mktemp)"
+    local _saw_placeholder=false
+    while IFS= read -r _sline; do
+      if [[ "$_sline" == "PROTECT_GLOBS_PLACEHOLDER" ]]; then
+        # Emit each glob on its own line.
+        if [[ -n "$protect_globs" ]]; then
+          printf '%s\n' "$protect_globs" >> "$tmp_shim"
+        fi
+        _saw_placeholder=true
+      else
+        printf '%s\n' "$_sline" >> "$tmp_shim"
+      fi
+    done < "$shim_path"
+    mv "$tmp_shim" "$shim_path"
+
+  elif [[ "$host" == "codex" ]]; then
+    cat > "$shim_path" <<'SHIM'
+#!/usr/bin/env bash
+# Eidolons strict-tier shim — codex PreToolUse
+# Protected-globs ONLY. Delegate-or-deny REFUSED (Codex PreToolUse has no agent_id;
+# subagent firing is undocumented — cannot discriminate main-loop vs subagent).
+# [ASSUMPTION A5]: apply_patch path in tool_input.file_path OR tool_input.path;
+#                  shim tries both; fails open if neither resolves.
+# FAIL-OPEN: any error/malformed stdin => exit 0 empty (allow). Only glob path denies.
+# Deny shape (codex): {"decision":"block","reason":"..."} exit 0.
+set -euo pipefail
+
+_deny_codex() {
+  jq -n --arg r "Eidolons strict: $1." '{decision:"block",reason:$r}'
+}
+
+_main() {
+  command -v jq >/dev/null 2>&1 || return 0
+  _in="$(cat 2>/dev/null)" || return 0
+  [[ -n "$_in" ]] || return 0
+  # Extract the edit target: try file_path first, then path (A5 — both fields tried).
+  _fp="$(printf '%s' "$_in" | jq -r '.tool_input.file_path // .tool_input.path // empty' 2>/dev/null)" || _fp=""
+  [[ -n "$_fp" ]] || return 0
+  # Protected-glob check (denies in ALL contexts — the only check for codex).
+  while IFS= read -r _g; do
+    [[ -z "$_g" ]] && continue
+    _gn="${_g%/**}/*"
+    case "$_fp" in
+      "$_g"|$_gn) _deny_codex "$_fp matches protected glob $_g"; return 0 ;;
+    esac
+  done <<'GLOBS'
+PROTECT_GLOBS_PLACEHOLDER
+GLOBS
+  return 0
+}
+_main 2>/dev/null || true
+SHIM
+    local tmp_shim2
+    tmp_shim2="$(mktemp)"
+    local _saw_placeholder2=false
+    while IFS= read -r _sline2; do
+      if [[ "$_sline2" == "PROTECT_GLOBS_PLACEHOLDER" ]]; then
+        if [[ -n "$protect_globs" ]]; then
+          printf '%s\n' "$protect_globs" >> "$tmp_shim2"
+        fi
+        _saw_placeholder2=true
+      else
+        printf '%s\n' "$_sline2" >> "$tmp_shim2"
+      fi
+    done < "$shim_path"
+    mv "$tmp_shim2" "$shim_path"
   fi
 
   chmod +x "$shim_path"
@@ -217,8 +361,12 @@ for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
   [[ -z "$_host" ]] && continue
 
   # Copilot: SessionStart only (userPromptSubmitted output is unprocessed — per-prompt
-  # injection impossible, copilot-cli#1139). All other hosts get both shims.
-  if [[ "$_host" == "copilot" ]]; then
+  # injection impossible, copilot-cli#1139). All other supported-shim hosts get both.
+  # Cursor/opencode: no base UPS/SessionStart shims (they surface via sync/strict only).
+  if [[ "$_host" == "cursor" ]] || [[ "$_host" == "opencode" ]]; then
+    info "  $_host: no base-tier UPS/SessionStart shims (static surfaces via sync; strict via --strict)"
+    # No shim file written; host is still recorded in hosts_wired for status/strict routing.
+  elif [[ "$_host" == "copilot" ]]; then
     _write_shim "$_host" "SessionStart"
     info "  wrote SessionStart shim for $_host (SessionStart-only; see caveat below)"
     _ss_path="$HARNESS_SHIM_DIR/${_host}-SessionStart.sh"
@@ -247,6 +395,69 @@ for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
   fi
 done
 
+# ── Strict tier: PreToolUse shims + advisory plugin (R18/R19/R20) ────────
+# Only written when --strict is set. Sound strict hosts: claude-code (block),
+# codex (protected-globs only). Advisory: opencode. Refused: cursor.
+_strict_hosts=""       # sorted CSV of strict-wired hosts
+_strict_modes_yaml=""  # per-host mode for lock strict_modes:
+_protect_globs=""      # newline-joined globs from harness.protect
+
+if [[ "$STRICT" == "true" ]]; then
+  # Read protected globs from eidolons.yaml harness.protect (may be empty).
+  MANIFEST_JSON_STRICT="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null || echo '{}')"
+  _protect_globs="$(printf '%s' "$MANIFEST_JSON_STRICT" \
+    | jq -r '(.harness.protect // [])[]' 2>/dev/null || echo "")"
+
+  for _sh in $(printf '%s' "$_hosts_wired_sorted" | tr ',' '\n' | sort); do
+    [[ -z "$_sh" ]] && continue
+    case "$_sh" in
+      claude-code)
+        # R19: write claude-code PreToolUse shim (delegate-or-deny + protected-globs).
+        _write_pretooluse_shim "claude-code" "$_protect_globs"
+        info "  wrote claude-code-PreToolUse.sh (strict: delegate-or-deny + protected-globs)"
+        _strict_hosts="${_strict_hosts:+${_strict_hosts},}claude-code"
+        _strict_modes_yaml="${_strict_modes_yaml}    claude-code: block\n"
+        # Add shim path to shim_paths.
+        _pts_path="$HARNESS_SHIM_DIR/claude-code-PreToolUse.sh"
+        _shim_paths="${_shim_paths:+${_shim_paths},}${_pts_path}"
+        ;;
+      codex)
+        # R20: write codex PreToolUse shim (protected-globs only; delegate-or-deny refused).
+        warn "refuse: codex strict delegate-or-deny is not implemented — Codex PreToolUse does not expose agent_id/agent_type (only SubagentStart/Stop do), so main-loop vs subagent edits cannot be distinguished. Codex strict enforces protected-globs only. (undocumented subagent firing)"
+        _write_pretooluse_shim "codex" "$_protect_globs"
+        info "  wrote codex-PreToolUse.sh (strict: protected-globs only)"
+        if [[ -z "$_protect_globs" ]]; then
+          info "  codex strict: harness.protect is empty — codex strict has no globs to enforce (near no-op)"
+        fi
+        _strict_hosts="${_strict_hosts:+${_strict_hosts},}codex"
+        _strict_modes_yaml="${_strict_modes_yaml}    codex: protected-globs-only\n"
+        _pts_path="$HARNESS_SHIM_DIR/codex-PreToolUse.sh"
+        _shim_paths="${_shim_paths:+${_shim_paths},}${_pts_path}"
+        ;;
+      opencode)
+        # R18/R-plugin: advisory plugin (tool.execute.before; #5894 subagent bypass — unsound hard block).
+        warn "refuse: opencode tool.execute.before block is unsound (subagent bypass #5894) — writing advisory plugin only, no hard block"
+        _oc_plugin_dir=".opencode/plugins"
+        _oc_plugin_file="${_oc_plugin_dir}/eidolons.js"
+        _oc_plugin_tmpl="${SELF_DIR}/../templates/harness/opencode-eidolons.js"
+        mkdir -p "$_oc_plugin_dir"
+        if [ -f "$_oc_plugin_tmpl" ]; then
+          cp "$_oc_plugin_tmpl" "$_oc_plugin_file"
+          ok "  wrote ${_oc_plugin_file} (strict: advisory plugin, primary-agent-only)"
+        else
+          warn "  opencode-eidolons.js template not found at ${_oc_plugin_tmpl} — skipping plugin write"
+        fi
+        _strict_hosts="${_strict_hosts:+${_strict_hosts},}opencode"
+        _strict_modes_yaml="${_strict_modes_yaml}    opencode: advisory\n"
+        ;;
+      cursor)
+        # cursor strict is OUT of P3 scope.
+        warn "refuse: cursor strict (delegate-or-deny) is out of P3 scope — no cursor PreToolUse surface written"
+        ;;
+    esac
+  done
+fi
+
 # ── Wire claude-code settings.json ────────────────────────────────────────
 # Spec R2: append our entries to each event array only if not already present.
 # Never replace sibling events or other entries (FINDING-1 fix).
@@ -257,15 +468,31 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   _ups_cmd="$HARNESS_SHIM_DIR/claude-code-UserPromptSubmit.sh"
   _ss_cmd="$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
 
+  _ptu_cmd="$HARNESS_SHIM_DIR/claude-code-PreToolUse.sh"
+  _ptu_matcher="Edit|Write|MultiEdit|NotebookEdit"
+
   if [[ ! -f "$SETTINGS_JSON" ]]; then
     # Fresh file — write with only our hooks entries.
-    jq -n \
-      --arg ups "$_ups_cmd" \
-      --arg ss "$_ss_cmd" \
-      '{"hooks": {
-          "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-          "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
-       }}' > "$SETTINGS_JSON"
+    if [[ "$STRICT" == "true" ]] && printf '%s' ",$_strict_hosts," | grep -q ",claude-code,"; then
+      jq -n \
+        --arg ups "$_ups_cmd" \
+        --arg ss "$_ss_cmd" \
+        --arg ptu "$_ptu_cmd" \
+        --arg ptm "$_ptu_matcher" \
+        '{"hooks": {
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
+            "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}],
+            "PreToolUse": [{"matcher": $ptm, "hooks": [{"type": "command", "command": $ptu}]}]
+         }}' > "$SETTINGS_JSON"
+    else
+      jq -n \
+        --arg ups "$_ups_cmd" \
+        --arg ss "$_ss_cmd" \
+        '{"hooks": {
+            "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
+            "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+         }}' > "$SETTINGS_JSON"
+    fi
     ok "Wrote .claude/settings.json with hooks block"
   else
     # Existing file — surgical append: for each event, add our entry only if
@@ -274,25 +501,56 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
       warn ".claude/settings.json is not valid JSON — skipping hooks merge (manual merge required)"
     else
       _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
-      _merged="$(jq \
-        --arg ups "$_ups_cmd" \
-        --arg ss "$_ss_cmd" \
-        '
-        # Append UserPromptSubmit entry only if command not already present.
-        .hooks.UserPromptSubmit = (
-          (.hooks.UserPromptSubmit // []) as $arr |
-          if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
-          else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
-          end
-        ) |
-        # Append SessionStart entry only if command not already present.
-        .hooks.SessionStart = (
-          (.hooks.SessionStart // []) as $arr |
-          if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
-          else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
-          end
-        )
-        ' "$SETTINGS_JSON")"
+      if [[ "$STRICT" == "true" ]] && printf '%s' ",$_strict_hosts," | grep -q ",claude-code,"; then
+        _merged="$(jq \
+          --arg ups "$_ups_cmd" \
+          --arg ss "$_ss_cmd" \
+          --arg ptu "$_ptu_cmd" \
+          --arg ptm "$_ptu_matcher" \
+          '
+          # Append UserPromptSubmit entry only if command not already present.
+          .hooks.UserPromptSubmit = (
+            (.hooks.UserPromptSubmit // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
+            else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
+            end
+          ) |
+          # Append SessionStart entry only if command not already present.
+          .hooks.SessionStart = (
+            (.hooks.SessionStart // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
+            else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+            end
+          ) |
+          # Append PreToolUse entry only if command not already present (R19 AC-R19-1).
+          .hooks.PreToolUse = (
+            (.hooks.PreToolUse // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ptu)) then $arr
+            else $arr + [{"matcher": $ptm, "hooks": [{"type": "command", "command": $ptu}]}]
+            end
+          )
+          ' "$SETTINGS_JSON")"
+      else
+        _merged="$(jq \
+          --arg ups "$_ups_cmd" \
+          --arg ss "$_ss_cmd" \
+          '
+          # Append UserPromptSubmit entry only if command not already present.
+          .hooks.UserPromptSubmit = (
+            (.hooks.UserPromptSubmit // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
+            else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
+            end
+          ) |
+          # Append SessionStart entry only if command not already present.
+          .hooks.SessionStart = (
+            (.hooks.SessionStart // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
+            else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+            end
+          )
+          ' "$SETTINGS_JSON")"
+      fi
       _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
       if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
         printf '%s\n' "$_merged" > "$SETTINGS_JSON"
@@ -335,10 +593,21 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
   warn "[ASSUMPTION A1] .codex/hooks.json schema — verify with 'eidolons doctor' once Codex hook support is confirmed."
   _codex_ups_cmd="$HARNESS_SHIM_DIR/codex-UserPromptSubmit.sh"
   _codex_ss_cmd="$HARNESS_SHIM_DIR/codex-SessionStart.sh"
-  _codex_json="$(jq -n \
-    --arg ups "$_codex_ups_cmd" \
-    --arg ss "$_codex_ss_cmd" \
-    '{"hooks": {"UserPromptSubmit": [{"command": $ups}], "SessionStart": [{"command": $ss}]}}')"
+  _codex_ptu_cmd="$HARNESS_SHIM_DIR/codex-PreToolUse.sh"
+
+  if [[ "$STRICT" == "true" ]] && printf '%s' ",$_strict_hosts," | grep -q ",codex,"; then
+    # Strict codex: add PreToolUse entry (R20 AC-R20-1).
+    _codex_json="$(jq -n \
+      --arg ups "$_codex_ups_cmd" \
+      --arg ss "$_codex_ss_cmd" \
+      --arg ptu "$_codex_ptu_cmd" \
+      '{"hooks": {"UserPromptSubmit": [{"command": $ups}], "SessionStart": [{"command": $ss}], "PreToolUse": [{"command": $ptu}]}}')"
+  else
+    _codex_json="$(jq -n \
+      --arg ups "$_codex_ups_cmd" \
+      --arg ss "$_codex_ss_cmd" \
+      '{"hooks": {"UserPromptSubmit": [{"command": $ups}], "SessionStart": [{"command": $ss}]}}')"
+  fi
 
   if [[ ! -f "$CODEX_HOOKS" ]]; then
     printf '%s\n' "$_codex_json" > "$CODEX_HOOKS"
@@ -372,9 +641,34 @@ if [[ -f "$PROJECT_LOCK" ]]; then
 "
   done
 
+  # Build strict: and protect: YAML sections (only when strict mode active).
+  _strict_yaml_section=""
+  if [[ "$STRICT" == "true" ]] && [[ -n "$_strict_hosts" ]]; then
+    _strict_hosts_yaml=""
+    for _sh in $(printf '%s' "$_strict_hosts" | tr ',' '\n' | sort); do
+      [[ -z "$_sh" ]] && continue
+      _strict_hosts_yaml="${_strict_hosts_yaml}    - $_sh
+"
+    done
+    _strict_yaml_section="$(printf '  strict:\n%s  strict_modes:\n%b  protect:\n' \
+      "$_strict_hosts_yaml" "$_strict_modes_yaml")"
+    # Append protect globs (may be empty list).
+    if [[ -n "$_protect_globs" ]]; then
+      _protect_globs_yaml=""
+      while IFS= read -r _pg; do
+        [[ -z "$_pg" ]] && continue
+        _protect_globs_yaml="${_protect_globs_yaml}    - \"${_pg}\"
+"
+      done <<EOF
+$_protect_globs
+EOF
+      _strict_yaml_section="${_strict_yaml_section}${_protect_globs_yaml}"
+    fi
+  fi
+
   # Build the new harness block text.
-  _new_harness_block="$(printf 'harness:\n  schema_version: 1\n  hosts_wired:\n%s  shim_paths:\n%s' \
-    "$_hosts_yaml" "$_shims_yaml")"
+  _new_harness_block="$(printf 'harness:\n  schema_version: 1\n  hosts_wired:\n%s  shim_paths:\n%s%s' \
+    "$_hosts_yaml" "$_shims_yaml" "$_strict_yaml_section")"
 
   # Read existing lock, strip any existing harness: block using awk (FINDING-3 fix).
   # awk prints lines, suppresses from /^harness:/ until the next top-level key or EOF.

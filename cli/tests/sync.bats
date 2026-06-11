@@ -1674,6 +1674,210 @@ CORTEX
   [ "$result" = "AGENTS.md" ]
 }
 
+# ─── R17: OpenCode permission.task gates ─────────────────────────────────────
+
+# Helper: set up an opencode-wired project with lockfile + eidolons installed.
+_seed_opencode_project() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [opencode]
+  shared_dispatch: true
+members:
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: spectra
+    version: "4.9.0"
+    resolved: "github:Rynaro/SPECTRA@test"
+    target: "./.eidolons/spectra"
+    hosts_wired: ["opencode"]
+EOF
+}
+
+# Invoke the opencode permission stage: write a temp driver and execute it.
+_run_opencode_permission_stage() {
+  local _cwd
+  _cwd="$(pwd)"
+  local _driver
+  _driver="$(mktemp /tmp/oc_perm_XXXXXX.sh)"
+  cat > "$_driver" << 'DRIVER'
+#!/usr/bin/env bash
+set -euo pipefail
+. "$EIDOLONS_NEXUS/cli/src/lib.sh" >/dev/null 2>&1
+. "$EIDOLONS_NEXUS/cli/src/lib_mcp.sh" >/dev/null 2>&1
+MANIFEST_JSON="$(yaml_to_json eidolons.yaml)"
+HOSTS_CSV="$(printf '%s' "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
+EFFECTIVE_SHARED_DISPATCH="$(printf '%s' "$MANIFEST_JSON" | jq -r '.hosts.shared_dispatch // "false"')"
+MEMBERS_JSON="$(printf '%s' "$MANIFEST_JSON" | jq -c '.members[]' 2>/dev/null || true)"
+DRY_RUN=false
+PROJECT_MANIFEST=eidolons.yaml
+PROJECT_LOCK=eidolons.lock
+
+if [[ ",${HOSTS_CSV}," == *",opencode,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
+  _oc_json="opencode.json"
+  _roster_json="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null || echo '{}')"
+  _roster_names="$(printf '%s' "$_roster_json" | jq -r '[.eidolons[].name] | join(" ")' 2>/dev/null || echo '')"
+  _oc_patch='{"agent":{}}'
+  while IFS= read -r _oc_member_json; do
+    [[ -z "$_oc_member_json" ]] && continue
+    _oc_m="$(printf '%s' "$_oc_member_json" | jq -r '.name' 2>/dev/null)" || continue
+    [[ -z "$_oc_m" ]] && continue
+    _oc_downstream="$(printf '%s' "$_roster_json" \
+      | jq -r --arg m "$_oc_m" \
+          '[.eidolons[] | select(.name == $m) | .handoffs.downstream[]?] | join(" ")' \
+          2>/dev/null || echo '')"
+    _oc_allowed_arr="kupo"
+    for _oc_t in $_oc_downstream; do
+      [[ -z "$_oc_t" ]] && continue
+      case " $_oc_allowed_arr " in *" $_oc_t "*) : ;; *) _oc_allowed_arr="$_oc_allowed_arr $_oc_t" ;; esac
+    done
+    _oc_task="$(printf '%s' "$_oc_allowed_arr" \
+      | jq -Rc 'split(" ") | {"*":"deny"} + (reduce .[] as $t ({}; . + {($t):"allow"}))' 2>/dev/null)" \
+      || _oc_task='{"*":"deny","kupo":"allow"}'
+    _oc_patch="$(printf '%s\n%s' "$_oc_patch" \
+      "{\"agent\":{\"${_oc_m}\":{\"permission\":{\"task\":${_oc_task}}}}}" \
+      | jq -s '.[0] * .[1]' 2>/dev/null || echo "$_oc_patch")"
+  done <<EOF
+$MEMBERS_JSON
+EOF
+  _oc_current_members="$(printf '%s\n' "$MEMBERS_JSON" | jq -r '.name' 2>/dev/null | tr '\n' ' ')"
+  if [ ! -f "$_oc_json" ]; then
+    _oc_result="$(printf '%s' "$_oc_patch" | jq '.' 2>/dev/null || echo '')"
+  else
+    if ! jq empty "$_oc_json" 2>/dev/null; then
+      _oc_result=""
+    else
+      _oc_result="$(jq -n \
+        --argjson base "$(cat "$_oc_json")" \
+        --argjson patch "$_oc_patch" \
+        --arg roster_names "$_roster_names" \
+        --arg current "$_oc_current_members" \
+        '($base * $patch) |
+         if has("agent") then
+           .agent = (.agent | to_entries | map(
+             .key as $k |
+             (($roster_names | split(" ") | any(. == $k)) and
+              ($current | split(" ") | any(. == $k) | not)) as $stale |
+             if $stale then
+               .value = (.value | del(.permission.task)) |
+               if (.value | length) == 0 then empty else . end
+             else .
+             end
+           ) | from_entries)
+         else . end' 2>/dev/null || echo '')"
+    fi
+  fi
+  if [ -n "$_oc_result" ]; then
+    printf '%s\n' "$_oc_result" > "$_oc_json"
+  fi
+fi
+DRIVER
+  chmod +x "$_driver"
+  (cd "$_cwd" && EIDOLONS_NEXUS="$EIDOLONS_ROOT" EIDOLONS_HOME="$EIDOLONS_HOME" bash "$_driver") 2>/dev/null
+  rm -f "$_driver"
+}
+
+@test "sync: opencode permission.task written for members with {*:deny, downstream:allow, kupo:allow}" {
+  _seed_opencode_project
+  # Spectra's downstream in roster: [apivr] + kupo universal.
+  _run_opencode_permission_stage
+  [ -f "opencode.json" ]
+  run bash -c "jq -e '.agent.spectra.permission.task[\"*\"] == \"deny\"' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.agent.spectra.permission.task.kupo == \"allow\"' opencode.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "sync: opencode permission.task wildcard-deny first, allows after (last-match-wins layout)" {
+  _seed_opencode_project
+  _run_opencode_permission_stage
+  [ -f "opencode.json" ]
+  # The wildcard-deny must be present.
+  run bash -c "jq -e '.agent.spectra.permission.task | has(\"*\")' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.agent.spectra.permission.task[\"*\"] == \"deny\"' opencode.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "sync: opencode permission.task sibling-preserving + idempotent (jq -cS no-op)" {
+  _seed_opencode_project
+  # Pre-seed opencode.json with sibling keys.
+  printf '{"mcp":{"crystalium":{"type":"local","command":["docker"],"enabled":true}},"model":"gpt-4o"}\n' > opencode.json
+  _run_opencode_permission_stage
+  # mcp and model siblings preserved.
+  run bash -c "jq -e '.mcp.crystalium' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.model == \"gpt-4o\"' opencode.json"
+  [ "$status" -eq 0 ]
+  # permission.task added.
+  run bash -c "jq -e '.agent.spectra.permission.task' opencode.json"
+  [ "$status" -eq 0 ]
+  # Idempotency: run again — byte-identical.
+  _before="$(jq -cS . opencode.json)"
+  _run_opencode_permission_stage
+  _after="$(jq -cS . opencode.json)"
+  [ "$_before" = "$_after" ]
+}
+
+@test "sync: opencode permission.task not written when opencode absent" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+  shared_dispatch: true
+members:
+  - name: spectra
+    version: "^4.0.0"
+    source: github:Rynaro/SPECTRA
+EOF
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: spectra
+    version: "4.9.0"
+    resolved: "github:Rynaro/SPECTRA@test"
+    target: "./.eidolons/spectra"
+    hosts_wired: ["claude-code"]
+EOF
+  _run_opencode_permission_stage
+  [ ! -f "opencode.json" ]
+}
+
+@test "sync: opencode removed member's permission gate reconciled away" {
+  _seed_opencode_project
+  _run_opencode_permission_stage
+  [ -f "opencode.json" ]
+  run bash -c "jq -e '.agent.spectra.permission.task' opencode.json"
+  [ "$status" -eq 0 ]
+  # Now remove spectra from the project (remove from members).
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [opencode]
+  shared_dispatch: true
+members: []
+EOF
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-10T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members: []
+EOF
+  _run_opencode_permission_stage
+  # spectra's permission.task must be gone.
+  run bash -c "jq -e '.agent.spectra.permission.task // empty | length > 0' opencode.json 2>/dev/null || echo 'absent'"
+  [[ "$output" == "absent" ]] || [ "$status" -ne 0 ]
+}
+
 @test "harness: cursor-only project gets both mdc and AGENTS.md; repeat sync no-op" {
   _seed_cursor_manifest_for_sync
   _seed_cortex_for_sync

@@ -142,6 +142,14 @@ if [[ -f "$COPILOT_HOOKS_FILE" ]]; then
   ok "Removed .github/hooks/eidolons.json"
 fi
 
+# ── Remove opencode advisory plugin (strict R18/R-plugin) ────────────────
+OPENCODE_PLUGIN=".opencode/plugins/eidolons.js"
+if [[ -f "$OPENCODE_PLUGIN" ]]; then
+  rm -f "$OPENCODE_PLUGIN"
+  rmdir ".opencode/plugins" 2>/dev/null || true
+  ok "Removed .opencode/plugins/eidolons.js"
+fi
+
 # ── Remove harness: key from eidolons.lock (awk — FINDING-3 fix) ─────────
 if [[ -f "$PROJECT_LOCK" ]]; then
   # awk: suppress lines from /^harness:/ until next top-level key or EOF.
