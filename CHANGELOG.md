@@ -8,14 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-### Fixed
-- `fix(eval)`: `eval compliance` parser now matches the `Agent` subagent-dispatch tool (Claude Code 2.x) in addition to `Task` (older/other hosts) — the parser previously matched only `Task` and missed every real dispatch (Claude Code 2.1.175 emits `Agent`). Found via the first live run, not smoke.
-- `fix(eval)`: `eval compliance` fixtures now include a deterministic `src/` code surface (router/worker/auth/pagination + config/deploy) so the suite's codebase-referencing prompts are actionable. An empty config-only fixture made coding prompts unanswerable and systematically under-measured delegation. First live result + caveats recorded in `.spectra/research/compliance-eval-2026-06-12.md`.
-
+## [1.38.0] — 2026-06-12 — Routing-compliance instrument + README overhaul
 
 ### Added
-- `feat(eval)`: `eidolons eval compliance` — the A/B routing-compliance instrument that operationalizes the FORGE reversal gate (`DOSSIER-HARNESS-2026-06.md:106`, "advisory compliance <80% on T3 → escalate to block"). Drives a headless host driver (`claude -p --output-format stream-json` by default; pluggable via `--driver`) over `evals/compliance-suite.yaml` in two offline fixture arms — ARM A with `harness install` wired, ARM B prose-cortex-only — parses the stream for `Task(<eidolon>)` dispatches, and scores against LIVE kernel ground truth (`eidolons run --json`, never hardcoded). Reports per-arm `delegation_rate` + `correct_target_rate` (the gate metric), `Δ(A−B)`, per-class breakdown, `pass^k` stability, and a GATE verdict vs the 80% threshold. `--smoke` runs the whole pipeline against a fake driver (CI never bills); `--dry-run` prints the session-cost envelope; live runs require `--yes`.
+- `feat(eval)`: `eidolons eval compliance` — the A/B routing-compliance instrument that operationalizes the FORGE reversal gate (`DOSSIER-HARNESS-2026-06.md:106`, "advisory compliance <80% on T3 → escalate to block"). Drives a headless host driver (`claude -p --output-format stream-json` by default; pluggable via `--driver`) over `evals/compliance-suite.yaml` in two offline fixture arms — ARM A with `harness install` wired, ARM B prose-cortex-only — parses the stream for subagent dispatches, and scores against LIVE kernel ground truth (`eidolons run --json`, never hardcoded). Reports per-arm `delegation_rate` + `correct_target_rate` (the gate metric), `Δ(A−B)`, per-class breakdown, `pass^k` stability, and a GATE verdict vs the 80% threshold. `--smoke` runs the whole pipeline against a fake driver (CI never bills); `--dry-run` prints the session-cost envelope; live runs require `--yes`.
 - `feat(eval)`: hard safety net — `eval_compliance.sh` refuses the default `claude` driver when `EIDOLONS_COMPLIANCE_NO_LIVE=1` (exported by the bats `setup()`), so the test suite can never spawn a billed session even if a test forgets `--smoke` or mis-scrubs PATH. Live measurement is human-driven only, per `.spectra/harness-mechanization/runbook-compliance.md`.
+- **First live routing-compliance result** (headless Claude Code, k=2, 56 sessions): ARM A (harness-wired) `correct_target_rate` **66.7%** vs ARM B (prose cortex only) 58.3% (+8.3pp); **stability `pass²` 58.3% vs 16.7%** (3.5×); reasoner→FORGE routing 100% vs 0%; controls 1.0 in both arms (no over-delegation). Gate FAILs vs 80% — but this is the SessionStart-only lower bound (headless `claude -p` does not fire `UserPromptSubmit`, so per-prompt route injection is untested). Full writeup + scorecard: `.spectra/research/compliance-eval-2026-06-12.md`.
+
+### Fixed
+- `fix(eval)`: `eval compliance` parser now matches the `Agent` subagent-dispatch tool (Claude Code 2.x) in addition to `Task` (older/other hosts) — the parser previously matched only `Task` and missed every real dispatch (Claude Code 2.1.175 emits `Agent`). Found via the first live run, not smoke.
+- `fix(eval)`: `eval compliance` fixtures now include a deterministic `src/` code surface (router/worker/auth/pagination + config/deploy) so the suite's codebase-referencing prompts are actionable. An empty config-only fixture made coding prompts unanswerable and systematically under-measured delegation.
+
+### Changed
+- `docs(readme)`: overhaul — refreshed from the stale nexus v1.13.4 / APIVR-Δ-default era to current: **Vivi** as the loop-native default coder (APIVR-Δ reframed as opt-in fallback), a new **"Mechanical routing — the harness"** section, updated pipeline diagram and team versions, the unified `eidolons mcp` install surface, and a "Recently shipped" covering v1.31–v1.37 (harness mechanization, GAP-2 memory pre-flight, Vivi succession, model management, `eval compliance`).
 
 ## [1.37.0] — 2026-06-11 — GAP-2: mechanical memory pre-flight
 
