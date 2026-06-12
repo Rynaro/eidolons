@@ -1,0 +1,340 @@
+# Agent hand-off — eidolons eval compliance (A/B routing-compliance instrument)
+# SPECTRA planning artifact · 2026-06-11 · campaign harness-mechanization
+# Companion to spec-compliance.md. Consumed by the executor (Vivi).
+meta:
+  spec: spec-compliance.md
+  intent: REQUEST
+  complexity: 9
+  tier: extended
+  confidence: 0.88
+  decision: AUTO_PROCEED
+  handoff_to: vivi
+  handoff_role: coder
+  model_hint: standard   # sonnet (vivi default); bump to deep only if loop stalls
+  read_only_planning: true
+  operationalizes: "DOSSIER-HARNESS-2026-06.md:106 (FORGE reversal: advisory compliance <80% on T3 → escalate to block)"
+  hard_constraints:
+    - "bash 3.2: no declare -A, no ${var,,}/${var^^}, no readarray/mapfile, no &>>"
+    - "stderr discipline: stdout = scorecard ONLY (text card or --json)"
+    - "no eval of consumer config; fixtures generated mechanically"
+    - "offline fixtures: NEVER fetch_eidolon / git clone in the builder"
+    - "idempotent fixture build; deterministic except mktemp path"
+    - "live driver is the ONLY billed/network path; gated behind --yes"
+    - "CI never calls a live model (smoke = fake driver)"
+
+orchestrator_decisions:   # frame within; do not relitigate
+  D-C1: "new `eval compliance` mode → cli/src/eval_compliance.sh, dispatched from eval.sh; canary.sh untouched"
+  D-C2: "two arms in isolated mktemp fixtures, identical except `harness install`; OFFLINE deterministic build; explicit .claude/settings.json permission allowlist"
+  D-C3: "driver = claude -p stream-json, --max-turns default 3, --model default sonnet; pluggable --driver; claude-absent = actionable die, never hang"
+  D-C4: "detect Task tool_use events; per-prompt compliance = delegated_any + delegated_correct vs LIVE kernel ground truth; control prompts inverted"
+  D-C5: "evals/compliance-suite.yaml (~12-16 prompts, 8 classes + 2-3 controls); behavioral expect (class + control); target supplied live"
+  D-C6: "metrics: per-arm delegation_rate/correct_target_rate, per-class, Δ(A−B), GATE vs 80% on arm A, --k pass^k; JSON scorecard; results → .spectra/research/"
+  D-C7: "cost discipline: print N×arms×k + model, require --yes; --smoke = fake-driver full pipeline (also the bats path); CI never bills"
+  D-C8: "arm-A self-check before measuring (hooks present, shims -x, kernel probe returns a route); abort with diagnostics if instrument broken"
+
+# ── Verified facts (scout, 2026-06-11) — do not re-derive ──────────────────
+verified_anchors:
+  eval_dispatch: "cli/src/eval.sh:59-65 — eval.sh owns its sub-verbs; NO second allowlist in cli/eidolons (mcp double-allowlist trap does NOT apply)"
+  kernel_hook_probe: "echo '{\"prompt\":\"map the auth flow\"}' | eidolons run --hook claude-code --stdin → {hookSpecificOutput:{additionalContext:'Route: atlas ...'}} (PROBED LIVE)"
+  kernel_groundtruth: "eidolons run '<prompt>' --json → {decision, selected, tier} (PROBED LIVE: 'spec out the new caching layer' → dispatch/[spectra]/standard)"
+  harness_install: "cli/src/harness_install.sh writes to cwd only; merges hooks into .claude/settings.json (lines 497-562); --hosts --non-interactive --force flags exist"
+  cortex_present: "EIDOLONS.md at checkout root; mirrored to .eidolons/cortex/EIDOLONS.md by sync; harness_hook.sh session_start reads .eidolons/cortex/EIDOLONS.md"
+  roster_helpers: "lib.sh roster_list_names / roster_get; roster/index.yaml has name/display_name/capability_class/methodology.summary; model-profiles.yaml maps tier→string (anthropic: light=haiku/standard=sonnet/deep=opus)"
+  agent_stub_shape: ".claude/agents/<name>.md frontmatter: name/description/model/tools; Task subagent_type targets the agent FILENAME (must exist)"
+  lib_helpers: "with_timeout SECONDS CMD (bash 3.2 timeout); yaml_to_json; say/ok/info/warn/die all to stderr; empty-array expansion: \"${arr[@]+\\\"${arr[@]}\\\"}\""
+  no_prior_art: "no in-repo headless `claude -p` / stream-json parse / Task-detect — all net-new; stream shape host-version-dependent, unverifiable offline"
+
+# ── Stories (INVEST; timeboxed; GIVEN/WHEN/THEN) ───────────────────────────
+stories:
+  - id: R30.0
+    title: "Module skeleton + eval.sh dispatch + flag contract"
+    timebox: "≤1d"
+    risk: P0
+    action_plan:
+      - "Create cli/src/eval_compliance.sh mirroring eval_swe.sh header/sourcing/flag-loop"
+      - "Edit cli/src/eval.sh: add `compliance) exec bash $SELF_DIR/eval_compliance.sh \"$@\" ;;` to the case (line 59-65) + usage line"
+      - "Implement flag parse: --suite-file --driver --model --max-turns --k --arm --smoke --dry-run --yes --keep --min --gate --json -h"
+      - "Arg validation: --k/--max-turns >=1; --arm in {A,B,both}; live-without-confirmation die"
+    files: [cli/src/eval_compliance.sh, cli/src/eval.sh]
+    technical_context:
+      pattern: "ADAPT eval_swe.sh (flag loop, set -euo pipefail, SELF_DIR sourcing lib.sh)"
+      gotcha: "stdout = scorecard only; all help/log to stderr"
+    acceptance:
+      - "GIVEN the CLI WHEN `eidolons eval compliance --help` THEN exit 0 with help body"
+      - "GIVEN `eidolons eval --help` THEN the mode list includes `compliance`"
+      - "GIVEN an unknown option THEN die non-zero naming the option; --k 0 dies"
+    agent_hints:
+      context_files: [cli/src/eval_swe.sh, cli/src/eval.sh, cli/src/lib.sh]
+      validation_gates: [bats:eval_compliance, shellcheck-x]
+
+  - id: R30.1
+    title: "Offline deterministic fixture builder (both arms)"
+    timebox: "≤2d"
+    risk: P0
+    depends_on: [R30.0]
+    action_plan:
+      - "_build_fixture ARM DEST: mkdir tree; copy $NEXUS/EIDOLONS.md → DEST/.eidolons/cortex/EIDOLONS.md (die if absent)"
+      - "Write minimal eidolons.yaml (all 7 roster members, version 0.0.0, source from roster_get .source.repo)"
+      - "Write minimal eidolons.lock (per-member target ./.eidolons/<name>, hosts_wired [claude-code]; top-level hosts.wire)"
+      - "Write CLAUDE.md cortex-pointer block (INLINE heredoc constant — D-FIX-1, marker-bounded)"
+      - "Generate .claude/agents/<name>.md per roster member from index.yaml (name/description/model only — D-FIX-2; model via suggested_tier→model-profiles, default sonnet)"
+      - "Write .claude/settings.json permission allowlist (Task/Read/Grep/Glob; defaultMode acceptEdits — D-C2 exact allowlist)"
+      - "ARM A ONLY: cd DEST && eidolons harness install --hosts claude-code --non-interactive (merges hooks on top — D-FIX-3); set EIDOLONS_SKIP_REFRESH=1"
+      - "mktemp -d for each arm; trap cleanup EXIT (skip cleanup under --keep) — mirror eval_swe.sh:169-171"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      pattern: "helpers.bash seed_manifest/seed_lock shapes scaled to 7 members"
+      gotcha: "NEVER fetch_eidolon/git clone — offline P0; set EIDOLONS_SKIP_REFRESH=1 around harness install"
+    acceptance:
+      - "GIVEN a clean checkout WHEN builder runs both arms with network blocked THEN no clone/fetch; cortex byte-identical to checkout; 7 stubs valid frontmatter (name==filename)"
+      - "GIVEN both arms THEN they differ ONLY in settings.json hooks + lock harness: block + .eidolons/harness/; CLAUDE.md byte-identical"
+    agent_hints:
+      context_files: [cli/tests/helpers.bash, cli/src/harness_install.sh, roster/index.yaml, roster/model-profiles.yaml, roster/routing.yaml]
+      validation_gates: [bats:eval_compliance, shellcheck-x]
+
+  - id: R30.2
+    title: "ARM-A wiring self-check (D-C8 — no vacuous arms)"
+    timebox: "≤1d"
+    risk: P0
+    depends_on: [R30.1]
+    action_plan:
+      - "Check 1: jq -e '.hooks.UserPromptSubmit and .hooks.SessionStart' .claude/settings.json"
+      - "Check 2: claude-code-UserPromptSubmit.sh and -SessionStart.sh exist and -x"
+      - "Check 3: echo '{\"prompt\":\"map the auth flow\"}' | eidolons run --hook claude-code --stdin → stdout non-empty JSON with .hookSpecificOutput.additionalContext containing 'Route:'"
+      - "Any check fails → die non-zero, abort WHOLE run, diagnostics to stderr"
+      - "Runs in ALL modes incl --smoke (D-SC-1); kernel probe is the REAL run.sh, never faked"
+      - "Test seam: EIDOLONS_COMPLIANCE_SABOTAGE=skip-harness makes builder skip ARM A harness install (D-TEST-1)"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      gotcha: "self-check is the campaign's anti-vacuous-arm guardrail; non-skippable; the kernel probe was PROBED LIVE and works"
+    acceptance:
+      - "GIVEN a wired arm A WHEN self-check runs THEN it passes silently"
+      - "GIVEN a sabotaged arm A (no harness install) WHEN self-check runs THEN the WHOLE run aborts non-zero with 'wiring self-check failed' on stderr"
+    agent_hints:
+      context_files: [cli/src/run.sh, cli/src/harness_hook.sh]
+      validation_gates: [bats:eval_compliance]
+
+  - id: R30.3
+    title: "Driver contract + claude-absent + --keep stream dump"
+    timebox: "≤1d"
+    risk: P1
+    depends_on: [R30.2]
+    action_plan:
+      - "_default_claude_driver: claude -p \"$PROMPT\" --output-format stream-json --verbose --max-turns N --model M (cwd=fixture)"
+      - "Pass prompt on argv AND stdin; export EIDOLONS_COMPLIANCE_PROMPT/_CWD (D-DRV-1, max pluggability)"
+      - "claude-absent: command -v claude || die 'needs the claude binary ... Install Claude Code / --driver / --smoke' BEFORE first live call"
+      - "Per-session with_timeout (default 120s, env EIDOLONS_COMPLIANCE_SESSION_TIMEOUT); timeout = delegated_any:false + error:timeout (never abort suite)"
+      - "Under --keep: persist each raw stream to <fixture>/.eidolons/compliance/last-stream.jsonl (feeds R33 first-contact capture)"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      gotcha: "--verbose may be required for stream-json full event emission; PIN the contract (one JSON obj/line incl Task tool_use), not the exact flags — runbook reconciles"
+    acceptance:
+      - "GIVEN no claude on PATH WHEN non-smoke run THEN die non-zero with 'Install Claude Code'/'needs the claude binary' (no hang)"
+      - "GIVEN --keep WHEN a session runs THEN raw stream is at <fixture>/.eidolons/compliance/last-stream.jsonl"
+    agent_hints:
+      context_files: [cli/src/eval_swe.sh, cli/src/lib.sh]
+      validation_gates: [bats:eval_compliance]
+
+  - id: R30.4
+    title: "Stream parser — Task-dispatch detection"
+    timebox: "≤2d"
+    risk: P0
+    depends_on: [R30.3]
+    action_plan:
+      - "_parse_stream: NDJSON → drop non-JSON (fromjson? // empty); collect tool_use blocks where name==Task; extract input.subagent_type (try subagentType too); record turn index (D-PARSE-1, defensive multi-shape)"
+      - "Try both .message.content[] and .content[] envelope shapes"
+      - "delegated_any (routed): >=1 Task to a roster Eidolon; delegated_correct: FIRST Task subagent_type in kernel selected (chain → head — D-PARSE-2)"
+      - "Filter subagent_type ∈ roster_list_names for delegated_any (ignore non-roster Tasks)"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      gotcha: "CAPTURE-LIVE-BEFORE-PARSING: author fake fixtures best-effort, then reconcile against live-sample.jsonl (R33) BEFORE any headline run — do not fabricate-and-ship"
+    acceptance:
+      - "GIVEN dispatch-correct.jsonl THEN delegated_any:true, delegated_correct:true"
+      - "GIVEN dispatch-wrong.jsonl (GT=atlas) THEN delegated_any:true, delegated_correct:false"
+      - "GIVEN no-task.jsonl THEN delegated_any:false"
+      - "GIVEN chain-head.jsonl (GT=[spectra,vivi]) THEN correct (head=spectra)"
+    agent_hints:
+      context_files: [cli/tests/fixtures/compliance/]
+      validation_gates: [bats:eval_compliance]
+
+  - id: R30.5
+    title: "Live ground truth via the deterministic kernel"
+    timebox: "≤0.5d"
+    risk: P1
+    depends_on: [R30.4]
+    action_plan:
+      - "Per prompt: gt=$(eidolons run \"$prompt\" <ctx-flags> --json); gt_decision/gt_selected via jq"
+      - "ctx flags from suite task.ctx (surface_modules/surface_files/trance/prior_failure) — mirror eval.sh:130-133"
+      - "control = gt_decision==clarify OR suite control:true (both honoured; cross-checked)"
+      - "Compute GT ONCE per prompt (deterministic; cache across k and arms)"
+    files: [cli/src/eval_compliance.sh]
+    acceptance:
+      - "GIVEN a routed prompt THEN gt_selected drives delegated_correct; GIVEN a clarify prompt THEN it is scored as a control"
+    agent_hints:
+      context_files: [cli/src/run.sh, cli/src/eval.sh, roster/routing.yaml]
+      validation_gates: [bats:eval_compliance]
+
+  - id: R30.6
+    title: "Metrics, scorecard, GATE line (the FORGE reversal)"
+    timebox: "≤2d"
+    risk: P1
+    depends_on: [R30.5]
+    action_plan:
+      - "Per arm: delegation_rate, correct_target_rate (pass@1 over k for routed), control_pass_rate (pass^k for controls), stability_passk, by_class breakdown"
+      - "delta = A−B on delegation_rate + correct_target_rate"
+      - "gate block: metric=A.correct_target_rate, threshold 80, PASS/FAIL verdict + reversal_action (D-GATE-1: gate on CORRECT target, not bare delegation)"
+      - "--gate/--min N → exit 1 if arm-A correct_target_rate < threshold"
+      - "JSON scorecard (compliance_version 1.0, mode, driver, model, max_turns, k, n_prompts/routed/control, sessions_run, arms{A,B}, delta, gate, scope_note)"
+      - "Text card mirrors eval_swe/eval routing; scope_note as ⚠ banner (non-det + k=1-noise + tool-restriction caveat)"
+      - "Use jq division for rates (NOT awk %.2f — eval_quality.sh:158 jq-1.7 number-literal lesson)"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      gotcha: "stdout = scorecard (text or json); cost banner + self-check diagnostics → stderr (D-MET-1)"
+    acceptance:
+      - "GIVEN both arms ran THEN scorecard has per-arm rates, by_class, delta, gate{verdict} comparing A.correct_target_rate to 80%"
+      - "GIVEN --gate AND arm-A correct_target_rate < 80 THEN exit 1"
+    agent_hints:
+      context_files: [cli/src/eval_swe.sh, cli/src/eval_quality.sh]
+      validation_gates: [bats:eval_compliance]
+
+  - id: R30.7
+    title: "Cost discipline + --dry-run + --smoke + --validate-suite"
+    timebox: "≤1.5d"
+    risk: P0
+    depends_on: [R30.6]
+    action_plan:
+      - "COST: banner to stderr before first live session (N_prompts × arms × k = SESSIONS, driver, model, max-turns)"
+      - "absent --yes/--smoke/--dry-run on a live run → die non-zero (D-COST-1, loud); --dry-run prints banner + exit 0"
+      - "--smoke: swap _run_driver → _fake_driver (cat canned fixture by EIDOLONS_COMPLIANCE_PROMPT map); full pipeline, zero net/model"
+      - "--validate-suite: shape check (id/prompt/class, no dup id/prompt, class ∈ 8 classes + control, control: agrees with kernel clarify, ≥1/class + ≥2 controls) — mirror eval.sh:90-118"
+    files: [cli/src/eval_compliance.sh]
+    technical_context:
+      gotcha: "smoke must not hit network (EIDOLONS_SKIP_REFRESH=1, --non-interactive everywhere)"
+    acceptance:
+      - "GIVEN non-smoke/non-dry/no-yes run THEN die non-zero after the COST banner"
+      - "GIVEN --dry-run THEN print banner, exit 0, call no driver"
+      - "GIVEN --smoke THEN full pipeline runs with zero net/model (the bats path)"
+      - "GIVEN --validate-suite THEN shipped suite passes; broken suite fails non-zero with defect list"
+    agent_hints:
+      context_files: [cli/src/eval.sh, cli/src/eval_swe.sh]
+      validation_gates: [bats:eval_compliance, shellcheck-x]
+
+  - id: R30.suite
+    title: "evals/compliance-suite.yaml + schema (D-C5)"
+    timebox: "≤1d"
+    risk: P1
+    depends_on: [R30.0]
+    action_plan:
+      - "Author ~14 prompts: ≥1 per capability class (scout/planner/coder/scriber/reasoner/debugger/executor) adapted from routing-suite.yaml + 1 chain + 1 refusal + 2-3 controls (e.g. 'do the thing')"
+      - "Each task: id, prompt, class, optional ctx, optional control:true; expect is BEHAVIORAL (class + control), kernel supplies target at runtime"
+      - "Create schemas/compliance-suite.schema.json (additive; model on eval-suite.schema.json: required id/prompt/class; control optional bool; ctx optional)"
+      - "make schema must pass (jq empty schemas/*.json)"
+    files: [evals/compliance-suite.yaml, schemas/compliance-suite.schema.json]
+    technical_context:
+      pattern: "reuse routing-suite.yaml prompt corpus; behavioral expect (no hardcoded targets)"
+    acceptance:
+      - "GIVEN the suite WHEN --validate-suite runs THEN it passes (≥1/class, ≥2 controls, no dups, controls agree with kernel)"
+      - "GIVEN make schema THEN compliance-suite.schema.json is valid JSON"
+    agent_hints:
+      context_files: [evals/routing-suite.yaml, schemas/eval-suite.schema.json, roster/routing.yaml]
+      validation_gates: [make-schema, bats:eval_compliance]
+
+  - id: R31
+    title: "Fake-driver smoke + bats coverage + NDJSON fixtures"
+    timebox: "≤2d"
+    risk: P0
+    depends_on: [R30.4, R30.6, R30.7]
+    action_plan:
+      - "Author cli/tests/fixtures/compliance/*.jsonl: dispatch-correct, dispatch-wrong, no-task, chain-head, control-clean, control-routed (live-sample.jsonl lands via R33)"
+      - "cli/tests/eval_compliance.bats (load helpers); ≥16 cases per spec test table (1-21)"
+      - "Engineer the smoke suite so scorecard-math test (14) has KNOWN rates"
+      - "Canonicalize JSON compares (jq -cS); determinism asserts (two --smoke --json runs byte-identical)"
+      - "Sabotage seam test (7) via EIDOLONS_COMPLIANCE_SABOTAGE; claude-absent test (16) via PATH scrub or --driver /nonexistent"
+    files: [cli/tests/eval_compliance.bats, cli/tests/fixtures/compliance/]
+    technical_context:
+      gotcha: "darwin-green/ubuntu-red trap — canonical jq compare, sort arrays, trust ubuntu CI; pure sh/coreutils/git/jq, no model/net/Docker"
+    acceptance:
+      - "GIVEN make test-file F=cli/tests/eval_compliance.bats THEN all ≥16 cases pass under bash 3.2"
+      - "GIVEN --smoke --json THEN stdout is valid JSON only (no log lines)"
+    agent_hints:
+      context_files: [cli/tests/eval_swe.bats, cli/tests/eval.bats, cli/tests/helpers.bash]
+      validation_gates: [bats:eval_compliance, shellcheck-x]
+
+  - id: R32
+    title: "Docs — CHANGELOG + cli-reference + architecture"
+    timebox: "≤0.5d"
+    risk: P2
+    depends_on: [R30.7]
+    action_plan:
+      - "CHANGELOG.md Unreleased ### Added: eval compliance summary (A/B, offline fixtures, pluggable driver, GATE vs 80%, --smoke, --yes)"
+      - "docs/cli-reference.md: eval compliance subsection (flag table, A/B, smoke-vs-live, cost gate, JSON excerpt, honest scope)"
+      - "docs/architecture.md: one paragraph tying it to dossier:106 (only non-deterministic eval → pass^k; A/B isolates harness effect)"
+    files: [CHANGELOG.md, docs/cli-reference.md, docs/architecture.md]
+    acceptance:
+      - "GIVEN review THEN CHANGELOG has the entry, cli-reference documents mode+flags+scope, architecture cites DOSSIER-HARNESS-2026-06.md:106"
+    agent_hints:
+      context_files: [CHANGELOG.md, docs/cli-reference.md, docs/architecture.md, DOSSIER-HARNESS-2026-06.md]
+      validation_gates: [release-stamp-gate]
+
+  - id: R33
+    title: "Live-run runbook + first-contact capture sequencing"
+    timebox: "≤0.5d"
+    risk: P0
+    depends_on: [R31]
+    action_plan:
+      - "Write .spectra/harness-mechanization/runbook-compliance.md: smoke pre-flight → first-contact capture (live-sample.jsonl) → parser reconcile → headline (sonnet, k=2, both arms, --gate --json --yes)"
+      - "State the cost envelope (~14 prompts × 2 arms × k=2 ≈ 56 sessions, ≤3 turns sonnet)"
+      - "Commit target: .spectra/research/compliance-eval-results.md (kupo-eval-results.md style); orchestrator commits, runner prints"
+      - "Decision rule operationalising dossier:106 (arm-A correct_target_rate <80% + Δ shows harness not closing gap → recommend block default)"
+      - "GATE the headline run on live-sample reconciliation (do not spend tokens before smoke is green against the reconciled sample)"
+    files: [.spectra/harness-mechanization/runbook-compliance.md]
+    acceptance:
+      - "GIVEN the runbook THEN steps are ORDERED smoke→capture→reconcile→headline with cost envelope + .spectra/research/ commit target + the reversal decision rule"
+    agent_hints:
+      context_files: [.spectra/research/kupo-eval-results.md, DOSSIER-HARNESS-2026-06.md]
+      validation_gates: []
+
+# ── Execution plan ─────────────────────────────────────────────────────────
+execution_plan:
+  build_order:
+    - R30.0
+    - R30.1
+    - R30.2
+    - R30.4   # parser against authored fixtures (smoke-first)
+    - R30.3   # driver (fake-first)
+    - R30.5
+    - R30.6
+    - R30.7
+    - R30.suite   # parallelizable after R30.0
+    - R31     # bats developed ALONGSIDE R30.4-R30.7 (smoke-first TDD)
+    - R32
+    - R33     # first-contact capture feeds back into R30.4/R31 BEFORE headline
+  critical_feedback_loop: "R33 step 2 (live-sample capture) may force R30.4 parser + R31 fixture corrections; headline run BLOCKED until smoke green against reconciled live-sample.jsonl"
+  parent_handles:
+    - "git commit + push (Vivi tool gaps per memory: SPECTRA/IDG/Vivi may lack Bash-git in some host configs)"
+    - "make test-file F=cli/tests/eval_compliance.bats + make lint (shellcheck -x) pre-PR"
+  global_gates:
+    - "make test-file F=cli/tests/eval_compliance.bats"
+    - "make lint (shellcheck -x -S error)"
+    - "make schema (jq empty schemas/*.json — for the new compliance-suite.schema.json)"
+
+# ── Rejected alternatives (do not re-explore) ──────────────────────────────
+rejected_alternatives:
+  - "Extend canary.sh — D-C1 keeps canary human-in-the-loop; compliance is fully automatable"
+  - "Hardcode expected targets — drifts from routing.yaml; compute GT live via the deterministic kernel"
+  - "Single arm — no baseline; Δ(A−B) is the scientific claim; common-mode biases cancel only in the difference"
+  - "Reuse eval routing grading loop — that grades the deterministic kernel; compliance needs live driver + NDJSON parse + pass^k + 2-arm fixtures"
+  - "Fixtures that init/sync a real project — would fetch from GitHub (network/slow/non-det); offline stub builder suffices (we measure dispatch, not subagent execution)"
+  - "Make --strict/block the default now — premature; the dossier reversal is conditional on THIS measurement"
+  - "TRANCE parallel-spec — one bounded CLI module, not multi-service architecture; single-pass cycle is the correct tier"
+
+# ── Confidence ─────────────────────────────────────────────────────────────
+confidence:
+  overall: 0.88
+  decision: AUTO_PROCEED
+  factors:
+    pattern_match: 0.90
+    requirement_clarity: 0.92
+    decomposition_stability: 0.88
+    constraint_compliance: 0.82
+  residual_risk: "the EXACT claude -p stream-json envelope shape + CLI flags are host-version-dependent and unverifiable offline; CONTAINED by (1) pinning the contract not the surface, (2) defensive multi-shape parsing (D-PARSE-1), (3) mandatory first-contact live-sample capture + reconcile BEFORE any headline run (R33). The instrument is fully developable+testable under --smoke with zero model contact."

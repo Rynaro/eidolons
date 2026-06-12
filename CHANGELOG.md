@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
+## [Unreleased]
+
+### Added
+- `feat(eval)`: `eidolons eval compliance` — the A/B routing-compliance instrument that operationalizes the FORGE reversal gate (`DOSSIER-HARNESS-2026-06.md:106`, "advisory compliance <80% on T3 → escalate to block"). Drives a headless host driver (`claude -p --output-format stream-json` by default; pluggable via `--driver`) over `evals/compliance-suite.yaml` in two offline fixture arms — ARM A with `harness install` wired, ARM B prose-cortex-only — parses the stream for `Task(<eidolon>)` dispatches, and scores against LIVE kernel ground truth (`eidolons run --json`, never hardcoded). Reports per-arm `delegation_rate` + `correct_target_rate` (the gate metric), `Δ(A−B)`, per-class breakdown, `pass^k` stability, and a GATE verdict vs the 80% threshold. `--smoke` runs the whole pipeline against a fake driver (CI never bills); `--dry-run` prints the session-cost envelope; live runs require `--yes`.
+- `feat(eval)`: hard safety net — `eval_compliance.sh` refuses the default `claude` driver when `EIDOLONS_COMPLIANCE_NO_LIVE=1` (exported by the bats `setup()`), so the test suite can never spawn a billed session even if a test forgets `--smoke` or mis-scrubs PATH. Live measurement is human-driven only, per `.spectra/harness-mechanization/runbook-compliance.md`.
+
 ## [1.37.0] — 2026-06-11 — GAP-2: mechanical memory pre-flight
 
 ### Changed

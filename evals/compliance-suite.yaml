@@ -1,0 +1,87 @@
+# Eidolons Compliance Eval Suite
+# ───────────────────────────────
+# Prompt corpus for `eidolons eval compliance` — the A/B routing-compliance
+# instrument. Each task is run through a real headless host driver with and
+# without the harness wired; the stream is parsed for Task(<eidolon>) dispatches
+# and scored against the LIVE kernel ground truth (eidolons run --json).
+#
+# Schema: ../schemas/compliance-suite.schema.json
+#
+# Behavioral expect format: `class` + optional `control: true`. The kernel
+# supplies the target Eidolon at runtime (never hardcoded here) — this keeps
+# the suite in sync with routing.yaml automatically.
+#
+# Capability classes: scout, planner, coder, scriber, reasoner, debugger, executor
+# Control tasks (control: true): kernel returns clarify; correct = NO Task dispatch.
+
+compliance_version: "1.0"
+created_at: "2026-06-11"
+target: "routing-compliance A/B instrument"
+
+tasks:
+  # ── SCOUT ──────────────────────────────────────────────────────────────────
+  - id: C-001
+    class: scout
+    prompt: "map the authentication flow in the codebase"
+
+  - id: C-002
+    class: scout
+    prompt: "trace who calls the main router function"
+
+  # ── PLANNER ────────────────────────────────────────────────────────────────
+  - id: C-003
+    class: planner
+    prompt: "spec out the new caching layer"
+
+  - id: C-004
+    class: planner
+    prompt: "design the requirements for the retry mechanism"
+
+  # ── CODER ──────────────────────────────────────────────────────────────────
+  - id: C-005
+    class: coder
+    prompt: "implement the retry logic in the worker"
+
+  - id: C-006
+    class: coder
+    prompt: "fix the off-by-one error in the pagination code"
+
+  # ── SCRIBER ────────────────────────────────────────────────────────────────
+  - id: C-007
+    class: scriber
+    prompt: "document the authentication module as an ADR"
+
+  - id: C-008
+    class: scriber
+    prompt: "write a runbook for the deployment process"
+
+  # ── REASONER ───────────────────────────────────────────────────────────────
+  - id: C-009
+    class: reasoner
+    prompt: "which approach should we use, optimistic or pessimistic locking?"
+
+  # ── DEBUGGER ───────────────────────────────────────────────────────────────
+  - id: C-010
+    class: debugger
+    prompt: "got a stack trace, still failing after retry"
+
+  # ── EXECUTOR ───────────────────────────────────────────────────────────────
+  - id: C-011
+    class: executor
+    prompt: "fix the typo in the config key"
+
+  # ── CHAIN (planner→coder) ──────────────────────────────────────────────────
+  - id: C-012
+    class: planner
+    prompt: "design and implement the new pagination endpoint"
+
+  # ── CONTROLS (correct = NO Task dispatch; kernel returns clarify) ──────────
+  - id: C-013
+    class: control
+    control: true
+    prompt: "do the thing"
+
+  - id: C-014
+    class: control
+    control: true
+    prompt: "can you help me with something"
