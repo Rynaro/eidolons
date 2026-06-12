@@ -361,6 +361,137 @@ STUB
 }
 SETTINGS
 
+  # 6.5 Realistic code surface (D-FIX-4): a small deterministic multi-file
+  # service so the suite's prompts are ACTIONABLE. An empty config-only fixture
+  # makes coding prompts ("implement retry in the worker") unanswerable — the
+  # host replies "there is no worker file, point me to it" and never delegates,
+  # systematically under-measuring compliance (found via the live capture, not
+  # smoke: the fake driver returns canned dispatches regardless of fixture).
+  # Both arms get the identical surface — only the harness wiring differs.
+  mkdir -p "$dest/src"
+  cat > "$dest/src/router.py" <<'PY'
+"""HTTP request router for the demo service."""
+from auth import authenticate
+
+ROUTES = {}
+
+
+def register(path, handler):
+    ROUTES[path] = handler
+
+
+def main_router(request):
+    """Entry point: dispatch an incoming request to its handler."""
+    user = authenticate(request.get("token"))
+    handler = ROUTES.get(request["path"])
+    if handler is None:
+        return {"status": 404}
+    return handler(request, user)
+
+
+def health(request, user):
+    return {"status": 200, "body": "ok"}
+
+
+register("/health", health)
+PY
+  cat > "$dest/src/worker.py" <<'PY'
+"""Background job worker."""
+from queue import Queue
+
+
+def process_job(job):
+    """Run a single job. NOTE: no retry on transient failure yet."""
+    return job["fn"](*job.get("args", []))
+
+
+def run_worker(jobs: "Queue"):
+    while not jobs.empty():
+        job = jobs.get()
+        process_job(job)  # transient errors are currently fatal
+PY
+  cat > "$dest/src/auth.py" <<'PY'
+"""Authentication module.
+
+Flow: a request carries a bearer token -> validate_token() checks the
+signature and expiry -> load_session() resolves the user -> the router
+attaches the user to the request context.
+"""
+
+SESSIONS = {}
+
+
+def validate_token(token):
+    """Return the token payload if the signature and expiry are valid."""
+    if not token or "." not in token:
+        return None
+    payload, _sig = token.rsplit(".", 1)
+    return {"sub": payload}
+
+
+def load_session(payload):
+    return SESSIONS.get(payload["sub"])
+
+
+def authenticate(token):
+    """Top of the auth flow: token -> payload -> session/user."""
+    payload = validate_token(token)
+    if payload is None:
+        return None
+    return load_session(payload) or {"sub": payload["sub"], "anon": False}
+PY
+  cat > "$dest/src/pagination.py" <<'PY'
+"""List pagination helpers."""
+
+
+def paginate(items, page, per_page):
+    """Return the slice of items for a 1-indexed page.
+
+    BUG: the end index is off by one and drops the last item on each page.
+    """
+    start = (page - 1) * per_page
+    end = start + per_page - 1   # off-by-one: should be start + per_page
+    return items[start:end]
+
+
+def page_count(total, per_page):
+    return (total + per_page - 1) // per_page
+PY
+  cat > "$dest/config.yaml" <<'YML'
+service:
+  name: demo-api
+  # NOTE: the worker reads `max_retries`, but this key is misspelled.
+  max_retires: 3
+  timeout_seconds: 30
+database:
+  host: localhost
+  port: 5432
+YML
+  cat > "$dest/deploy.sh" <<'SH'
+#!/usr/bin/env bash
+# Deployment process for demo-api.
+set -euo pipefail
+echo "building image..."
+docker build -t demo-api:latest .
+echo "running migrations..."
+python -m demo.migrate
+echo "rolling out..."
+kubectl set image deploy/demo-api api=demo-api:latest
+echo "done."
+SH
+  cat > "$dest/README.md" <<'MD'
+# demo-api
+
+A small HTTP service used as the routing-compliance fixture surface.
+
+- `src/router.py` — request routing (`main_router`)
+- `src/worker.py` — background job worker
+- `src/auth.py` — token authentication flow
+- `src/pagination.py` — list pagination
+- `config.yaml` — service configuration
+- `deploy.sh` — deployment process
+MD
+
   # 7. ARM A only: run harness install (merges hooks into settings.json)
   # Skip if EIDOLONS_COMPLIANCE_SABOTAGE=skip-harness (test seam — D-TEST-1)
   if [[ "$arm" == "A" && "${EIDOLONS_COMPLIANCE_SABOTAGE:-}" != "skip-harness" ]]; then
@@ -428,7 +559,10 @@ _parse_stream() {
         # Tool_use blocks may live at .message.content[] or .content[] (D-PARSE-1)
         | ( ($ev.message.content // $ev.content // [])
             | if type == "array" then . else [] end )[]
-        | select((.type? == "tool_use") and (.name? == "Task"))
+        # The subagent-dispatch tool is named "Agent" in Claude Code 2.x and
+        # "Task" in older versions / other hosts (verified live: claude 2.1.175
+        # emits "Agent"). Match both so the parser is host-version-robust.
+        | select((.type? == "tool_use") and ((.name? == "Agent") or (.name? == "Task")))
         | (.input.subagent_type // .input.subagentType // null) as $st
         | select($st != null)
         | select($roster | index($st) != null)
