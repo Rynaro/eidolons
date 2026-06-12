@@ -196,7 +196,7 @@ _parser_test() {
             | .value as \$ev
             | ( (\$ev.message.content // \$ev.content // [])
                 | if type == \"array\" then . else [] end )[]
-            | select((.type? == \"tool_use\") and (.name? == \"Task\"))
+            | select((.type? == \"tool_use\") and ((.name? == \"Agent\") or (.name? == \"Task\")))
             | (.input.subagent_type // .input.subagentType // null) as \$st
             | select(\$st != null)
             | select(\$roster | index(\$st) != null)
@@ -562,4 +562,31 @@ YAML
   arm_a="$fixture_root/compliance-arm-A"
   grep -q '<!-- eidolon:cortex start -->' "$arm_a/CLAUDE.md"
   grep -q '<!-- eidolon:cortex end -->' "$arm_a/CLAUDE.md"
+}
+
+@test "compliance: fixture has an actionable code surface (both arms, identical)" {
+  # The suite's prompts reference a real codebase ("the worker", "pagination",
+  # "the auth flow", "the main router", "the config key"). An empty fixture made
+  # coding prompts unanswerable and under-measured delegation (live-capture
+  # finding). Assert the deterministic code surface exists and carries the
+  # planted issues the prompts target.
+  run eval_compliance --smoke --keep --json
+  [ "$status" -eq 0 ]
+  fixture_root="$(ls -dt "${TMPDIR:-/tmp}"/eidolons-compliance.* 2>/dev/null | head -1)"
+  [ -n "$fixture_root" ]
+
+  local a="$fixture_root/compliance-arm-A" b="$fixture_root/compliance-arm-B"
+  for d in "$a" "$b"; do
+    [ -f "$d/src/worker.py" ]
+    [ -f "$d/src/auth.py" ]
+    [ -f "$d/src/router.py" ]
+    [ -f "$d/src/pagination.py" ]
+    [ -f "$d/config.yaml" ]
+    grep -q 'def main_router' "$d/src/router.py"
+    grep -q 'off-by-one' "$d/src/pagination.py"
+    grep -q 'max_retires' "$d/config.yaml"   # the planted typo the executor prompt targets
+  done
+  # Common-mode: the code surface is byte-identical across arms (only wiring differs).
+  run diff -r "$a/src" "$b/src"
+  [ "$status" -eq 0 ]
 }
