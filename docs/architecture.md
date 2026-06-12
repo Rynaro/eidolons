@@ -381,6 +381,21 @@ The harness injects **routing** (P1–P3) AND **memory** (GAP-2) on the same Ses
 
 **Runtime gate:** activates at shim runtime, not install time. Installing crystalium (`eidolons mcp install crystalium`) after `harness install` makes the next SessionStart include memory — no `harness install --force` needed. The arm lives in the nexus-shipped `harness_hook.sh`; it activates on `eidolons upgrade self`.
 
+### Measuring the harness effect (`eidolons eval compliance`)
+
+The harness verdict (inject-by-default; escalate to block only if measured advisory
+compliance falls below 80% on T3 hosts — `DOSSIER-HARNESS-2026-06.md:106`) was a standing
+*reversal condition* with no instrument behind it. `eidolons eval compliance` is that
+instrument. It runs the prompt suite through a headless host driver in two offline fixture
+arms — **ARM A** with `harness install` wired (hooks live), **ARM B** prose-cortex-only —
+parses the host's `stream-json` for `Task(<eidolon>)` dispatches, and scores each against the
+deterministic kernel's live routing decision (`eidolons run --json`). The gate metric is
+ARM A's `correct_target_rate` vs 80%; `Δ(A−B)` isolates the injection effect from the host's
+baseline routing ability. Tool restriction is common-mode across both arms, so the delta is
+robust while the absolute arm-A rate is a floor under a read-only surface. CI runs only the
+fake-driver `--smoke` path; live measurement is human-driven (`runbook-compliance.md`) and
+mechanically fenced from the test suite by `EIDOLONS_COMPLIANCE_NO_LIVE`.
+
 ---
 
 ## Related

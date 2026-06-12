@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/compliance-suite.schema.json",
+  "title": "Eidolons Compliance Eval Suite",
+  "description": "Prompt corpus for `eidolons eval compliance` A/B routing-compliance instrument. Behavioral expect: kernel supplies target at runtime.",
+  "type": "object",
+  "required": ["compliance_version", "tasks"],
+  "additionalProperties": true,
+  "properties": {
+    "compliance_version": { "type": "string" },
+    "created_at": { "type": "string" },
+    "target": { "type": "string" },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "class", "prompt"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "class": {
+            "type": "string",
+            "enum": ["scout", "planner", "coder", "scriber", "reasoner", "debugger", "executor", "control"]
+          },
+          "prompt": { "type": "string", "minLength": 1 },
+          "control": { "type": "boolean" },
+          "ctx": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "surface_files": { "type": "integer" },
+              "surface_modules": { "type": "integer" },
+              "trance": { "type": "boolean" },
+              "prior_failure": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    }
+  }
+}

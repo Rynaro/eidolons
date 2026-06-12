@@ -574,6 +574,55 @@ eidolons canary atlas --validate /path/to/response.md
 
 ---
 
+## `eidolons eval compliance`
+
+A/B behavioural instrument: does the advisory harness injection actually change a host
+LLM's delegation behaviour? Measures **routing compliance** — whether the host dispatches to
+the Eidolon the deterministic kernel would route to — with the harness wired (ARM A) versus
+documentary cortex only (ARM B). Operationalizes the FORGE reversal gate
+(`DOSSIER-HARNESS-2026-06.md:106`).
+
+```bash
+eidolons eval compliance --smoke --json          # free pipeline self-test (fake driver)
+eidolons eval compliance --dry-run --k 2 --arm both   # print the billed-session cost, stop
+# live (billed) — see .spectra/harness-mechanization/runbook-compliance.md:
+EIDOLONS_COMPLIANCE_NO_LIVE= eidolons eval compliance --arm both --k 2 --yes --json
+```
+
+### Options
+
+| Flag | Meaning |
+|---|---|
+| `--smoke` | Run the whole pipeline against a canned fake driver. No model, no billing. CI default. |
+| `--dry-run` | Print the `COST: n_prompts × arms × k` session count and exit 0 without calling a driver. |
+| `--yes` | Required to start a live (billed) run. Without it, a non-smoke/non-dry run dies with the cost message. |
+| `--arm A\|B\|both` | Which arm(s) to run (default `both`). A = harness wired; B = prose cortex only. |
+| `--k N` | Repeats per prompt (default 1). Use ≥2 for any headline claim — k=1 is noise. |
+| `--driver '<cmd>'` | Substitute the default `claude -p` driver. The command gets the prompt on argv and stdin and must emit the host stream on stdout. |
+| `--model <m>` | Model for the default driver (default `sonnet`). |
+| `--max-turns N` | Cap per session (default 3 — we measure whether an early Task dispatch fires, not task completion). |
+| `--suite-file <path>` | Prompt suite (default `evals/compliance-suite.yaml`). |
+| `--min N` / `--gate` | Exit 1 if ARM-A `correct_target_rate` is below N percent / below the 80% FORGE threshold. |
+| `--keep` / `--capture-sample` | Keep fixtures / save the raw stream for parser reconciliation. |
+| `--json` | Emit the machine-readable scorecard on stdout. |
+
+### Scorecard
+
+Per arm: `delegation_rate` (any roster Task dispatched), `correct_target_rate` (first dispatch
+matches the kernel's `selected`/chain — **the gate metric**), `control_pass_rate` (control
+prompts correctly get NO dispatch), `stability_passk`, and a per-class breakdown. Top level:
+`delta` (A − B, the isolated harness effect) and `gate` (verdict vs 80% + reversal action).
+
+### Safety
+
+The instrument never bills from tests. `eval_compliance.sh` refuses the default `claude`
+driver when `EIDOLONS_COMPLIANCE_NO_LIVE=1` is set; the bats `setup()` exports it, so the
+suite cannot spawn a billed session even if a test omits `--smoke`. Clear the variable only
+for a deliberate, supervised live run (runbook). A custom `--driver` bypasses this net and
+owns its own cost gating.
+
+---
+
 ## `eidolons nexus`
 
 Inspect and control the nexus roster channel — the split between the pinned CLI
