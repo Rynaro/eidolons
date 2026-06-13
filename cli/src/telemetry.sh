@@ -31,6 +31,8 @@ Usage:
   eidolons telemetry capture --hook STOP_<HOST> --stdin
   eidolons telemetry rollup  [--by repo|branch|model|eidolon|tier|day] [--since DATE] [--project <slug>] [--json]
   eidolons telemetry report  [--project <slug>] [--since DATE] [--json]
+  eidolons telemetry budget  --limit N [--by repo|branch|model|eidolon|tier|day] [--since DATE] [--project <slug>] [--usd] [--json]
+  eidolons telemetry export  [otel|json|csv] [--since DATE] [--project <slug>] [--otel-version <ver>]
   eidolons telemetry enable
   eidolons telemetry disable
 
@@ -46,13 +48,27 @@ report    Human dashboard: M1 spend by repo/branch/model/eidolon/tier, M2
           reconciliation, M3 tier split — always source-split (audited vs
           estimated), never blended. --json for the structured report.
 
+budget    Cross-run budget gate: aggregate spend over the store (grouped by --by,
+          default --by eidolon), compare each group against --limit N. Exits 3
+          when ANY group exceeds the limit; exits 0 when all within. Audited and
+          estimated are always evaluated and reported separately (honesty gate).
+          --usd converts the limit to dollars using roster/pricing.yaml prices.
+          --json for alerting pipelines.
+
+export    Export the store in a machine-readable format (stdout only):
+            otel  — OpenTelemetry GenAI-convention spans (same gen_ai.* attribute
+                    keys as 'trace otel' — single source of truth, no divergence).
+            json  — Deduplicated store as a JSON array.
+            csv   — RFC-4180 flat table (one row per turn) with header.
+          Pipe to any backend (Datadog, Grafana, Langfuse, a spreadsheet).
+          The nexus bundles no collector. --otel-version pins the GenAI convention
+          version for the otel format. Exits 0 on empty store with no spurious output.
+
 enable    Write the zero-logic Stop shim + register the hook in
           .claude/settings.json (claude-code; opt-in, idempotent).
 
 disable   Remove the Stop shim + hook entry. Idempotent; leaves routing hooks
           (UserPromptSubmit/SessionStart) untouched.
-
-P2 (not yet implemented): budget, lift, export [otel|json|csv], verify.
 
 Store layout:
   $EIDOLONS_HOME/telemetry/<project-slug>/<YYYY-MM-DD>.jsonl
@@ -72,6 +88,7 @@ sub="${1:-}"
 case "$sub" in
   capture) ;;  # handled below
   rollup|report)  ;;  # handled below — Phase D implementations
+  budget|export)  ;;  # handled below — P2.4/P2.5 implementations
   enable|disable) ;;  # handled below — Phase F implementations
   --help|-h|help)
     usage
@@ -92,18 +109,21 @@ esac
 # Phase D — rollup and report (pure-jq M1/M2/M3)
 # ══════════════════════════════════════════════════════════════════════════
 
-if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
+if [[ "$sub" == "rollup" || "$sub" == "report" || "$sub" == "budget" ]]; then
 
-  # ── Shared arg parsing for rollup + report ──────────────────────────────
-  _trd_by="model"
+  # ── Shared arg parsing for rollup + report + budget ─────────────────────
+  _trd_by=""        # empty = not explicitly set; subcommand applies its own default
   _trd_since=""
   _trd_project=""
   _trd_json=0
+  # budget-specific args
+  _trd_limit=""
+  _trd_usd=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --by)
-        _trd_by="${2:-model}"
+        _trd_by="${2:-}"
         shift 2
         ;;
       --since)
@@ -116,6 +136,14 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
         ;;
       --json)
         _trd_json=1
+        shift
+        ;;
+      --limit)
+        _trd_limit="${2:-}"
+        shift 2
+        ;;
+      --usd)
+        _trd_usd=1
         shift
         ;;
       --help|-h)
@@ -193,6 +221,15 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
       printf 'no telemetry captured yet for %s\n' "$_trd_project"
     fi
     exit 0
+  fi
+
+  # Apply per-subcommand defaults for --by (not set = use subcommand default).
+  if [[ -z "$_trd_by" ]]; then
+    if [[ "$sub" == "budget" ]]; then
+      _trd_by="eidolon"
+    else
+      _trd_by="model"
+    fi
   fi
 
   # ── P2.1: Load pricing table (roster/pricing.yaml → JSON) ────────────────
@@ -573,6 +610,517 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     printf 'for per-thread ECL estimates, see: eidolons trace cost\n'
     exit 0
   fi
+
+  # ══════════════════════════════════════════════════════════════════════
+  # budget subcommand — P2.4 cross-run budget gate
+  # ══════════════════════════════════════════════════════════════════════
+  if [[ "$sub" == "budget" ]]; then
+
+    # Validate --limit is required.
+    if [[ -z "$_trd_limit" ]]; then
+      printf '%s\n' "telemetry budget: --limit N is required" >&2
+      exit 1
+    fi
+
+    # Validate --by value.
+    case "$_trd_by" in
+      repo|branch|model|eidolon|tier|day) ;;
+      *) die "telemetry budget: --by must be one of repo|branch|model|eidolon|tier|day" ;;
+    esac
+
+    # Validate limit is numeric.
+    case "$_trd_limit" in
+      ''|*[!0-9.]*) die "telemetry budget: --limit must be a number" ;;
+    esac
+
+    # ── Build group aggregations (source-split, honesty gate) ─────────────
+    # We group by source first, then by the --by key, computing total tokens
+    # and USD (when --usd and all models in the group are priced).
+    # Mirrors rollup logic but produces breach-detection output.
+
+    # Build the jq group-by expression for the --by dimension.
+    _trd_budget_by="$_trd_by"
+
+    _trd_budget_groups="$(printf '%s' "$STORE" | jq \
+      --arg by "$_trd_budget_by" \
+      --argjson prices "$_PRICING_JSON" '
+      # Helper: normalize model string (strip [...] suffix).
+      def norm_model: gsub("\\[.*\\]$"; "");
+
+      # Helper: compute USD for one row.
+      def row_usd($p):
+        (.model | norm_model) as $m |
+        if $p | has($m) then
+          ($p[$m].input        // 0) * .usage.input_tokens              / 1000000 +
+          ($p[$m].output       // 0) * .usage.output_tokens             / 1000000 +
+          ($p[$m].cache_creation // 0) * .usage.cache_creation_input_tokens / 1000000 +
+          ($p[$m].cache_read   // 0) * .usage.cache_read_input_tokens   / 1000000
+        else
+          null
+        end;
+
+      # Helper: sum USD for an array; null if any model unpriced.
+      def sum_usd($p):
+        map(row_usd($p)) |
+        if any(. == null) then null
+        else add // 0
+        end;
+
+      # Helper: extract the group key for a row given --by dimension.
+      def group_key:
+        if $by == "model" then .model
+        elif $by == "day" then (.ts // "" | split("T") | .[0])
+        elif $by == "repo" then .attribution.repo
+        elif $by == "branch" then .attribution.branch
+        elif $by == "eidolon" then .attribution.eidolon
+        elif $by == "tier" then (.attribution.tier // "null")
+        else .model
+        end;
+
+      # Group by source, then by dimension key.
+      group_by(.source)
+      | map(
+          . as $src_rows |
+          ($src_rows[0].source) as $src |
+          {
+            source: $src,
+            groups: (
+              $src_rows
+              | group_by(group_key)
+              | map(
+                  . as $grp |
+                  ($grp[0] | group_key) as $key |
+                  {
+                    key: ($key // "?"),
+                    turns: ($grp | length),
+                    total_tokens: (
+                      $grp | map(
+                        .usage.input_tokens + .usage.output_tokens
+                        + .usage.cache_creation_input_tokens
+                        + .usage.cache_read_input_tokens
+                      ) | add // 0
+                    ),
+                    usd: ($grp | sum_usd($prices)),
+                    unpriced_models: (
+                      [ $grp[].model | norm_model ] | unique
+                      | map(. as $m | select(($prices | has($m)) | not))
+                    )
+                  }
+                )
+            )
+          }
+        )
+    ')"
+
+    # ── Breach detection ──────────────────────────────────────────────────
+    # Check each source × group pair against --limit.
+    # Exit semantics: exit 3 if ANY group exceeds limit; exit 0 if all within.
+    # Honesty: audited and estimated evaluated/reported separately.
+    _trd_breached=0
+    _trd_breach_lines=""
+
+    _trd_source_count="$(printf '%s' "$_trd_budget_groups" | jq 'length')"
+    _trd_src_idx=0
+
+    while [[ "$_trd_src_idx" -lt "$_trd_source_count" ]]; do
+      _trd_src_json="$(printf '%s' "$_trd_budget_groups" | jq ".[$_trd_src_idx]")"
+      _trd_src_name="$(printf '%s' "$_trd_src_json" | jq -r '.source')"
+      _trd_grp_count="$(printf '%s' "$_trd_src_json" | jq '.groups | length')"
+      _trd_grp_idx=0
+
+      while [[ "$_trd_grp_idx" -lt "$_trd_grp_count" ]]; do
+        _trd_grp_json="$(printf '%s' "$_trd_src_json" | jq ".groups[$_trd_grp_idx]")"
+        _trd_grp_key="$(printf '%s' "$_trd_grp_json" | jq -r '.key')"
+        _trd_grp_total="$(printf '%s' "$_trd_grp_json" | jq -r '.total_tokens')"
+        _trd_grp_usd="$(printf '%s' "$_trd_grp_json" | jq -r '.usd')"
+        _trd_grp_unpriced="$(printf '%s' "$_trd_grp_json" | jq -r '.unpriced_models | join(",")')"
+
+        if [[ "$_trd_usd" -eq 1 ]]; then
+          # USD mode: check against $ limit.
+          if [[ "$_trd_grp_usd" == "null" ]]; then
+            # Unpriced models in this group — honest note, not silent pass.
+            _note="[source:${_trd_src_name}] group '${_trd_grp_key}': cannot evaluate \$ budget — unpriced model(s): ${_trd_grp_unpriced}"
+            _trd_breach_lines="${_trd_breach_lines}${_note}
+"
+          else
+            # Compare float: use awk.
+            _exceeded="$(printf '%s %s' "$_trd_grp_usd" "$_trd_limit" | \
+              awk '{print ($1 > $2) ? "1" : "0"}')"
+            if [[ "$_exceeded" -eq 1 ]]; then
+              _trd_breached=1
+              _overage="$(printf '%s %s' "$_trd_grp_usd" "$_trd_limit" | \
+                awk '{printf "%.6f", $1 - $2}')"
+              _line="BREACH [source:${_trd_src_name}] group '${_trd_grp_key}': \$${_trd_grp_usd} > limit \$${_trd_limit} (overage: \$${_overage})"
+              _trd_breach_lines="${_trd_breach_lines}${_line}
+"
+            fi
+          fi
+        else
+          # Token mode: compare integers via awk (handles large numbers safely).
+          _tok_exceeded="$(printf '%s %s' "$_trd_grp_total" "$_trd_limit" | \
+            awk '{print ($1 > $2) ? "1" : "0"}')"
+          if [[ "$_tok_exceeded" -eq 1 ]]; then
+            _trd_breached=1
+            _tok_overage="$(printf '%s %s' "$_trd_grp_total" "$_trd_limit" | \
+              awk '{print $1 - $2}')"
+            _line="BREACH [source:${_trd_src_name}] group '${_trd_grp_key}': ${_trd_grp_total} tokens > limit ${_trd_limit} (overage: ${_tok_overage})"
+            _trd_breach_lines="${_trd_breach_lines}${_line}
+"
+          fi
+        fi
+
+        _trd_grp_idx=$(( _trd_grp_idx + 1 ))
+      done
+
+      _trd_src_idx=$(( _trd_src_idx + 1 ))
+    done
+
+    # ── Output ────────────────────────────────────────────────────────────
+    _trd_unit="tokens"
+    if [[ "$_trd_usd" -eq 1 ]]; then
+      _trd_unit="USD"
+    fi
+
+    if [[ "$_trd_json" -eq 1 ]]; then
+      # Build JSON breach report.
+      _trd_breach_arr="[]"
+      if [[ -n "$_trd_breach_lines" ]]; then
+        # Convert breach lines to a JSON array of strings.
+        _trd_breach_arr="$(printf '%s' "$_trd_breach_lines" | jq -R -s '
+          split("\n") | map(select(. != ""))
+        ')"
+      fi
+      printf '%s' "$_trd_budget_groups" | jq \
+        --arg project "$_trd_project" \
+        --arg by "$_trd_by" \
+        --arg limit "$_trd_limit" \
+        --arg unit "$_trd_unit" \
+        --argjson breached "$_trd_breached" \
+        --argjson breaches "$_trd_breach_arr" \
+        '{
+          project: $project,
+          by: $by,
+          limit: $limit,
+          unit: $unit,
+          breached: ($breached == 1),
+          breaches: $breaches,
+          groups: .
+        }'
+    else
+      printf '%seidolons telemetry budget%s  (by %s, limit %s %s, project: %s)\n' \
+        "${BOLD:-}" "${RESET:-}" "$_trd_by" "$_trd_limit" "$_trd_unit" "$_trd_project"
+      printf '%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+      printf '  Honesty contract: audited and estimated evaluated separately.\n'
+      printf '\n'
+
+      # Print each source + group with status.
+      printf '%s' "$_trd_budget_groups" | jq -r --arg limit "$_trd_limit" --argjson usd "$_trd_usd" '
+        .[] |
+        "  [source: \(.source)]",
+        (.groups[] |
+          (.total_tokens | tostring) as $tok |
+          ($limit | tonumber) as $lim |
+          if $usd == 1 then
+            if .usd == null then
+              "    \(.key): (cannot evaluate $ budget — unpriced model(s): \(.unpriced_models | join(",")))"
+            elif (.usd > $lim) then
+              "    \(.key): $\(.usd) > $\($limit) BREACH [overage: $\(.usd - $lim)]"
+            else
+              "    \(.key): $\(.usd) (within limit $\($limit)) [\($tok) tokens]"
+            end
+          elif (.total_tokens > $lim) then
+            "    \(.key): \($tok) tokens > \($limit) BREACH [overage: \(.total_tokens - $lim)]"
+          else
+            "    \(.key): \($tok) tokens (within limit \($limit))"
+          end
+        )
+      '
+
+      if [[ -n "$_trd_breach_lines" ]]; then
+        printf '\n%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        printf '%s' "$_trd_breach_lines"
+      fi
+    fi
+
+    if [[ "$_trd_breached" -eq 1 ]]; then
+      exit 3
+    fi
+    exit 0
+  fi
+
+fi
+
+# ══════════════════════════════════════════════════════════════════════════
+# P2.5 — telemetry export [otel|json|csv]
+# ══════════════════════════════════════════════════════════════════════════
+
+if [[ "$sub" == "export" ]]; then
+
+  OTEL_GENAI_VERSION_DEFAULT="1.30.0"
+
+  # Peek at $1: if it's a known format word, consume it; otherwise default to json.
+  _tex_format="json"
+  if [[ $# -gt 0 ]]; then
+    case "$1" in
+      otel|json|csv)
+        _tex_format="$1"
+        shift
+        ;;
+      --*)
+        # Starts with -- so it's an option, not a format — leave on stack, default to json.
+        ;;
+      "")
+        shift
+        ;;
+      *)
+        printf '%s\n' "telemetry export: unknown format '$1' (expected otel|json|csv)" >&2
+        exit 1
+        ;;
+    esac
+  fi
+
+  _tex_since=""
+  _tex_project=""
+  _tex_otel_version="$OTEL_GENAI_VERSION_DEFAULT"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --since)
+        _tex_since="${2:-}"
+        shift 2
+        ;;
+      --project)
+        _tex_project="${2:-}"
+        shift 2
+        ;;
+      --otel-version)
+        _tex_otel_version="${2:-$OTEL_GENAI_VERSION_DEFAULT}"
+        shift 2
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        printf '%s\n' "telemetry export: unknown option '$1'" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  # Resolve project slug.
+  if [[ -z "$_tex_project" ]]; then
+    _tex_project="$(project_slug)"
+  fi
+
+  _tex_store_dir="${EIDOLONS_HOME}/telemetry/${_tex_project}"
+
+  # Empty / absent store — honest exit 0 (no spurious output).
+  _tex_has_data=0
+  if [[ -d "$_tex_store_dir" ]]; then
+    for _tex_f in "${_tex_store_dir}"/*.jsonl; do
+      [[ -f "$_tex_f" ]] && { _tex_has_data=1; break; }
+    done
+  fi
+
+  if [[ "$_tex_has_data" -eq 0 ]]; then
+    # Exit 0 with no spurious output (per acceptance criteria).
+    exit 0
+  fi
+
+  # Collect JSONL files (optionally filtered by --since date).
+  _tex_files=""
+  for _tex_f in "${_tex_store_dir}"/*.jsonl; do
+    [[ -f "$_tex_f" ]] || continue
+    if [[ -n "$_tex_since" ]]; then
+      _tex_day="$(basename "$_tex_f" .jsonl)"
+      if [[ "$_tex_day" < "$_tex_since" ]]; then
+        continue
+      fi
+    fi
+    _tex_files="${_tex_files} ${_tex_f}"
+  done
+
+  if [[ -z "$_tex_files" ]]; then
+    exit 0
+  fi
+
+  # STORE = deduplicated rows (dedup-on-read per §4.2).
+  # shellcheck disable=SC2086
+  TEX_STORE="$(jq -s 'unique_by(.event_id)' ${_tex_files} 2>/dev/null || echo '[]')"
+
+  _tex_total="$(printf '%s' "$TEX_STORE" | jq 'length')"
+  if [[ "$_tex_total" -eq 0 ]]; then
+    exit 0
+  fi
+
+  # ── Load pricing table (for otel usd annotation) ─────────────────────
+  _TEX_PRICING_YAML="${NEXUS}/roster/pricing.yaml"
+  _TEX_PRICING_JSON="{}"
+  if [[ -f "$_TEX_PRICING_YAML" ]]; then
+    if command -v yq >/dev/null 2>&1; then
+      _TEX_PRICING_JSON="$(yq eval -o=json '.prices // {}' "$_TEX_PRICING_YAML" 2>/dev/null || echo '{}')"
+      if ! printf '%s' "$_TEX_PRICING_JSON" | jq empty 2>/dev/null; then
+        _TEX_PRICING_JSON="{}"
+      fi
+    fi
+  fi
+
+  case "$_tex_format" in
+
+    # ── json: emit deduped STORE as a JSON array ─────────────────────────
+    json)
+      printf '%s\n' "$TEX_STORE"
+      exit 0
+      ;;
+
+    # ── csv: RFC-4180 flat table, one row per turn ────────────────────────
+    # Header + one line per turn with core columns.
+    # RFC-4180: fields with commas/quotes/newlines wrapped in double-quotes;
+    # double-quotes inside fields doubled.
+    # Honesty: usd column is empty when model is unpriced (not 0).
+    csv)
+      printf '%s\n' "$TEX_STORE" | jq -r \
+        --argjson prices "$_TEX_PRICING_JSON" '
+        # Helper: normalize model string (strip [...] suffix).
+        def norm_model: gsub("\\[.*\\]$"; "");
+
+        # Helper: compute USD for one row; null if unpriced.
+        def row_usd($p):
+          (.model | norm_model) as $m |
+          if $p | has($m) then
+            ($p[$m].input        // 0) * .usage.input_tokens              / 1000000 +
+            ($p[$m].output       // 0) * .usage.output_tokens             / 1000000 +
+            ($p[$m].cache_creation // 0) * .usage.cache_creation_input_tokens / 1000000 +
+            ($p[$m].cache_read   // 0) * .usage.cache_read_input_tokens   / 1000000
+          else
+            null
+          end;
+
+        # RFC-4180 safe-quote: wrap in double-quotes and double any internal quotes.
+        def csv_quote:
+          tostring |
+          if test("[,\"\n\r]") then
+            "\"" + gsub("\""; "\"\"") + "\""
+          else
+            .
+          end;
+
+        # Emit CSV header first.
+        (
+          "ts,source,host,model,eidolon,repo,branch,tier,is_sidechain,input_tokens,output_tokens,cache_creation_tokens,cache_read_tokens,usd"
+        ),
+        # One row per turn.
+        (.[] |
+          [
+            (.ts // "" | csv_quote),
+            (.source // "" | csv_quote),
+            (.host // "" | csv_quote),
+            (.model // "" | csv_quote),
+            (.attribution.eidolon // "" | csv_quote),
+            (.attribution.repo // "" | csv_quote),
+            ((.attribution.branch // "") | csv_quote),
+            ((.attribution.tier // "") | csv_quote),
+            (.attribution.is_sidechain | tostring | csv_quote),
+            (.usage.input_tokens // 0 | tostring),
+            (.usage.output_tokens // 0 | tostring),
+            (.usage.cache_creation_input_tokens // 0 | tostring),
+            (.usage.cache_read_input_tokens // 0 | tostring),
+            (row_usd($prices) | if . == null then "" else tostring end)
+          ] | join(",")
+        )
+      '
+      exit 0
+      ;;
+
+    # ── otel: OpenTelemetry GenAI-convention spans ────────────────────────
+    # Same attribute keys as `trace otel` (trace.sh) — single source of truth.
+    # Input is turn.v1 rows from STORE; span shape mirrors trace.sh otel output.
+    # Attribute key parity with trace.sh (lines ~232-248):
+    #   gen_ai.system, gen_ai.operation.name, gen_ai.agent.name,
+    #   gen_ai.agent.id, gen_ai.request.model,
+    #   gen_ai.usage.input_tokens, gen_ai.usage.output_tokens,
+    #   eidolons.token_budget, eidolons.performative, eidolons.tier,
+    #   eidolons.to, eidolons.artifact.kind, eidolons.host
+    # Extensions for telemetry store fields (not in ECL envelopes):
+    #   gen_ai.usage.input_tokens (real audited value from usage)
+    #   gen_ai.usage.output_tokens (real audited value)
+    #   eidolons.cache_creation_tokens, eidolons.cache_read_tokens
+    #   eidolons.source, eidolons.is_sidechain, eidolons.repo, eidolons.branch
+    #   eidolons.usd (when priced; absent when unpriced — honesty)
+    otel)
+      printf '%s\n' "$TEX_STORE" | jq \
+        --arg otelver "$_tex_otel_version" \
+        --arg project "$_tex_project" \
+        --argjson prices "$_TEX_PRICING_JSON" \
+        '
+        # Helper: normalize model string (strip [...] suffix).
+        def norm_model: gsub("\\[.*\\]$"; "");
+
+        # Helper: compute USD for one row; null if unpriced.
+        def row_usd($p):
+          (.model | norm_model) as $m |
+          if $p | has($m) then
+            ($p[$m].input        // 0) * .usage.input_tokens              / 1000000 +
+            ($p[$m].output       // 0) * .usage.output_tokens             / 1000000 +
+            ($p[$m].cache_creation // 0) * .usage.cache_creation_input_tokens / 1000000 +
+            ($p[$m].cache_read   // 0) * .usage.cache_read_input_tokens   / 1000000
+          else
+            null
+          end;
+
+        {
+          schema: "opentelemetry.gen_ai",
+          gen_ai_convention_version: $otelver,
+          note: "telemetry store export — token figures are audited spend (source:audited) or estimated (source:estimated)",
+          project: $project,
+          spans: [
+            .[] |
+            # row_usd is null for unpriced models — never silently $0.
+            . as $row |
+            {
+              trace_id: ($row.session_id // "unknown"),
+              span_id: ($row.event_id // "unknown"),
+              parent_span_id: null,
+              name: ("invoke_agent " + ($row.attribution.eidolon // "?")),
+              start_time: ($row.ts // null),
+              kind: "SPAN_KIND_CLIENT",
+              attributes: (
+                {
+                  "gen_ai.system": "eidolons",
+                  "gen_ai.operation.name": "invoke_agent",
+                  "gen_ai.agent.name": ($row.attribution.eidolon // "?"),
+                  "gen_ai.agent.id": null,
+                  "gen_ai.request.model": ($row.model // null),
+                  "gen_ai.usage.input_tokens":  ($row.usage.input_tokens // 0),
+                  "gen_ai.usage.output_tokens": ($row.usage.output_tokens // 0),
+                  "eidolons.cache_creation_tokens": ($row.usage.cache_creation_input_tokens // 0),
+                  "eidolons.cache_read_tokens":     ($row.usage.cache_read_input_tokens // 0),
+                  "eidolons.token_budget": null,
+                  "eidolons.performative": null,
+                  "eidolons.tier": ($row.attribution.tier // null),
+                  "eidolons.to": null,
+                  "eidolons.artifact.kind": null,
+                  "eidolons.host": ($row.host // null),
+                  "eidolons.source": ($row.source // null),
+                  "eidolons.is_sidechain": ($row.attribution.is_sidechain // false),
+                  "eidolons.repo": ($row.attribution.repo // null),
+                  "eidolons.branch": ($row.attribution.branch // null)
+                }
+                # Merge usd only when priced (honesty: absent when unpriced, not null/$0).
+                + (
+                    ($row | row_usd($prices)) as $usd |
+                    if $usd != null then {"eidolons.usd": $usd} else {} end
+                  )
+              )
+            }
+          ]
+        }
+        '
+      exit 0
+      ;;
+
+  esac
 
 fi
 
