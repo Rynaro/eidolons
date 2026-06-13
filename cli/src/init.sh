@@ -27,6 +27,7 @@ _MP_YES_SEEN=false
 _MP_NO_SEEN=false
 WITH_MEMORY=false
 NO_MCP=false
+WITH_TELEMETRY=false
 
 usage() {
   cat <<EOF
@@ -80,6 +81,11 @@ Options:
   --no-mcp                 Suppress the CRYSTALIUM offer entirely (both
                            interactive and non-interactive). --no-mcp wins
                            over --with-memory.
+  --with-telemetry         Enable the opt-in telemetry Stop hook (claude-code
+                           only in MLP) after sync. Writes the zero-logic
+                           Stop shim and registers it in .claude/settings.json.
+                           Default off. Run 'eidolons telemetry enable' anytime
+                           to enable after init.
   -h, --help               Show this help
 
 Behavior:
@@ -115,6 +121,7 @@ while [[ $# -gt 0 ]]; do
     --no-multi-pointer)     MULTI_POINTER=false; MULTI_POINTER_EXPLICIT=true; _MP_NO_SEEN=true; shift ;;
     --with-memory)          WITH_MEMORY=true; shift ;;
     --no-mcp)               NO_MCP=true; shift ;;
+    --with-telemetry)       WITH_TELEMETRY=true; shift ;;
     -h|--help)              usage; exit 0 ;;
     *)                      echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
@@ -534,5 +541,11 @@ bash "$SELF_DIR/sync.sh" \
 
 if [ "$SYNC_RC" -eq 0 ]; then
   offer_crystalium_memory
+  # --with-telemetry: enable the opt-in Stop hook after a successful sync.
+  if [ "$WITH_TELEMETRY" = "true" ]; then
+    say "Enabling telemetry (--with-telemetry)"
+    bash "$SELF_DIR/telemetry.sh" enable \
+      || warn "telemetry enable did not complete. Run 'eidolons telemetry enable' to retry."
+  fi
 fi
 exit "$SYNC_RC"

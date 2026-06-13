@@ -222,6 +222,12 @@ calls each MCP's health driver. A separate "MCP catalogue drift" section
 surfaces MCPs that are behind `pins.stable`. See `docs/mcp.md` for the full
 user-facing reference.
 
+---
+
+## Telemetry subsystem
+
+`eidolons telemetry` is the cross-run, store-backed, audited-spend layer. It sits alongside `eidolons trace` (the per-thread, stateless ECL reader) — `trace` reads self-reported per-thread token estimates, `telemetry` captures the real API `usage` block from the Claude Code session transcript at `Stop` time. Capture is opt-in: `eidolons telemetry enable` (or `init --with-telemetry`) writes a zero-logic Stop shim to `.eidolons/harness/hooks/claude-code-Stop.sh` and registers it in `.claude/settings.json`, mirroring the UPS/SessionStart shim pattern. Rows are appended to a day-partitioned JSONL store under `$EIDOLONS_HOME/telemetry/<project-slug>/<YYYY-MM-DD>.jsonl`. Every row and every report carries an explicit `source` tag (`audited` for CC transcript rows, `estimated` for proxy stubs) — the two are never blended. `telemetry rollup` and `telemetry report` compute spend by repo/branch/model/Eidolon/tier (M1), reconciliation delta vs ECL self-report (M2), and standard-vs-TRANCE tier split (M3), all in tokens (dollar pricing is a P2 deliverable via `roster/pricing.yaml`). `telemetry disable` removes only the Stop shim entry; sibling hooks (UPS/SessionStart/PreToolUse) are untouched.
+
 ATLAS's `commands/aci.sh` reuses the image when the pinned digest is already
 loaded (skipping the `docker build`); the `index` `docker run` writes to a
 writable bind mount, distinct from the `--read-only` `serve` invocation

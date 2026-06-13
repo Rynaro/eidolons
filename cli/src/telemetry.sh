@@ -67,9 +67,7 @@ sub="${1:-}"
 case "$sub" in
   capture) ;;  # handled below
   rollup|report)  ;;  # handled below — Phase D implementations
-  enable|disable)
-    die "telemetry $sub: not yet implemented (Phase F)"
-    ;;
+  enable|disable) ;;  # handled below — Phase F implementations
   --help|-h|help)
     usage
     exit 0
@@ -493,6 +491,217 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     printf '\n%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     printf 'note: all figures in tokens (dollar pricing → P2)\n'
     printf 'for per-thread ECL estimates, see: eidolons trace cost\n'
+    exit 0
+  fi
+
+fi
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase F — telemetry enable / disable
+# ══════════════════════════════════════════════════════════════════════════
+
+if [[ "$sub" == "enable" || "$sub" == "disable" ]]; then
+
+  HARNESS_SHIM_DIR=".eidolons/harness/hooks"
+  _tel_stop_shim="${HARNESS_SHIM_DIR}/claude-code-Stop.sh"
+  _tel_stop_cmd="$(cd "$(pwd)" && printf '%s/%s' "$HARNESS_SHIM_DIR" "claude-code-Stop.sh")"
+  SETTINGS_JSON=".claude/settings.json"
+
+  # ── enable ───────────────────────────────────────────────────────────────
+  if [[ "$sub" == "enable" ]]; then
+
+    # Check for .claude/ dir — MLP audited path is claude-code only.
+    if [[ ! -d ".claude" ]]; then
+      info "telemetry enable: no .claude/ directory detected; telemetry capture is CC-audited-only in the MLP (other hosts = P2). No shim written."
+      exit 0
+    fi
+
+    # ── 1. Write the zero-logic Stop shim (mirrors UPS shim §4.1) ──────────
+    mkdir -p "$HARNESS_SHIM_DIR"
+
+    # Only write (or overwrite) if the shim does not already contain our marker.
+    _shim_needs_write=true
+    if [[ -f "$_tel_stop_shim" ]]; then
+      if grep -q 'telemetry capture --hook STOP_claude-code --stdin' "$_tel_stop_shim" 2>/dev/null; then
+        _shim_needs_write=false
+      fi
+    fi
+
+    if [[ "$_shim_needs_write" == "true" ]]; then
+      cat > "$_tel_stop_shim" <<'SHIM'
+#!/usr/bin/env bash
+# Eidolons telemetry shim — claude-code Stop
+# ZERO LOGIC: cat stdin → exec telemetry capture. No parsing. No decisions.
+# FAIL-OPEN: any error → exit 0.
+set -euo pipefail
+
+_eidolons_bin() {
+  if command -v eidolons >/dev/null 2>&1; then
+    echo "eidolons"
+  elif [[ -x "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons" ]]; then
+    echo "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+  else
+    return 1
+  fi
+}
+
+_bin="$(_eidolons_bin 2>/dev/null)" || exit 0
+_input="$(cat 2>/dev/null)" || exit 0
+[[ -n "$_input" ]] || exit 0
+"$_bin" telemetry capture --hook STOP_claude-code --stdin <<< "$_input" 2>/dev/null || exit 0
+SHIM
+      chmod +x "$_tel_stop_shim"
+      ok "Wrote telemetry Stop shim: $_tel_stop_shim"
+    else
+      info "telemetry Stop shim already present (no-op): $_tel_stop_shim"
+    fi
+
+    # ── 2. Register Stop hook in .claude/settings.json (idempotent) ────────
+    # Mirrors the surgical-append pattern from harness_install.sh:497-550.
+    mkdir -p .claude
+
+    if [[ ! -f "$SETTINGS_JSON" ]]; then
+      # Fresh file — write with only the Stop entry.
+      jq -n \
+        --arg stop "$_tel_stop_cmd" \
+        '{"hooks": {
+            "Stop": [{"hooks": [{"type": "command", "command": $stop}]}]
+         }}' > "$SETTINGS_JSON"
+      ok "Wrote $SETTINGS_JSON with Stop hook"
+    else
+      if ! jq empty "$SETTINGS_JSON" 2>/dev/null; then
+        warn "$SETTINGS_JSON is not valid JSON — skipping Stop hook merge (manual merge required)"
+      else
+        _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
+        _merged="$(jq \
+          --arg stop "$_tel_stop_cmd" \
+          '
+          # Append Stop entry only if command not already present.
+          .hooks.Stop = (
+            (.hooks.Stop // []) as $arr |
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $stop)) then $arr
+            else $arr + [{"hooks": [{"type": "command", "command": $stop}]}]
+            end
+          )
+          ' "$SETTINGS_JSON")"
+        _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
+        if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
+          printf '%s\n' "$_merged" > "$SETTINGS_JSON"
+          ok "Merged Stop hook entry into $SETTINGS_JSON"
+        else
+          info "$SETTINGS_JSON already has Stop hook entry (no-op)"
+        fi
+      fi
+    fi
+
+    # ── 3. Record the shim path in eidolons.lock ────────────────────────────
+    # Reuse the existing shim_paths list under harness: — no new schema field.
+    if [[ -f "eidolons.lock" ]]; then
+      # Check if the shim path is already recorded.
+      if grep -qF "$_tel_stop_shim" "eidolons.lock" 2>/dev/null; then
+        info "eidolons.lock already contains telemetry shim path (no-op)"
+      else
+        _lock_tmp="eidolons.lock.tel.tmp"
+        if grep -q '^  shim_paths:' "eidolons.lock" 2>/dev/null; then
+          # A shim_paths: section exists — append our line within it.
+          awk -v shim="    - ${_tel_stop_shim}" '
+            /^  shim_paths:/ { print; _in_shims=1; next }
+            _in_shims && /^    - / { print; next }
+            _in_shims && !/^    - / {
+              print shim
+              _in_shims=0
+              print
+              next
+            }
+            { print }
+            END { if (_in_shims) print shim }
+          ' "eidolons.lock" > "$_lock_tmp" && mv "$_lock_tmp" "eidolons.lock"
+        else
+          # No shim_paths: section — append a minimal harness: block at the end.
+          {
+            cat "eidolons.lock"
+            printf 'harness:\n  schema_version: 1\n  shim_paths:\n    - %s\n' \
+              "$_tel_stop_shim"
+          } > "$_lock_tmp" && mv "$_lock_tmp" "eidolons.lock"
+        fi
+        ok "Recorded telemetry shim in eidolons.lock"
+      fi
+    else
+      info "eidolons.lock not found — skipping lock update (run 'eidolons sync' first)"
+    fi
+
+    ok "Telemetry enabled for claude-code. Stop hook will capture audited token usage."
+    info "Disable with: eidolons telemetry disable"
+    exit 0
+  fi
+
+  # ── disable ──────────────────────────────────────────────────────────────
+  if [[ "$sub" == "disable" ]]; then
+
+    _did_anything=false
+
+    # 1. Remove the Stop shim file.
+    if [[ -f "$_tel_stop_shim" ]]; then
+      rm -f "$_tel_stop_shim"
+      ok "Removed telemetry Stop shim: $_tel_stop_shim"
+      _did_anything=true
+    else
+      info "telemetry Stop shim not present (no-op): $_tel_stop_shim"
+    fi
+
+    # 2. Remove the Stop entry from .claude/settings.json (only ours; leave siblings).
+    if [[ -f "$SETTINGS_JSON" ]]; then
+      if ! jq empty "$SETTINGS_JSON" 2>/dev/null; then
+        warn "$SETTINGS_JSON is not valid JSON — skipping Stop hook removal"
+      else
+        _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
+        _cleaned="$(jq \
+          --arg stop "$_tel_stop_cmd" \
+          '
+          if (.hooks.Stop // []) == [] then .
+          else
+            .hooks.Stop = (
+              (.hooks.Stop // [])
+              | map(select(
+                  (.hooks // [] | map(.command // "") | any(. == $stop)) | not
+                ))
+            ) |
+            # Remove the Stop key entirely if the array is now empty.
+            if (.hooks.Stop // []) == [] then del(.hooks.Stop) else . end
+          end
+          ' "$SETTINGS_JSON")"
+        _cleaned_canonical="$(printf '%s' "$_cleaned" | jq -cS . 2>/dev/null || echo "")"
+        if [[ "$_existing_canonical" != "$_cleaned_canonical" ]]; then
+          printf '%s\n' "$_cleaned" > "$SETTINGS_JSON"
+          ok "Removed telemetry Stop entry from $SETTINGS_JSON"
+          _did_anything=true
+        else
+          info "$SETTINGS_JSON has no telemetry Stop entry (no-op)"
+        fi
+      fi
+    else
+      info "$SETTINGS_JSON not found (no-op)"
+    fi
+
+    # 3. Remove the shim path from eidolons.lock shim_paths list.
+    if [[ -f "eidolons.lock" ]]; then
+      if grep -qF "$_tel_stop_shim" "eidolons.lock" 2>/dev/null; then
+        _lock_tmp="eidolons.lock.tel.tmp"
+        # Remove the line containing the telemetry shim path.
+        grep -vF "    - ${_tel_stop_shim}" "eidolons.lock" > "$_lock_tmp" \
+          && mv "$_lock_tmp" "eidolons.lock"
+        ok "Removed telemetry shim entry from eidolons.lock"
+        _did_anything=true
+      else
+        info "eidolons.lock has no telemetry shim entry (no-op)"
+      fi
+    fi
+
+    if [[ "$_did_anything" == "true" ]]; then
+      ok "Telemetry disabled. UPS/SessionStart/PreToolUse hooks untouched."
+    else
+      info "Telemetry was not enabled — nothing to remove."
+    fi
     exit 0
   fi
 
