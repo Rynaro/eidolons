@@ -66,8 +66,9 @@ sub="${1:-}"
 
 case "$sub" in
   capture) ;;  # handled below
-  rollup|report|enable|disable)
-    die "telemetry $sub: not yet implemented (Phase D/F)"
+  rollup|report)  ;;  # handled below — Phase D implementations
+  enable|disable)
+    die "telemetry $sub: not yet implemented (Phase F)"
     ;;
   --help|-h|help)
     usage
@@ -83,6 +84,419 @@ case "$sub" in
     exit 1
     ;;
 esac
+
+# ══════════════════════════════════════════════════════════════════════════
+# Phase D — rollup and report (pure-jq M1/M2/M3)
+# ══════════════════════════════════════════════════════════════════════════
+
+if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
+
+  # ── Shared arg parsing for rollup + report ──────────────────────────────
+  _trd_by="model"
+  _trd_since=""
+  _trd_project=""
+  _trd_json=0
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --by)
+        _trd_by="${2:-model}"
+        shift 2
+        ;;
+      --since)
+        _trd_since="${2:-}"
+        shift 2
+        ;;
+      --project)
+        _trd_project="${2:-}"
+        shift 2
+        ;;
+      --json)
+        _trd_json=1
+        shift
+        ;;
+      --help|-h)
+        usage
+        exit 0
+        ;;
+      *)
+        printf '%s\n' "telemetry $sub: unknown option '$1'" >&2
+        exit 1
+        ;;
+    esac
+  done
+
+  # Resolve project slug: --project wins; fallback to cwd-derived.
+  if [[ -z "$_trd_project" ]]; then
+    _trd_project="$(project_slug)"
+  fi
+
+  # D2 store directory for this project.
+  _trd_store_dir="${EIDOLONS_HOME}/telemetry/${_trd_project}"
+
+  # ── Empty / absent store — honest exit 0 ─────────────────────────────
+  _trd_has_data=0
+  if [[ -d "$_trd_store_dir" ]]; then
+    for _trd_f in "${_trd_store_dir}"/*.jsonl; do
+      [[ -f "$_trd_f" ]] && { _trd_has_data=1; break; }
+    done
+  fi
+
+  if [[ "$_trd_has_data" -eq 0 ]]; then
+    if [[ "$_trd_json" -eq 1 ]]; then
+      printf '%s\n' '{"status":"empty","message":"no telemetry captured yet for '"$_trd_project"'"}'
+    else
+      printf 'no telemetry captured yet for %s\n' "$_trd_project"
+    fi
+    exit 0
+  fi
+
+  # ── Collect JSONL files (optionally filtered by --since date) ──────────
+  # Build an array of matching day files. Use word-level loop (bash 3.2 safe).
+  _trd_files=""
+  for _trd_f in "${_trd_store_dir}"/*.jsonl; do
+    [[ -f "$_trd_f" ]] || continue
+    if [[ -n "$_trd_since" ]]; then
+      _trd_day="$(basename "$_trd_f" .jsonl)"
+      # Skip files whose date is before --since.
+      if [[ "$_trd_day" < "$_trd_since" ]]; then
+        continue
+      fi
+    fi
+    _trd_files="${_trd_files} ${_trd_f}"
+  done
+
+  if [[ -z "$_trd_files" ]]; then
+    if [[ "$_trd_json" -eq 1 ]]; then
+      printf '%s\n' '{"status":"empty","message":"no telemetry captured yet for '"$_trd_project"'"}'
+    else
+      printf 'no telemetry captured yet for %s\n' "$_trd_project"
+    fi
+    exit 0
+  fi
+
+  # ── STORE = deduplicated rows (jq -s unique_by(.event_id) per §4.2) ───
+  # shellcheck disable=SC2086
+  # We can't use an array-quoting trick in bash 3.2 with variable-length
+  # lists, so pass _trd_files as word-split (intentional, files have no spaces).
+  # shellcheck disable=SC2086
+  STORE="$(jq -s 'unique_by(.event_id)' ${_trd_files} 2>/dev/null || echo '[]')"
+
+  _trd_total="$(printf '%s' "$STORE" | jq 'length')"
+  if [[ "$_trd_total" -eq 0 ]]; then
+    if [[ "$_trd_json" -eq 1 ]]; then
+      printf '%s\n' '{"status":"empty","message":"no telemetry captured yet for '"$_trd_project"'"}'
+    else
+      printf 'no telemetry captured yet for %s\n' "$_trd_project"
+    fi
+    exit 0
+  fi
+
+  # ══════════════════════════════════════════════════════════════════════
+  # rollup subcommand
+  # ══════════════════════════════════════════════════════════════════════
+  if [[ "$sub" == "rollup" ]]; then
+
+    # Validate --by value.
+    case "$_trd_by" in
+      repo|branch|model|eidolon|tier|day) ;;
+      *) die "telemetry rollup: --by must be one of repo|branch|model|eidolon|tier|day" ;;
+    esac
+
+    # For --by day, group on the date portion of .ts; otherwise on attribution key.
+    if [[ "$_trd_by" == "model" ]]; then
+      _trd_key_expr='.model'
+    elif [[ "$_trd_by" == "day" ]]; then
+      _trd_key_expr='(.ts // "" | split("T") | .[0])'
+    else
+      _trd_key_expr=".attribution.${_trd_by}"
+    fi
+
+    # M1-style rollup per §7, always source-split.
+    # The spec formula groups by source first, then by the key.
+    _trd_rollup="$(printf '%s' "$STORE" | jq --arg by "$_trd_by" --arg key_expr "$_trd_key_expr" '
+      group_by(.source)
+      | map({
+          source: .[0].source,
+          by: (
+            . as $grp |
+            if $by == "model" then
+              ($grp | group_by(.model))
+              | map({
+                  key: (.[0].model // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(-.total)
+            elif $by == "repo" then
+              ($grp | group_by(.attribution.repo))
+              | map({
+                  key: (.[0].attribution.repo // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(-.total)
+            elif $by == "branch" then
+              ($grp | group_by(.attribution.branch))
+              | map({
+                  key: (.[0].attribution.branch // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(-.total)
+            elif $by == "eidolon" then
+              ($grp | group_by(.attribution.eidolon))
+              | map({
+                  key: (.[0].attribution.eidolon // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(-.total)
+            elif $by == "tier" then
+              ($grp | group_by(.attribution.tier))
+              | map({
+                  key: (.[0].attribution.tier // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(-.total)
+            else
+              ($grp | group_by(.ts[0:10]))
+              | map({
+                  key: (.[0].ts[0:10] // "?"),
+                  turns: length,
+                  input:          (map(.usage.input_tokens)                  | add // 0),
+                  output:         (map(.usage.output_tokens)                 | add // 0),
+                  cache_creation: (map(.usage.cache_creation_input_tokens)   | add // 0),
+                  cache_read:     (map(.usage.cache_read_input_tokens)       | add // 0),
+                  total: (map(.usage.input_tokens + .usage.output_tokens
+                              + .usage.cache_creation_input_tokens
+                              + .usage.cache_read_input_tokens) | add // 0)
+                })
+              | sort_by(.key)
+            end
+          )
+        })')"
+
+    if [[ "$_trd_json" -eq 1 ]]; then
+      printf '%s\n' "$_trd_rollup"
+    else
+      printf '%stellemetry rollup%s  (by %s, project: %s)\n' \
+        "${BOLD:-}" "${RESET:-}" "$_trd_by" "$_trd_project"
+      printf '%s' "$_trd_rollup" | jq -r '.[] | "  [source: \(.source)]", (.by[] | "  \(.key // "?")\t\(.turns) turns\t\(.total) tokens")'
+    fi
+    exit 0
+  fi
+
+  # ══════════════════════════════════════════════════════════════════════
+  # report subcommand — M1 / M2 / M3, honesty-gated (C6)
+  # ══════════════════════════════════════════════════════════════════════
+  if [[ "$sub" == "report" ]]; then
+
+    # ── M1 — real spend attribution (headline, §7) ─────────────────────
+    # Group by source, then compute totals + breakdowns.
+    # The honesty gate (AC-F4-4): audited and estimated MUST remain
+    # as distinct keys. No blended total at the top level.
+    _trd_m1="$(printf '%s' "$STORE" | jq '
+      # Compute per-source totals (strict separation — honesty gate C6)
+      (group_by(.source)
+       | map({
+           key: .[0].source,
+           value: {
+             turns: length,
+             total_tokens: (map(.usage.input_tokens + .usage.output_tokens
+                               + .usage.cache_creation_input_tokens
+                               + .usage.cache_read_input_tokens) | add // 0),
+             input_tokens:          (map(.usage.input_tokens)                | add // 0),
+             output_tokens:         (map(.usage.output_tokens)               | add // 0),
+             cache_creation_tokens: (map(.usage.cache_creation_input_tokens) | add // 0),
+             cache_read_tokens:     (map(.usage.cache_read_input_tokens)     | add // 0),
+             by_model: (
+               group_by(.model)
+               | map({key: (.[0].model // "?"),
+                      value: {turns: length,
+                              total: (map(.usage.input_tokens + .usage.output_tokens
+                                         + .usage.cache_creation_input_tokens
+                                         + .usage.cache_read_input_tokens) | add // 0)}})
+               | from_entries),
+             by_repo: (
+               group_by(.attribution.repo)
+               | map({key: (.[0].attribution.repo // "?"),
+                      value: {turns: length,
+                              total: (map(.usage.input_tokens + .usage.output_tokens
+                                         + .usage.cache_creation_input_tokens
+                                         + .usage.cache_read_input_tokens) | add // 0)}})
+               | from_entries),
+             by_eidolon: (
+               group_by(.attribution.eidolon)
+               | map({key: (.[0].attribution.eidolon // "?"),
+                      value: {turns: length,
+                              total: (map(.usage.input_tokens + .usage.output_tokens
+                                         + .usage.cache_creation_input_tokens
+                                         + .usage.cache_read_input_tokens) | add // 0)}})
+               | from_entries),
+             by_tier: (
+               group_by(.attribution.tier)
+               | map({key: (.[0].attribution.tier // "null"),
+                      value: {turns: length,
+                              total: (map(.usage.input_tokens + .usage.output_tokens
+                                         + .usage.cache_creation_input_tokens
+                                         + .usage.cache_read_input_tokens) | add // 0)}})
+               | from_entries)
+           }
+         })
+       | from_entries) as $by_source |
+      # Honesty gate: expose as by_source.audited / by_source.estimated
+      # NEVER merge them into a single "total_tokens" at the top level.
+      {by_source: $by_source}
+    ')"
+
+    # ── M2 — reconciliation delta (§7) ─────────────────────────────────
+    _trd_m2="$(printf '%s' "$STORE" | jq '
+      [.[] | select(.self_reported_tokens != null)]
+      | if length == 0 then
+          {turns_with_self_report: 0,
+           status: "na",
+           message: "0 turns with self-reported data — reconciliation N/A until ECL self-report join lands"}
+        else
+          map(
+            . + {
+              _audited_total: (.usage.input_tokens + .usage.output_tokens
+                               + .usage.cache_creation_input_tokens
+                               + .usage.cache_read_input_tokens),
+              _delta: ((.usage.input_tokens + .usage.output_tokens
+                        + .usage.cache_creation_input_tokens
+                        + .usage.cache_read_input_tokens)
+                       - .self_reported_tokens)
+            }
+          ) |
+          {
+            turns_with_self_report: length,
+            mean_abs_delta: ((map(._delta | if . < 0 then -. else . end) | add) / length),
+            drift_direction: (if (map(._delta) | add) > 0 then "agents_underreport" else "agents_overreport" end),
+            status: "ok"
+          }
+        end
+    ')"
+
+    # ── M3 — cost intent split / TRANCE (§7, C6 source-split) ─────────
+    _trd_m3="$(printf '%s' "$STORE" | jq '
+      group_by(.source)
+      | map({
+          source: .[0].source,
+          by_tier: (
+            group_by(.attribution.tier)
+            | map({
+                tier: (.[0].attribution.tier // "standard"),
+                turns: length,
+                total: (map(.usage.input_tokens + .usage.output_tokens
+                            + .usage.cache_creation_input_tokens
+                            + .usage.cache_read_input_tokens) | add // 0)
+              })
+          )
+        })
+    ')"
+
+    # ── JSON output (machine-readable, honesty-gated shape) ────────────
+    if [[ "$_trd_json" -eq 1 ]]; then
+      printf '%s' "$_trd_m1" | jq \
+        --arg project "$_trd_project" \
+        --argjson m2 "$_trd_m2" \
+        --argjson m3 "$_trd_m3" \
+        '. + {project: $project, m2_reconciliation: $m2, m3_tier_split: $m3}'
+      exit 0
+    fi
+
+    # ── Text output ────────────────────────────────────────────────────
+    printf '%seidolons telemetry report%s  (project: %s)\n' \
+      "${BOLD:-}" "${RESET:-}" "$_trd_project"
+    printf '%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    printf '\n%sM1 — Real Spend Attribution%s (tokens, not dollars — pricing P2)\n' \
+      "${BOLD:-}" "${RESET:-}"
+    printf '%s\n' "  Honesty contract: audited and estimated are ALWAYS shown separately."
+
+    # Print per-source summaries.
+    printf '%s' "$_trd_m1" | jq -r '
+      .by_source | to_entries[] |
+      "  [source: \(.key)]\n" +
+      "    total_tokens:          \(.value.total_tokens)\n" +
+      "    turns:                 \(.value.turns)\n" +
+      "    input_tokens:          \(.value.input_tokens)\n" +
+      "    output_tokens:         \(.value.output_tokens)\n" +
+      "    cache_creation_tokens: \(.value.cache_creation_tokens)\n" +
+      "    cache_read_tokens:     \(.value.cache_read_tokens)\n" +
+      "    by_model:\n" +
+      (.value.by_model | to_entries | sort_by(-.value.total) |
+       map("      \(.key): \(.value.total) tokens (\(.value.turns) turns)") | join("\n")) +
+      "\n    by_repo:\n" +
+      (.value.by_repo | to_entries | sort_by(-.value.total) |
+       map("      \(.key): \(.value.total) tokens (\(.value.turns) turns)") | join("\n")) +
+      "\n    by_eidolon:\n" +
+      (.value.by_eidolon | to_entries | sort_by(-.value.total) |
+       map("      \(.key): \(.value.total) tokens (\(.value.turns) turns)") | join("\n")) +
+      "\n    by_tier:\n" +
+      (.value.by_tier | to_entries | sort_by(-.value.total) |
+       map("      \(.key): \(.value.total) tokens (\(.value.turns) turns)") | join("\n"))
+    '
+
+    printf '\n%sM2 — Reconciliation Delta%s\n' "${BOLD:-}" "${RESET:-}"
+    _trd_m2_status="$(printf '%s' "$_trd_m2" | jq -r '.status')"
+    if [[ "$_trd_m2_status" == "na" ]]; then
+      printf '  %s\n' "$(printf '%s' "$_trd_m2" | jq -r '.message')"
+    else
+      printf '%s' "$_trd_m2" | jq -r '
+        "  turns with self-report: \(.turns_with_self_report)\n" +
+        "  mean absolute delta:    \(.mean_abs_delta)\n" +
+        "  drift direction:        \(.drift_direction)"
+      '
+    fi
+
+    printf '\n%sM3 — Cost Intent / TRANCE Tier Split%s\n' "${BOLD:-}" "${RESET:-}"
+    printf '%s' "$_trd_m3" | jq -r '
+      .[] |
+      "  [source: \(.source)]" +
+      "\n" +
+      (.by_tier | map("    tier \(.tier): \(.total) tokens (\(.turns) turns)") | join("\n"))
+    '
+
+    printf '\n%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    printf 'note: all figures in tokens (dollar pricing → P2)\n'
+    printf 'for per-thread ECL estimates, see: eidolons trace cost\n'
+    exit 0
+  fi
+
+fi
 
 # ══════════════════════════════════════════════════════════════════════════
 # telemetry capture
