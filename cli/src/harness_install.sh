@@ -60,16 +60,18 @@ FORCE=false
 NON_INTERACTIVE=false
 REFRESH_SHIMS_ONLY=false
 STRICT=false
+WITH_TELEMETRY=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --hosts)          HOSTS_ARG="${2:-}"; shift 2 ;;
-    --force)          FORCE=true; shift ;;
+    --hosts)           HOSTS_ARG="${2:-}"; shift 2 ;;
+    --force)           FORCE=true; shift ;;
     --non-interactive) NON_INTERACTIVE=true; shift ;;
     --refresh-shims-only) REFRESH_SHIMS_ONLY=true; shift ;;
-    --strict)         STRICT=true; shift ;;
-    -h|--help)        usage; exit 0 ;;
-    *)                die "Unknown option: $1 (see 'eidolons harness install --help')" ;;
+    --strict)          STRICT=true; shift ;;
+    --with-telemetry)  WITH_TELEMETRY=true; shift ;;
+    -h|--help)         usage; exit 0 ;;
+    *)                 die "Unknown option: $1 (see 'eidolons harness install --help')" ;;
   esac
 done
 
@@ -309,6 +311,81 @@ SHIM
   fi
 
   chmod +x "$shim_path"
+}
+
+# _write_stop_shim HOST
+# Writes the zero-logic telemetry Stop shim for HOST.
+# Mirrors the UPS shim pattern (§4.1). Only called when --with-telemetry is set.
+_write_stop_shim() {
+  local host="$1"
+  local shim_path="$HARNESS_SHIM_DIR/${host}-Stop.sh"
+
+  cat > "$shim_path" <<'SHIM'
+#!/usr/bin/env bash
+# Eidolons telemetry shim — STOP_HOST Stop
+# ZERO LOGIC: cat stdin → exec telemetry capture. No parsing. No decisions.
+# FAIL-OPEN: any error → exit 0.
+set -euo pipefail
+
+_eidolons_bin() {
+  if command -v eidolons >/dev/null 2>&1; then
+    echo "eidolons"
+  elif [[ -x "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons" ]]; then
+    echo "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+  else
+    return 1
+  fi
+}
+
+_bin="$(_eidolons_bin 2>/dev/null)" || exit 0
+_input="$(cat 2>/dev/null)" || exit 0
+[[ -n "$_input" ]] || exit 0
+"$_bin" telemetry capture --hook STOP_HOST --stdin <<< "$_input" 2>/dev/null || exit 0
+SHIM
+  sed -i '' "s/STOP_HOST/${host}/g" "$shim_path" 2>/dev/null \
+    || sed -i "s/STOP_HOST/${host}/g" "$shim_path"
+  chmod +x "$shim_path"
+}
+
+# _register_stop_in_settings SHIM_CMD SETTINGS_JSON
+# Idempotent surgical-append of a Stop hook entry into .claude/settings.json.
+# Mirrors the UPS/SessionStart pattern (harness_install.sh:497-550).
+_register_stop_in_settings() {
+  local stop_cmd="$1"
+  local settings_file="$2"
+
+  if [[ ! -f "$settings_file" ]]; then
+    jq -n \
+      --arg stop "$stop_cmd" \
+      '{"hooks": {
+          "Stop": [{"hooks": [{"type": "command", "command": $stop}]}]
+       }}' > "$settings_file"
+    ok "Wrote $settings_file with Stop hook"
+    return
+  fi
+  if ! jq empty "$settings_file" 2>/dev/null; then
+    warn "$settings_file is not valid JSON — skipping Stop hook merge"
+    return
+  fi
+  local _existing_canonical _merged _merged_canonical
+  _existing_canonical="$(jq -cS . "$settings_file" 2>/dev/null || echo "")"
+  _merged="$(jq \
+    --arg stop "$stop_cmd" \
+    '
+    .hooks.Stop = (
+      (.hooks.Stop // []) as $arr |
+      if ($arr | map(.hooks[]?.command? // "") | any(. == $stop)) then $arr
+      else $arr + [{"hooks": [{"type": "command", "command": $stop}]}]
+      end
+    )
+    ' "$settings_file")"
+  _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
+  if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
+    printf '%s\n' "$_merged" > "$settings_file"
+    ok "Merged Stop hook entry into $settings_file"
+  else
+    info "$settings_file already has Stop hook entry (no-op)"
+  fi
 }
 
 # ── Refresh-shims-only mode (called by sync) ──────────────────────────────
@@ -559,6 +636,20 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         info ".claude/settings.json already has identical hooks entries (no-op)"
       fi
     fi
+  fi
+fi
+
+# ── Wire telemetry Stop shim (--with-telemetry opt-in) ───────────────────
+# Only written when --with-telemetry is explicitly passed. Does NOT alter
+# the existing UPS/SessionStart/PreToolUse behavior when flag is absent.
+if [[ "$WITH_TELEMETRY" == "true" ]]; then
+  if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
+    _tel_stop_path="$HARNESS_SHIM_DIR/claude-code-Stop.sh"
+    _tel_stop_cmd="$_tel_stop_path"
+    _write_stop_shim "claude-code"
+    info "  wrote claude-code-Stop.sh (telemetry Stop shim)"
+    _shim_paths="${_shim_paths:+${_shim_paths},}${_tel_stop_path}"
+    _register_stop_in_settings "$_tel_stop_cmd" ".claude/settings.json"
   fi
 fi
 

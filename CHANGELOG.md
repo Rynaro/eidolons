@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.39.0] — 2026-06-13 — eidolons telemetry: audited token-cost + prompt-efficiency subsystem (MLP)
+
+### Added
+- `feat(telemetry)`: `eidolons telemetry capture --hook STOP_<HOST> --stdin` — kernel verb that reads the Claude Code session transcript at Stop time, projects each assistant turn's real API token usage into a `turn.v1` row (source: `audited`), and appends it to the day-partitioned JSONL store under `$EIDOLONS_HOME/telemetry/<project-slug>/<YYYY-MM-DD>.jsonl`. Non-CC hosts log an honest `estimated` stub. Fail-open: hook paths always exit 0.
+- `feat(telemetry)`: `eidolons telemetry rollup [--by repo|branch|model|eidolon|tier|day] [--since DATE] [--project <slug>] [--json]` — pure-jq M1 aggregation over the store, always source-split (audited vs estimated).
+- `feat(telemetry)`: `eidolons telemetry report [--project <slug>] [--since DATE] [--json]` — human dashboard reporting M1 (spend attribution), M2 (reconciliation delta vs ECL self-report), and M3 (cost-by-tier / TRANCE split), always source-split. Every report carries both `audited` and `estimated` as distinct keys — a blended total is structurally absent (audited-vs-estimated honesty contract).
+- `feat(telemetry)`: `eidolons telemetry enable` — opt-in Stop-hook install for claude-code. Writes a zero-logic Stop shim to `.eidolons/harness/hooks/claude-code-Stop.sh` (mirrors the UPS shim: `cat` stdin → `exec telemetry capture`; no parsing, no decisions in the shim). Registers the `Stop` hook in `.claude/settings.json` via idempotent surgical-append (same pattern as UPS/SessionStart). Records the shim path in `eidolons.lock` under the existing `shim_paths` key. Idempotent: running twice is a no-op. Exits 0 with an honest message when no `.claude/` directory is present (not a claude-code project).
+- `feat(telemetry)`: `eidolons telemetry disable` — removes only the telemetry Stop shim + `.claude/settings.json` Stop entry + `eidolons.lock` shim entry. UPS/SessionStart/PreToolUse hooks are untouched. Disabling when not enabled is a no-op.
+- `feat(telemetry)`: `eidolons init --with-telemetry` flag (default off) — triggers `telemetry enable` after a successful `init`. Mirrors the `--with-memory` pattern.
+- `feat(telemetry)`: audited-vs-estimated honesty contract (C6) — every captured row and every report surface always separates `source: audited` (real CC transcript token counts) from `source: estimated` (proxy/heuristic). A machine-checkable bats assertion enforces no blended headline.
+- `feat(telemetry)`: `roster/pricing.yaml` — P2 stub file; token→USD conversion table keyed by vendor model string. MLP reports tokens only; dollar pricing populates this file in P2.
+
 ## [1.38.0] — 2026-06-12 — Routing-compliance instrument + README overhaul
 
 ### Added

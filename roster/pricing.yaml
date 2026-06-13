@@ -1,0 +1,20 @@
+# roster/pricing.yaml — token→USD conversion table (P2 stub)
+#
+# MLP ships this file EMPTY. The MLP reports TOKENS, not dollars.
+# Dollar pricing is a P2 deliverable: when prices are populated here,
+# telemetry report will multiply the four usage fields by the matching
+# per-1M price for the model.
+#
+# Keys must match the vendor model strings owned by roster/model-profiles.yaml.
+# Price unit: USD per 1 million tokens.
+#
+# Example (P2 — uncomment and populate when pricing goes live):
+#   claude-opus-4-8:
+#     input: 15.00
+#     output: 75.00
+#     cache_read: 1.50
+#     cache_creation: 18.75
+
+schema_version: 1
+currency: USD
+prices: {}
