@@ -1088,6 +1088,158 @@ telemetry_capture_claude_code() {
   done <<EOF
 $_turns_json
 EOF
+
+  # ── P2.2 — Subagent/sidechain capture (toolUseResult projection) ─────────
+  # Extract every type:"user" line that carries .toolUseResult.agentType.
+  # These are Agent dispatch result lines persisted in the SAME parent transcript.
+  # Shape (verified against CC 2.x real transcripts):
+  #   .toolUseResult = { agentType, resolvedModel, totalTokens, usage{4 fields},
+  #                      agentId, status, totalDurationMs }
+  # Guard with // empty fallbacks — toolUseResult is CC-version-coupled; absence
+  # means no subagent rows (honest, non-fatal, never errors the hook path).
+
+  local _agent_turns_json
+  _agent_turns_json="$(jq -c '
+    [
+      select(.type == "user") |
+      select((.toolUseResult.agentType // empty) != null) |
+      {
+        session_id: (.sessionId // ""),
+        ts: (.timestamp // "1970-01-01T00:00:00Z"),
+        agent_type: (.toolUseResult.agentType // "unknown"),
+        resolved_model: (.toolUseResult.resolvedModel // "unknown"),
+        agent_id: (.toolUseResult.agentId // ""),
+        input_tokens: (.toolUseResult.usage.input_tokens // 0),
+        output_tokens: (.toolUseResult.usage.output_tokens // 0),
+        cache_creation_input_tokens: (.toolUseResult.usage.cache_creation_input_tokens // 0),
+        cache_read_input_tokens: (.toolUseResult.usage.cache_read_input_tokens // 0),
+        cwd: (.cwd // ""),
+        git_branch: (.gitBranch // null)
+      }
+    ]
+  ' "$_tp" 2>/dev/null | jq -c '.[]' 2>/dev/null || true)"
+
+  if [[ -z "$_agent_turns_json" ]]; then
+    # No toolUseResult lines in this transcript — not an error.
+    return 0
+  fi
+
+  local _agent_index=0
+  while IFS= read -r _agent_turn; do
+    [[ -z "$_agent_turn" ]] && continue
+
+    local _a_sess_id _a_ts _a_type _a_model _a_agent_id
+    local _a_in _a_out _a_cc _a_cr _a_cwd _a_branch
+    _a_sess_id="$(printf '%s' "$_agent_turn" | jq -r '.session_id // "unknown"')"
+    _a_ts="$(printf '%s' "$_agent_turn" | jq -r '.ts // "1970-01-01T00:00:00Z"')"
+    _a_type="$(printf '%s' "$_agent_turn" | jq -r '.agent_type // "unknown"')"
+    _a_model="$(printf '%s' "$_agent_turn" | jq -r '.resolved_model // "unknown"')"
+    _a_agent_id="$(printf '%s' "$_agent_turn" | jq -r '.agent_id // ""')"
+    _a_in="$(printf '%s' "$_agent_turn" | jq -r '.input_tokens // 0')"
+    _a_out="$(printf '%s' "$_agent_turn" | jq -r '.output_tokens // 0')"
+    _a_cc="$(printf '%s' "$_agent_turn" | jq -r '.cache_creation_input_tokens // 0')"
+    _a_cr="$(printf '%s' "$_agent_turn" | jq -r '.cache_read_input_tokens // 0')"
+    _a_cwd="$(printf '%s' "$_agent_turn" | jq -r '.cwd // ""')"
+    _a_branch="$(printf '%s' "$_agent_turn" | jq -r '.git_branch // null')"
+
+    # event_id = sha256(session_id|agentId): agentId is the clean dedup key.
+    # Re-runs produce the same event_id → no double-counting.
+    local _a_event_id
+    if [[ -n "$_a_agent_id" ]]; then
+      _a_event_id="$(_sha256_str "${_a_sess_id}|${_a_agent_id}" 2>/dev/null || \
+        printf '%s' "${_a_sess_id}|${_a_agent_id}" | od -A n -t x1 | tr -d ' \n' | head -c 64)"
+    else
+      # Fallback when agentId absent (guard for future CC format changes).
+      _a_event_id="$(_sha256_str "${_a_sess_id}|agent|${_agent_index}" 2>/dev/null || \
+        printf '%s' "${_a_sess_id}|agent|${_agent_index}" | od -A n -t x1 | tr -d ' \n' | head -c 64)"
+    fi
+
+    # Day partitioning.
+    local _a_day
+    _a_day="$(printf '%s' "$_a_ts" | sed 's/T.*//' | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' || echo "$_today")"
+
+    # D2 store path (same slug as main projection).
+    local _a_store_dir="$EIDOLONS_HOME/telemetry/${_store_slug}"
+    local _a_day_file="${_a_store_dir}/${_a_day}.jsonl"
+    mkdir -p "$_a_store_dir"
+
+    # Repo from cwd.
+    local _a_repo
+    _a_repo="$(basename "${_a_cwd:-$PWD}" 2>/dev/null || echo "unknown")"
+
+    # Build the subagent turn.v1 row.
+    # - source: "audited" (real persisted usage from the parent transcript)
+    # - is_sidechain: true (authoritative — this IS the subagent result)
+    # - eidolon: .toolUseResult.agentType (authoritative — no dispatch-stamp join needed)
+    # - model: .toolUseResult.resolvedModel (verbatim, may carry [1m] suffix)
+    # - tier: null for subagent rows this sprint (eidolon+model+usage are the win)
+    local _a_row
+    _a_row="$(jq -nc \
+      --arg schema "eidolons.telemetry.turn.v1" \
+      --arg event_id "$_a_event_id" \
+      --arg ts "$_a_ts" \
+      --arg source "audited" \
+      --arg host "claude-code" \
+      --arg session_id "$_a_sess_id" \
+      --argjson turn_index "$_agent_index" \
+      --arg model "$_a_model" \
+      --argjson input_tokens "$_a_in" \
+      --argjson output_tokens "$_a_out" \
+      --argjson cache_creation_input_tokens "$_a_cc" \
+      --argjson cache_read_input_tokens "$_a_cr" \
+      --arg repo "$_a_repo" \
+      --argjson branch "$(printf '%s' "$_a_branch" | jq -R 'if . == "null" then null else . end')" \
+      --argjson commit "$(if [[ -n "$_git_commit" ]]; then printf '"%s"' "$_git_commit"; else printf 'null'; fi)" \
+      --argjson dirty "$(if [[ -n "$_git_dirty" ]]; then printf '%s' "$_git_dirty"; else printf 'null'; fi)" \
+      --argjson pr "$_pr_ref" \
+      --arg cwd "${_a_cwd:-}" \
+      --arg eidolon "$_a_type" \
+      '{
+        schema: $schema,
+        event_id: $event_id,
+        ts: $ts,
+        source: $source,
+        host: $host,
+        session_id: $session_id,
+        turn_index: $turn_index,
+        model: $model,
+        usage: {
+          input_tokens: $input_tokens,
+          output_tokens: $output_tokens,
+          cache_creation_input_tokens: $cache_creation_input_tokens,
+          cache_read_input_tokens: $cache_read_input_tokens
+        },
+        self_reported_tokens: null,
+        reconciliation_delta: null,
+        attribution: {
+          repo: $repo,
+          branch: $branch,
+          commit: $commit,
+          dirty: $dirty,
+          pr: $pr,
+          cwd: $cwd,
+          is_sidechain: true,
+          eidolon: $eidolon,
+          eidolon_prompt_sha: null,
+          objective_hash: null,
+          task_id: null,
+          prompt_version: null,
+          tier: null
+        },
+        ecl_thread_id: null
+      }' 2>/dev/null || true)"
+
+    if [[ -z "$_a_row" ]]; then
+      info "telemetry capture: failed to build subagent row for agent $_a_type index $_agent_index; skipping"
+      _agent_index=$((_agent_index + 1))
+      continue
+    fi
+
+    _append_row_if_new "$_a_row" "$_a_day_file"
+    _agent_index=$((_agent_index + 1))
+  done <<EOF
+$_agent_turns_json
+EOF
 }
 
 # ══════════════════════════════════════════════════════════════════════════

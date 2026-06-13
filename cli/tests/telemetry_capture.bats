@@ -219,12 +219,13 @@ setup() {
     return 1
   }
 
-  # The 2 new turns were appended: 3 original + 2 new = 5 audited rows.
+  # The 2 new turns were appended: 3 assistant + 1 subagent (toolUseResult) + 2 new = 6 audited rows.
+  # (P2.2 extended the fixture with a toolUseResult agent line, adding 1 subagent row.)
   local rows_after_grow
   rows_after_grow="$(jq -s '[.[] | select(.source=="audited")] | length' \
     "$EIDOLONS_HOME"/telemetry/*/*.jsonl 2>/dev/null || echo 0)"
-  [ "$rows_after_grow" -eq 5 ] || {
-    echo "FAIL: expected 5 audited rows after growth, got $rows_after_grow (data loss in skip-on-append)" >&2
+  [ "$rows_after_grow" -eq 6 ] || {
+    echo "FAIL: expected 6 audited rows after growth (3 assistant + 1 subagent + 2 new), got $rows_after_grow (data loss in skip-on-append)" >&2
     jq -cs '[.[] | select(.source=="audited")] | map({turn_index, in:.usage.input_tokens})' \
       "$EIDOLONS_HOME"/telemetry/*/*.jsonl >&2 || true
     return 1
@@ -418,6 +419,216 @@ setup() {
 
   [ "$audited_count" -eq 0 ] || {
     echo "FAIL: STOP_codex produced $audited_count audited row(s) — must never tag audited" >&2
+    return 1
+  }
+}
+
+# ─── P2.2 — Subagent capture tripwire (fixture-first, RISK-D1 class) ─────────
+#
+# GIVEN the committed cc-transcript.jsonl extended with a type:"user" line
+# carrying a toolUseResult.agentType field (real shape from CC 2.x),
+# WHEN telemetry capture fires,
+# THEN a row with is_sidechain:true, attribution.eidolon=="vivi",
+#      model=="claude-sonnet-4-6", and the 4-field usage (650000/112075/25000/25000)
+#      is written to the store.
+#
+# This test is written BEFORE the toolUseResult projection exists in telemetry.sh.
+# It MUST be RED initially (confirmed before projection shipped).
+
+@test "telemetry capture P2.2: produces is_sidechain:true row for toolUseResult agent dispatch (tripwire)" {
+  [ -f "$FIXTURE_TRANSCRIPT" ] || {
+    echo "BROKEN TEST: fixture not found at $FIXTURE_TRANSCRIPT" >&2
+    return 1
+  }
+
+  local hook_event
+  hook_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$FIXTURE_TRANSCRIPT")"
+
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  # Collect all rows from the store.
+  local all_rows_file
+  all_rows_file="$BATS_TEST_TMPDIR/subagent_rows.jsonl"
+  local day_file
+  for day_file in "$EIDOLONS_HOME"/telemetry/*/*.jsonl; do
+    [ -f "$day_file" ] || continue
+    cat "$day_file" >> "$all_rows_file" 2>/dev/null || true
+  done
+
+  [ -f "$all_rows_file" ] || {
+    echo "FAIL: no store rows written — subagent projection not yet implemented" >&2
+    return 1
+  }
+
+  # Assert: at least one row with is_sidechain:true AND eidolon=="vivi".
+  local sidechain_vivi
+  sidechain_vivi="$(jq -s '
+    [.[] | select(.source == "audited" and .attribution.is_sidechain == true and .attribution.eidolon == "vivi")] | length
+  ' "$all_rows_file" 2>/dev/null || echo 0)"
+
+  [ "$sidechain_vivi" -ge 1 ] || {
+    echo "FAIL: no audited row with is_sidechain:true and eidolon:vivi found — toolUseResult projection missing" >&2
+    jq -cs '[.[] | {source,is_sidechain:.attribution.is_sidechain,eidolon:.attribution.eidolon}]' \
+      "$all_rows_file" >&2 || true
+    return 1
+  }
+}
+
+@test "telemetry capture P2.2: subagent row carries resolvedModel and all 4 usage fields" {
+  [ -f "$FIXTURE_TRANSCRIPT" ] || {
+    echo "BROKEN TEST: fixture not found at $FIXTURE_TRANSCRIPT" >&2
+    return 1
+  }
+
+  local hook_event
+  hook_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$FIXTURE_TRANSCRIPT")"
+
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  local all_rows_file
+  all_rows_file="$BATS_TEST_TMPDIR/subagent_model_rows.jsonl"
+  local day_file
+  for day_file in "$EIDOLONS_HOME"/telemetry/*/*.jsonl; do
+    [ -f "$day_file" ] || continue
+    cat "$day_file" >> "$all_rows_file" 2>/dev/null || true
+  done
+
+  [ -f "$all_rows_file" ] || {
+    echo "FAIL: no store rows written" >&2
+    return 1
+  }
+
+  # The vivi toolUseResult in fixture: resolvedModel=claude-sonnet-4-6,
+  # usage: input=650000, output=112075, cache_creation=25000, cache_read=25000.
+  local matching
+  matching="$(jq -s '
+    [.[] | select(
+      .source == "audited" and
+      .attribution.is_sidechain == true and
+      .attribution.eidolon == "vivi" and
+      .model == "claude-sonnet-4-6" and
+      .usage.input_tokens == 650000 and
+      .usage.output_tokens == 112075 and
+      .usage.cache_creation_input_tokens == 25000 and
+      .usage.cache_read_input_tokens == 25000
+    )] | length
+  ' "$all_rows_file" 2>/dev/null || echo 0)"
+
+  [ "$matching" -ge 1 ] || {
+    echo "FAIL: no vivi subagent row matched expected model + all 4 usage fields" >&2
+    jq -cs '[.[] | select(.attribution.is_sidechain == true) | {source,model,usage,eidolon:.attribution.eidolon}]' \
+      "$all_rows_file" >&2 || true
+    return 1
+  }
+}
+
+@test "telemetry capture P2.2: subagent dedup on re-run — agentId is dedup key" {
+  [ -f "$FIXTURE_TRANSCRIPT" ] || {
+    echo "BROKEN TEST: fixture not found at $FIXTURE_TRANSCRIPT" >&2
+    return 1
+  }
+
+  local hook_event
+  hook_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$FIXTURE_TRANSCRIPT")"
+
+  # Run capture twice.
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  # Collect all rows.
+  local all_rows_file
+  all_rows_file="$BATS_TEST_TMPDIR/dedup_subagent.jsonl"
+  local day_file
+  for day_file in "$EIDOLONS_HOME"/telemetry/*/*.jsonl; do
+    [ -f "$day_file" ] || continue
+    cat "$day_file" >> "$all_rows_file" 2>/dev/null || true
+  done
+
+  [ -f "$all_rows_file" ] || {
+    echo "FAIL: no rows written" >&2
+    return 1
+  }
+
+  # Assert zero duplicate event_ids (agentId-based dedup for subagent rows).
+  local dup_count
+  dup_count="$(jq -s 'group_by(.event_id) | map(select(length > 1)) | length' \
+    "$all_rows_file" 2>/dev/null || echo 0)"
+
+  [ "$dup_count" -eq 0 ] || {
+    echo "FAIL: $dup_count duplicate event_id group(s) — subagent agentId dedup failed" >&2
+    return 1
+  }
+}
+
+@test "telemetry capture P2.2: main-loop rows unchanged by subagent projection (no-regression)" {
+  [ -f "$FIXTURE_TRANSCRIPT" ] || {
+    echo "BROKEN TEST: fixture not found at $FIXTURE_TRANSCRIPT" >&2
+    return 1
+  }
+
+  local hook_event
+  hook_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$FIXTURE_TRANSCRIPT")"
+
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  local all_rows_file
+  all_rows_file="$BATS_TEST_TMPDIR/regression_rows.jsonl"
+  local day_file
+  for day_file in "$EIDOLONS_HOME"/telemetry/*/*.jsonl; do
+    [ -f "$day_file" ] || continue
+    cat "$day_file" >> "$all_rows_file" 2>/dev/null || true
+  done
+
+  [ -f "$all_rows_file" ] || {
+    echo "FAIL: no rows written" >&2
+    return 1
+  }
+
+  # Original fixture has 3 assistant turns: the main-loop rows must still be there.
+  # Turn 1: model=claude-opus-4-8, input=1000, output=200.
+  local main_row_1
+  main_row_1="$(jq -s '
+    [.[] | select(
+      .source == "audited" and
+      .model == "claude-opus-4-8" and
+      .usage.input_tokens == 1000 and
+      .usage.output_tokens == 200
+    )] | length
+  ' "$all_rows_file" 2>/dev/null || echo 0)"
+
+  [ "$main_row_1" -ge 1 ] || {
+    echo "FAIL: original main-loop turn-1 row missing (regression in assistant-turn projection)" >&2
+    return 1
+  }
+
+  # Turn 3: model=claude-sonnet-4-6 (main), input=500, output=100, cache_read=8000.
+  local main_row_3
+  main_row_3="$(jq -s '
+    [.[] | select(
+      .source == "audited" and
+      .model == "claude-sonnet-4-6" and
+      .usage.input_tokens == 500 and
+      .usage.output_tokens == 100 and
+      .usage.cache_read_input_tokens == 8000 and
+      .attribution.is_sidechain == false
+    )] | length
+  ' "$all_rows_file" 2>/dev/null || echo 0)"
+
+  [ "$main_row_3" -ge 1 ] || {
+    echo "FAIL: original main-loop turn-3 row (sonnet, input=500, cache_read=8000) missing" >&2
+    jq -cs '[.[] | {source,model,is_sidechain:.attribution.is_sidechain,usage}]' \
+      "$all_rows_file" >&2 || true
     return 1
   }
 }
