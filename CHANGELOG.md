@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.40.0] — 2026-06-13 — telemetry P2 sprint 1: subagent capture + dollar pricing
+
+### Added
+- `feat(telemetry)`: **subagent/sidechain spend capture** — `telemetry capture` now also projects per-Eidolon delegated spend from the Claude Code parent transcript's `Agent` tool results (`toolUseResult.{agentType, resolvedModel, totalTokens, usage}`) into `turn.v1` rows tagged `is_sidechain:true`, attributed to the dispatched Eidolon via `agentType` (authoritative — no dispatch-join needed), deduped by `event_id = sha256(session_id|agentId)`. Recovers delegated token spend that the MLP (orchestrator-turns-only) missed entirely, populating `by_eidolon` with the real delegation breakdown. Single-file (the transcript the Stop hook already reads) — no fragile multi-file correlation. Guarded with `// empty` fallbacks (CC-version-coupled; absence = no subagent rows, non-fatal).
+- `feat(telemetry)`: **dollar pricing** — `roster/pricing.yaml` populated with per-1M-token USD for `claude-opus-4-8` and `claude-sonnet-4-6` (other models left for maintainer confirmation → honest token fallback). `telemetry report`/`rollup` compute `usd` per group when a price resolves, normalizing model-string suffixes (e.g. `claude-opus-4-8[1m]` → `claude-opus-4-8`) for the lookup. Unpriced models render tokens + an explicit no-price note — priced and unpriced are never blended into one dollar headline (extends the C6 honesty contract).
+
 ## [1.39.0] — 2026-06-13 — eidolons telemetry: audited token-cost + prompt-efficiency subsystem (MLP)
 
 ### Added
