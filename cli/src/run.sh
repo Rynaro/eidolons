@@ -313,6 +313,102 @@ if [[ -n "$VERIFY_ENVELOPE" ]]; then
     '. + {incoming_verify: {verdict:$vv, mode:$vm, envelope:$ve}}')"
 fi
 
+# ── Phase E — telemetry dispatch-time stamp (AC-F3-5) ────────────────────────
+# Gated: only when $EIDOLONS_HOME/telemetry/ dir exists OR EIDOLONS_TELEMETRY=1.
+# Side-effect-only: routing stdout / --json / hook-output are BYTE-IDENTICAL
+# whether telemetry is on or off.  Best-effort: errors are swallowed so the
+# routing kernel never fails due to a telemetry write problem.
+# Bash 3.2 safe: no declare -A, no ${var,,}, no readarray.
+_telemetry_dispatch_stamp() {
+  # Gate: telemetry enabled?
+  local _tdir="$EIDOLONS_HOME/telemetry"
+  if [[ "${EIDOLONS_TELEMETRY:-0}" != "1" && ! -d "$_tdir" ]]; then
+    return 0
+  fi
+
+  # Extract selected Eidolons and tier from the ARTIFACT.
+  local _sel _tier
+  _sel="$(printf '%s' "$ARTIFACT" | jq -r '[.chain[].eidolon] | join(",")' 2>/dev/null || true)"
+  _tier="$(printf '%s' "$ARTIFACT" | jq -r '.tier // "standard"' 2>/dev/null || true)"
+  # Only stamp when at least one Eidolon was selected.
+  if [[ -z "$_sel" || "$_sel" == "null" ]]; then
+    return 0
+  fi
+
+  # Derive session key: prefer session_id from hook stdin; fallback to PID.
+  local _sid="$$"
+  if [[ -n "$HOOK_STDIN_INPUT" ]] && command -v jq >/dev/null 2>&1; then
+    local _sid_from_hook
+    _sid_from_hook="$(printf '%s' "$HOOK_STDIN_INPUT" | jq -r '.session_id // empty' 2>/dev/null || true)"
+    if [[ -n "$_sid_from_hook" ]]; then
+      _sid="$_sid_from_hook"
+    fi
+  fi
+
+  # Compute objective_hash = sha256 of the original (case-preserved) PROMPT.
+  local _obj_hash="null"
+  if command -v shasum >/dev/null 2>&1; then
+    _obj_hash="$(printf '%s' "$PROMPT" | shasum -a 256 2>/dev/null | awk '{print $1}' || true)"
+  elif command -v sha256sum >/dev/null 2>&1; then
+    _obj_hash="$(printf '%s' "$PROMPT" | sha256sum 2>/dev/null | awk '{print $1}' || true)"
+  fi
+  [[ -z "$_obj_hash" ]] && _obj_hash="null"
+  # Wrap in JSON string if not null.
+  local _obj_hash_json="null"
+  if [[ "$_obj_hash" != "null" ]]; then
+    _obj_hash_json="\"${_obj_hash}\""
+  fi
+
+  # UTC ISO-8601 timestamp.
+  local _ts
+  _ts="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date '+%Y-%m-%dT%H:%M:%SZ')"
+
+  # Write one JSONL record per selected Eidolon into the .dispatch/ dir.
+  local _dispatch_dir="${_tdir}/.dispatch"
+  mkdir -p "$_dispatch_dir" 2>/dev/null || return 0
+
+  # Process each Eidolon in the chain.
+  local _old_ifs="$IFS"
+  IFS=","
+  local _ename
+  for _ename in $_sel; do
+    IFS="$_old_ifs"
+    [[ -z "$_ename" ]] && continue
+
+    # eidolon_prompt_sha: use the lib helper (roster versions.latest).
+    local _eps
+    _eps="$(eidolon_prompt_sha "$_ename" 2>/dev/null || echo "null")"
+    [[ -z "$_eps" ]] && _eps="null"
+
+    # Build JSON value for eidolon_prompt_sha.
+    local _eps_json
+    if [[ "$_eps" == "null" ]]; then
+      _eps_json="null"
+    else
+      _eps_json="\"${_eps}\""
+    fi
+
+    # Build the dispatch row as a JSONL record.
+    local _row
+    _row="$(jq -nc \
+      --arg ts "$_ts" \
+      --arg eidolon "$_ename" \
+      --argjson eidolon_prompt_sha "$_eps_json" \
+      --argjson objective_hash "$_obj_hash_json" \
+      --arg tier "$_tier" \
+      '{ts:$ts, eidolon:$eidolon, eidolon_prompt_sha:$eidolon_prompt_sha,
+        objective_hash:$objective_hash, tier:$tier}' 2>/dev/null || true)"
+    if [[ -n "$_row" ]]; then
+      printf '%s\n' "$_row" >> "${_dispatch_dir}/${_sid}.jsonl" 2>/dev/null || true
+    fi
+    IFS=","
+  done
+  IFS="$_old_ifs"
+  return 0
+}
+# Non-fatal wrapper: swallow any error so routing kernel never fails.
+{ _telemetry_dispatch_stamp; } 2>/dev/null || true
+
 # ── Render ────────────────────────────────────────────────────────────────────
 if [[ "$EXPLAIN" == "1" ]]; then
   {

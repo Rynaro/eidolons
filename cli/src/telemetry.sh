@@ -305,18 +305,90 @@ telemetry_capture_claude_code() {
     #   branch = from transcript line (no extra git call)
     #   commit/dirty = from the one-per-session git call above
     #   is_sidechain = from transcript line
-    #   eidolon = "main" if not sidechain, else "unknown" (honest fallback, Phase E join)
+    #   eidolon = joined from dispatch record (Phase E); honest fallback when absent
     local _repo
     _repo="$(basename "${_cwd:-$PWD}" 2>/dev/null || echo "unknown")"
 
-    local _eidolon
-    if [[ "$_is_sc" == "true" ]]; then
-      _eidolon="unknown"
+    # ── Phase E: dispatch-time join (AC-F3, spec §4.3) ───────────────────────
+    # Load .dispatch/<session_id>.jsonl if present. Find the row with the
+    # greatest ts <= this turn's ts (time-proximity: the dispatch active when
+    # this turn occurred). Apply its eidolon/eidolon_prompt_sha/objective_hash/tier.
+    # Honest fallback when no match: eidolon = main/unknown, rest = null.
+    local _dispatch_eidolon="" _dispatch_eps="" _dispatch_obj_hash="" _dispatch_tier=""
+    local _dispatch_file="${EIDOLONS_HOME}/telemetry/.dispatch/${_sess_id}.jsonl"
+    if [[ -f "$_dispatch_file" ]] && command -v jq >/dev/null 2>&1; then
+      # Single jq -s pass: slurp JSONL, filter ts <= turn_ts, pick last (greatest ts).
+      # Returns compact JSON of the best matching dispatch row, or empty string.
+      local _best_row
+      _best_row="$(jq -sc --arg turn_ts "$_ts" \
+        'map(select(.ts <= $turn_ts)) | sort_by(.ts) | last // empty' \
+        "$_dispatch_file" 2>/dev/null || true)"
+      if [[ -n "$_best_row" && "$_best_row" != "null" && "$_best_row" != "empty" ]]; then
+        local _d_eidolon
+        _d_eidolon="$(printf '%s' "$_best_row" | jq -r '.eidolon // empty' 2>/dev/null || true)"
+        if [[ -n "$_d_eidolon" && "$_d_eidolon" != "null" ]]; then
+          _dispatch_eidolon="$_d_eidolon"
+          _dispatch_eps="$(printf '%s' "$_best_row" | jq -r '.eidolon_prompt_sha // empty' 2>/dev/null || true)"
+          _dispatch_obj_hash="$(printf '%s' "$_best_row" | jq -r '.objective_hash // empty' 2>/dev/null || true)"
+          _dispatch_tier="$(printf '%s' "$_best_row" | jq -r '.tier // empty' 2>/dev/null || true)"
+        fi
+      fi
+    fi
+
+    # Resolve final eidolon / eidolon_prompt_sha / objective_hash / tier values.
+    # Dispatch join takes priority; honest fallback when absent (AC-F3-6).
+    local _eidolon _eps_val _obj_hash_val _tier_val
+    if [[ -n "$_dispatch_eidolon" ]]; then
+      _eidolon="$_dispatch_eidolon"
     else
-      _eidolon="main"
+      if [[ "$_is_sc" == "true" ]]; then
+        _eidolon="unknown"
+      else
+        _eidolon="main"
+      fi
+    fi
+
+    # eidolon_prompt_sha: null when no dispatch match (honest).
+    if [[ -n "$_dispatch_eps" && "$_dispatch_eps" != "null" ]]; then
+      _eps_val="$_dispatch_eps"
+    else
+      _eps_val="null"
+    fi
+
+    # objective_hash: null when no dispatch match.
+    if [[ -n "$_dispatch_obj_hash" && "$_dispatch_obj_hash" != "null" ]]; then
+      _obj_hash_val="$_dispatch_obj_hash"
+    else
+      _obj_hash_val="null"
+    fi
+
+    # tier: null when no dispatch match (M3 split requires explicit tier; null = no TRANCE attribution yet).
+    if [[ -n "$_dispatch_tier" && "$_dispatch_tier" != "null" ]]; then
+      _tier_val="$_dispatch_tier"
+    else
+      _tier_val="null"
+    fi
+
+    # JSON-encode the nullable attribution fields.
+    local _eps_json _obj_hash_json _tier_json
+    if [[ "$_eps_val" == "null" ]]; then
+      _eps_json="null"
+    else
+      _eps_json="\"${_eps_val}\""
+    fi
+    if [[ "$_obj_hash_val" == "null" ]]; then
+      _obj_hash_json="null"
+    else
+      _obj_hash_json="\"${_obj_hash_val}\""
+    fi
+    if [[ "$_tier_val" == "null" ]]; then
+      _tier_json="null"
+    else
+      _tier_json="\"${_tier_val}\""
     fi
 
     # Build JSON row via jq -nc (no raw prompt/response text — AC-F1-4).
+    # Attribution fields enriched by Phase E dispatch-time join.
     local _row
     _row="$(jq -nc \
       --arg schema "eidolons.telemetry.turn.v1" \
@@ -339,6 +411,9 @@ telemetry_capture_claude_code() {
       --arg cwd "${_cwd:-}" \
       --argjson is_sidechain "$_is_sc" \
       --arg eidolon "$_eidolon" \
+      --argjson eidolon_prompt_sha "$_eps_json" \
+      --argjson objective_hash "$_obj_hash_json" \
+      --argjson tier "$_tier_json" \
       '{
         schema: $schema,
         event_id: $event_id,
@@ -365,11 +440,11 @@ telemetry_capture_claude_code() {
           cwd: $cwd,
           is_sidechain: $is_sidechain,
           eidolon: $eidolon,
-          eidolon_prompt_sha: null,
-          objective_hash: null,
+          eidolon_prompt_sha: $eidolon_prompt_sha,
+          objective_hash: $objective_hash,
           task_id: null,
           prompt_version: null,
-          tier: null
+          tier: $tier
         },
         ecl_thread_id: null
       }' 2>/dev/null || true)"
