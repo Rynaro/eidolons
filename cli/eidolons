@@ -116,6 +116,13 @@ Commands:
                              One-shot crystalium recall; emits compact digest.
                              Stdout IS the digest; all failures = empty/exit-0.
                  Run 'eidolons memory --help' for full usage.
+  telemetry <sub> Opt-in token-cost telemetry (audited spend, not estimated).
+                   capture --hook STOP_<HOST> --stdin   Capture turn rows at session Stop
+                   rollup  [--by ...] [--since ...]     Pure-jq M1/M2/M3 aggregation (Phase D)
+                   report  [--project] [--since] [--json] Human dashboard, source-split (Phase D)
+                   enable                               Write Stop shim + hook registration (Phase F)
+                   disable                              Remove Stop shim + hook entry (Phase F)
+                 Run 'eidolons telemetry --help' for full usage.
   harness <sub>  Wire host hooks for routing-context injection (claude-code, codex).
                    install [--hosts <h>]   Install hook shims + settings wiring
                    remove                  Remove hook shims + settings wiring
@@ -180,9 +187,10 @@ case "$cmd" in
   roster)      exec bash "$CLI_SRC/roster.sh"  "$@" ;;
   run)         exec bash "$CLI_SRC/run.sh"     "$@" ;;
   model)       exec bash "$CLI_SRC/model.sh"  "$@" ;;
-  trace)       exec bash "$CLI_SRC/trace.sh"   "$@" ;;
-  eval)        exec bash "$CLI_SRC/eval.sh"    "$@" ;;
-  sandbox)     exec bash "$CLI_SRC/sandbox.sh" "$@" ;;
+  trace)       exec bash "$CLI_SRC/trace.sh"      "$@" ;;
+  telemetry)   exec bash "$CLI_SRC/telemetry.sh" "$@" ;;
+  eval)        exec bash "$CLI_SRC/eval.sh"       "$@" ;;
+  sandbox)     exec bash "$CLI_SRC/sandbox.sh"    "$@" ;;
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)

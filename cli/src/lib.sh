@@ -157,6 +157,42 @@ roster_presets() {
   yaml_to_json "$ROSTER_FILE" | jq -r '.presets | keys[]'
 }
 
+# ─── Telemetry helpers ────────────────────────────────────────────────────
+# project_slug
+#   Returns the canonical project slug for the current directory: basename of
+#   $PWD, lowercased, with any non-alnum runs replaced by a single dash, and
+#   leading/trailing dashes trimmed. Promoted from memory.sh:138-142 so it
+#   is the single authoritative derivation. Output is byte-identical to the
+#   inline version in memory.sh. All log → stderr; stdout = the slug string.
+project_slug() {
+  local _bn
+  _bn="$(basename "$PWD")"
+  printf '%s' "$_bn" \
+    | tr '[:upper:]' '[:lower:]' \
+    | tr -cs 'a-z0-9' '-' \
+    | sed -e 's|^-||' -e 's|-$||'
+}
+
+# eidolon_prompt_sha NAME
+#   Returns the prompt-version identity string for a named Eidolon.
+#   Default (free, coarse): the Eidolon's roster versions.latest ([REV-D3-1]).
+#   Unknown name or roster lookup failure → prints "null" and returns 0 (honest
+#   fallback; never fatal — capture path must be fail-open). All log → stderr.
+eidolon_prompt_sha() {
+  local _ename="$1"
+  local _result
+  _result="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null \
+    | jq -r --arg n "$_ename" \
+        '.eidolons[] | select(.name == $n or ((.aliases // []) | index($n) != null)) | .versions.latest // "null"' \
+        2>/dev/null \
+    | head -1)" || true
+  if [[ -z "$_result" ]]; then
+    echo "null"
+    return 0
+  fi
+  echo "$_result"
+}
+
 # ─── Release integrity ───────────────────────────────────────────────────
 # The roster may include TUF-style target metadata under
 # .versions.releases[VERSION]. Existing entries without metadata stay
