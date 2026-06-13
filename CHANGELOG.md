@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.39.0] — 2026-06-13 — eidolons telemetry: audited token-cost + prompt-efficiency subsystem (MLP)
+
 ### Added
 - `feat(telemetry)`: `eidolons telemetry capture --hook STOP_<HOST> --stdin` — kernel verb that reads the Claude Code session transcript at Stop time, projects each assistant turn's real API token usage into a `turn.v1` row (source: `audited`), and appends it to the day-partitioned JSONL store under `$EIDOLONS_HOME/telemetry/<project-slug>/<YYYY-MM-DD>.jsonl`. Non-CC hosts log an honest `estimated` stub. Fail-open: hook paths always exit 0.
 - `feat(telemetry)`: `eidolons telemetry rollup [--by repo|branch|model|eidolon|tier|day] [--since DATE] [--project <slug>] [--json]` — pure-jq M1 aggregation over the store, always source-split (audited vs estimated).
