@@ -39,15 +39,20 @@ capture   Read a Stop/SessionEnd hook event from stdin, project each assistant
           day-partitioned D2 store. Source 'audited' for claude-code; 'estimated'
           stub for other hosts. ALWAYS exits 0 (fail-open; hook path never errors).
 
-rollup    (Phase D — not yet implemented) Pure-jq M1/M2/M3 aggregation over the store.
+rollup    Pure-jq aggregation over the store, grouped by --by and always split
+          by source (audited vs estimated). Default --by model. --json for rows.
 
-report    (Phase D — not yet implemented) Human dashboard: M1 spend by
-          repo/branch/model/eidolon/tier, always source-split (audited vs estimated).
+report    Human dashboard: M1 spend by repo/branch/model/eidolon/tier, M2
+          reconciliation, M3 tier split — always source-split (audited vs
+          estimated), never blended. --json for the structured report.
 
-enable    (Phase F — not yet implemented) Write the zero-logic Stop shim +
-          register the hook in .claude/settings.json.
+enable    Write the zero-logic Stop shim + register the hook in
+          .claude/settings.json (claude-code; opt-in, idempotent).
 
-disable   (Phase F — not yet implemented) Remove the Stop shim + hook entry.
+disable   Remove the Stop shim + hook entry. Idempotent; leaves routing hooks
+          (UserPromptSubmit/SessionStart) untouched.
+
+P2 (not yet implemented): budget, lift, export [otel|json|csv], verify.
 
 Store layout:
   $EIDOLONS_HOME/telemetry/<project-slug>/<YYYY-MM-DD>.jsonl
@@ -309,7 +314,7 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     if [[ "$_trd_json" -eq 1 ]]; then
       printf '%s\n' "$_trd_rollup"
     else
-      printf '%stellemetry rollup%s  (by %s, project: %s)\n' \
+      printf '%seidolons telemetry rollup%s  (by %s, project: %s)\n' \
         "${BOLD:-}" "${RESET:-}" "$_trd_by" "$_trd_project"
       printf '%s' "$_trd_rollup" | jq -r '.[] | "  [source: \(.source)]", (.by[] | "  \(.key // "?")\t\(.turns) turns\t\(.total) tokens")'
     fi
