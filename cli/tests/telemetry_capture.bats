@@ -161,6 +161,85 @@ setup() {
   }
 }
 
+# ─── AC-F1-3 (regression) incremental growth ──────────────────────────────
+#
+# GIVEN a day file already containing rows from a session's first N turns,
+# WHEN capture re-runs over the SAME session GROWN by 2 new turns,
+# THEN the 2 new turns ARE appended (no data loss), no event_id is duplicated,
+#      and stderr carries no `unbound variable` abort.
+#
+# Regression guard for the set -u landmine in _append_row_if_new's skip-on-append
+# log line (referenced $EVENT_ID/$DAY_FILE instead of the $_event_id/$_day_file
+# locals): under set -u that aborted the skip path on the FIRST duplicate, so a
+# grown session silently lost every turn after the first already-seen one. The
+# same-transcript dedup test (AC-F1-3) passed vacuously because end-state stayed
+# correct; only a growing session exposes the data loss.
+
+@test "telemetry capture: grown session appends new turns without loss or dup (AC-F1-3 regression)" {
+  [ -f "$FIXTURE_TRANSCRIPT" ] || {
+    echo "BROKEN TEST: fixture not found at $FIXTURE_TRANSCRIPT" >&2
+    return 1
+  }
+
+  # First capture: the committed 3-turn fixture.
+  local hook_event
+  hook_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$FIXTURE_TRANSCRIPT")"
+  printf '%s\n' "$hook_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>/dev/null || true
+
+  local rows_after_first
+  rows_after_first="$(jq -s '[.[] | select(.source=="audited")] | length' \
+    "$EIDOLONS_HOME"/telemetry/*/*.jsonl 2>/dev/null || echo 0)"
+  [ "$rows_after_first" -ge 1 ] || {
+    echo "BROKEN TEST: first capture produced no rows" >&2
+    return 1
+  }
+
+  # Build a GROWN transcript: the same session + 2 new assistant turns.
+  local sid grown
+  sid="$(jq -r 'select(.type=="assistant") | .sessionId' "$FIXTURE_TRANSCRIPT" | head -1)"
+  grown="$BATS_TEST_TMPDIR/grown-transcript.jsonl"
+  cat "$FIXTURE_TRANSCRIPT" > "$grown"
+  jq -cn --arg sid "$sid" '{type:"assistant",isSidechain:false,sessionId:$sid,gitBranch:"feat/telemetry-mlp",cwd:"/Users/synthetic/projects/eidolons",slug:"-Users-synthetic-projects-eidolons",timestamp:"2026-06-13T10:00:30.000Z",uuid:"u-grow-1",parentUuid:"u-prev",userType:"external",entrypoint:"cli",version:"1.0",requestId:"req-g1",message:{role:"assistant",type:"message",id:"m-g1",model:"claude-opus-4-8",content:[{type:"text",text:"grown turn four"}],usage:{input_tokens:700,output_tokens:150,cache_creation_input_tokens:0,cache_read_input_tokens:0}}}' >> "$grown"
+  jq -cn --arg sid "$sid" '{type:"assistant",isSidechain:false,sessionId:$sid,gitBranch:"feat/telemetry-mlp",cwd:"/Users/synthetic/projects/eidolons",slug:"-Users-synthetic-projects-eidolons",timestamp:"2026-06-13T10:00:40.000Z",uuid:"u-grow-2",parentUuid:"u-grow-1",userType:"external",entrypoint:"cli",version:"1.0",requestId:"req-g2",message:{role:"assistant",type:"message",id:"m-g2",model:"claude-opus-4-8",content:[{type:"text",text:"grown turn five"}],usage:{input_tokens:800,output_tokens:160,cache_creation_input_tokens:0,cache_read_input_tokens:1000}}}' >> "$grown"
+
+  # Second capture over the grown transcript; capture stderr to assert no abort.
+  local grown_event errfile
+  grown_event="$(printf '{"transcript_path":"%s","hook_event_name":"Stop"}' "$grown")"
+  errfile="$BATS_TEST_TMPDIR/grow-capture.err"
+  printf '%s\n' "$grown_event" | \
+    "$EIDOLONS_BIN" telemetry capture --hook STOP_claude-code --stdin \
+    2>"$errfile" || true
+
+  # No set -u abort leaked to stderr.
+  ! grep -q "unbound variable" "$errfile" || {
+    echo "FAIL: capture emitted an 'unbound variable' abort (set -u landmine):" >&2
+    cat "$errfile" >&2
+    return 1
+  }
+
+  # The 2 new turns were appended: 3 original + 2 new = 5 audited rows.
+  local rows_after_grow
+  rows_after_grow="$(jq -s '[.[] | select(.source=="audited")] | length' \
+    "$EIDOLONS_HOME"/telemetry/*/*.jsonl 2>/dev/null || echo 0)"
+  [ "$rows_after_grow" -eq 5 ] || {
+    echo "FAIL: expected 5 audited rows after growth, got $rows_after_grow (data loss in skip-on-append)" >&2
+    jq -cs '[.[] | select(.source=="audited")] | map({turn_index, in:.usage.input_tokens})' \
+      "$EIDOLONS_HOME"/telemetry/*/*.jsonl >&2 || true
+    return 1
+  }
+
+  # Still no duplicate event_ids.
+  local dup_count
+  dup_count="$(jq -s 'group_by(.event_id) | map(select(length > 1)) | length' \
+    "$EIDOLONS_HOME"/telemetry/*/*.jsonl 2>/dev/null || echo 0)"
+  [ "$dup_count" -eq 0 ] || {
+    echo "FAIL: $dup_count duplicate event_id group(s) after growth" >&2
+    return 1
+  }
+}
+
 # ─── AC-F1-4 lean row ─────────────────────────────────────────────────────
 #
 # GIVEN any captured row,

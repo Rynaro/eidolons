@@ -171,7 +171,7 @@ _append_row_if_new() {
   # Best-effort skip-on-append: check if event_id already in day file.
   if [[ -f "$_day_file" ]]; then
     if grep -qF "\"$_event_id\"" "$_day_file" 2>/dev/null; then
-      info "telemetry: event_id $EVENT_ID already present in $DAY_FILE, skipping"
+      info "telemetry: event_id $_event_id already present in $_day_file, skipping"
       return 0
     fi
   fi
