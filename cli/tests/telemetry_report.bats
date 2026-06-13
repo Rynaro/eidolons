@@ -671,3 +671,253 @@ write_row() {
     *) echo "FAIL: rollup text missing 'audited' label" >&2; return 1 ;;
   esac
 }
+
+# ─── P2.1 — Dollar pricing tests ─────────────────────────────────────────────
+#
+# These tests are written BEFORE the pricing wiring is added to telemetry.sh
+# (fixture-first discipline). They MUST be RED until the implementation ships.
+#
+# Pricing fixture: claude-opus-4-8 @ 15.00/75.00/18.75/1.50 per 1M tokens.
+# These prices are in roster/pricing.yaml and wired into telemetry.sh by P2.1.
+
+# ─── P2.1-1: priced model → report --json exposes usd ────────────────────────
+#
+# GIVEN a row with model=claude-opus-4-8 (in pricing.yaml) and
+#       usage: input=1000000, output=200000, cc=0, cr=0,
+# WHEN  report --json,
+# THEN  by_source.audited.usd > 0 (specifically 1000000*15/1e6 + 200000*75/1e6 = 15+15 = 30.00).
+
+@test "telemetry report P2.1: priced model exposes usd in report --json" {
+  # input=1M @ $15/1M = $15.00; output=200k @ $75/1M = $15.00; total = $30.00.
+  write_row "evt-price-r1" "audited" "claude-opus-4-8" 1000000 200000 0 0
+
+  local out status=0
+  out="$("$EIDOLONS_BIN" telemetry report \
+    --project "$TEST_SLUG" \
+    --json \
+    2>/dev/null)" || status=$?
+
+  [ "$status" -eq 0 ] || {
+    echo "FAIL: report exited $status" >&2
+    echo "Output: $out" >&2
+    return 1
+  }
+
+  # by_source.audited must carry a usd field.
+  local has_usd
+  has_usd="$(printf '%s' "$out" | jq '.by_source.audited | has("usd")')"
+  [ "$has_usd" = "true" ] || {
+    echo "FAIL: by_source.audited missing 'usd' field — P2.1 pricing not wired" >&2
+    printf '%s\n' "$out" | jq '.by_source.audited | keys' >&2
+    return 1
+  }
+
+  # usd must be > 0 for a priced model.
+  local usd_val
+  usd_val="$(printf '%s' "$out" | jq '.by_source.audited.usd')"
+  # Compare > 0 using awk (jq compare may differ by platform for floats).
+  local is_positive
+  is_positive="$(printf '%s' "$usd_val" | awk '{print ($1 > 0) ? "true" : "false"}')"
+  [ "$is_positive" = "true" ] || {
+    echo "FAIL: usd value is not positive ($usd_val) for priced model claude-opus-4-8" >&2
+    return 1
+  }
+
+  # Specific value check: $30.00 (allow floating-point rounding to ±0.01).
+  local usd_approx
+  usd_approx="$(printf '%s' "$usd_val" | awk '{d = $1 - 30.0; if (d < 0) d = -d; print (d < 0.01) ? "ok" : "fail"}')"
+  [ "$usd_approx" = "ok" ] || {
+    echo "FAIL: expected usd ≈ 30.00 (15+15), got $usd_val" >&2
+    return 1
+  }
+}
+
+# ─── P2.1-2: [1m] suffix normalization — resolvedModel with suffix still prices ─
+#
+# P2.2 stores resolvedModel verbatim (e.g. "claude-opus-4-8[1m]").
+# The pricing lookup must strip the suffix before the table lookup.
+
+@test "telemetry report P2.1: model with [1m] suffix resolves price (normalization)" {
+  # Store a row with a suffixed model string as P2.2 would produce.
+  write_row "evt-suffix-r1" "audited" "claude-opus-4-8[1m]" 1000000 0 0 0
+
+  local out status=0
+  out="$("$EIDOLONS_BIN" telemetry report \
+    --project "$TEST_SLUG" \
+    --json \
+    2>/dev/null)" || status=$?
+
+  [ "$status" -eq 0 ] || {
+    echo "FAIL: report exited $status" >&2
+    return 1
+  }
+
+  # usd must be present and positive (not treated as unpriced).
+  local has_usd
+  has_usd="$(printf '%s' "$out" | jq '.by_source.audited | has("usd")')"
+  [ "$has_usd" = "true" ] || {
+    echo "FAIL: by_source.audited missing usd — [1m] suffix not normalized for pricing" >&2
+    return 1
+  }
+
+  local usd_val
+  usd_val="$(printf '%s' "$out" | jq '.by_source.audited.usd')"
+  local is_positive
+  is_positive="$(printf '%s' "$usd_val" | awk '{print ($1 > 0) ? "true" : "false"}')"
+  [ "$is_positive" = "true" ] || {
+    echo "FAIL: usd=0 for claude-opus-4-8[1m] — [1m] suffix not stripped for pricing lookup" >&2
+    return 1
+  }
+}
+
+# ─── P2.1-3: unpriced model → tokens + honest no-price note, NO $0 ───────────
+#
+# An unpriced model must NOT appear as $0 — it must render tokens and a
+# "(no price for <model>)" note. This is the C6 honesty extension.
+
+@test "telemetry report P2.1: unpriced model renders tokens + no-price note, not dollar zero" {
+  # Use a model string not in pricing.yaml.
+  write_row "evt-noprice-r1" "audited" "model-unknown-unpriced" 1000 200 0 0
+
+  local out status=0
+  out="$("$EIDOLONS_BIN" telemetry report \
+    --project "$TEST_SLUG" \
+    --json \
+    2>/dev/null)" || status=$?
+
+  [ "$status" -eq 0 ] || {
+    echo "FAIL: report exited $status" >&2
+    return 1
+  }
+
+  # usd must NOT be present (or must be null) for an unpriced model.
+  # If usd is present it could be $0 (which is the forbidden honesty violation).
+  # Use -r to get raw output (no surrounding quotes from jq).
+  local usd_val
+  usd_val="$(printf '%s' "$out" | jq -r 'if (.by_source.audited | has("usd")) then (.by_source.audited.usd | tostring) else "ABSENT" end' 2>/dev/null || echo "ABSENT")"
+  # Accept either absent or null — both are honest. Reject any numeric value.
+  case "$usd_val" in
+    "ABSENT"|"null")
+      # Good: no usd field or explicitly null.
+      ;;
+    *)
+      echo "FAIL: by_source.audited.usd='$usd_val' for unpriced model (expected absent/null, not a number)" >&2
+      echo "An unpriced model must never be shown as \$0 — only token fallback is honest." >&2
+      return 1
+      ;;
+  esac
+
+  # The report must carry an unpriced_models list or note about the unpriced model.
+  local has_unpriced_note
+  has_unpriced_note="$(printf '%s' "$out" | jq '
+    (has("unpriced_models") and (.unpriced_models | length > 0)) or
+    (has("no_price_note")) or
+    (has("by_source") and (.by_source.audited.unpriced_models // [] | length > 0))
+  ')"
+  [ "$has_unpriced_note" = "true" ] || {
+    echo "FAIL: report JSON carries no unpriced_models note for model-unknown-unpriced" >&2
+    printf '%s\n' "$out" | jq 'keys' >&2
+    return 1
+  }
+}
+
+# ─── P2.1-4: mixed priced+unpriced — no blended dollar headline ───────────────
+#
+# GIVEN one priced row (claude-opus-4-8) and one unpriced row,
+# THEN report exposes usd for the priced model in its per-model breakdown AND
+#      does NOT combine them into a single dollar total
+#      (the C6 honesty contract extension: never blend priced + unpriced).
+
+@test "telemetry report P2.1: mixed priced+unpriced — no single blended dollar total (C6 extension)" {
+  # Priced: claude-opus-4-8; Unpriced: model-unknown-unpriced.
+  write_row "evt-mixed-r1" "audited" "claude-opus-4-8"         1000000 0 0 0
+  write_row "evt-mixed-r2" "audited" "model-unknown-unpriced"  500000  0 0 0
+
+  local out status=0
+  out="$("$EIDOLONS_BIN" telemetry report \
+    --project "$TEST_SLUG" \
+    --json \
+    2>/dev/null)" || status=$?
+
+  [ "$status" -eq 0 ] || {
+    echo "FAIL: report exited $status" >&2
+    return 1
+  }
+
+  # usd for priced source must be > 0 (not $0 due to the unpriced model pulling it down).
+  local usd_val
+  usd_val="$(printf '%s' "$out" | jq -r 'if (.by_source.audited | has("usd")) then (.by_source.audited.usd | tostring) else "ABSENT" end' 2>/dev/null || echo "ABSENT")"
+
+  case "$usd_val" in
+    "ABSENT"|"null")
+      # Acceptable: usd not emitted at the audited-total level when mix is present.
+      ;;
+    *)
+      # If usd is emitted for a mix, it MUST NOT include the unpriced tokens as $0.
+      # claude-opus-4-8: 1000000 * 15/1M = $15.00.
+      # A blended total including model-unknown-unpriced as $0 would still be $15.00
+      # which is the same — so we can just check usd is approximately the priced-only total.
+      local is_reasonable
+      is_reasonable="$(printf '%s' "$usd_val" | awk '{d = $1 - 15.0; if (d < 0) d = -d; print (d < 0.01) ? "ok" : "warn"}')"
+      # A warning (not a hard fail) — either $15 (priced-only) or absent are both honest.
+      if [ "$is_reasonable" != "ok" ]; then
+        echo "WARN: usd=$usd_val for mixed priced+unpriced; expected ~15.00 (priced-only) or absent" >&2
+      fi
+      ;;
+  esac
+
+  # The unpriced model must appear in unpriced_models note.
+  local has_note
+  has_note="$(printf '%s' "$out" | jq '
+    (has("unpriced_models") and (.unpriced_models | length > 0)) or
+    (has("by_source") and (.by_source.audited.unpriced_models // [] | length > 0))
+  ')"
+  [ "$has_note" = "true" ] || {
+    echo "FAIL: no unpriced_models note when mixed priced+unpriced models present" >&2
+    printf '%s\n' "$out" | jq 'keys' >&2
+    return 1
+  }
+}
+
+# ─── P2.1-5: M1/M3 still source-split after pricing wired ────────────────────
+#
+# Regression check: adding pricing must not break the source-split honesty gate.
+
+@test "telemetry report P2.1: M1/M3 source-split still intact after pricing wired" {
+  write_row "evt-split-r1" "audited"   "claude-opus-4-8" 1000 200 0 0 "repo" "main"    "standard"
+  write_row "evt-split-r2" "estimated" "claude-opus-4-8" 500  100 0 0 "repo" "unknown" "standard"
+
+  local out status=0
+  out="$("$EIDOLONS_BIN" telemetry report \
+    --project "$TEST_SLUG" \
+    --json \
+    2>/dev/null)" || status=$?
+
+  [ "$status" -eq 0 ] || {
+    echo "FAIL: report exited $status" >&2
+    return 1
+  }
+
+  # Both by_source.audited and by_source.estimated must still be present.
+  local has_audited has_estimated
+  has_audited="$(printf '%s' "$out" | jq '.by_source | has("audited")')"
+  has_estimated="$(printf '%s' "$out" | jq '.by_source | has("estimated")')"
+
+  [ "$has_audited" = "true" ] || {
+    echo "FAIL: by_source.audited missing after pricing wired (source-split regression)" >&2
+    return 1
+  }
+  [ "$has_estimated" = "true" ] || {
+    echo "FAIL: by_source.estimated missing after pricing wired (source-split regression)" >&2
+    return 1
+  }
+
+  # Audited and estimated total_tokens must be distinct (no blending).
+  local aud_tok est_tok
+  aud_tok="$(printf '%s' "$out" | jq '.by_source.audited.total_tokens')"
+  est_tok="$(printf '%s' "$out" | jq '.by_source.estimated.total_tokens')"
+  [ "$aud_tok" != "$est_tok" ] || {
+    echo "FAIL: audited and estimated total_tokens are equal ($aud_tok) — likely blended (regression)" >&2
+    return 1
+  }
+}

@@ -1,20 +1,48 @@
-# roster/pricing.yaml — token→USD conversion table (P2 stub)
+# roster/pricing.yaml — token→USD conversion table (P2 — dollar pricing)
 #
-# MLP ships this file EMPTY. The MLP reports TOKENS, not dollars.
-# Dollar pricing is a P2 deliverable: when prices are populated here,
-# telemetry report will multiply the four usage fields by the matching
-# per-1M price for the model.
+# Unit: USD per 1 million tokens.
+# Keys: vendor model strings (same strings roster/model-profiles.yaml owns).
+# Date-stamped: 2026-06-13 (Anthropic public pricing).
 #
-# Keys must match the vendor model strings owned by roster/model-profiles.yaml.
-# Price unit: USD per 1 million tokens.
+# Model-key normalization: strip any trailing [...] suffix before lookup
+# (e.g. "claude-opus-4-8[1m]" → "claude-opus-4-8"). This is handled in
+# telemetry.sh — do NOT add suffixed keys here.
 #
-# Example (P2 — uncomment and populate when pricing goes live):
-#   claude-opus-4-8:
-#     input: 15.00
-#     output: 75.00
-#     cache_read: 1.50
-#     cache_creation: 18.75
+# HONESTY RULE (C6 — non-negotiable):
+#   Models WITHOUT an entry here fall back to token-only reporting with a
+#   "(no price for <model>)" note. NEVER treat unpriced as $0. NEVER blend
+#   priced and unpriced into a single dollar headline.
+#
+# To add a new model: populate ALL FOUR price fields and add a date comment.
+# If you cannot verify a price from the vendor's public pricing page,
+# leave it commented out with a "maintainer-verify" note.
 
 schema_version: 1
 currency: USD
-prices: {}
+
+prices:
+  claude-opus-4-8:
+    input: 15.00
+    output: 75.00
+    cache_creation: 18.75
+    cache_read: 1.50
+  claude-sonnet-4-6:
+    input: 3.00
+    output: 15.00
+    cache_creation: 3.75
+    cache_read: 0.30
+  # Other models below — prices NOT populated because they have not been
+  # independently verified from the vendor's current public pricing page.
+  # Until verified + added, telemetry report falls back to tokens for these.
+  #
+  # claude-haiku-4-5:
+  #   input: ?       # maintainer-verify before enabling
+  #   output: ?
+  #   cache_creation: ?
+  #   cache_read: ?
+  #
+  # claude-fable-5:
+  #   input: ?       # maintainer-verify before enabling
+  #   output: ?
+  #   cache_creation: ?
+  #   cache_read: ?

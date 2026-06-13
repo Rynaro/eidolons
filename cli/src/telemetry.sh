@@ -195,6 +195,21 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     exit 0
   fi
 
+  # ── P2.1: Load pricing table (roster/pricing.yaml → JSON) ────────────────
+  # yq is a hard dep (auto-installed by cli/install.sh); the table is the sole
+  # price home. Fallback to {} (no prices) on any error — fail-open.
+  _PRICING_YAML="${NEXUS}/roster/pricing.yaml"
+  _PRICING_JSON="{}"
+  if [[ -f "$_PRICING_YAML" ]]; then
+    if command -v yq >/dev/null 2>&1; then
+      _PRICING_JSON="$(yq eval -o=json '.prices // {}' "$_PRICING_YAML" 2>/dev/null || echo '{}')"
+      # Ensure it parsed to a real object, not null/empty.
+      if ! printf '%s' "$_PRICING_JSON" | jq empty 2>/dev/null; then
+        _PRICING_JSON="{}"
+      fi
+    fi
+  fi
+
   # ══════════════════════════════════════════════════════════════════════
   # rollup subcommand
   # ══════════════════════════════════════════════════════════════════════
@@ -330,8 +345,44 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     # Group by source, then compute totals + breakdowns.
     # The honesty gate (AC-F4-4): audited and estimated MUST remain
     # as distinct keys. No blended total at the top level.
-    _trd_m1="$(printf '%s' "$STORE" | jq '
-      # Compute per-source totals (strict separation — honesty gate C6)
+    #
+    # P2.1: pricing is injected via $prices argjson (from _PRICING_JSON).
+    # Model-key normalization: strip any trailing [...] suffix before lookup
+    # (e.g. "claude-opus-4-8[1m]" → "claude-opus-4-8").
+    # Honesty: models with no price → tracked in unpriced_models; usd is
+    # computed only for fully-priced groups; never output $0 for unpriced.
+    _trd_m1="$(printf '%s' "$STORE" | jq \
+      --argjson prices "$_PRICING_JSON" '
+      # Helper: normalize a model string by stripping [...] suffix.
+      def norm_model: gsub("\\[.*\\]$"; "");
+
+      # Helper: compute USD for one row given the prices object.
+      # Returns null if the model has no price entry (honest — never $0).
+      def row_usd($p):
+        (.model | norm_model) as $m |
+        if $p | has($m) then
+          ($p[$m].input        // 0) * .usage.input_tokens              / 1000000 +
+          ($p[$m].output       // 0) * .usage.output_tokens             / 1000000 +
+          ($p[$m].cache_creation // 0) * .usage.cache_creation_input_tokens / 1000000 +
+          ($p[$m].cache_read   // 0) * .usage.cache_read_input_tokens   / 1000000
+        else
+          null
+        end;
+
+      # Helper: compute summed USD for an array of rows; null if ANY model unpriced.
+      # (This is the honest rule: never blend priced + unpriced into one $ number.)
+      def sum_usd($p):
+        map(row_usd($p)) |
+        if any(. == null) then null
+        else add // 0
+        end;
+
+      # Collect ALL distinct (normalized) model strings across the store
+      # so we can identify which ones have no price.
+      ( [ .[].model | norm_model ] | unique ) as $all_models |
+      ( $all_models | map(. as $m | select(($prices | has($m)) | not)) ) as $unpriced |
+
+      # Compute per-source totals (strict separation — honesty gate C6).
       (group_by(.source)
        | map({
            key: .[0].source,
@@ -344,6 +395,9 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
              output_tokens:         (map(.usage.output_tokens)               | add // 0),
              cache_creation_tokens: (map(.usage.cache_creation_input_tokens) | add // 0),
              cache_read_tokens:     (map(.usage.cache_read_input_tokens)     | add // 0),
+             # P2.1 USD: computed only when ALL models in this source group are priced.
+             # Unpriced → null (honest; see unpriced_models below).
+             usd: (. | sum_usd($prices)),
              by_model: (
                group_by(.model)
                | map({key: (.[0].model // "?"),
@@ -375,13 +429,19 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
                               total: (map(.usage.input_tokens + .usage.output_tokens
                                          + .usage.cache_creation_input_tokens
                                          + .usage.cache_read_input_tokens) | add // 0)}})
-               | from_entries)
+               | from_entries),
+             # Per-source unpriced models (subset of globally unpriced, limited to this source).
+             unpriced_models: (
+               [ .[].model | norm_model ] | unique |
+               map(. as $m | select(($prices | has($m)) | not))
+             )
            }
          })
        | from_entries) as $by_source |
       # Honesty gate: expose as by_source.audited / by_source.estimated
       # NEVER merge them into a single "total_tokens" at the top level.
-      {by_source: $by_source}
+      # P2.1: unpriced_models is a top-level list (honesty note for callers).
+      {by_source: $by_source, unpriced_models: $unpriced}
     ')"
 
     # ── M2 — reconciliation delta (§7) ─────────────────────────────────
@@ -445,15 +505,19 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
       "${BOLD:-}" "${RESET:-}" "$_trd_project"
     printf '%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    printf '\n%sM1 — Real Spend Attribution%s (tokens, not dollars — pricing P2)\n' \
-      "${BOLD:-}" "${RESET:-}"
+    printf '\n%sM1 — Real Spend Attribution%s\n' "${BOLD:-}" "${RESET:-}"
     printf '%s\n' "  Honesty contract: audited and estimated are ALWAYS shown separately."
 
-    # Print per-source summaries.
-    printf '%s' "$_trd_m1" | jq -r '
+    # Print per-source summaries (P2.1: show usd when resolved; token fallback otherwise).
+    printf '%s' "$_trd_m1" | jq -r --argjson prices "$_PRICING_JSON" '
       .by_source | to_entries[] |
       "  [source: \(.key)]\n" +
       "    total_tokens:          \(.value.total_tokens)\n" +
+      (if .value.usd != null then
+        "    usd:                   $\(.value.usd | tostring)\n"
+      else
+        "    usd:                   (tokens — no price for some models in this group)\n"
+      end) +
       "    turns:                 \(.value.turns)\n" +
       "    input_tokens:          \(.value.input_tokens)\n" +
       "    output_tokens:         \(.value.output_tokens)\n" +
@@ -472,6 +536,18 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
       (.value.by_tier | to_entries | sort_by(-.value.total) |
        map("      \(.key): \(.value.total) tokens (\(.value.turns) turns)") | join("\n"))
     '
+
+    # P2.1: note unpriced models (honesty — never silent $0).
+    _trd_unpriced="$(printf '%s' "$_trd_m1" | jq -r '
+      if (.unpriced_models | length) > 0 then
+        "  (no price for: " + (.unpriced_models | join(", ")) + " — token fallback)"
+      else
+        ""
+      end
+    ')"
+    if [[ -n "$_trd_unpriced" ]]; then
+      printf '%s\n' "$_trd_unpriced"
+    fi
 
     printf '\n%sM2 — Reconciliation Delta%s\n' "${BOLD:-}" "${RESET:-}"
     _trd_m2_status="$(printf '%s' "$_trd_m2" | jq -r '.status')"
@@ -494,7 +570,6 @@ if [[ "$sub" == "rollup" || "$sub" == "report" ]]; then
     '
 
     printf '\n%s\n' "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    printf 'note: all figures in tokens (dollar pricing → P2)\n'
     printf 'for per-thread ECL estimates, see: eidolons trace cost\n'
     exit 0
   fi
