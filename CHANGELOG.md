@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.41.1] — 2026-06-14 — fix: `.roster_ref` sidecar no longer trips `upgrade self`
+
+### Fixed
+- `fix(nexus)`: add `.roster_ref` to the repo's committed `.gitignore`. The runtime sidecar-heal (`nexus_ensure_roster_ref` → `nexus_ensure_gitignore_sidecar`, `cli/src/lib.sh`) appends `.roster_ref` on every install/refresh, but the entry was never committed (it was added in v1.11.0 alongside the `.install_ref`/`.roster_ref` split, while only the three `.install_*` sidecars were listed). The append therefore mutated a **tracked** file on every checkout, leaving `.gitignore` permanently dirty and falsely tripping the `eidolons upgrade self` clean-tree guard (`_nexus_is_dirty`, which excludes the refresh-managed `roster`/`EIDOLONS.md`/`methodology/cortex` paths but not `.gitignore`). Users with no edits of their own hit "The nexus has local changes" and were pushed into `--force`. Committing the entry makes the heal a no-op, matching the documented intent of the `.gitignore` sidecar block. Existing dirty installs self-heal on the next `upgrade self` (the new clone's `.gitignore` already contains the entry).
+
 ## [1.41.0] — 2026-06-14 — telemetry P2 sprint 2: budget gate + store export
 
 ### Added

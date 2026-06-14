@@ -67,3 +67,4 @@ secrets/
 .install_date
 .install_ref
 .install_commit
+.roster_ref
