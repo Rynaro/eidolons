@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.41.0] — 2026-06-14 — telemetry P2 sprint 2: budget gate + store export
+
+### Added
+- `feat(telemetry)`: `eidolons telemetry budget --limit N [--by repo|branch|model|eidolon|tier|day] [--since DATE] [--usd] [--json]` — cross-run budget gate over the telemetry store. Aggregates spend by `--by` (default `eidolon`), source-split (audited/estimated evaluated independently — never summed). Exits **3** when any group exceeds the limit (mirrors `trace cost --budget`), 0 when within; `--usd` evaluates a dollar threshold via `roster/pricing.yaml` (with an honest "can't evaluate $ budget for unpriced model" note rather than a silent pass). `--json` for alerting pipelines.
+- `feat(telemetry)`: `eidolons telemetry export [otel|json|csv] [--since DATE] [--project <slug>]` — stdout-only store export (the nexus bundles no collector). `otel` emits OpenTelemetry GenAI-convention spans reusing the SAME `gen_ai.*`/`eidolons.*` attribute keys as `trace otel` (single source of truth), one span per turn; `json` emits the deduped store array; `csv` flattens the core columns (ts/source/host/model/eidolon/repo/branch/tier/is_sidechain/4 token fields/usd-if-priced) with RFC-4180 quoting.
+
 ## [1.40.0] — 2026-06-13 — telemetry P2 sprint 1: subagent capture + dollar pricing
 
 ### Added
