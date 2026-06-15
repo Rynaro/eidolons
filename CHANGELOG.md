@@ -8,8 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.42.1] — 2026-06-15 — fix: nexus version pointers + README refresh
+
 ### Fixed
-- **Nexus version pointers no longer drift.** `roster/index.yaml`'s `nexus.{version,versions.latest,versions.pins.stable}` had been frozen at `1.0.0` since the first release — `release-nexus.yml` only wrote the per-version `releases[<v>]` integrity map, never the current-version pointers. Because `roster-health.yml`'s nightly nexus-integrity gate reads `.nexus.versions.latest`, clones that tag, and verifies it, the gate had been re-checking the ancient v1.0.0 while every release since (through v1.42.0) went unverified. Backfilled the pointers to `1.42.0` and made `release-nexus.yml` advance them to the released `$VERSION` at release time. No CLI behavior changes — `upgrade self` resolves the latest from git tags (`nexus_latest_tag`), not these pointers.
+- **Nexus version pointers no longer drift.** `roster/index.yaml`'s `nexus.{version,versions.latest,versions.pins.stable}` had been frozen at `1.0.0` since the first release — `release-nexus.yml` only wrote the per-version `releases[<v>]` integrity map, never the current-version pointers. Because `roster-health.yml`'s nightly nexus-integrity gate reads `.nexus.versions.latest`, clones that tag, and verifies it, the gate had been re-checking the ancient v1.0.0 while every release since (through v1.42.0) went unverified. Backfilled the pointers and made `release-nexus.yml` advance them to the released `$VERSION` at release time (this release stamps them to `1.42.1`). No CLI behavior changes — `upgrade self` resolves the latest from git tags (`nexus_latest_tag`), not these pointers.
+
+### Changed
+- `docs`: **README overhaul** — reorganized top-down by reader priority (~24% shorter), added a measured "Does it actually work?" section (routing A/B: pass² consistency 58.3% vs 16.7%, 3.5×; Vivi fanout pass² 1.00 vs 0.67 single-pass; Kupo 36/36, pass³ 1.00), dropped the "Recently shipped" block (CHANGELOG owns it), and replaced every hardcoded version with dynamic `github/v/release` badges that self-update. Also committed the previously-untracked `DOSSIER-HARNESS-2026-06.md` referenced across the docs.
 
 ## [1.42.0] — 2026-06-15 — feat: sync self-heals the SessionStart matcher
 
