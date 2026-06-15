@@ -531,6 +531,119 @@ SHIM
   [ "$before_ts" = "$after_ts" ]
 }
 
+# ─── OCI no-op idempotency guard (harness MCP-churn fix) ─────────────────────
+#
+# Symptom this guards: 'eidolons sync' / repeat 'mcp install' was re-rendering
+# and re-merging .mcp.json on every run even when the resolved OCI digest had
+# not changed. The bytes were identical (jq is deterministic) but the file was
+# re-written via mv, so its mtime changed — which can re-trigger the Claude Code
+# harness's per-project MCP file-change detection (re-prompt / "disabled" state).
+#
+# Required behaviour:
+#   1. no-op reinstall (same resolved digest) must NOT touch .mcp.json at all
+#      (no re-write → mtime unchanged) and must report "unchanged, skipping".
+#   2. a genuine digest bump MUST still re-render (bytes change).
+#   3. --force MUST still re-render even on a no-op.
+
+@test "OCI no-op guard: reinstall same digest does NOT re-write .mcp.json (mtime unchanged)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # First install pins a digest into .mcp.json + lockfile.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  [ -f ".mcp.json" ]
+
+  # Capture mtime via a portable stat wrapper (GNU vs BSD).
+  _mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1"; }
+  before_mtime="$(_mtime .mcp.json)"
+
+  # Sleep 1s so a re-write would produce a strictly different mtime
+  # (1s granularity is enough — both stat variants report whole seconds).
+  sleep 1
+
+  # Second install, SAME version/digest, no --force → must be a no-op.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  # Driver must announce the skip.
+  [[ "$output" =~ "unchanged" ]]
+
+  after_mtime="$(_mtime .mcp.json)"
+  # mtime MUST be unchanged — the file was not re-written.
+  [ "$before_mtime" = "$after_mtime" ]
+}
+
+@test "OCI no-op guard: genuine digest bump still re-renders .mcp.json" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  before_digest="$(jq -r '.mcpServers.crystalium.args[] | select(startswith("ghcr.io/rynaro/crystalium@"))' .mcp.json)"
+
+  # Install a DIFFERENT version → different digest → must re-render.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.4.0
+  [ "$status" -eq 0 ]
+  after_digest="$(jq -r '.mcpServers.crystalium.args[] | select(startswith("ghcr.io/rynaro/crystalium@"))' .mcp.json)"
+
+  [ "$before_digest" != "$after_digest" ]
+  [[ "$after_digest" =~ "@sha256:778167053c55cea71c1f6d7a12f8a11d904c00715aaa72ac47aec90b3d3fdf2f" ]]
+}
+
+@test "OCI no-op guard: --force re-renders even when digest unchanged" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  _mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1"; }
+  before_mtime="$(_mtime .mcp.json)"
+  sleep 1
+
+  # --force with same digest → must still re-render (file re-written).
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1 --force
+  [ "$status" -eq 0 ]
+  # --force must NOT take the "unchanged, skipping" path.
+  [[ ! "$output" =~ "unchanged, skipping" ]]
+  after_mtime="$(_mtime .mcp.json)"
+  [ "$before_mtime" != "$after_mtime" ]
+  # Entry still valid.
+  run bash -c "jq -e '.mcpServers.crystalium' .mcp.json"
+  [ "$status" -eq 0 ]
+}
+
+@test "OCI no-op guard: missing .mcp.json forces render even when lock digest matches" {
+  # Regression for the secondary symptom: if the lockfile still records the
+  # current digest but .mcp.json was deleted (or never written for this host),
+  # the guard must NOT skip — it must re-render so the entry comes back.
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  [ -f ".mcp.json" ]
+  [ -f "eidolons.mcp.lock" ]
+
+  # Simulate a lost .mcp.json (harness reset, manual delete) while the lock
+  # still carries the matching digest.
+  rm -f .mcp.json
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
+  [ "$status" -eq 0 ]
+  # .mcp.json must be restored (NOT skipped).
+  [ -f ".mcp.json" ]
+  run bash -c "jq -e '.mcpServers.crystalium' .mcp.json"
+  [ "$status" -eq 0 ]
+}
+
 # ─── Phase 2: R10 — cursor .cursor/mcp.json + R11 .codex/config.toml ────────
 
 # Helper: seed manifest with given hosts.

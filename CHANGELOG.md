@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- `fix(mcp)`: **`eidolons mcp install`/`sync`/`upgrade` no longer churn `.mcp.json` on a no-op.** The OCI-image driver (`mcp_driver_oci_image_install`) re-rendered and re-wrote `.mcp.json` on every run with no idempotency guard. Because `jq` is deterministic the *bytes* were identical on a no-op (so the existing byte-equality test passed), but the `mv`-based write advanced the file's **mtime** every time — and a host harness (e.g. Claude Code) that watches `.mcp.json` for changes treats that as a changed server and re-prompts for approval, the "my MCP got disabled after sync" symptom. The driver now compares the digest already baked into the `.mcp.json` server entry against the freshly-resolved catalogue digest and, when they match (and `--force` is not set), **skips the render+merge entirely** — `.mcp.json` is left byte- and mtime-identical. A genuine digest bump, `--force`, a missing `.mcp.json`, or an unresolved digest all still re-render as before. Note: this de-churns no-ops only; a *legitimate* digest bump still rewrites `.mcp.json` and the harness will re-prompt — that approval state lives in the host's own per-project trust file, which the CLI does not write. `eidolons sync` itself never touched `.mcp.json`; the realistic churn vector was always the install/refresh path (`mcp install`/`sync`/`upgrade` run `nexus_refresh` first, so a roster digest bump is auto-picked-up).
+
 ## [1.42.1] — 2026-06-15 — fix: nexus version pointers + README refresh
 
 ### Fixed

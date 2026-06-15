@@ -761,6 +761,31 @@ ${new_section}"
   fi
 }
 
+# _mcp_oci_mcpjson_digest NAME PROJECT_ROOT
+# Emit the OCI digest currently baked into PROJECT_ROOT/.mcp.json for NAME's
+# server entry (the `@sha256:...` suffix on the image arg), or empty if the
+# entry / file / digest is absent. Used by the no-op idempotency guard so a
+# repeat install with an unchanged digest does not re-write .mcp.json at all
+# (which would churn the file's mtime and re-trigger the host harness's
+# per-project MCP file-change detection — the "MCP disabled after sync" symptom).
+# Bash 3.2 safe (jq + sed only; no associative arrays / ${var,,}).
+_mcp_oci_mcpjson_digest() {
+  local name="$1"
+  local project_root="$2"
+  local mcpjson="${project_root}/.mcp.json"
+
+  [ -f "$mcpjson" ] || return 0
+  jq empty "$mcpjson" 2>/dev/null || return 0
+
+  # Pull every arg of this server entry, find the image ref, emit its @digest.
+  jq -r --arg n "$name" \
+    '(.mcpServers[$n].args // [])[]
+      | select(type == "string" and test("@sha256:"))' \
+    "$mcpjson" 2>/dev/null \
+    | sed -n 's|.*@\(sha256:[0-9a-f]\{1,\}\).*|\1|p' \
+    | head -1
+}
+
 # _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH
 # Internal helper: renders a template with placeholder substitution and
 # jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
@@ -930,7 +955,22 @@ mcp_driver_oci_image_install() {
         mcp_driver_oci_image_pull "$name" --image-digest "$digest" || return $?
       fi
     fi
-    _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
+    # Idempotency early-exit (no-op guard): if not --force, the .mcp.json entry
+    # already exists AND its baked-in digest matches the freshly-resolved digest,
+    # skip the render+merge entirely so .mcp.json is not re-written (no mtime
+    # churn → no harness MCP re-prompt). A genuine digest bump, --force, a
+    # missing .mcp.json, or a missing digest all fall through to re-render.
+    if [ "$force" = "false" ] && [ -n "$digest" ]; then
+      local existing_mcpjson_digest
+      existing_mcpjson_digest="$(_mcp_oci_mcpjson_digest "$name" "$project_root")"
+      if [ -n "$existing_mcpjson_digest" ] && [ "$existing_mcpjson_digest" = "$digest" ]; then
+        info "${name}: .mcp.json digest unchanged (${digest}) — unchanged, skipping render"
+      else
+        _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
+      fi
+    else
+      _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
+    fi
   fi
 
   # Build and upsert lockfile entry.
