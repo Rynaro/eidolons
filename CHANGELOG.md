@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **Nexus version pointers no longer drift.** `roster/index.yaml`'s `nexus.{version,versions.latest,versions.pins.stable}` had been frozen at `1.0.0` since the first release — `release-nexus.yml` only wrote the per-version `releases[<v>]` integrity map, never the current-version pointers. Because `roster-health.yml`'s nightly nexus-integrity gate reads `.nexus.versions.latest`, clones that tag, and verifies it, the gate had been re-checking the ancient v1.0.0 while every release since (through v1.42.0) went unverified. Backfilled the pointers to `1.42.0` and made `release-nexus.yml` advance them to the released `$VERSION` at release time. No CLI behavior changes — `upgrade self` resolves the latest from git tags (`nexus_latest_tag`), not these pointers.
+
 ## [1.42.0] — 2026-06-15 — feat: sync self-heals the SessionStart matcher
 
 ### Added
