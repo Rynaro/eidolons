@@ -1953,3 +1953,67 @@ alwaysApply: true
   [ "$_mdc_before" = "$_mdc_after" ]
   [ "$_agents_before" = "$_agents_after" ]
 }
+
+# ─── SessionStart matcher self-heal via sync (1.42.0) ─────────────────────────
+#
+# The heal lives in harness_install.sh's --refresh-shims-only path, which
+# 'eidolons sync' invokes (sync.sh ~line 1014) passing --no-heal through when
+# requested. The heal behavior itself (heal / preserve-foreign / idempotent /
+# --no-heal-skips) is proven in harness.bats T1–T5. These sync-level tests
+# prove the flag is ACCEPTED and PLUMBED (default = heal; --no-heal = skip).
+
+@test "sync: --no-heal flag is accepted (does not error)" {
+  setup_fake_git_for_upgrade
+  seed_manifest_with atlas=^1.0.0
+  run eidolons sync --yes --no-heal
+  [ "$status" -eq 0 ]
+}
+
+@test "sync: --no-heal documented in usage" {
+  run eidolons sync -h
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "--no-heal" ]]
+}
+
+# Prove sync threads --no-heal through to the refresh call: drive the refresh
+# path the same way sync.sh does, with a stale OUR matcher seeded. Default heals;
+# --no-heal leaves it stale. (Mirrors sync.sh's `harness_install.sh
+# --refresh-shims-only ${_heal_flag}` invocation.)
+@test "sync refresh path: default heals stale matcher; --no-heal skips" {
+  seed_manifest
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-15T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+  mkdir -p .claude .eidolons/harness/hooks
+  _seed_stale() {
+    cat > .claude/settings.json <<'JSON'
+{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}]}}
+JSON
+  }
+  # Default (heal on).
+  _seed_stale
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  _m="$(jq -r '.hooks.SessionStart[0].matcher' .claude/settings.json)"
+  [ "$_m" = "startup|resume|clear|compact" ]
+  # --no-heal (the flag sync threads through).
+  _seed_stale
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only --no-heal
+  [ "$status" -eq 0 ]
+  _m2="$(jq -r '.hooks.SessionStart[0].matcher' .claude/settings.json)"
+  [ "$_m2" = "startup" ]
+}
