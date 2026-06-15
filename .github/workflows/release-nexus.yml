@@ -181,14 +181,22 @@ jobs:
           SHA256="${{ steps.archive.outputs.archive_sha256 }}"
           NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-          # Use yq to update the release metadata in-place.
+          # Use yq to update the release metadata in-place. Also advance the
+          # current-version pointers (version / versions.latest / pins.stable)
+          # to the version being released — VERSION on main is monotonic and was
+          # already validated to match the requested release above, so $VERSION
+          # is the latest. Without this, these pointers stay frozen at the first
+          # release and roster-health verifies the wrong (stale) tag forever.
           yq e ".nexus.versions.releases[\"$VERSION\"].commit = \"$COMMIT\" |
                 .nexus.versions.releases[\"$VERSION\"].tree = \"$TREE\" |
                 .nexus.versions.releases[\"$VERSION\"].archive_sha256 = \"$SHA256\" |
-                .nexus.versions.releases[\"$VERSION\"].released_at = \"$NOW\"" \
+                .nexus.versions.releases[\"$VERSION\"].released_at = \"$NOW\" |
+                .nexus.version = \"$VERSION\" |
+                .nexus.versions.latest = \"$VERSION\" |
+                .nexus.versions.pins.stable = \"$VERSION\"" \
             -i roster/index.yaml
 
-          echo "Updated roster nexus release block for v$VERSION"
+          echo "Updated roster nexus release block + version pointers for v$VERSION"
 
       - name: Commit and open PR for roster update
         env:
