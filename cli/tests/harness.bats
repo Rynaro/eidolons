@@ -127,6 +127,11 @@ JSTUB
   # Shims must exist and be executable.
   [ -x ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
   [ -x ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+  # SessionStart matcher MUST cover all CC source values (startup|resume|clear|compact).
+  # Regression: a "startup"-only matcher means the cortex is never re-injected after
+  # auto-compaction (source:"compact"), so the host reverts to default mid-session.
+  _ss_matcher="$(jq -r '.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart")) | .matcher' .claude/settings.json)"
+  [ "$_ss_matcher" = "startup|resume|clear|compact" ]
 }
 
 @test "harness: install lockfile harness key is sorted/canonical" {
@@ -384,6 +389,25 @@ SHIM
   fi
   # If empty output: no Eidolon scored above tau (clarify decision) — also valid.
   # The test passes regardless because both paths are correct per AC-R1-2.
+}
+
+# ─── UPS injection is self-contained (survives cortex eviction on compaction) ──
+
+@test "harness: run --hook claude-code UPS additionalContext is self-contained imperative" {
+  seed_manifest
+  # A non-trivial prompt should route and carry an inline, self-contained
+  # delegation instruction — NOT a pointer to the dispatch protocol, which
+  # compaction deletes from the window. Regression for the UPS-hardening fix.
+  run eidolons run --hook claude-code "implement the authentication flow"
+  [ "$status" -eq 0 ]
+  if [[ -n "$output" ]]; then
+    _ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+    # Must carry the imperative phrasing inline.
+    [[ "$_ctx" == *"via the Task tool"* ]]
+    [[ "$_ctx" == *"Do NOT implement"* ]]
+    # Must NOT degrade to the old bare pointer.
+    [[ "$_ctx" != *"route per Eidolons dispatch protocol."* ]]
+  fi
 }
 
 # ─── R1-AC2: trivial prompt emits empty stdout ─────────────────────────────────

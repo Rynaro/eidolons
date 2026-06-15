@@ -118,9 +118,9 @@ ${mem_digest}"
   # Construct the advisory context block (compact, ≤1000 tokens).
   local ctx_text
   if [[ -n "$chain_str" && "$chain_str" != "$selected" ]]; then
-    ctx_text="Route: $selected  Tier: $tier  Chain: $chain_str  Instruction: Delegate to $selected — route per Eidolons dispatch protocol."
+    ctx_text="Route: $selected  Tier: $tier  Chain: $chain_str  Instruction: Delegate to $selected via the Task tool now. Do NOT implement, edit, or debug directly in the main loop — dispatch to the named Eidolon subagent(s)."
   else
-    ctx_text="Route: $selected  Tier: $tier  Chain: none  Instruction: Delegate to $selected — route per Eidolons dispatch protocol."
+    ctx_text="Route: $selected  Tier: $tier  Chain: none  Instruction: Delegate to $selected via the Task tool now. Do NOT implement, edit, or debug directly in the main loop — dispatch to the named Eidolon subagent(s)."
   fi
 
   if [[ -n "$assumptions_str" ]]; then
