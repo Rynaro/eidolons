@@ -1349,11 +1349,11 @@ eidolons:
 # after tagging; placeholders here are a bootstrap-window sentinel that
 # nexus_verify_release() detects and skips gracefully.
 nexus:
-  version: "1.0.0"
+  version: "1.42.0"
   versions:
-    latest: "1.0.0"
+    latest: "1.42.0"
     pins:
-      stable: "1.0.0"
+      stable: "1.42.0"
     releases:
       "1.0.0":
         tag: "v1.0.0"
