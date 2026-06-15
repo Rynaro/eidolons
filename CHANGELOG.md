@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.41.2] — 2026-06-15 — fix: routing cortex re-injects after compaction
+
+### Fixed
+- `fix(harness)`: the always-loaded routing cortex (Roster Index + Dispatch Protocol) now re-injects after Claude Code auto-compaction, `--resume`, and `/clear` — previously it was dropped for the rest of a long session. The `SessionStart` hook written into `.claude/settings.json` by `eidolons harness install` was registered with `"matcher": "startup"` only, so it fired once at session boot and never again. Claude Code fires `SessionStart` with `source` ∈ {`startup`, `resume`, `clear`, `compact`}; on auto-compaction (long sessions, ~200k+ tokens) the original cortex `additionalContext` is summarized away **and** the startup-only hook does not re-fire — leaving the host with no dispatch protocol in context, which silently reverts routing to direct main-loop work (the "Eidolons get ignored after a long session" symptom). All four `SessionStart` matchers emitted by `cli/src/harness_install.sh` (fresh-file + merge paths, base + strict) now use `"startup|resume|clear|compact"`.
+- `fix(harness)`: the per-prompt `UserPromptSubmit` route injection (`cli/src/harness_hook.sh`) no longer points at the (compaction-deleted) dispatch protocol. It now carries a self-contained imperative — *"Delegate to … via the Task tool now. Do NOT implement, edit, or debug directly in the main loop — dispatch to the named Eidolon subagent(s)."* — so per-prompt routing survives even in the window before the next `SessionStart` re-fires.
+- **Migration:** existing installs do **not** self-heal via `eidolons sync` (it re-renders shim scripts but never re-touches the `settings.json` matcher). Run `eidolons harness install --force` (or `eidolons upgrade self` then re-install) to pick up the new matcher.
+
 ## [1.41.1] — 2026-06-14 — fix: `.roster_ref` sidecar no longer trips `upgrade self`
 
 ### Fixed

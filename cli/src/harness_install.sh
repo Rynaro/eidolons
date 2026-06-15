@@ -558,7 +558,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         --arg ptm "$_ptu_matcher" \
         '{"hooks": {
             "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-            "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}],
+            "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}],
             "PreToolUse": [{"matcher": $ptm, "hooks": [{"type": "command", "command": $ptu}]}]
          }}' > "$SETTINGS_JSON"
     else
@@ -567,7 +567,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         --arg ss "$_ss_cmd" \
         '{"hooks": {
             "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-            "SessionStart": [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+            "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
          }}' > "$SETTINGS_JSON"
     fi
     ok "Wrote .claude/settings.json with hooks block"
@@ -596,7 +596,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
-            else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+            else $arr + [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
             end
           ) |
           # Append PreToolUse entry only if command not already present (R19 AC-R19-1).
@@ -623,7 +623,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
-            else $arr + [{"matcher": "startup", "hooks": [{"type": "command", "command": $ss}]}]
+            else $arr + [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
             end
           )
           ' "$SETTINGS_JSON")"
