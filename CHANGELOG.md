@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.42.0] — 2026-06-15 — feat: sync self-heals the SessionStart matcher
+
+### Added
+- `feat(harness)`: **seamless self-heal of the `SessionStart` matcher.** `eidolons sync` now corrects a stale `startup`-only Claude Code `SessionStart` matcher in `.claude/settings.json` to the canonical `startup|resume|clear|compact` **in place**, during the harness-shim refresh, on by default. This closes the v1.41.2 migration gap: existing installs no longer need a manual `--force` re-install — they self-heal on the next `eidolons sync`. The heal touches **only** the Eidolons-owned entry (matched by command path), leaves foreign `SessionStart` entries and sibling events (`UserPromptSubmit`/`PreToolUse`/`Stop`) byte-identical, compares `jq -cS` canonical before/after so an already-healed file is a no-op, and is fail-soft (any jq/IO error → warn + continue; a heal error never aborts `sync`).
+- `feat(harness)`: `--no-heal` opt-out on both `eidolons sync` and `eidolons harness install` (the heal runs during the internal `--refresh-shims-only` pass). Default behaviour is to heal; `--no-heal` skips the matcher correction while still refreshing the shim bodies.
+
+### Fixed
+- `fix(harness)`: the `.claude/settings.json` `SessionStart` **merge is now an upsert, not append-if-absent.** Previously, when a settings file already contained the Eidolons-owned `SessionStart` entry with a stale `"matcher": "startup"`, the merge left it unchanged — so `eidolons harness install --force` did **not** heal its own stale entry (the latent bug behind the v1.41.2 manual-edit advice). The merge now corrects the matcher of the present Eidolons entry in place (or appends when absent). `harness install --force` therefore heals too. This **supersedes** the v1.41.2 migration note: the path is now simply `eidolons upgrade self` then `eidolons sync` — no `--force` dance.
+- `chore(harness)`: the canonical `SessionStart` matcher is now defined once (`_SS_MATCHER` in `cli/src/harness_install.sh`) and threaded as a jq `--arg` through all four emit paths (fresh-file + merge, base + strict), replacing four hardcoded `startup|resume|clear|compact` literals. A future source-list change touches one line.
+
+### Migration
+- Existing installs **self-heal on the next `eidolons sync`** (no `--force` needed). For a hard backstop, install the strict tier — `eidolons harness install --strict` adds a `PreToolUse` delegate-or-deny tier that mechanically **blocks** direct main-loop edits (claude-code: delegate-or-deny + protected-globs; codex: protected-globs only; opencode: advisory plugin; cursor: refused) — recommended where you want delegation enforced rather than merely injected.
+
 ## [1.41.2] — 2026-06-15 — fix: routing cortex re-injects after compaction
 
 ### Fixed

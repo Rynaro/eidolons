@@ -94,6 +94,17 @@ eidolons harness install --strict   # opt-in: add tool-boundary delegate-or-deny
 eidolons harness status             # per-host effective enforcement tier
 ```
 
+**Self-healing settings (v1.42.0).** The Claude Code SessionStart hook is wired with a `startup|resume|clear|compact` matcher so the cortex is re-injected after auto-compaction (a `startup`-only matcher silently stops working mid-session). `eidolons sync` now **self-heals** a stale `startup`-only matcher in `.claude/settings.json` in place — only ever touching the Eidolons-owned entry, never a foreign hook. So the upgrade path is simply:
+
+```bash
+eidolons upgrade self   # upgrade to the latest stable nexus
+eidolons sync           # heals the SessionStart matcher in place (no --force dance)
+```
+
+The heal is on by default and idempotent (a second `sync` is a no-op). Pass `--no-heal` to `eidolons sync` (or `eidolons harness install`) to opt out. `eidolons harness install --force` also heals its own entry now (the merge is an upsert, not append-if-absent — this supersedes the v1.41.2 manual-edit advice).
+
+**Defense in depth: `--strict`.** The default tier injects routing as *advisory* context — the host can still ignore it. For a hard backstop, `eidolons harness install --strict` adds a `PreToolUse` **delegate-or-deny** tier that mechanically *blocks* main-loop edits (so direct edits from the top-level loop are denied; only delegated subagents may write), plus protected-glob denials in all contexts. Soundness is per-host: **claude-code** gets full delegate-or-deny + protected-globs; **codex** gets protected-globs only (its `PreToolUse` exposes no `agent_id`, so main-loop vs subagent can't be distinguished); **opencode** gets an advisory plugin only (the `tool.execute.before` block is unsound, #5894); **cursor** is refused (out of scope). Use `--strict` when you want delegation enforced, not merely suggested.
+
 **Memory pre-flight is mechanical too.** When CRYSTALIUM is installed, the session-start hook runs `eidolons memory preflight` — a one-shot, out-of-band recall that injects prior project memory into context, fail-open and bounded. Memory becomes a harness guarantee, not something the model has to think to ask for.
 
 The whole design — what each vendor's hooks can actually *force* versus merely suggest, and the per-host enforcement ladder — is written up in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer". And it's *measured*: [`eidolons eval compliance`](docs/cli-reference.md) runs an A/B (harness-wired vs prose-only) instrument that reports whether the injection actually changes the host's delegation behaviour.

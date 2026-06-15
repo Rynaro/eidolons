@@ -29,6 +29,7 @@ SKIP_PREVIEW=false
 QUIET=false
 VERBOSE_FLAG=false
 STRICT_HOSTS_CLI=""   # tri-state: "" (use manifest), "true" or "false" (override)
+NO_HEAL=false         # opt out of the SessionStart-matcher self-heal during refresh
 
 usage() {
   cat <<EOF
@@ -46,6 +47,9 @@ Options:
                       without a manifest `host` annotation. Overrides
                       hosts.strict in eidolons.yaml for this run.
   --no-strict-hosts   Disable strict mode for this run (override manifest).
+  --no-heal           Skip the seamless SessionStart-matcher self-heal of an
+                      installed harness (default: heal a stale 'startup'-only
+                      matcher in .claude/settings.json in place).
   -h, --help          Show this help
 
 Behavior:
@@ -67,6 +71,7 @@ while [[ $# -gt 0 ]]; do
     --verbose)         VERBOSE_FLAG=true; shift ;;
     --strict-hosts)    STRICT_HOSTS_CLI=true; shift ;;
     --no-strict-hosts) STRICT_HOSTS_CLI=false; shift ;;
+    --no-heal)         NO_HEAL=true; shift ;;
     -h|--help)         usage; exit 0 ;;
     *)                 echo "Unknown option: $1" >&2; exit 2 ;;
   esac
@@ -1010,7 +1015,10 @@ if [[ "$_harness_installed" != "absent" ]]; then
   if [[ "$DRY_RUN" == "true" ]]; then
     info "  [dry-run] would refresh harness shims (harness installed, schema_version=$_harness_installed)"
   else
-    bash "$SELF_DIR/harness_install.sh" --refresh-shims-only || true
+    _heal_flag=""
+    [[ "$NO_HEAL" == "true" ]] && _heal_flag="--no-heal"
+    bash "$SELF_DIR/harness_install.sh" --refresh-shims-only $_heal_flag || true
+    unset _heal_flag
   fi
 fi
 unset _harness_installed

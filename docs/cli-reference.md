@@ -83,7 +83,7 @@ The cortex cleanup runs now (ahead of the full v1.1 implementation): `eidolons r
 Reconcile installed state to `eidolons.yaml`. Idempotent.
 
 ```
-eidolons sync [--non-interactive] [--dry-run]
+eidolons sync [--non-interactive] [--dry-run] [--no-heal]
 ```
 
 - Fetches each member's repo (cached in `~/.eidolons/cache/`).
@@ -91,6 +91,11 @@ eidolons sync [--non-interactive] [--dry-run]
 - Aggregates per-Eidolon manifests into `eidolons.lock`.
 - Mirrors `EIDOLONS.md` to `.eidolons/cortex/EIDOLONS.md` and mirrors the deep companion tables (`trance-matrix.md`, `handoff-graph.md`, `validation-gates.md`, `README.md`) from `methodology/cortex/` to `.eidolons/cortex/`.
 - When `shared_dispatch: true`, injects a marker-bounded `<!-- eidolon:cortex start/end -->` pointer block into root `AGENTS.md`, `CLAUDE.md`, and `.github/copilot-instructions.md` so the host LLM is directed to the cortex at session start. The block is omitted when shared-dispatch is off.
+- When the harness is installed, refreshes the hook shims and **self-heals** a stale `startup`-only Claude Code `SessionStart` matcher in `.claude/settings.json` to the canonical `startup|resume|clear|compact` (only the Eidolons-owned entry is touched; idempotent). Pass `--no-heal` to skip the heal.
+
+| Flag | Effect |
+|------|--------|
+| `--no-heal` | Skip the seamless `SessionStart`-matcher self-heal during the harness-shim refresh (default: heal a stale `startup`-only matcher in place). |
 
 ---
 
@@ -249,7 +254,8 @@ Writes shim scripts under `.eidolons/harness/hooks/` and merges hooks blocks int
 | `--hosts HOST,...` | Comma-separated host subset (`claude-code`, `codex`, `copilot`, `cursor`, `opencode`). Default: all hosts in `eidolons.yaml hosts.wire`. |
 | `--strict` | Enable the strict enforcement tier (see below). |
 | `--protect GLOB` | Add a file-glob to the protected set. May be repeated. Protected globs are denied in ALL contexts including subagents. |
-| `--force` | Overwrite existing shims even when already up-to-date. |
+| `--force` | Overwrite existing shims even when already up-to-date. (The `SessionStart` merge is an upsert: a stale `startup`-only matcher on the Eidolons-owned entry is healed in place.) |
+| `--no-heal` | Skip the seamless `SessionStart`-matcher self-heal during the internal `--refresh-shims-only` refresh (default: heal). |
 
 **Base tier (default):** writes `UserPromptSubmit.sh` + `SessionStart.sh` shims for claude-code and codex; `sessionStart` shim for copilot. Merges a hooks block into `.claude/settings.json` (claude-code) and `.codex/hooks.json` (codex). Cursor and opencode receive no base shims (their surfaces ride `eidolons sync` and `eidolons mcp install`).
 

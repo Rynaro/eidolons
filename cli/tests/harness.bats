@@ -166,6 +166,146 @@ JSTUB
   cmp -s eidolons.lock.first eidolons.lock
 }
 
+# ─── SessionStart matcher self-heal (1.42.0) ──────────────────────────────────
+
+# T1: install --force upserts (heals) a stale "startup"-only OUR SessionStart
+# entry to the canonical matcher. RED-before-fix proven empirically against main:
+# the old append-if-absent merge left a present OUR entry UNCHANGED, so --force
+# did NOT heal "startup" → it stayed "startup". The upsert fix makes this GREEN.
+@test "harness: install --force heals stale OUR SessionStart matcher in place (T1 upsert)" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude .eidolons/harness/hooks
+  # Seed OUR SessionStart entry at the stale "startup"-only matcher.
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  run eidolons harness install --hosts claude-code --non-interactive --force
+  [ "$status" -eq 0 ]
+  # OUR entry must now carry the canonical matcher (heal-in-place, not append).
+  _m="$(jq -r '.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart")) | .matcher' .claude/settings.json)"
+  [ "$_m" = "startup|resume|clear|compact" ]
+  # No duplicate OUR entry was appended.
+  _count="$(jq -r '[.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart"))] | length' .claude/settings.json)"
+  [ "$_count" = "1" ]
+}
+
+# T2: sync's refresh path (refresh-shims-only) heals a stale OUR matcher and
+# emits an "ok healed…" line. Heal is on by default.
+@test "harness: refresh-shims-only heals stale OUR SessionStart matcher + emits ok line (T2)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .claude .eidolons/harness/hooks
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  _m="$(jq -r '.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart")) | .matcher' .claude/settings.json)"
+  [ "$_m" = "startup|resume|clear|compact" ]
+  [[ "$output" =~ "healed stale SessionStart matcher" ]]
+}
+
+# T3: --no-heal skips the heal (matcher stays stale) but still refreshes shims.
+@test "harness: refresh-shims-only --no-heal skips heal; shims still refreshed (T3)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .claude .eidolons/harness/hooks
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only --no-heal
+  [ "$status" -eq 0 ]
+  # Matcher must stay stale (heal skipped).
+  _m="$(jq -r '.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart")) | .matcher' .claude/settings.json)"
+  [ "$_m" = "startup" ]
+  # No heal line emitted.
+  ! [[ "$output" =~ "healed stale SessionStart matcher" ]]
+  # Shim still refreshed (no longer "# old shim").
+  run grep -c "Eidolons harness shim" .eidolons/harness/hooks/claude-code-SessionStart.sh
+  [ "$status" -eq 0 ]
+  [[ "$output" -ge 1 ]]
+}
+
+# T4: a FOREIGN SessionStart entry must be byte-identical after heal; only ours changes.
+@test "harness: heal preserves FOREIGN SessionStart entry byte-identically (T4)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .claude .eidolons/harness/hooks
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": "/usr/local/bin/foreign.sh"}]},
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  _foreign_before="$(jq -cS '.hooks.SessionStart[] | select(.hooks[].command == "/usr/local/bin/foreign.sh")' .claude/settings.json)"
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  # Foreign entry unchanged (including its "startup" matcher).
+  _foreign_after="$(jq -cS '.hooks.SessionStart[] | select(.hooks[].command == "/usr/local/bin/foreign.sh")' .claude/settings.json)"
+  [ "$_foreign_before" = "$_foreign_after" ]
+  # Ours healed.
+  _ours="$(jq -r '.hooks.SessionStart[] | select(.hooks[].command | test("claude-code-SessionStart")) | .matcher' .claude/settings.json)"
+  [ "$_ours" = "startup|resume|clear|compact" ]
+}
+
+# T5: second heal run is a no-op — settings.json byte-identical, no spurious ok line.
+@test "harness: heal is idempotent — second run is a no-op (T5)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .claude .eidolons/harness/hooks
+  printf '#!/usr/bin/env bash\n# old shim\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  # First heal.
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  _after_first="$(jq -cS . .claude/settings.json)"
+  # Second heal — must be a no-op.
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  _after_second="$(jq -cS . .claude/settings.json)"
+  [ "$_after_first" = "$_after_second" ]
+  # No spurious heal line on the second run.
+  ! [[ "$output" =~ "healed stale SessionStart matcher" ]]
+}
+
 # ─── R2-AC3: sibling-key preservation ─────────────────────────────────────────
 
 @test "harness: install preserves settings.json sibling keys" {

@@ -21,6 +21,11 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HARNESS_SHIM_DIR=".eidolons/harness/hooks"
 
+# Canonical SessionStart matcher — single source of truth. Covers every CC
+# source value (startup|resume|clear|compact) so the cortex is re-injected
+# after auto-compaction. Changing the source-list touches ONLY this line.
+_SS_MATCHER="startup|resume|clear|compact"
+
 usage() {
   cat <<EOF
 eidolons harness install — wire host hook shims for routing-context injection
@@ -39,6 +44,9 @@ Options:
   --non-interactive    Skip confirmation prompts (for CI / scripted use)
   --refresh-shims-only Re-render shim contents only; no lock or settings changes
                        (called internally by 'eidolons sync' when harness is installed)
+  --no-heal            Skip the seamless SessionStart-matcher self-heal during
+                       --refresh-shims-only (default: heal a stale 'startup'-only
+                       matcher in .claude/settings.json in place).
   -h, --help           Show this help
 
 Info:
@@ -61,6 +69,7 @@ NON_INTERACTIVE=false
 REFRESH_SHIMS_ONLY=false
 STRICT=false
 WITH_TELEMETRY=false
+NO_HEAL=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -68,6 +77,7 @@ while [[ $# -gt 0 ]]; do
     --force)           FORCE=true; shift ;;
     --non-interactive) NON_INTERACTIVE=true; shift ;;
     --refresh-shims-only) REFRESH_SHIMS_ONLY=true; shift ;;
+    --no-heal)         NO_HEAL=true; shift ;;
     --strict)          STRICT=true; shift ;;
     --with-telemetry)  WITH_TELEMETRY=true; shift ;;
     -h|--help)         usage; exit 0 ;;
@@ -388,6 +398,43 @@ _register_stop_in_settings() {
   fi
 }
 
+# _heal_session_start_matcher SETTINGS_JSON SHIM_CMD
+# Seamless self-heal: if SETTINGS_JSON has OUR SessionStart entry (command ==
+# SHIM_CMD), force its matcher to the canonical $_SS_MATCHER (upsert: heal-in-place
+# if present, else append). Foreign entries and sibling events are never touched.
+# Idempotent: jq -cS canonical compare before writing; write ONLY on change.
+# Fail-SOFT: any jq/IO error → warn + return (never abort the caller).
+_heal_session_start_matcher() {
+  local settings_file="$1"
+  local ss_cmd="$2"
+  [[ -f "$settings_file" ]] || return 0
+  if ! jq empty "$settings_file" 2>/dev/null; then
+    warn "$settings_file is not valid JSON — skipping SessionStart matcher heal"
+    return 0
+  fi
+  local _before _healed _after
+  _before="$(jq -cS . "$settings_file" 2>/dev/null)" || { warn "could not read $settings_file — skipping heal"; return 0; }
+  _healed="$(jq \
+    --arg ss "$ss_cmd" \
+    --arg m "$_SS_MATCHER" \
+    '
+    .hooks.SessionStart = (
+      (.hooks.SessionStart // []) as $arr |
+      if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
+        ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+      else
+        $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
+      end
+    )
+    ' "$settings_file" 2>/dev/null)" || { warn "SessionStart matcher heal failed (jq) — leaving $settings_file unchanged"; return 0; }
+  _after="$(printf '%s' "$_healed" | jq -cS . 2>/dev/null)" || { warn "SessionStart matcher heal produced invalid JSON — leaving $settings_file unchanged"; return 0; }
+  if [[ "$_before" != "$_after" ]]; then
+    printf '%s\n' "$_healed" > "$settings_file" 2>/dev/null \
+      || { warn "could not write $settings_file — heal skipped"; return 0; }
+    ok "healed stale SessionStart matcher (startup -> $_SS_MATCHER) in $settings_file"
+  fi
+}
+
 # ── Refresh-shims-only mode (called by sync) ──────────────────────────────
 if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
   if [[ ! -f "$PROJECT_LOCK" ]]; then
@@ -408,6 +455,11 @@ if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
       _write_shim "$_host" "UserPromptSubmit"
       _write_shim "$_host" "SessionStart"
       info "  refreshed shims for $_host"
+    fi
+    # Seamless self-heal: correct a stale 'startup'-only SessionStart matcher
+    # in .claude/settings.json (claude-code only). Opt out with --no-heal.
+    if [[ "$_host" == "claude-code" ]] && [[ "$NO_HEAL" != "true" ]]; then
+      _heal_session_start_matcher ".claude/settings.json" "$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
     fi
   done
   ok "Harness shims refreshed"
@@ -556,18 +608,20 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         --arg ss "$_ss_cmd" \
         --arg ptu "$_ptu_cmd" \
         --arg ptm "$_ptu_matcher" \
+        --arg m "$_SS_MATCHER" \
         '{"hooks": {
             "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-            "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}],
+            "SessionStart": [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}],
             "PreToolUse": [{"matcher": $ptm, "hooks": [{"type": "command", "command": $ptu}]}]
          }}' > "$SETTINGS_JSON"
     else
       jq -n \
         --arg ups "$_ups_cmd" \
         --arg ss "$_ss_cmd" \
+        --arg m "$_SS_MATCHER" \
         '{"hooks": {
             "UserPromptSubmit": [{"hooks": [{"type": "command", "command": $ups}]}],
-            "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
+            "SessionStart": [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
          }}' > "$SETTINGS_JSON"
     fi
     ok "Wrote .claude/settings.json with hooks block"
@@ -584,6 +638,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
           --arg ss "$_ss_cmd" \
           --arg ptu "$_ptu_cmd" \
           --arg ptm "$_ptu_matcher" \
+          --arg m "$_SS_MATCHER" \
           '
           # Append UserPromptSubmit entry only if command not already present.
           .hooks.UserPromptSubmit = (
@@ -592,11 +647,14 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
             else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
             end
           ) |
-          # Append SessionStart entry only if command not already present.
+          # SessionStart UPSERT: heal-our-matcher-in-place if present, else append.
+          # (Heals a stale "startup"-only matcher so --force self-heals.)
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
-            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
-            else $arr + [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
+              ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+            else
+              $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
             end
           ) |
           # Append PreToolUse entry only if command not already present (R19 AC-R19-1).
@@ -611,6 +669,7 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
         _merged="$(jq \
           --arg ups "$_ups_cmd" \
           --arg ss "$_ss_cmd" \
+          --arg m "$_SS_MATCHER" \
           '
           # Append UserPromptSubmit entry only if command not already present.
           .hooks.UserPromptSubmit = (
@@ -619,11 +678,14 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
             else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
             end
           ) |
-          # Append SessionStart entry only if command not already present.
+          # SessionStart UPSERT: heal-our-matcher-in-place if present, else append.
+          # (Heals a stale "startup"-only matcher so --force self-heals.)
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
-            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then $arr
-            else $arr + [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": $ss}]}]
+            if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
+              ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+            else
+              $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
             end
           )
           ' "$SETTINGS_JSON")"
