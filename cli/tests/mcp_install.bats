@@ -556,9 +556,21 @@ SHIM
   [ "$status" -eq 0 ]
   [ -f ".mcp.json" ]
 
-  # Capture mtime via a portable stat wrapper (GNU vs BSD).
-  _mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1"; }
+  # Capture mtime via a portable stat wrapper.
+  # IMPORTANT: GNU first, BSD fallback. The reverse order is a portability trap:
+  # on GNU coreutils `stat -f '%m'` means --file-system with an INVALID format,
+  # so it dumps multi-line filesystem status (incl. drifting Free/Available block
+  # counts) AND exits non-zero, falling through to the BSD branch and producing a
+  # garbage concatenation whose value churns under concurrent FS load (`--jobs N`).
+  # `stat -c '%Y'` succeeds on GNU and fails cleanly on BSD (illegal option -- c),
+  # so GNU-first is correct on both.
+  _mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; }
   before_mtime="$(_mtime .mcp.json)"
+  # Durable, non-timing proofs the file was not re-written: inode + content hash.
+  _md5() { md5sum "$1" 2>/dev/null | cut -d' ' -f1 || md5 -q "$1"; }
+  _inode() { stat -c '%i' "$1" 2>/dev/null || stat -f '%i' "$1"; }
+  before_md5="$(_md5 .mcp.json)"
+  before_inode="$(_inode .mcp.json)"
 
   # Sleep 1s so a re-write would produce a strictly different mtime
   # (1s granularity is enough — both stat variants report whole seconds).
@@ -567,11 +579,16 @@ SHIM
   # Second install, SAME version/digest, no --force → must be a no-op.
   run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
   [ "$status" -eq 0 ]
-  # Driver must announce the skip.
-  [[ "$output" =~ "unchanged" ]]
+  # Driver must announce the skip with the EXACT guard message — a bare "unchanged"
+  # substring can match an unrelated lockfile/upsert no-op and pass vacuously.
+  [[ "$output" =~ "unchanged, skipping render" ]]
 
   after_mtime="$(_mtime .mcp.json)"
-  # mtime MUST be unchanged — the file was not re-written.
+  after_md5="$(_md5 .mcp.json)"
+  after_inode="$(_inode .mcp.json)"
+  # The file must be untouched: same content, same inode (never mv'd), same mtime.
+  [ "$before_md5" = "$after_md5" ]
+  [ "$before_inode" = "$after_inode" ]
   [ "$before_mtime" = "$after_mtime" ]
 }
 
@@ -602,16 +619,23 @@ SHIM
 
   run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1
   [ "$status" -eq 0 ]
-  _mtime() { stat -f '%m' "$1" 2>/dev/null || stat -c '%Y' "$1"; }
+  # GNU-first wrapper (see the no-op guard test for why BSD-first is a trap).
+  _mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; }
+  _inode() { stat -c '%i' "$1" 2>/dev/null || stat -f '%i' "$1"; }
   before_mtime="$(_mtime .mcp.json)"
+  before_inode="$(_inode .mcp.json)"
   sleep 1
 
-  # --force with same digest → must still re-render (file re-written).
+  # --force with same digest → must still re-render (file re-written via mv).
   run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium@1.2.1 --force
   [ "$status" -eq 0 ]
   # --force must NOT take the "unchanged, skipping" path.
   [[ ! "$output" =~ "unchanged, skipping" ]]
   after_mtime="$(_mtime .mcp.json)"
+  after_inode="$(_inode .mcp.json)"
+  # Re-write proof: a fresh inode (mv of a new tmp) is a deterministic, non-timing
+  # signal that --force bypassed the canonical no-op guard. mtime backs it up.
+  [ "$before_inode" != "$after_inode" ]
   [ "$before_mtime" != "$after_mtime" ]
   # Entry still valid.
   run bash -c "jq -e '.mcpServers.crystalium' .mcp.json"

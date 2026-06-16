@@ -513,19 +513,23 @@ _mcp_host_is_wired() {
     >/dev/null 2>&1
 }
 
-# _mcp_merge_into_json_file RENDERED TARGET_FILE NAME
+# _mcp_merge_into_json_file RENDERED TARGET_FILE NAME [FORCE]
 # Idempotent jq-merge of a rendered MCP JSON entry into a target JSON file.
 # RENDERED is a JSON string (mcpServers top-level). TARGET_FILE is the path.
-# NAME is for logging only.
+# NAME is for logging only. FORCE (optional, "true") bypasses the canonical
+# no-op guard so the file is always re-written even when content is identical.
 # Merge semantics:
 #   - Missing file → write fresh file (normalised through jq for canonical form).
 #   - Present valid JSON → jq-merge: existing mcpServers preserved + new entry added.
+#       · canonical form unchanged AND not FORCE → skip the swap (no mtime/inode
+#         churn → no harness MCP re-prompt).
 #   - Present invalid JSON → warn + skip (soft-fail, no data loss).
 # Bash 3.2 compatible.
 _mcp_merge_into_json_file() {
   local rendered="$1"
   local target="$2"
   local name="$3"
+  local force="${4:-false}"
   local tmp
   tmp="$(mktemp)"
 
@@ -550,8 +554,25 @@ _mcp_merge_into_json_file() {
     | jq -s '.[0].mcpServers as $new | (.[1] // {}) | .mcpServers = ((.mcpServers // {}) + $new)' \
         - "$target" \
     > "$tmp" 2>/dev/null; then
-    mv "$tmp" "$target"
-    ok "${name} entry merged into ${target}"
+    # Canonical no-op guard (matches harness_install.sh's `jq -cS` pattern):
+    # only swap the file in when the merge actually changed its canonical form.
+    # A repeat merge of the same entry is byte-identical, so this skips the `mv`
+    # entirely — the file keeps its inode AND its mtime (no churn → no harness
+    # MCP re-prompt). This makes the write path idempotent even when the caller's
+    # higher-level digest guard is bypassed (e.g. a concurrent re-render).
+    # FORCE bypasses the guard so an explicit --force always re-writes.
+    local _existing_canonical _merged_canonical
+    _existing_canonical="$(jq -cS . "$target" 2>/dev/null || printf '')"
+    _merged_canonical="$(jq -cS . "$tmp" 2>/dev/null || printf '')"
+    if [ "$force" != "true" ] \
+       && [ "$_existing_canonical" = "$_merged_canonical" ] \
+       && [ -n "$_merged_canonical" ]; then
+      rm -f "$tmp"
+      info "${name} entry already present in ${target} (unchanged, no rewrite)"
+    else
+      mv "$tmp" "$target"
+      ok "${name} entry merged into ${target}"
+    fi
   else
     rm -f "$tmp"
     warn "jq merge failed for ${target} — skipping ${name} server registration"
@@ -786,9 +807,10 @@ _mcp_oci_mcpjson_digest() {
     | head -1
 }
 
-# _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH
+# _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH [FORCE]
 # Internal helper: renders a template with placeholder substitution and
 # jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
+# FORCE (optional, "true") forces a re-write even when content is unchanged.
 #
 # Placeholder substitution (all safe for bash 3.2; uses sed, no eval):
 #   __HOME__          → $HOME
@@ -809,6 +831,7 @@ _mcp_oci_render_and_merge() {
   local project_root="$2"
   local digest="$3"
   local tmpl_rel="$4"
+  local force="${5:-false}"
 
   # Resolve template path: tmpl_rel is relative to NEXUS root (as stored in catalogue).
   local tmpl
@@ -838,12 +861,12 @@ _mcp_oci_render_and_merge() {
     "$tmpl")"
 
   # Write .mcp.json (primary target).
-  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}"
+  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}" "$force"
 
   # Write .cursor/mcp.json when cursor is in hosts.wire (R10).
   if _mcp_host_is_wired "cursor" "$project_root"; then
     mkdir -p "${project_root}/.cursor"
-    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor"
+    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor" "$force"
   fi
 
   # Write .codex/config.toml managed section when codex is in hosts.wire (R11).
@@ -966,10 +989,10 @@ mcp_driver_oci_image_install() {
       if [ -n "$existing_mcpjson_digest" ] && [ "$existing_mcpjson_digest" = "$digest" ]; then
         info "${name}: .mcp.json digest unchanged (${digest}) — unchanged, skipping render"
       else
-        _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
+        _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force"
       fi
     else
-      _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel"
+      _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force"
     fi
   fi
 
