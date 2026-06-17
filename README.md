@@ -51,13 +51,21 @@ Two questions, both measured against a **bare host running the same model** — 
 
 The signature win is **consistency** — the injection makes routing far more deterministic. (This is a SessionStart-only *lower bound*: headless hosts don't fire per-prompt hooks, so the interactive number is expected higher. Honest writeup: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).)
 
-**2. Does the specialist shape beat one generalist pass?** On an adversarial-hard coding suite (budget-matched, k=2), **Vivi's** parallel-candidate shape lands every fix where a single pass lands two-thirds:
+**2. Does the specialist shape beat one generalist pass?** On an adversarial-hard coding suite (budget-matched, k=2) — measured in [Vivi's own repo](https://github.com/Rynaro/Vivi) — **Vivi's** parallel-candidate shape lands every fix where a single pass lands two-thirds:
 
 | Hard-task fix quality &nbsp;<sub>(pass², resolved on both runs)</sub> | Single pass | Vivi (fanout) |
 |---|:---:|:---:|
 | Adversarial-hard suite | 0.67 | **1.00** |
 
 Zero reward-hacks in 63 holdout-gated runs. And **Kupo**, the executor the team delegates micro-tasks to, earned its roster seat on a behavioral additive-proof — **36/36 tasks, pass³ 1.00**.
+
+**Don't trust our numbers — reproduce the floor yourself.** The behavioral evals above are billed and model-dependent, but the *routing decision* underneath them is a deterministic, non-LLM kernel — so we ship it as a benchmark anyone can run cold, with **no API key, no billing, and ~0 tokens**:
+
+```bash
+eidolons eval routing --suite public      # 15 labelled tasks across 12 routing categories
+```
+
+It grades the kernel's output against Eidolons-authored ground truth ([`evals/routing-suite.yaml`](evals/routing-suite.yaml)); because the kernel is deterministic, `pass^k == pass^1` and you'll get the exact same result we do. (`--validate-suite` self-tests the suite; `--json` for machine output.) This is the reproducible floor the billed evals build on — verify it, then weigh the rest.
 
 These are early, small-N signals, framed honestly in the research digests and [`CHANGELOG.md`](CHANGELOG.md) — not marketing.
 
@@ -105,7 +113,7 @@ Handoffs are structured artifacts written to disk, not free-form messages. See [
 
 ## Mechanical routing — the harness
 
-A descriptor table in a prose file can only *suggest* delegation; the host decides whether to listen, and usually it doesn't until you name an Eidolon yourself. The **harness** closes that gap with three pieces:
+A descriptor table in a prose file can only *suggest* delegation; the host decides whether to listen, and usually it doesn't until you name an Eidolon yourself. The decision to build a mechanical harness wasn't a hunch — it's backed by a research synthesis of **112 adversarially-verified capability rows across 18 agents** ([`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md)). The **harness** closes that gap with three pieces:
 
 - **A deterministic routing kernel.** `eidolons run "<prompt>" --json` classifies a prompt against [`roster/routing.yaml`](roster/routing.yaml) — no LLM, fully reproducible — and emits which Eidolon(s) handle it, at what tier, in what chain.
 - **Per-host hook adapters.** `eidolons harness install` wires that kernel into each host's own lifecycle hooks. At session start the routing artifact and a memory digest are injected as context — **the host doesn't have to remember to delegate; the routing arrives on its own.**
