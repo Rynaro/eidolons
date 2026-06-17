@@ -1268,7 +1268,7 @@ eidolons:
       name: KUPO
       version: "1.0"
       cycle: "K→U→P→O"
-      summary: "Low-effort localized executor. Heavier Eidolons delegate a quick verifier-backed micro-task; Kupo patches an ephemeral sandbox, proves it externally, and proposes a verified patch for the parent to commit."
+      summary: "Low-effort localized executor. The orchestrator dispatches a quick verifier-backed micro-task (Eidolons flag, orchestrator brokers); Kupo patches an ephemeral sandbox, proves it externally, and proposes a verified patch for the orchestrator to apply."
     source:
       type: github
       repo: Rynaro/Kupo
@@ -1327,8 +1327,8 @@ eidolons:
       target_default: "./.eidolons/kupo"
       standalone: true
     handoffs:
-      upstream: [spectra, vigil, forge, vivi, apivr, atlas] # the Eidolons that may DELEGATE micro-tasks in
-      downstream: [] # pure downstream worker — replies only to the delegating parent
+      upstream: [spectra, vigil, forge, vivi, apivr, atlas] # the Eidolons that may FLAG a micro-task for the orchestrator to dispatch (orchestrator-brokered; no subagent spawn)
+      downstream: [] # pure worker — replies only to the orchestrator that dispatched it
       lateral: []
     comm:
       envelope_version: "2.0"

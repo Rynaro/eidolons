@@ -535,3 +535,21 @@ EOF
                || shasum -a 256 '.eidolons/cortex/memory-protocol.md')"
   [ "$CHECKSUM1" = "$CHECKSUM2" ]
 }
+
+@test "routing: localized micro-task ('fix the import') prefers Kupo over the coder" {
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run "fix the import in src/foo.py" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "kupo" ]
+}
+
+@test "routing: named coder still wins over Kupo's micro-task boost" {
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run "Vivi, fix the import in src/foo.py" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}
+
+@test "routing: genuine feature work ('implement the import resolver') still routes to the coder" {
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run "implement the import resolver module" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
+}

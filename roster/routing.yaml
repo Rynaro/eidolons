@@ -94,9 +94,10 @@ eidolons:
     capability_class: executor
     suggested_tier: light
     # NARROW by design: only clearly-localized micro-task verbs, so the router never
-    # poaches APIVR-Δ/Vivi coding work. Kupo is primarily a DELEGATION target (heavier
-    # Eidolons hand it micro-tasks); these verbs let it also be dispatched directly.
-    trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "autofix lint", "format fix", "one-line fix", "update fixture", "grep-replace", "config key edit", "fix the typo"]
+    # poaches APIVR-Δ/Vivi coding work. Kupo is orchestrator-dispatched (subagents cannot
+    # spawn subagents); the localized_micro_task signal boosts Kupo over the coder when
+    # a fix-family verb co-occurs with a localized-task marker (+0.15 → 0.95 > 0.8).
+    trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "pin the version", "autofix lint", "format fix", "one-line fix", "single-line edit", "update fixture", "update snapshot", "grep-replace", "search-replace", "config key edit", "fix the typo", "fix the path"]
     refuse_verbs: ["design", "cross-cutting refactor", "refactor across", "plan", "novel architecture", "greenfield", "open-ended", "loop-native campaign", "implement feature"]
     downstream: []
 
@@ -128,6 +129,17 @@ signals:
     boost: { atlas: 0.2 }
     stakes: true
     note: "large surface → ATLAS-TRANCE candidate (V2)"
+  - id: localized_micro_task
+    # Kupo-vs-coder tiebreak (executor precedence). The `fix`-family verbs
+    # (fix the import / one-line fix / fix the typo) tie Kupo with Vivi/APIVR-Δ
+    # at 0.8 because the coder matches the bare word `fix`. When a LOCALIZED
+    # micro-task marker co-occurs, prefer the executor: boost Kupo by +0.15
+    # (0.8 -> 0.95, clears the coder's 0.8) while staying below the +0.5
+    # name bonus, so "Vivi, fix the import" still routes to Vivi.
+    # Pure DATA (I-C2): the kernel sums this boost; there is no eval.
+    match: ["import", "lockfile", "lint autofix", "typo", "rename", "one-line", "single-line", "fixture", "snapshot", "dependency pin", "pin the version", "grep-replace", "search-replace", "path fix", "config key"]
+    boost: { kupo: 0.15 }
+    note: "localized micro-task marker → prefer the executor over the coder (Kupo-vs-Vivi tiebreak)"
 
 # ─── Chain templates (EIDOLONS.md §"Chain Templates") ───────────────────────────
 # Selected when ≥2 capability classes co-trigger. `requires_classes` lists the
