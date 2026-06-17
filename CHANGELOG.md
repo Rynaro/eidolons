@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- Re-scope Kupo from Eidolon-delegation-target to orchestrator-direct executor (subagents cannot spawn subagents); add `localized_micro_task` routing signal (+0.15 boost) so `fix`-family localized micro-tasks deterministically prefer Kupo over the coder (0.8→0.95); add five new Kupo trigger verbs (`pin the version`, `single-line edit`, `update snapshot`, `search-replace`, `fix the path`); correct the cortex delegation narrative in `EIDOLONS.md` and `methodology/cortex/handoff-graph.md` (reconciles the `vivi↔kupo` inconsistency and drops the stale "deferred" sentence).
+
 ## [1.42.2] — 2026-06-16 — fix: de-churn `.mcp.json` on no-op OCI install
 
 ### Fixed
