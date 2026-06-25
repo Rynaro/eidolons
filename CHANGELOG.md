@@ -8,13 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.44.0] — 2026-06-25 — feat: ESL (Eidolons Spec Lifecycle) subsystem + per-Eidolon adoption
 
 ### Added
-- idg v1.9.0 published in the roster with release integrity metadata.
-- vigil v1.7.0 published in the roster with release integrity metadata.
-- kupo v1.2.0 published in the roster with release integrity metadata.
-- vivi v1.2.0 published in the roster with release integrity metadata.
+- **ESL (Eidolons Spec Lifecycle) — an opt-in, spec-driven lifecycle over the existing Eidolons.** A thin coordination grammar (contract: [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl)) implemented by the official **tonberry** MCP, wired into the catalogue (`roster/mcps.yaml` + `cli/templates/mcp/tonberry.mcp.json.tmpl`). Non-trivial changes run `propose → [deliberate] → implement → verify → drift → archive` with a mechanical right-sizing gate (`trivial→Kupo / lite / full`), enforced `maker ≠ checker`, and a drift-check — designed against the documented spec-driven failure modes (over-specification, instruction bloat, spec-as-waterfall). Opt-in; absent the MCP the Eidolons route and build unchanged.
+- `eidolons mcp assess <name>` — records a project's ESL enforcement mode (`advisory`|`block`) into `eidolons.mcp.lock` from the MCP's `assess` op (the escalation RECORD hop); `eidolons mcp install`/`refresh` now carry forward a recorded `enforcement` (idempotency fix).
+- Cortex: `methodology/cortex/esl-protocol.md` — lifecycle orchestration (per-Eidolon role bindings SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG) + the escalation RECORD→HONOR protocol; plus the ESL awareness block in `CLAUDE.md` and `EIDOLONS.md`.
+- Per-Eidolon ESL adoption — each lifecycle-owning Eidolon now ships an `esl-hop` skill declaring its lifecycle hop:
 - spectra v4.10.0 published in the roster with release integrity metadata.
+- vivi v1.2.0 published in the roster with release integrity metadata.
+- kupo v1.2.0 published in the roster with release integrity metadata.
+- vigil v1.7.0 published in the roster with release integrity metadata.
+- idg v1.9.0 published in the roster with release integrity metadata.
+- README: a "Spec-Driven lifecycle — ESL" capability section.
 
 ## [1.43.0] — 2026-06-17 — fix: re-scope Kupo to orchestrator-direct routing
 
