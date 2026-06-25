@@ -1,0 +1,29 @@
+{
+  "esl_version": "1.0",
+  "change_id": "mcp-assess-dry-run",
+  "status": "archived",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "verify_method": "bats: --dry-run prints assessment JSON to stdout, exit 0"
+    },
+    {
+      "id": "AC-2",
+      "verify_method": "bats: eidolons.mcp.lock byte-unchanged under --dry-run"
+    },
+    {
+      "id": "AC-3",
+      "verify_method": "bats: enforcement still recorded without --dry-run (G-RECORD regression)"
+    },
+    {
+      "id": "AC-4",
+      "verify_method": "bats: --dry-run documented in usage/help"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-06-25-mcp-assess-dry-run"
+}

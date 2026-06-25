@@ -1,0 +1,10 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "kupo"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM"
+}
