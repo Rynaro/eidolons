@@ -155,6 +155,8 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 
 **ECL — Wire Format.** Inter-Eidolon hand-offs use the **Eidolons Communication Layer (ECL v1.0)** wire format: every emitted artefact carries a JSON sidecar envelope (`ecl-envelope.json`) containing the performative, sender/receiver identities, a SHA-256 integrity tag, and a JSONL trace stream. ECL is opt-in for v1.0; existing Eidolons remain conformant unchanged. Machine-readable hand-off contracts live at [`Rynaro/eidolons-ecl/contracts/`](https://github.com/Rynaro/eidolons-ecl/tree/main/contracts).
 
+**ESL — Spec Lifecycle.** Eidolons changes may follow the **Eidolons Spec Lifecycle (ESL v1.0)**: a right-sizable state machine + a mandatory mechanical right-sizing gate (trivial→Kupo / lite→one-page / full→full) + a drift/living-spec contract, with **maker≠checker** enforced on the verify envelope. The grammar (states, `change.json` schema, bash conformance checker) lives at [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl); it reuses SPECTRA artifacts, ECL envelopes, and CRYSTALIUM layers. Opt-in for v1.0.
+
 *Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 
 <!-- eidolon:cortex end -->
