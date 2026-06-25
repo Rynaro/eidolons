@@ -41,11 +41,16 @@ Arguments:
 
 Options:
   --project-root PATH  Project directory to assess (default: cwd).
+  --dry-run            Compute and print the assessment JSON but do NOT write
+                       the enforcement decision into eidolons.mcp.lock (the lock
+                       stays byte-unchanged). Use to preview an escalation in CI
+                       or a pre-commit check without mutating the committed lock.
   -h, --help           Show this help.
 
 Examples:
   eidolons mcp assess tonberry
   eidolons mcp assess tonberry --project-root /path/to/project
+  eidolons mcp assess tonberry --dry-run
 
 Graceful skip: if the MCP is not installed or its assess op is unavailable,
 this warns and exits 0 (ESL is opt-in — never hard-fails the project).
@@ -65,12 +70,17 @@ name="${1:-}"
 shift
 
 project_root=""
+dry_run=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --project-root)
       [ -z "${2:-}" ] && die "--project-root requires an argument"
       project_root="$2"
       shift 2
+      ;;
+    --dry-run)
+      dry_run=1
+      shift
       ;;
     -h|--help) usage; exit 0 ;;
     -*) warn "Unknown option: $1"; usage >&2; exit 2 ;;
@@ -141,12 +151,19 @@ assessed_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 
 # ── RECORD (nexus owns the lock-write — C-OWNER). ─────────────────────────────
 # Direct read-modify-write that bypasses mcp_lock_upsert's no-op signature (which
-# excludes enforcement* — see mcp_lock_set_enforcement).
-if mcp_lock_set_enforcement "$name" "$enforcement" "$signals_json" "$thresholds_json" "$assessed_at"; then
-  ok "${name} enforcement recorded: ${enforcement}"
+# excludes enforcement* — see mcp_lock_set_enforcement). With --dry-run we SKIP
+# this hop entirely: the assessment is computed and printed (below) but the lock
+# stays byte-unchanged. The note goes to stderr (logs only) so the stdout JSON
+# that consumers parse is never polluted.
+if [ "$dry_run" -eq 1 ]; then
+  info "${name} (dry-run): assessment computed (enforcement=${enforcement}) — lock not written."
 else
-  warn "${name}: could not record enforcement (no lock entry) — no-op."
-  exit 0
+  if mcp_lock_set_enforcement "$name" "$enforcement" "$signals_json" "$thresholds_json" "$assessed_at"; then
+    ok "${name} enforcement recorded: ${enforcement}"
+  else
+    warn "${name}: could not record enforcement (no lock entry) — no-op."
+    exit 0
+  fi
 fi
 
 # ── Machine-readable result to stdout (logs went to stderr). ──────────────────

@@ -237,6 +237,58 @@ EOF
   [ "$output" = "14" ]
 }
 
+# ─── DRY-RUN (--dry-run gates only the RECORD hop) ───────────────────────────
+
+@test "DRY-RUN: prints assessment JSON to stdout (enforcement parseable)" {
+  setup_mcp_env
+  seed_tonberry_lock
+
+  stub_assess_json '{"signals":{"change_count":14,"repo_loc":62000,"full_ratio":0.6},"thresholds":{"N":10,"L":50000,"R":0.4},"tripped":["change_count","repo_loc","full_ratio"],"recommended_mode":"block"}'
+
+  # Capture STDOUT ONLY (stderr discarded). This is the load-bearing AC-1 check:
+  # any 'say'/'info'/'warn' note (incl. the dry-run "lock not written" line) must
+  # land on stderr, so the captured stdout has to be a single valid JSON object
+  # that jq parses cleanly. A stray log line on stdout would break this jq parse.
+  run bash -c "bash '$EIDOLONS_ROOT/cli/src/mcp_assess.sh' tonberry --dry-run 2>/dev/null"
+  [ "$status" -eq 0 ]
+
+  printf '%s' "$output" | jq -e '.enforcement == "block"'
+  printf '%s' "$output" | jq -e '.name == "tonberry"'
+  printf '%s' "$output" | jq -e '.recommended_mode == "block"'
+  printf '%s' "$output" | jq -e 'has("tripped")'
+  printf '%s' "$output" | jq -e 'has("assessed_at")'
+}
+
+@test "DRY-RUN: leaves eidolons.mcp.lock byte-unchanged" {
+  setup_mcp_env
+  seed_tonberry_lock
+
+  # RED-first: the field is absent before assess.
+  run lock_field '.enforcement'
+  [ -z "$output" ]
+
+  stub_assess_json '{"signals":{"change_count":14,"repo_loc":62000,"full_ratio":0.6},"thresholds":{"N":10,"L":50000,"R":0.4},"tripped":["change_count","repo_loc","full_ratio"],"recommended_mode":"block"}'
+
+  # Snapshot the exact bytes before the run.
+  cp eidolons.mcp.lock "$BATS_TEST_TMPDIR/lock.before"
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_assess.sh" tonberry --dry-run
+  [ "$status" -eq 0 ]
+
+  # The lock is byte-for-byte identical — no enforcement* keys written (AC-2).
+  cmp -s "$BATS_TEST_TMPDIR/lock.before" eidolons.mcp.lock
+
+  run lock_field '.enforcement'
+  [ -z "$output" ]
+}
+
+@test "DRY-RUN: --dry-run is listed in assess usage/help" {
+  setup_mcp_env
+  run eidolons mcp assess --help
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "--dry-run" ]]
+}
+
 # ─── G-DUAL (both dispatch tables) ───────────────────────────────────────────
 
 @test "G-DUAL: 'eidolons mcp assess' reaches mcp_assess.sh (not 'unknown subcommand')" {
