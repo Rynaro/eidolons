@@ -92,3 +92,13 @@ Contracts: `contracts/` in that repo (machine-readable hand-off contracts, one Y
 ECL is the **wire-format contract** for inter-Eidolon hand-offs. Every emitted artefact carries a JSON sidecar envelope (`ecl-envelope.json`) containing the performative, sender/receiver identities, a SHA-256 integrity tag over the payload, and a JSONL trace stream. The closed performative set has exactly ten members. ECL is a sibling spec to EIIS: EIIS governs install layout; ECL governs runtime communication.
 
 **P0 (non-negotiable):** opt-in for v1.0 (live Eidolons remain conformant unchanged); sidecar-on-disk envelopes (never in-context only); closed 10-performative set (no extensions without a spec revision); SHA-256 is the default integrity algorithm; conformance checker is bash 3.2 compatible.
+
+## ESL — Eidolons Spec Lifecycle (v1.0.0)
+
+Entry:     `https://github.com/Rynaro/eidolons-esl`
+Spec:      `spec/esl-1.0.md` in that repo
+Schema:    `schema/change.v1.json` (vendorable change manifest)
+
+ESL is the **spec-lifecycle coordination grammar** for Eidolons changes — a right-sizable state machine (`proposed → [deliberated] → in_progress → verified → archived`), a mandatory mechanical **right-sizing gate** (trivial→Kupo/no-spec, lite→one-page, full→full), and a **living-spec/drift contract**. It is a thin grammar over the *existing* Eidolons: it **OWNS** the lifecycle and **DEFERS** artifact schema→SPECTRA, transport→ECL, persistence→CRYSTALIUM, bus→Junction. Sibling spec to ECL/EIIS — ESL governs the spec lifecycle, ECL governs the wire format.
+
+**P0 (non-negotiable):** anti-scope — ESL *names* fields and *references* schemas by version, but **NEVER re-declares** a deferred schema/performative/memory-layer; opt-in for v1.0; **maker≠checker** is mechanically enforced on the verify envelope; the right-sizing gate is mechanical (observable signals only), never LLM-discretionary; conformance checker is bash 3.2 compatible (warn/block).
