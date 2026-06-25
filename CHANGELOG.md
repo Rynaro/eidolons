@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- vigil v1.7.0 published in the roster with release integrity metadata.
 - kupo v1.2.0 published in the roster with release integrity metadata.
 - vivi v1.2.0 published in the roster with release integrity metadata.
 - spectra v4.10.0 published in the roster with release integrity metadata.
