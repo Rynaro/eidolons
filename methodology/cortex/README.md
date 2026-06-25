@@ -13,7 +13,7 @@ here.
 | `trance-matrix.md` | Per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
 | `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
 | `memory-protocol.md` | Full 8-tool CRYSTALIUM surface, layer × tier × operation matrix, Dream consolidation knobs, skill_invoke sandboxing, ECL-envelope → ingest mapping | Composing memory-aware chains, auditing tier gates, configuring Dream |
-| `esl-protocol.md` | ESL escalation RECORD→HONOR protocol: `eidolons mcp assess` lock-write, the two-layer verify-mode fallback, the idempotency carry-forward, and the tunable N/L/R threshold knobs | Verifying a project's ESL changes, choosing the verify enforcement mode, recording an escalation |
+| `esl-protocol.md` | ESL cortex protocol — Part 1: lifecycle orchestration (per-Eidolon adoption: state ownership SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG, right-sizing gate, maker≠checker, tonberry v0.4.0 ergonomics); Part 2: escalation RECORD→HONOR (`eidolons mcp assess` lock-write, two-layer verify-mode fallback, idempotency carry-forward, N/L/R knobs) | Composing a non-trivial change in an ESL-enabled project; verifying ESL changes; choosing the verify enforcement mode; recording an escalation |
 
 ## Token budget note
 
