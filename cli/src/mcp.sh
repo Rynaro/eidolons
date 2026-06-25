@@ -27,6 +27,7 @@ Subcommands:
   uninstall <name>        Remove an MCP from this project
   upgrade [<name>[@<ver>]|--all]  Upgrade installed MCPs (pins.stable, or explicit version)
   use <name>@<ver>        Switch to any catalogue-published version (up or down)
+  assess <name>           Record an MCP's ESL escalation decision into the lock
   sync                    Reconcile project eidolons.yaml mcps: block with installed state
   health [<name>|--all]   Run health probes for installed MCPs
   run <name> [<args>...]  Pass-through to a runnable MCP (binary kind only in v1.3)
@@ -54,6 +55,7 @@ case "$subcmd" in
   uninstall) exec bash "$SELF_DIR/mcp_uninstall.sh" "$@" ;;
   upgrade)   exec bash "$SELF_DIR/mcp_upgrade.sh"   "$@" ;;
   use)       exec bash "$SELF_DIR/mcp_use.sh"       "$@" ;;
+  assess)    exec bash "$SELF_DIR/mcp_assess.sh"    "$@" ;;
   sync)      exec bash "$SELF_DIR/mcp_sync.sh"      "$@" ;;
   health)    exec bash "$SELF_DIR/mcp_health.sh"    "$@" ;;
   run)       exec bash "$SELF_DIR/mcp_run.sh"       "$@" ;;
@@ -70,7 +72,7 @@ case "$subcmd" in
   *)
     echo "Unknown mcp subcommand: $subcmd" >&2
     echo "" >&2
-    echo "Available subcommands: list show install refresh uninstall upgrade use sync health run pull images" >&2
+    echo "Available subcommands: list show install refresh uninstall upgrade use assess sync health run pull images" >&2
     echo "Run 'eidolons mcp --help' for usage." >&2
     exit 2
     ;;

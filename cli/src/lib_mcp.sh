@@ -103,6 +103,160 @@ mcp_lock_entry() {
     | jq --arg n "$name" '(.mcps // [])[] | select(.name == $n)'
 }
 
+# mcp_lock_carry_enforcement NAME ENTRY_JSON
+# Merge any pre-existing ESL enforcement fields from the current lock entry for
+# NAME onto a freshly-built ENTRY_JSON, emitting the augmented entry on stdout.
+#
+# THE TRAP (ESL escalation auto-flip, FORGE H5 / G-IDEMPOTENT): the OCI/binary
+# install + refresh entry-builders rebuild the lock entry from the catalogue,
+# and that rebuild does NOT know about the enforcement* fields written by
+# 'eidolons mcp assess'. mcp_lock_upsert's no-op signature (kind/version/source/
+# integrity/target/hosts_wired) also excludes them. So absent this carry-forward,
+# a plain 'mcp install'/'mcp refresh' would silently DROP a recorded escalation.
+# Install/refresh drivers MUST funnel their rebuilt entry through this helper
+# before upsert so a re-install never clears a recorded enforcement.
+#
+# Carried fields (only when present on the old entry):
+#   enforcement, enforcement_signals, enforcement_thresholds, enforcement_assessed_at
+# If no old entry / no enforcement fields exist, ENTRY_JSON is emitted unchanged.
+# Bash 3.2 safe (jq only).
+mcp_lock_carry_enforcement() {
+  local name="$1"
+  local new_entry="$2"
+
+  local old_entry
+  old_entry="$(mcp_lock_entry "$name")"
+  if [ -z "$old_entry" ]; then
+    printf '%s' "$new_entry"
+    return 0
+  fi
+
+  # Project just the enforcement* keys that exist on the old entry, then merge
+  # them onto the new entry (new entry's own keys win for everything else).
+  printf '%s' "$new_entry" \
+    | jq --argjson old "$old_entry" '
+        ($old
+          | with_entries(select(.key
+              | test("^enforcement($|_signals$|_thresholds$|_assessed_at$)")))) as $carry
+        | . + $carry'
+}
+
+# mcp_lock_set_enforcement NAME MODE SIGNALS_JSON THRESHOLDS_JSON ASSESSED_AT
+# Record the ESL enforcement decision onto NAME's existing lock entry. This is
+# the nexus-side lock-write for 'eidolons mcp assess' (tonberry NEVER writes the
+# lock — C-OWNER). It does a direct read-modify-write that DELIBERATELY bypasses
+# mcp_lock_upsert: that helper's no-op signature excludes the enforcement* fields,
+# so routing an enforcement-only change through it would falsely no-op and never
+# persist the flip. Returns 1 (no write) when NAME is not installed.
+# MODE: "advisory" | "block". SIGNALS_JSON / THRESHOLDS_JSON: compact JSON objects.
+# Bash 3.2 safe (jq only).
+mcp_lock_set_enforcement() {
+  local name="$1"
+  local mode="$2"
+  # NOTE: do NOT default these with ${3:-{}} — bash closes the ${...} at the
+  # first '}' and appends a literal '}', corrupting a non-empty JSON arg into
+  # invalid JSON. Default in a separate statement instead.
+  local signals_json="${3:-}"
+  local thresholds_json="${4:-}"
+  local assessed_at="${5:-}"
+  [ -n "$signals_json" ] || signals_json='{}'
+  [ -n "$thresholds_json" ] || thresholds_json='{}'
+
+  local existing_arr old_entry
+  existing_arr="$(mcp_lock_read | jq '(.mcps // [])')"
+  old_entry="$(printf '%s' "$existing_arr" \
+    | jq --arg n "$name" '.[] | select(.name == $n)')"
+
+  if [ -z "$old_entry" ]; then
+    return 1
+  fi
+
+  local updated
+  updated="$(printf '%s' "$old_entry" \
+    | jq \
+        --arg mode "$mode" \
+        --argjson sig "$signals_json" \
+        --argjson thr "$thresholds_json" \
+        --arg at "$assessed_at" '
+        .enforcement = $mode
+        | .enforcement_signals = $sig
+        | .enforcement_thresholds = $thr
+        | (if $at == "" then . else .enforcement_assessed_at = $at end)')"
+
+  local new_arr
+  new_arr="$(printf '%s' "$existing_arr" \
+    | jq --arg n "$name" 'map(select(.name != $n))')"
+  new_arr="$(printf '%s' "$new_arr" \
+    | jq --argjson e "$updated" '. + [$e]')"
+
+  mcp_lock_write_from_array "$new_arr"
+}
+
+# mcp_driver_oci_image_assess NAME PROJECT_ROOT
+# Run the MCP's one-shot `assess` op as a container CLI invocation and emit the
+# raw JSON the tool prints on stdout. The lock-write is NOT done here — the
+# caller (mcp_assess.sh) records the result so the nexus owns the lock-write.
+#
+# Invocation shape (read-only bind, no caps, no net): the project root is
+# bind-mounted read-only at /workspace and the tool is asked to assess it.
+# A FAKE override hook (EIDOLONS_MCP_ASSESS_CMD) lets tests inject a stub
+# without a live docker pull; when set, it is run verbatim with PROJECT_ROOT
+# as $1 and its stdout is used as the assess JSON.
+#
+# Returns:
+#   0  + JSON on stdout when assess produced parseable JSON
+#   3  when the image/digest is unresolved or the assess op could not run
+# All diagnostics go to stderr.
+mcp_driver_oci_image_assess() {
+  local name="$1"
+  local project_root="$2"
+
+  # Test/CI override: a stub command that emits the assess JSON. Keeps bats
+  # off a live docker pull (mirrors the fake-docker pattern but for the
+  # one-shot assess path, which the generic fake-docker shim does not model).
+  if [ -n "${EIDOLONS_MCP_ASSESS_CMD:-}" ]; then
+    local _out
+    if _out="$(eval "${EIDOLONS_MCP_ASSESS_CMD}" "$project_root" 2>/dev/null)"; then
+      printf '%s' "$_out"
+      return 0
+    fi
+    return 3
+  fi
+
+  # Resolve image + locked digest (prefer lock, fall back to catalogue pin).
+  local source_image digest
+  source_image="$(mcp_catalogue_get_field "$name" '.source.image')"
+  digest="$(mcp_lock_entry "$name" | jq -r '.integrity.value // empty')"
+  if [ -z "$digest" ]; then
+    local pinned
+    pinned="$(mcp_catalogue_get_field "$name" '.versions.pins.stable')"
+    digest="$(mcp_catalogue_get "$name" \
+      | jq -r --arg v "$pinned" '.versions.releases[$v].digest // empty')"
+  fi
+
+  if [ -z "$source_image" ] || [ -z "$digest" ]; then
+    warn "${name}: cannot resolve image@digest for assess — skipping"
+    return 3
+  fi
+
+  if ! atlas_aci_check_docker_cli; then return 3; fi
+  if ! atlas_aci_check_docker_daemon; then return 3; fi
+
+  local image_ref="${source_image}@${digest}"
+  local _out
+  if _out="$(docker run --rm \
+      -v "${project_root}:/workspace:ro" \
+      -w /workspace \
+      --cap-drop ALL \
+      --security-opt no-new-privileges \
+      "$image_ref" assess /workspace 2>/dev/null)"; then
+    printf '%s' "$_out"
+    return 0
+  fi
+  warn "${name}: assess op did not run (image ${image_ref}); ESL assessment skipped"
+  return 3
+}
+
 # _mcp_now — current UTC timestamp in RFC 3339 / ISO 8601 format.
 # Bash 3.2 safe: uses 'date -u'.
 _mcp_now() {
@@ -203,6 +357,32 @@ mcp_lock_write_from_array() {
       fi
 
       printf '    installed_at: "%s"\n' "$einstalled"
+
+      # ESL enforcement block (only emitted when recorded by 'mcp assess').
+      # The enforcement* fields are sticky, VCS-committed policy state; they are
+      # NOT rebuilt by the catalogue-driven install path (see
+      # mcp_lock_carry_enforcement) so the writer must serialize them verbatim
+      # when present, or a re-write would silently drop a recorded escalation.
+      local eenforce
+      eenforce="$(printf '%s' "$entry" | jq -r '.enforcement // ""')"
+      if [ -n "$eenforce" ]; then
+        printf '    enforcement: "%s"\n' "$eenforce"
+        # signals / thresholds are JSON objects → emit as compact JSON flow
+        # mappings (valid YAML, round-trips cleanly through yaml_to_json).
+        local esignals ethresholds eassessed
+        esignals="$(printf '%s' "$entry" | jq -c '.enforcement_signals // empty')"
+        ethresholds="$(printf '%s' "$entry" | jq -c '.enforcement_thresholds // empty')"
+        eassessed="$(printf '%s' "$entry" | jq -r '.enforcement_assessed_at // ""')"
+        if [ -n "$esignals" ]; then
+          printf '    enforcement_signals: %s\n' "$esignals"
+        fi
+        if [ -n "$ethresholds" ]; then
+          printf '    enforcement_thresholds: %s\n' "$ethresholds"
+        fi
+        if [ -n "$eassessed" ]; then
+          printf '    enforcement_assessed_at: "%s"\n' "$eassessed"
+        fi
+      fi
     done
   } > "$tmpfile"
 
@@ -1041,6 +1221,11 @@ mcp_driver_oci_image_install() {
       installed_at: $iat
     }')"
 
+  # ESL enforcement carry-forward (G-IDEMPOTENT): preserve any recorded
+  # enforcement* fields the catalogue-driven rebuild above does not know about,
+  # so a plain re-install never clears a recorded escalation.
+  entry="$(mcp_lock_carry_enforcement "$name" "$entry")"
+
   mcp_lock_upsert "$name" "$entry"
 }
 
@@ -1563,6 +1748,10 @@ _mcp_binary_upsert_lock() {
       hosts_wired: $hw,
       installed_at: $iat
     }')"
+
+  # ESL enforcement carry-forward (G-IDEMPOTENT): preserve any recorded
+  # enforcement* fields the catalogue-driven rebuild above does not know about.
+  entry="$(mcp_lock_carry_enforcement "$name" "$entry")"
 
   mcp_lock_upsert "$name" "$entry"
 }
