@@ -127,6 +127,19 @@ eidolons harness status             # per-host effective enforcement tier
 
 For a hard backstop, `--strict` adds a `PreToolUse` **delegate-or-deny** tier that mechanically blocks direct main-loop edits (only delegated subagents may write), with soundness graded per host. When CRYSTALIUM is installed, the session-start hook also runs `eidolons memory preflight` — a one-shot recall that injects prior project memory, fail-open and bounded. The full per-host capability matrix is in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
 
+## Spec-Driven lifecycle — ESL
+
+Routing decides *who* works. **ESL** — the Eidolons Spec Lifecycle — decides *how a change moves*, so non-trivial work runs through a right-sized, auditable lifecycle instead of a one-shot prompt. It isn't a second framework bolted on: the specialists you already have **are** the lifecycle — SPECTRA specifies, FORGE deliberates, Vivi implements, Kupo/VIGIL verify, IDG archives — and ESL is the thin grammar that sequences them, change by change, on disk under `.spectra/changes/`. Each Eidolon ships its own lifecycle hop; the cortex orchestrates the rest.
+
+It's built deliberately against [the documented failure modes of spec-driven development](https://github.com/Rynaro/eidolons-esl/blob/main/docs/rationale.md) — over-specification, instruction bloat, spec-as-waterfall, "spec" as a throwaway prompt:
+
+- **A mechanical right-sizing gate** classifies every change by observable signals — `trivial` → Kupo direct (no ceremony), `lite` → one-page spec, `full` → the whole lifecycle. You can't over-specify a one-line fix.
+- **maker ≠ checker, enforced** — the implementer and the verifier are mechanically distinct identities, checked on the hand-off envelope. A change cannot self-verify.
+- **Drift-check before archive** re-derives the change against its living spec, catching implementation that outran the intent.
+- **Opt-in, then forced** — advisory by default; a project escalates to *blocking* enforcement once it crosses mechanical size thresholds, recorded auditably in the lock.
+
+The official implementation is **[tonberry](https://github.com/Rynaro/tonberry)** — a thin (~13 MB, distroless) Go MCP whose `verify` is **byte-identical** to a zero-dependency `bash 3.2` conformance checker, so the rich runtime and the minimal reference can never drift. Install it with `eidolons mcp install tonberry`; the contract it implements is **[`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl)**. ESL is opt-in — absent the MCP, the Eidolons route and build exactly as before.
+
 ## Install
 
 One-time, global:
@@ -148,7 +161,7 @@ eidolons harness install     # wire mechanical routing + memory injection into y
 eidolons verify              # re-check installed Eidolons against the roster's signed metadata
 ```
 
-Keep the nexus current with `eidolons upgrade self` (atomic, integrity-verified, with `--check` and `--rollback`); upgrade installed Eidolons with `eidolons upgrade`. MCP servers — including CRYSTALIUM memory — are a separate catalogue managed through `eidolons mcp {list,install,upgrade,…}`. Commit `eidolons.lock` alongside `eidolons.yaml` for reproducible, tamper-evident installs. Full walkthrough: [`docs/getting-started.md`](docs/getting-started.md).
+Keep the nexus current with `eidolons upgrade self` (atomic, integrity-verified, with `--check` and `--rollback`); upgrade installed Eidolons with `eidolons upgrade`. MCP servers — CRYSTALIUM memory and the tonberry ESL runtime — are a separate catalogue managed through `eidolons mcp {list,install,upgrade,…}`. Commit `eidolons.lock` alongside `eidolons.yaml` for reproducible, tamper-evident installs. Full walkthrough: [`docs/getting-started.md`](docs/getting-started.md).
 
 ## Verified releases
 
