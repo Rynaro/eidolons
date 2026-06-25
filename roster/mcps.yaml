@@ -205,14 +205,19 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/tonberry"
     versions:
-      latest: "0.3.0"
+      latest: "0.3.1"
       pins:
-        stable: "0.3.0"
+        stable: "0.3.1"
       releases:
         "0.3.0":
           # Multi-arch index (linux/amd64 + linux/arm64). 11 tools — lifecycle ops
           # + EARS C7 advisory; verify byte-identical to the ESL bash checker.
           digest: "sha256:cb898ab1ba4cf8a31ff6b82963ba4d5e2cbf2f3f9f66670fcc043d37b9e407da"
+          released_at: "2026-06-25T00:00:00Z"
+        "0.3.1":
+          # Hardening: release-manifest index-digest capture, vendored-oracle drift
+          # guard (CI), gofmt gate, CLI arg consistency, Version-string fix. 11 tools.
+          digest: "sha256:3b2a01947c01ea3a3f3345073e198113964adb6e9b4629287da92622076aa856"
           released_at: "2026-06-25T00:00:00Z"
     install:
       hosts_wired:
