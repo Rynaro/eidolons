@@ -675,7 +675,7 @@ elif [[ -f "$CORTEX_SRC" ]]; then
   fi
   # Mirror deep companion tables if the source directory exists.
   if [[ -d "$CORTEX_DEEP_SRC" ]]; then
-    for _deep_file in trance-matrix.md handoff-graph.md validation-gates.md README.md memory-protocol.md; do
+    for _deep_file in trance-matrix.md handoff-graph.md validation-gates.md README.md memory-protocol.md esl-protocol.md; do
       _src="$CORTEX_DEEP_SRC/$_deep_file"
       _dst="$CORTEX_DEEP_DEST/$_deep_file"
       if [[ -f "$_src" ]]; then

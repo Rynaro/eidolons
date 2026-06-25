@@ -107,6 +107,8 @@ Commands:
                    refresh <name>           Re-fetch artefact (image/binary)
                    uninstall <name>         Remove from this project
                    upgrade [<name>|--all]   Upgrade to catalogue stable
+                   use <name>@<ver>         Switch to a published version
+                   assess <name>            Record ESL escalation into the lock
                    sync                     Reconcile eidolons.yaml mcps: block
                    health [<name>|--all]    Run health probes
                    run <name> [<args>]      Pass-through to runnable MCP binary
@@ -262,7 +264,7 @@ case "$cmd" in
     [ $# -gt 0 ] && shift
     case "$mcp_sub" in
       # New unified verbs — delegate to mcp.sh sub-dispatcher.
-      list|show|install|refresh|uninstall|upgrade|use|sync|health|run|pull|images|-h|--help|help)
+      list|show|install|refresh|uninstall|upgrade|use|assess|sync|health|run|pull|images|-h|--help|help)
         exec bash "$CLI_SRC/mcp.sh" "$mcp_sub" "$@"
         ;;
       # Legacy deprecated alias: 'eidolons mcp atlas-aci [pull] [...]'
