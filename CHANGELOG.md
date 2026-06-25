@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- spectra v4.10.0 published in the roster with release integrity metadata.
+
 ## [1.43.0] — 2026-06-17 — fix: re-scope Kupo to orchestrator-direct routing
 
 ### Changed
