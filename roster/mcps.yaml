@@ -173,3 +173,57 @@ mcps:
         - docker_daemon
         - image_local
         - registry_reachable
+
+  - name: tonberry
+    display_name: "tonberry"
+    scope: system
+    kind: oci-image
+    description: "Official ESL (Eidolons Spec Lifecycle) implementation — composes change artifacts and drives the lifecycle; verify is byte-identical to the canonical bash conformance checker."
+    use_cases:
+      - "Compose + validate ESL change manifests under .spectra/changes/<change_id>/."
+      - "Drive the lifecycle: propose -> right_size -> transition -> verify -> drift_check -> archive."
+      - "Mechanical conformance (C1-C6 MUST + C7 EARS advisory); maker != checker + drift-before-archive enforced."
+      - "Project-scope escalation assessment (advisory -> block for bigger projects)."
+    related_eidolons: [spectra, vivi, kupo, vigil, idg]
+    grants_to_eidolons: [spectra, vivi, kupo, vigil, idg]
+    wiring_mode: allowlist
+    exposes_tools:
+      glob: "mcp__tonberry__*"
+      list:
+        - mcp__tonberry__propose
+        - mcp__tonberry__right_size
+        - mcp__tonberry__transition
+        - mcp__tonberry__compose_manifest
+        - mcp__tonberry__compose_envelope
+        - mcp__tonberry__verify
+        - mcp__tonberry__drift_check
+        - mcp__tonberry__archive
+        - mcp__tonberry__list
+        - mcp__tonberry__status
+        - mcp__tonberry__assess
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/tonberry"
+    versions:
+      latest: "0.3.0"
+      pins:
+        stable: "0.3.0"
+      releases:
+        "0.3.0":
+          # Multi-arch index (linux/amd64 + linux/arm64). 11 tools — lifecycle ops
+          # + EARS C7 advisory; verify byte-identical to the ESL bash checker.
+          digest: "sha256:cb898ab1ba4cf8a31ff6b82963ba4d5e2cbf2f3f9f66670fcc043d37b9e407da"
+          released_at: "2026-06-25T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+        - ".cursor/mcp.json"
+        - ".github/agents/*"
+        - ".codex/config.toml"
+      template: "cli/templates/mcp/tonberry.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+        - docker_daemon
+        - image_local
+        - registry_reachable

@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "tonberry": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "tonberry-__PROJECT_SLUG__",
+        "--label",
+        "eidolons.project=__PROJECT_SLUG__",
+        "-v",
+        "__PROJECT_ROOT__:/workspace",
+        "-w",
+        "/workspace",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/tonberry@__IMAGE_DIGEST__",
+        "serve"
+      ]
+    }
+  }
+}
