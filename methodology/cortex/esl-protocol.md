@@ -96,10 +96,17 @@ tonberry) upserts the decision into that MCP's `eidolons.mcp.lock` entry:
 
 The lockfile is VCS-committed, so the escalation is auditable in a PR diff.
 
-**When to run it:** on `archive` / end-of-change (the recommended default — no
-polling daemon), or manually / on a cadence (after large growth or before a
-release). It does NOT fire on `eidolons sync`/`install` (wiring ops, not policy).
-An "advisory" result is a normal exit 0, not a failure.
+**When to run it:** it **fires automatically at `eidolons mcp install tonberry`**
+(the install cadence — a fresh install records an enforcement mode + signals so
+the project starts with an honest advisory↔block strength), and on `archive` /
+end-of-change (the orchestrator calls it after `mcp__tonberry__archive` — no
+polling daemon). It also runs manually / on a cadence (after large growth or
+before a release). Because `eidolons mcp sync` routes a not-yet-installed MCP
+through `install`, the auto-assess rides that path too; an already-installed
+no-op `sync` does not re-fire. The install auto-fire is gated strictly to
+tonberry, is fail-open (it never aborts the install), and is suppressible with
+`EIDOLONS_SKIP_AUTO_ASSESS=1` for CI / deterministic flows. An "advisory" result
+is a normal exit 0, not a failure.
 
 **Graceful skip (ESL opt-in):** if tonberry is not installed, or its `assess` op
 is unavailable, `mcp assess` warns and exits 0 with no lock write — never

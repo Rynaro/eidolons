@@ -26,6 +26,84 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 
+# ── ESL forcing-function helpers (M1 + M2) ────────────────────────────────────
+# Pure file reads (jq / grep / glob / awk) — NO docker, NO network. Each is
+# fail-open: any error degrades to "absent"/"advisory"/empty so the caller's
+# existing fail-open wrapper (`_main 2>/dev/null || true`) never breaks a
+# session. Opt-in is enforced by _esl_tonberry_present (modeled on the
+# crystalium tonberry-in-BOTH gate at cli/src/memory.sh:117-129).
+
+# _esl_tonberry_present [ROOT] — 0 iff tonberry is in BOTH .mcp.json AND the lock.
+_esl_tonberry_present() {
+  local root="${1:-$(pwd)}"
+  [ -f "$root/.mcp.json" ] || return 1
+  jq -e '.mcpServers.tonberry' "$root/.mcp.json" >/dev/null 2>&1 || return 1
+  [ -f "$root/eidolons.mcp.lock" ] || return 1
+  grep -q "name: tonberry" "$root/eidolons.mcp.lock" 2>/dev/null || return 1
+  return 0
+}
+
+# _esl_enforcement_mode [ROOT] — echo "block" or "advisory" (default advisory).
+# Reads the `enforcement:` field from the tonberry lock entry via a small awk
+# state machine (no yq dependency; the `enforcement_*` siblings do not match the
+# anchored `^    enforcement:` line). Absent / unrecognized ⇒ advisory.
+_esl_enforcement_mode() {
+  local root="${1:-$(pwd)}"
+  local lock="$root/eidolons.mcp.lock"
+  local mode=""
+  if [ -f "$lock" ]; then
+    mode="$(awk '
+      /^  - name: tonberry$/ { in_t=1; next }
+      /^  - name: / { in_t=0 }
+      in_t && /^    enforcement:/ {
+        v=$2; gsub(/"/, "", v); print v; exit
+      }
+    ' "$lock" 2>/dev/null || true)"
+  fi
+  case "$mode" in
+    block)    printf 'block' ;;
+    *)        printf 'advisory' ;;
+  esac
+}
+
+# _esl_inflight_change [ROOT] — echo "CHANGE_ID STATUS" for the first
+# .spectra/changes/*/change.json whose status != archived; empty if none.
+# Filters on status (not folder location) to be robust to both the MOVE and the
+# tombstone archive layouts (spec OQ-4).
+_esl_inflight_change() {
+  local root="${1:-$(pwd)}"
+  local f st cid
+  for f in "$root"/.spectra/changes/*/change.json; do
+    [ -f "$f" ] || continue
+    st="$(jq -r '.status // ""' "$f" 2>/dev/null || echo "")"
+    [ -n "$st" ] || continue
+    [ "$st" = "archived" ] && continue
+    cid="$(jq -r '.change_id // ""' "$f" 2>/dev/null || echo "")"
+    [ -n "$cid" ] || continue
+    printf '%s %s' "$cid" "$st"
+    return 0
+  done
+  return 0
+}
+
+# _esl_render_block MODE RESUME — render the SessionStart ESL block (<=500 chars).
+# MODE: "block" ⇒ "MUST"; anything else ⇒ "SHOULD". RESUME: "id status" or empty.
+# Always names the trivial escape. The heading is the spec-fixed literal.
+_esl_render_block() {
+  local mode="$1"
+  local resume="${2:-}"
+  local imperative="SHOULD"
+  [ "$mode" = "block" ] && imperative="MUST"
+  printf '## ESL — spec lifecycle in effect\n'
+  printf 'This project runs ESL (tonberry). You %s open a change before editing: mcp__tonberry__propose -> right_size. Trivial fixes -> Kupo / no-spec.' "$imperative"
+  if [ -n "$resume" ]; then
+    local rid rst
+    rid="${resume%% *}"
+    rst="${resume#* }"
+    printf '\nRESUME: in-flight change %s (%s) — finish it before opening a new one.' "$rid" "$rst"
+  fi
+}
+
 # ── Fail-open wrapper: any unhandled error → empty stdout, exit 0 ──────────
 # We use a subshell pattern so errors inside _main don't reach the caller.
 _main() {
@@ -87,6 +165,23 @@ _main() {
 ${mem_digest}"
     fi
 
+    # ── ESL forcing-function arm (M1): inject the "open a change" preflight ───
+    # Opt-in: only when tonberry is in BOTH .mcp.json AND the lock. Reads only
+    # (no .mcp.json write → G-NOCHURN; no docker). Appended into the SAME payload
+    # AFTER the memory block; the jq emit below is unchanged. Fail-open: any
+    # error in a helper degrades to no ESL block, so the cortex+memory still emit.
+    if _esl_tonberry_present; then
+      local esl_mode esl_resume esl_block
+      esl_mode="$(_esl_enforcement_mode)"
+      esl_resume="$(_esl_inflight_change)"
+      esl_block="$(_esl_render_block "$esl_mode" "$esl_resume")"
+      if [[ -n "$esl_block" ]]; then
+        cortex_digest="${cortex_digest}
+
+${esl_block}"
+      fi
+    fi
+
     # Emit JSON.
     jq -n \
       --arg en "SessionStart" \
@@ -125,6 +220,22 @@ ${mem_digest}"
 
   if [[ -n "$assumptions_str" ]]; then
     ctx_text="$ctx_text  Notes: $assumptions_str"
+  fi
+
+  # ── ESL rider (M2): append the "open a change first" clause on a real route ──
+  # Only the non-trivial path reaches here (the clarify/trivial early-return at
+  # the top already yields empty stdout = the inherited trivial escape, untouched
+  # by M2). Opt-in: tonberry in BOTH .mcp.json AND lock. Strength tracks the
+  # recorded enforcement mode. Fail-open: a helper error simply skips the clause.
+  if _esl_tonberry_present; then
+    local esl_mode_ups esl_clause
+    esl_mode_ups="$(_esl_enforcement_mode)"
+    if [[ "$esl_mode_ups" == "block" ]]; then
+      esl_clause="ESL project: MUST open a change first — mcp__tonberry__propose -> right_size; trivial routes need no spec."
+    else
+      esl_clause="ESL project: open a change first (SHOULD) — mcp__tonberry__propose -> right_size; trivial routes need no spec."
+    fi
+    ctx_text="$ctx_text  $esl_clause"
   fi
 
   # Trim to ≤4000 chars to stay well under 1000 tokens.

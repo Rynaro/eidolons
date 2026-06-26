@@ -963,3 +963,123 @@ EOF
   # Critically: must not say "nexus cache stale" (that would mean it tried to fetch).
   [[ ! "$output" =~ "nexus cache stale" ]]
 }
+
+# ─── M4-S1 — install auto-fires 'mcp assess tonberry' (ESL self-escalation) ──
+#
+# After the per-kind driver + wiring, an install of tonberry auto-fires
+# 'eidolons mcp assess tonberry' once so the lock records an enforcement mode +
+# size signals. Gates: only tonberry; fail-open (never aborts install);
+# EIDOLONS_SKIP_AUTO_ASSESS=1 suppresses; writes ONLY the lock (G-NOCHURN).
+# The assess op is stubbed via EIDOLONS_MCP_ASSESS_CMD (no live docker pull).
+
+# Install a stub `assess` command that prints a fixed "block" assess JSON on
+# stdout (mirrors mcp_assess.bats:stub_assess_json — single-quote wrapped so the
+# JSON braces/quotes survive the heredoc verbatim). No live docker pull needed.
+stub_assess_block() {
+  local json='{"signals":{"change_count":14,"repo_loc":62000,"full_ratio":0.6},"thresholds":{"N":10,"L":50000,"R":0.4},"tripped":["change_count"],"recommended_mode":"block"}'
+  local stub="$BATS_TEST_TMPDIR/fake-assess.sh"
+  cat > "$stub" <<STUB
+#!/usr/bin/env bash
+printf '%s' '${json}'
+STUB
+  chmod +x "$stub"
+  export EIDOLONS_MCP_ASSESS_CMD="bash $stub"
+}
+
+_tonberry_enforcement() {
+  yq eval '.mcps[] | select(.name=="tonberry") | .enforcement // "NONE"' eidolons.mcp.lock 2>/dev/null
+}
+
+@test "M4-S1: install tonberry auto-fires assess → enforcement recorded in the lock" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  stub_assess_block
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  [ -f "eidolons.mcp.lock" ] || return 1
+  run _tonberry_enforcement
+  [ "$output" = "block" ]
+}
+
+@test "M4-S1: EIDOLONS_SKIP_AUTO_ASSESS=1 suppresses the install auto-fire (no enforcement recorded)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  stub_assess_block
+  export EIDOLONS_SKIP_AUTO_ASSESS=1
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  [ -f "eidolons.mcp.lock" ] || return 1
+  run _tonberry_enforcement
+  [ "$output" = "NONE" ]
+}
+
+@test "M4-S1: auto-fire is fail-open — a failing assess never aborts the install" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  # Stub assess that FAILS (exit 1) → mcp_assess.sh graceful-skips; install must
+  # still complete (the auto-fire is '|| true').
+  local stub="$BATS_TEST_TMPDIR/fail-assess.sh"
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$stub"
+  chmod +x "$stub"
+  export EIDOLONS_MCP_ASSESS_CMD="bash $stub"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  [ -f ".mcp.json" ] || return 1
+  run bash -c "jq -e '.mcpServers.tonberry' .mcp.json"
+  [ "$status" -eq 0 ] || return 1
+  # No enforcement recorded (the assess could not run).
+  run _tonberry_enforcement
+  [ "$output" = "NONE" ]
+}
+
+@test "M4-S1: auto-fire is gated to tonberry — installing crystalium does NOT fire assess" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  # Sentinel-writing assess stub: it is only ever invoked if the auto-fire runs.
+  local sentinel="$BATS_TEST_TMPDIR/assess-fired"
+  local stub="$BATS_TEST_TMPDIR/sentinel-assess.sh"
+  cat > "$stub" <<STUB
+#!/usr/bin/env bash
+touch "$sentinel"
+printf '%s' '{"recommended_mode":"advisory","signals":{},"thresholds":{},"tripped":[]}'
+STUB
+  chmod +x "$stub"
+  export EIDOLONS_MCP_ASSESS_CMD="bash $stub"
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" crystalium
+  [ "$status" -eq 0 ] || return 1
+  # crystalium != tonberry → the auto-fire must be skipped → sentinel absent.
+  [ ! -f "$sentinel" ]
+}
+
+@test "M4-S1 (G-NOCHURN): install auto-assess writes only the lock — .mcp.json mtime unchanged across re-assess" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  stub_assess_block
+  # First install pins .mcp.json (and records enforcement via the auto-fire).
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  [ -f ".mcp.json" ] || return 1
+  _mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; }
+  _md5() { md5sum "$1" 2>/dev/null | cut -d' ' -f1 || md5 -q "$1"; }
+  local before_mtime before_md5 after_mtime after_md5
+  before_mtime="$(_mtime .mcp.json)"
+  before_md5="$(_md5 .mcp.json)"
+  sleep 1
+  # The RECORD hop in isolation must touch ONLY the lock, never .mcp.json.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_assess.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  after_mtime="$(_mtime .mcp.json)"
+  after_md5="$(_md5 .mcp.json)"
+  [ "$before_md5" = "$after_md5" ] || return 1
+  [ "$before_mtime" = "$after_mtime" ]
+}
