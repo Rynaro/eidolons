@@ -476,9 +476,14 @@ EOF
   # Edit a CLI file (lib.sh) — this SHOULD trip the guard.
   printf 'cli HAND-EDITED\n' >> "$fake_nexus/cli/src/lib.sh"
 
+  # NEXUS must be set AFTER sourcing lib.sh (as PR-4 does): lib.sh:11 re-derives
+  # NEXUS from EIDOLONS_NEXUS, so setting it first gets clobbered to the checkout
+  # under test → the guard would check the wrong tree. (That mistake passes on CI
+  # by coincidence — EIDOLONS_NEXUS is dirty there — but fails from a clean clone
+  # or a git worktree where $checkout/.git is a file.)
   run bash -c "
-    NEXUS='$fake_nexus'
     . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    NEXUS='$fake_nexus'
     _nexus_is_dirty() {
       [[ -d \"\$NEXUS/.git\" ]] || return 1
       local status
@@ -494,7 +499,7 @@ EOF
       exit 0
     fi
   "
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 1 ] || return 1
   [[ "$output" =~ "DIRTY" ]]
 }
 
