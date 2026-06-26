@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.46.0] — 2026-06-26 — chore: roll-up (ESL forcing follow-ups)
+
+> The mechanical ESL forcing-function itself shipped in **v1.45.0**; this release rolls up its follow-ups into a clean current tag for `eidolons upgrade self`.
+
+### Fixed
+- `PR-5` dirty-guard test checked the wrong tree: it set `NEXUS` before sourcing `cli/src/lib.sh` (which re-derives `NEXUS` from `EIDOLONS_NEXUS`), so the guard inspected the checkout under test instead of the intended fixture — passing on CI by coincidence but failing from a clean clone or a git worktree. Set `NEXUS` after sourcing, matching `PR-4`. No production change (`_nexus_is_dirty` was correct). `make test` is now green from a worktree/clone too.
+
+### Documentation
+- README "Spec-Driven lifecycle — ESL" section now describes the v1.45.0 mechanical forcing: once tonberry is installed the harness injects an ESL reminder at session start and on every non-trivial routed prompt (SHOULD→MUST by recorded enforcement), install auto-assesses project size (`EIDOLONS_SKIP_AUTO_ASSESS=1` to skip), trivial work stays exempt, and the hard edit-time gate is deferred.
+
 ## [1.45.0] — 2026-06-25 — feat: mechanical ESL forcing-function (front-of-lifecycle)
 
 ### Added
