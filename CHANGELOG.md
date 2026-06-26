@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.45.0] — 2026-06-25 — feat: mechanical ESL forcing-function (front-of-lifecycle)
+
+### Added
+- **ESL forcing is now mechanical, not advisory.** Installing the **tonberry** MCP exposed the ESL tools but nothing made the orchestrator use them — the forcing lived only as load-on-demand cortex prose, so a non-trivial change edited directly never reached `tonberry verify` and `--mode block` could never bite. The gap was at the *front* of the lifecycle (entering it). Four opt-in, fail-open arms close it:
+- **M1** — the SessionStart hook (`cli/src/harness_hook.sh`) injects a compact `## ESL — spec lifecycle in effect` block after the memory preflight when tonberry is present in **both** `.mcp.json` and `eidolons.mcp.lock`; wording scales **SHOULD→MUST** by the recorded `enforcement`, and a RESUME line names any in-flight change.
+- **M2** — the UserPromptSubmit hook appends an ESL clause to the routing directive on non-trivial routes; trivial/`clarify` routes stay silent (inherited escape).
+- **M4** — `eidolons mcp install tonberry` auto-fires `mcp assess` (auto-by-size advisory→block escalation; seed thresholds 10 / 50k / 0.4; `EIDOLONS_SKIP_AUTO_ASSESS=1` opt-out), with the idempotency carry-forward regression-locked.
+- **M5** — verified the main loop reaches `mcp__tonberry__*` tools by default (no grant fanout needed).
+- Opt-in preserved (tonberry absent ⇒ byte-identical output), bash 3.2, no `.mcp.json` mtime churn. The PreToolUse hard gate (M3) is deferred behind a `G-NO-HARDGATE-YET` static check.
+
 ## [1.44.0] — 2026-06-25 — feat: ESL (Eidolons Spec Lifecycle) subsystem + per-Eidolon adoption
 
 ### Added
