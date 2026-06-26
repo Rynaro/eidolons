@@ -1,0 +1,12 @@
+## Roster Index (always-loaded)
+
+| Eidolon | Role |
+|---------|------|
+| ATLAS   | scout |
+
+## Dispatch Protocol (always-loaded)
+
+Route all non-trivial work through the Eidolons pipeline.
+
+## Prior project memory (CRYSTALIUM recall)
+[semantic/T1] Prior spec: ESL forcing baseline fixture

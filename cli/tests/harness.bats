@@ -1563,3 +1563,232 @@ STUB
   # No memory section — graceful skip.
   ! [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
 }
+
+# ─── ESL forcing-function: M1 (SessionStart) + M2 (UPS rider) ─────────────────
+#
+# Gates encoded here: G-OPTIN (P0, RED-first), G-PRESENT, G-MODE, G-RESUME,
+# G-FAILOPEN (P0), G-NOCHURN (RED-first), G-TRIVIAL, G-BUDGET.
+# The opt-in gate is tonberry-in-BOTH (.mcp.json AND eidolons.mcp.lock), modeled
+# on the crystalium memory preflight gate (cli/src/memory.sh:117-129).
+
+# The exact preflight digest used when the v1.44.0 G-OPTIN baseline fixture was
+# captured. The byte-identical assertion only holds if the memory block matches.
+ESL_BASELINE_PREFLIGHT="[semantic/T1] Prior spec: ESL forcing baseline fixture"
+
+# seed_tonberry [enforcement_mode]
+# Writes a tonberry entry into BOTH .mcp.json and eidolons.mcp.lock so the
+# opt-in gate fires. Optional arg writes an `enforcement:` line (advisory|block).
+seed_tonberry() {
+  local mode="${1:-}"
+  cat > .mcp.json <<'EOF'
+{
+  "mcpServers": {
+    "tonberry": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "ghcr.io/rynaro/tonberry", "serve"]
+    }
+  }
+}
+EOF
+  {
+    printf 'mcps:\n'
+    printf '  - name: tonberry\n'
+    printf '    kind: oci-image\n'
+    printf '    version: "0.4.0"\n'
+    [ -n "$mode" ] && printf '    enforcement: "%s"\n' "$mode"
+  } > eidolons.mcp.lock
+}
+
+# seed_inflight_change <id> <status>
+seed_inflight_change() {
+  local id="$1" status="$2"
+  mkdir -p ".spectra/changes/$id"
+  printf '{"change_id":"%s","status":"%s"}\n' "$id" "$status" > ".spectra/changes/$id/change.json"
+}
+
+# Portable mtime + content hash (GNU-first; BSD fallback — see mcp_install.bats).
+_esl_mtime() { stat -c '%Y' "$1" 2>/dev/null || stat -f '%m' "$1"; }
+_esl_md5()   { md5sum "$1" 2>/dev/null | cut -d' ' -f1 || md5 -q "$1"; }
+
+@test "ESL G-OPTIN (P0): tonberry absent → SessionStart additionalContext byte-identical to v1.44.0 baseline" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT="$ESL_BASELINE_PREFLIGHT"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  # tonberry is ABSENT (no .mcp.json / no lock) → opt-in gate must skip silently.
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  [ -n "$output" ] || return 1
+  printf '%s' "$output" | jq -j '.hookSpecificOutput.additionalContext' > "$BATS_TEST_TMPDIR/ctx.out"
+  # BYTE-IDENTICAL to the captured baseline (the RED-first proof: any ESL leak or
+  # any memory/cortex regression changes these bytes and fails cmp).
+  cmp "$BATS_TEST_TMPDIR/ctx.out" "$EIDOLONS_ROOT/cli/tests/fixtures/esl/baseline_session_additionalContext.txt" || return 1
+  # And no ESL heading leaked into a non-ESL project.
+  ! grep -q '## ESL' "$BATS_TEST_TMPDIR/ctx.out"
+}
+
+@test "ESL G-PRESENT: tonberry present → ESL block AND memory block AND cortex coexist" {
+  seed_manifest
+  seed_cortex
+  seed_tonberry advisory
+  export FAKE_PREFLIGHT_OUTPUT="[semantic/T1] prior project context"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"## ESL — spec lifecycle in effect"* ]] || return 1
+  [[ "$_ctx" == *"Roster Index"* ]] || return 1
+  [[ "$_ctx" == *"Prior project memory (CRYSTALIUM recall)"* ]]
+}
+
+@test "ESL G-MODE (M1): advisory → SHOULD; block → MUST; trivial escape always named" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+
+  seed_tonberry advisory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"SHOULD open a change"* ]] || return 1
+  [[ "$_ctx" != *"MUST open a change"* ]] || return 1
+  [[ "$_ctx" == *"Kupo"* ]] || return 1  # trivial escape named
+
+  seed_tonberry block
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"MUST open a change before"* ]] || return 1
+  [[ "$_ctx" == *"Kupo"* ]]
+}
+
+@test "ESL G-RESUME: an in-flight change → RESUME line names change_id + status (archived skipped)" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  seed_tonberry block
+  seed_inflight_change "auth-flow" "in_progress"
+  seed_inflight_change "old-done" "archived"   # must be filtered out (status != archived)
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"RESUME:"* ]] || return 1
+  [[ "$_ctx" == *"auth-flow"* ]] || return 1
+  [[ "$_ctx" == *"in_progress"* ]] || return 1
+  [[ "$_ctx" != *"old-done"* ]]
+}
+
+@test "ESL G-FAILOPEN (P0): corrupt lock + non-JSON change.json → exit 0, cortex+memory still emit" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT="[semantic/T1] still here"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  # tonberry "present" (gate passes via grep) but the lock body is garbage YAML.
+  printf '{"mcpServers":{"tonberry":{"command":"docker","args":["run"]}}}\n' > .mcp.json
+  printf 'name: tonberry\n::: not : valid : yaml : [[[\n' > eidolons.mcp.lock
+  mkdir -p .spectra/changes/broken
+  printf 'NOT JSON {{{' > .spectra/changes/broken/change.json
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  # Graceful degrade: the cortex + memory sections still emit (no crash).
+  [[ "$_ctx" == *"Roster Index"* ]] || return 1
+  [[ "$_ctx" == *"Prior project memory (CRYSTALIUM recall)"* ]]
+}
+
+@test "ESL G-NOCHURN (RED-first): SessionStart hook with tonberry present does NOT change .mcp.json mtime" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  seed_tonberry block
+  local before_mtime before_md5 after_mtime after_md5
+  before_mtime="$(_esl_mtime .mcp.json)"
+  before_md5="$(_esl_md5 .mcp.json)"
+  sleep 1   # 1s granularity: a re-write would yield a strictly later mtime
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  after_mtime="$(_esl_mtime .mcp.json)"
+  after_md5="$(_esl_md5 .mcp.json)"
+  # The arm only READS .mcp.json — content, and mtime, must be untouched.
+  [ "$before_md5" = "$after_md5" ] || return 1
+  [ "$before_mtime" = "$after_mtime" ]
+}
+
+@test "ESL G-BUDGET: SessionStart ESL block is <=500 chars (block + resume = largest case)" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  seed_tonberry block
+  seed_inflight_change "a-fairly-long-change-identifier" "in_progress"
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  # The ESL block is the trailing section (appended after cortex+memory).
+  _esl="$(printf '%s' "$_ctx" | awk '/^## ESL/{f=1} f{print}')"
+  local _len
+  _len="$(printf '%s' "$_esl" | wc -m | tr -d ' ')"
+  [ "$_len" -gt 0 ] || return 1
+  [ "$_len" -le 500 ]
+}
+
+# ─── M2 — UserPromptSubmit ESL rider (driven via a fixed routing artifact) ────
+# Drive harness_hook.sh directly with a crafted ARTIFACT_JSON so the route is
+# deterministic (the live router's tau scoring is not under test here).
+
+@test "ESL M2 rider: advisory route appends a SHOULD ESL clause without dropping the directive" {
+  seed_tonberry advisory
+  local art='{"decision":"route","selected":["spectra"],"tier":"standard","chain":[]}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="implement the authentication flow" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"via the Task tool"* ]] || return 1                # base directive retained
+  [[ "$_ctx" == *"ESL project: open a change first (SHOULD)"* ]] || return 1
+  [[ "$_ctx" == *"mcp__tonberry__propose"* ]]
+}
+
+@test "ESL M2 rider: block route uses the MUST ESL clause" {
+  seed_tonberry block
+  local art='{"decision":"route","selected":["vivi"],"tier":"standard","chain":[]}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="x" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"ESL project: MUST open a change first"* ]] || return 1
+  [[ "$_ctx" == *"mcp__tonberry__propose"* ]]
+}
+
+@test "ESL M2 opt-in: tonberry absent → routing directive carries NO ESL clause" {
+  # No .mcp.json / no lock → opt-in gate skips.
+  local art='{"decision":"route","selected":["spectra"],"tier":"standard","chain":[]}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="x" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ] || return 1
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext')"
+  [[ "$_ctx" == *"via the Task tool"* ]] || return 1
+  [[ "$_ctx" != *"ESL project:"* ]]
+}
+
+@test "ESL G-TRIVIAL: clarify/trivial route → empty stdout even with tonberry present (M2 silent)" {
+  seed_tonberry block
+  local art='{"decision":"clarify"}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="thanks, that looks good" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ] || return 1
+  [ -z "$output" ]
+}

@@ -133,3 +133,18 @@ esac
 # Soft failure: mcp_wiring_apply_for_mcp warns on individual file errors but
 # never aborts the parent command (see spec §10.4).
 mcp_wiring_apply_for_mcp "$mcp_name"
+
+# ─── ESL auto-assess self-escalation (M4-S1) ─────────────────────────────────
+# When the installed MCP is tonberry, fire 'eidolons mcp assess tonberry' once so
+# a fresh install records its enforcement mode + size signals into the lock (the
+# advisory↔block strength stays honest as the project grows). Strictly gated to
+# tonberry (NOT crystalium/atlas-aci/junction). Fail-open: '|| true' — the assess
+# hop never aborts the install. The assess op is itself opt-in + graceful-skip
+# (mcp_assess.sh: absent lock / no docker / no assess op → exit 0) and writes ONLY
+# the lock, never .mcp.json (G-NOCHURN). EIDOLONS_SKIP_AUTO_ASSESS=1 suppresses the
+# container call for CI / deterministic flows.
+if [ "$mcp_name" = "tonberry" ] && [ "${EIDOLONS_SKIP_AUTO_ASSESS:-0}" != "1" ]; then
+  info "Auto-assessing ESL enforcement for ${mcp_name} (install cadence)..."
+  bash "$SELF_DIR/mcp_assess.sh" "$mcp_name" \
+    ${project_root:+--project-root "$project_root"} || true
+fi

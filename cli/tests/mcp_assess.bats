@@ -380,3 +380,69 @@ STUB
   run grep -nE '^[[:space:]]+assess\)' "$EIDOLONS_ROOT/cli/eidolons"
   [ "$status" -ne 0 ]
 }
+
+# ─── M4-S5 — enforcement from the install AUTO-FIRE survives sync + re-install ─
+#
+# Distinct from the existing carry-forward proofs above (which seed enforcement
+# MANUALLY): here the enforcement is written by the NEW install-time auto-fire,
+# then must survive (a) a no-op 'mcp sync' and (b) a real entry-rewrite via a
+# forced re-install WITH the auto-fire suppressed (so block can only survive via
+# mcp_lock_carry_enforcement, never a fresh re-assess).
+
+@test "M4-S5: install auto-fire enforcement survives a subsequent mcp sync AND a forced re-install" {
+  setup_mcp_env
+  # Fake docker so the OCI install driver runs without a live pull.
+  local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'SHIM'
+#!/usr/bin/env bash
+case "${1:-}" in
+  info) exit 0 ;;
+  image) exit 0 ;;
+  pull) exit 0 ;;
+  *) exit 0 ;;
+esac
+SHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  # Manifest declaring tonberry so 'mcp sync' has something to reconcile.
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+mcps:
+  - name: tonberry
+    version: "^0.4.0"
+EOF
+
+  # The install auto-fire records enforcement via the assess stub (block).
+  stub_assess_json '{"signals":{"change_count":14,"repo_loc":62000,"full_ratio":0.6},"thresholds":{"N":10,"L":50000,"R":0.4},"tripped":["change_count"],"recommended_mode":"block"}'
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ] || return 1
+  # PROOF the auto-fire (not a manual seed) wrote the enforcement.
+  run bash -c "yq eval '.mcps[] | select(.name==\"tonberry\") | .enforcement' eidolons.mcp.lock"
+  [ "$output" = "block" ] || return 1
+
+  # (a) A subsequent 'mcp sync' must preserve the recorded escalation.
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_sync.sh"
+  [ "$status" -eq 0 ] || return 1
+  run bash -c "yq eval '.mcps[] | select(.name==\"tonberry\") | .enforcement' eidolons.mcp.lock"
+  [ "$output" = "block" ] || return 1
+
+  # (b) A forced re-install WITH the auto-fire suppressed rewrites the entry; the
+  #     auto-fire write can only survive via the carry-forward (no re-assess).
+  export EIDOLONS_SKIP_AUTO_ASSESS=1
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry --force
+  [ "$status" -eq 0 ] || return 1
+  run bash -c "yq eval '.mcps[] | select(.name==\"tonberry\") | .enforcement' eidolons.mcp.lock"
+  [ "$output" = "block" ] || return 1
+  run bash -c "yq eval -o=json '.mcps[] | select(.name==\"tonberry\") | .enforcement_signals.change_count' eidolons.mcp.lock"
+  [ "$output" = "14" ]
+}
