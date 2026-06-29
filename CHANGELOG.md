@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+
+### Added
+- crystalium v1.5.1 published in the roster with release integrity metadata.
+
 ## [1.46.0] — 2026-06-26 — chore: roll-up (ESL forcing follow-ups)
 
 > The mechanical ESL forcing-function itself shipped in **v1.45.0**; this release rolls up its follow-ups into a clean current tag for `eidolons upgrade self`.
