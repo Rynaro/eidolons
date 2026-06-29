@@ -8,9 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.46.1] — 2026-06-29 — fix: Junction teardown no longer deletes harness hook shims
 
 ### Added
 - crystalium v1.5.1 published in the roster with release integrity metadata.
+
+### Fixed
+- **Junction teardown orphaned the harness hook shims → `UserPromptSubmit hook error: /bin/sh: .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh: not found` on every prompt.** The host-hook shims written by `eidolons harness install` live under `.eidolons/harness/hooks/`, the *same* parent dir as the Junction marker (`.eidolons/harness/manifest.json`) and the memory preflight cache (`.eidolons/harness/cache/`). Three teardown paths — `eidolons mcp uninstall junction` (`lib_mcp.sh`), `eidolons sync` when Junction is absent (`sync.sh`), and the legacy `eidolons harness uninstall` (`harness.sh`) — did a blanket `rm -rf .eidolons/harness`, deleting the shims while leaving the `.claude/settings.json` hook entries pointing at them. Each now removes **only** the marker via a new collision-safe `remove_junction_marker` helper (`lib.sh`) that `rmdir`s the parent only when it is left empty, so hook shims and the memory cache survive. Marker *detection* is likewise scoped to `manifest.json` rather than the shared dir. Regression coverage: `cli/tests/junction_marker.bats` (RJM-1..4) plus two `mcp_uninstall.bats` cases. Bash 3.2 safe; recover an already-broken project with `eidolons sync` or `eidolons harness install --force` (re-renders the shims).
 
 ## [1.46.0] — 2026-06-26 — chore: roll-up (ESL forcing follow-ups)
 
