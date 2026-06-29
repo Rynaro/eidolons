@@ -996,13 +996,19 @@ if [[ -n "$_harness_cache_dir" ]]; then
     fi
   fi
 else
-  # Junction absent — remove marker if present (idempotent).
-  if [[ -d "./.eidolons/harness" ]]; then
+  # Junction absent — remove ONLY the marker file, never the shared
+  # .eidolons/harness/ dir: the host-hook shims under hooks/ (from
+  # 'eidolons harness install') must survive, otherwise the .claude/settings.json
+  # hook entries dangle and every prompt fails with a "shim not found" error.
+  # The dir is reclaimed only when left empty. (Collision fix; see
+  # remove_junction_marker. The shim-refresh block below re-renders shims when
+  # the harness is installed.)
+  if [[ -f "$HARNESS_MARKER" ]]; then
     if [[ "$DRY_RUN" == "true" ]]; then
-      info "  [dry-run] would remove harness marker dir (Junction not installed)"
+      info "  [dry-run] would remove harness marker file (Junction not installed)"
     else
-      rm -rf "./.eidolons/harness"
-      info "Removed harness marker (Junction not installed)"
+      remove_junction_marker "./.eidolons/harness"
+      info "Removed harness marker (Junction not installed; preserved hook shims)"
     fi
   fi
 fi

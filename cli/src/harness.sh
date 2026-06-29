@@ -284,8 +284,10 @@ _harness_verify() {
 
 # ─── Subcommand: uninstall ────────────────────────────────────────────────
 # _harness_uninstall [--yes]
-# Removes all $CACHE_DIR/junction@*/ directories and ./.eidolons/harness/.
-# Idempotent: second run is a no-op. Asks for confirmation unless --yes.
+# Removes all $CACHE_DIR/junction@*/ directories and the Junction marker
+# (./.eidolons/harness/manifest.json). Preserves harness hook shims (hooks/) and
+# the memory cache (cache/) that share the dir; the dir is reclaimed only if left
+# empty. Idempotent: second run is a no-op. Asks for confirmation unless --yes.
 _harness_uninstall() {
   local yes=false
   while [[ $# -gt 0 ]]; do
@@ -307,7 +309,10 @@ _harness_uninstall() {
       found_cache=true
     fi
   done
-  if [[ -d "$HARNESS_MARKER_DIR" ]]; then
+  # Detect the Junction *marker* by its manifest file, not the parent dir:
+  # .eidolons/harness/ is shared with harness hook shims (hooks/) and the memory
+  # preflight cache (cache/), which this uninstall must not touch.
+  if [[ -f "$HARNESS_MARKER_DIR/manifest.json" ]]; then
     found_marker=true
   fi
 
@@ -325,7 +330,7 @@ _harness_uninstall() {
       done
     fi
     if [[ "$found_marker" == "true" ]]; then
-      echo "  - $HARNESS_MARKER_DIR" >&2
+      echo "  - $HARNESS_MARKER_DIR/manifest.json" >&2
     fi
     printf "Proceed? [y/N] " >&2
     local ans
@@ -345,10 +350,11 @@ _harness_uninstall() {
     fi
   done
 
-  # Remove marker dir.
-  if [[ -d "$HARNESS_MARKER_DIR" ]]; then
-    rm -rf "$HARNESS_MARKER_DIR"
-    info "Removed marker: $HARNESS_MARKER_DIR"
+  # Remove the Junction marker ONLY (manifest.json), preserving any harness
+  # hook shims / memory cache that share the dir. Reclaims the dir if empty.
+  if [[ -f "$HARNESS_MARKER_DIR/manifest.json" ]]; then
+    remove_junction_marker "$HARNESS_MARKER_DIR"
+    info "Removed marker: $HARNESS_MARKER_DIR/manifest.json"
     removed_any=true
   fi
 

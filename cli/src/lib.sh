@@ -1699,6 +1699,33 @@ apply_eidolons_gitignore() {
   fi
 }
 
+# ─── Junction marker teardown (collision-safe) ───────────────────────────
+# remove_junction_marker [HARNESS_ROOT]
+# Surgically removes the Junction harness *marker* (manifest.json) WITHOUT
+# clobbering the sibling subsystems that share the .eidolons/harness/ parent:
+#   - hooks/   — host-hook shims written by 'eidolons harness install'
+#   - cache/   — memory preflight cache (memory.sh)
+# The parent directory is reclaimed only when it is left empty: rmdir refuses a
+# non-empty directory, so a surviving hooks/ or cache/ keeps it intact.
+#
+# Why this exists: 'eidolons mcp uninstall junction', 'eidolons sync' (Junction
+# absent), and the legacy 'eidolons harness uninstall' previously all did
+# `rm -rf .eidolons/harness`, which deleted the host-hook shims too. The orphaned
+# .claude/settings.json hook entries then fired
+#   /bin/sh: .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh: not found
+# on every prompt. Removal of the Junction marker must be scoped to the marker.
+#
+# Always returns 0 (teardown is best-effort/idempotent). Bash 3.2 safe.
+remove_junction_marker() {
+  local hroot="${1:-./.eidolons/harness}"
+  [[ -e "$hroot" ]] || return 0
+  # Remove only the Junction-owned marker file.
+  rm -f "$hroot/manifest.json" 2>/dev/null || true
+  # Reclaim the dir only if nothing else (hooks/, cache/, …) still lives in it.
+  rmdir "$hroot" 2>/dev/null || true
+  return 0
+}
+
 # ─── Member upgrade status helpers ───────────────────────────────────────
 # Extracted from upgrade.sh so both upgrade and doctor share the same data path.
 # (Bucket C, spec: eidolons-update-flow-2026-05-05.md)
