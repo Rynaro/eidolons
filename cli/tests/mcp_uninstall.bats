@@ -88,3 +88,44 @@ EOF
     [ "$status" -eq 0 ]
   fi
 }
+
+# Regression: 'mcp uninstall junction' must NOT delete harness hook shims that
+# share the .eidolons/harness/ parent dir. Previously it did `rm -rf
+# .eidolons/harness`, orphaning the .claude/settings.json hook entries and firing
+# "/bin/sh: .../claude-code-UserPromptSubmit.sh: not found" on every prompt.
+@test "mcp uninstall: preserves harness hook shims; removes only the Junction marker" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  seed_junction_lock_for_uninstall
+
+  # Simulate the post-'eidolons harness install' layout: hook shims + memory
+  # cache live alongside the Junction marker under .eidolons/harness/.
+  mkdir -p .eidolons/harness/hooks .eidolons/harness/cache
+  printf '#!/usr/bin/env bash\nexit 0\n' > .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  printf '#!/usr/bin/env bash\nexit 0\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/*.sh
+  echo '{"preflight":true}' > .eidolons/harness/cache/preflight.json
+  echo '{"name":"junction","version":"'"$FAKE_JUNCTION_VERSION"'"}' > .eidolons/harness/manifest.json
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_uninstall.sh" "junction"
+  [ "$status" -eq 0 ]
+
+  # Hook shims and memory cache survive.
+  [ -x ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
+  [ -x ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+  [ -f ".eidolons/harness/cache/preflight.json" ]
+  # Only the Junction marker is removed.
+  [ ! -f ".eidolons/harness/manifest.json" ]
+}
+
+# Symmetric case: with NO harness shims present, the marker dir is fully reclaimed.
+@test "mcp uninstall: reclaims an otherwise-empty .eidolons/harness dir" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  seed_junction_lock_for_uninstall
+
+  mkdir -p .eidolons/harness
+  echo '{"name":"junction"}' > .eidolons/harness/manifest.json
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_uninstall.sh" "junction"
+  [ "$status" -eq 0 ]
+  [ ! -d ".eidolons/harness" ]
+}

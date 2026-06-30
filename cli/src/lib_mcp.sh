@@ -1801,9 +1801,15 @@ mcp_driver_binary_uninstall() {
     fi
   done
 
-  if [ -d "./.eidolons/harness" ]; then
-    rm -rf "./.eidolons/harness"
-    info "Removed marker: .eidolons/harness"
+  # Remove ONLY the Junction marker (manifest.json), never the shared
+  # .eidolons/harness/ dir — host-hook shims under hooks/ (installed by
+  # 'eidolons harness install') must survive an MCP uninstall, else the
+  # .claude/settings.json hook entries are orphaned and every prompt fails with
+  # ".../claude-code-UserPromptSubmit.sh: not found". The dir is reclaimed only
+  # when it is left empty. (Collision fix; see remove_junction_marker.)
+  if [ -e "./.eidolons/harness" ]; then
+    remove_junction_marker "./.eidolons/harness"
+    info "Removed Junction marker (preserved any harness hook shims)"
   fi
 
   # Remove the junction server entry from .mcp.json (symmetric with install).
