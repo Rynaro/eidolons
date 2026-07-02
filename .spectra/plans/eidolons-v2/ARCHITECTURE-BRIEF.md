@@ -1,6 +1,6 @@
 # Eidolons v2.0 — Architecture Brief
 
-**Date:** 2026-07-02 · **Status:** DRAFT v0.9 (pending R1 orchestration + R3 OSS-comparison integration)
+**Date:** 2026-07-02 · **Status:** v1.0 (all research integrated)
 **Basis:** four fan-out audits + verification/memory research brief (this directory) + live-store forensics.
 **Prime objective:** raise the floor — a weaker model inside Eidolons should beat a stronger model outside it — while raising the ceiling and preserving the identity (named specialists, refusal boundaries, portability, traceability).
 
@@ -185,7 +185,24 @@ works); memory becomes diagnosable; evals catch regressions with persisted basel
 7. v2.0 cut: nexus major with roster requiring the new member releases; consumer
    contract unchanged (v1 projects keep working — degradation rules).
 
-## 6. Ship gate for calling it "v2.0"
+## 6. Competitive positioning (OSS landscape, July 2026)
+
+The bundle (deterministic hook-enforced routing + typed hashed envelopes + gated
+lifecycle + cross-host memory + zero-dependency install) remains unique — but the moat
+narrows on two axes: host breadth (wshobson/agents ships 6 hosts including Copilot and
+Gemini CLI as a marketplace, 37.5k stars) and routing determinism (Microsoft Conductor,
+295 stars but MSFT-backed, is the deterministic-orchestration twin). claude-flow (62.6k
+stars) proves the opposite bet (learned/emergent routing) is commercially viable —
+auditability, not popularity, is our claim. Cross-host memory is commoditized (Mem0,
+basic-memory, Cognee); crystalium's differentiation is its wiring into tiers/ISE/
+verifier-gated skills, never memory-as-a-feature. Consequences absorbed into this
+brief: publish kernel routing semantics with Conductor-grade legibility; add a
+canary-string CI check proving hooks fire (WS4); evaluate single-source→per-host
+compilation to fight drift at 5+ hosts (Wave-3 sweep already fights the same drift);
+keep the eval posture at nightly bounded canaries, not bench-scale per-PR infra.
+Full comparison: research-oss-landscape.md.
+
+## 7. Ship gate for calling it "v2.0"
 
 - Matrix eval shows light-tier + system ≥ standard-tier bare on the KEEP cohort
   (hypothesis H-WIN; if it fails, v2.0 does not ship the claim — it ships the
