@@ -37,13 +37,13 @@
             "properties": {
               "glob": {
                 "type": "string",
-                "pattern": "^mcp__[a-z][a-z0-9_]*__\\*$",
-                "description": "Glob pattern for all tools exposed by this MCP (e.g. mcp__junction__*)"
+                "pattern": "^mcp__[a-z][a-z0-9_-]*__\\*$",
+                "description": "Glob pattern for all tools exposed by this MCP (e.g. mcp__junction__*). The server-key segment MUST byte-match the catalogue name — hyphens included (mcp__atlas-aci__*, never mcp__atlas_aci__*); check_mcp_catalogue.sh enforces this."
               },
               "list": {
                 "type": "array",
-                "items": { "type": "string", "pattern": "^mcp__[a-z][a-z0-9_]*__[a-z][a-z0-9_]*$" },
-                "description": "Explicit enumeration of tool names (informational, shown in eidolons mcp show)"
+                "items": { "type": "string", "pattern": "^mcp__[a-z][a-z0-9_-]*__[a-z][a-z0-9._-]*$" },
+                "description": "Explicit enumeration of tool names (informational, shown in eidolons mcp show). Tool segment may contain dots (e.g. mcp__junction__harness.run)."
               }
             },
             "anyOf": [

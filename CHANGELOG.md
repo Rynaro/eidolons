@@ -8,6 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **`check_mcp_catalogue.sh` — mechanical tool-namespace guard for `roster/mcps.yaml`** (`make schema` + CI). The host exposes MCP tools as `mcp__<server-key>__<tool>`, and the server key is the catalogue entry's `name` verbatim — so an `exposes_tools.glob` that drifts by one byte (the historical `mcp__atlas_aci__*` underscore bug) makes every allowlist grant silently inert. The guard asserts, per entry: glob byte-matches `mcp__<name>__*`, every `exposes_tools.list` item lives in that namespace, and the `.mcp.json` template registers the server under the key `<name>`. Coverage: `cli/tests/mcp_catalogue_lint.bats` (MCL-1..6).
+- `schemas/mcp-lockfile.schema.json` now declares the ESL escalation fields `eidolons mcp assess` writes (`enforcement`, `enforcement_signals`, `enforcement_thresholds`, `enforcement_assessed_at`) — the schema for the VCS-committed, PR-audited lockfile no longer lags the code that writes it.
+
+### Fixed
+- `roster/mcps.yaml` junction `exposes_tools.list` named tools that do not exist in Junction v0.3.0 (`harness_run`, `harness_verify`, `plan_dispatch`, `reasoning_step`); it now mirrors Junction's actual MCP registration verbatim (`harness.plan_from_prompt`, `harness.run`, `harness.verify`, `harness.inject`).
+- `schemas/mcp-catalogue.schema.json` tool-name patterns forbade hyphens in the server-key segment, so the correct `mcp__atlas-aci__*` glob violated the very schema documenting it; the patterns now allow hyphens (server key) and dots (tool names, e.g. `mcp__junction__harness.run`).
+
 ## [1.46.1] — 2026-06-29 — fix: Junction teardown no longer deletes harness hook shims
 
 ### Added
