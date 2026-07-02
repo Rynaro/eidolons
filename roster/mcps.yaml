@@ -79,11 +79,13 @@ mcps:
     wiring_mode: transport
     exposes_tools:
       glob: "mcp__junction__*"
+      # Tool names below mirror Junction's actual MCP registration (internal/mcp/tools.go)
+      # verbatim — dots included. The host exposes mcp__<server-key>__<tool-name> as-is.
       list:
-        - mcp__junction__harness_run
-        - mcp__junction__harness_verify
-        - mcp__junction__plan_dispatch
-        - mcp__junction__reasoning_step
+        - mcp__junction__harness.plan_from_prompt
+        - mcp__junction__harness.run
+        - mcp__junction__harness.verify
+        - mcp__junction__harness.inject
     source:
       type: github_release
       repo: "Rynaro/Junction"

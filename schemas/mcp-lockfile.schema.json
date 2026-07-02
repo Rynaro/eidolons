@@ -40,7 +40,20 @@
             "items": { "type": "string" },
             "description": "Files that received marker-bounded sections (relative paths)."
           },
-          "installed_at": { "type": "string", "format": "date-time" }
+          "installed_at": { "type": "string", "format": "date-time" },
+          "enforcement": {
+            "enum": ["advisory", "block"],
+            "description": "ESL escalation mode recorded by 'eidolons mcp assess' (the RECORD hop). Sticky, VCS-committed policy state; carried across reinstalls by mcp_lock_carry_enforcement."
+          },
+          "enforcement_signals": {
+            "type": "object",
+            "description": "Observable signals the assessment was computed from (e.g. file/contributor counts). Shape is owned by the assessed MCP's assess op."
+          },
+          "enforcement_thresholds": {
+            "type": "object",
+            "description": "Thresholds the signals were compared against when the enforcement mode was recorded."
+          },
+          "enforcement_assessed_at": { "type": "string", "format": "date-time" }
         }
       }
     }
