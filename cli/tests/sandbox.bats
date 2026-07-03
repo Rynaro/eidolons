@@ -774,3 +774,170 @@ SH
   [ "$(echo "$output" | jq -r '.red_gate')" = "" ]
   [ "$(echo "$output" | jq -r '.judge')" = "" ]
 }
+
+# ── S3-cascade: post-generation tier cascade (light<standard<deep) ────────────
+# Evidence basis: pre-generation difficulty routers are ML-shaped; run-cheap ->
+# verify -> escalate is the only deterministic-capable routing class. The loop,
+# not the model, decides escalation — see 'eidolons sandbox loop --help'.
+
+@test "S3-cascade: escalates light -> standard when light's fix-hook can't fix it, reports cascade_tier_used" {
+  _git_project
+  # fix.sh only "fixes" state.txt when it is invoked at tier=standard — proving
+  # the fix-hook (not the sandbox) maps tier -> model, and that escalation is
+  # driven purely by EIDOLONS_SANDBOX_MODEL_TIER.
+  cat > fix.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_MODEL_TIER" = "standard" ]; then
+  echo fixed > state.txt
+fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'sh fix.sh' --cascade light,standard --max-attempts 2 \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.cascade_tier_used')" = "standard" ]
+  [ -f .out/cascade-light/loop.json ]
+  [ -f .out/cascade-standard/loop.json ]
+  # the light tier really did exhaust its attempts before escalating
+  [ "$(jq -r '.final' .out/cascade-light/loop.json)" = "capped" ]
+}
+
+@test "S3-cascade: a 3-tier ladder escalates twice and reports the winning (deep) tier" {
+  _git_project
+  cat > fix.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_MODEL_TIER" = "deep" ]; then
+  echo fixed > state.txt
+fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'sh fix.sh' --cascade light,standard,deep --max-attempts 2 \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.cascade_tier_used')" = "deep" ]
+}
+
+@test "S3-cascade: rejects an unknown tier name (usage error)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --cascade bogus,standard --allow-unsafe-host --out .out
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "cascade" ]]
+  [[ "$output" =~ "unknown tier" ]]
+}
+
+@test "S3-cascade: rejects non-ascending tiers (usage error)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --cascade standard,light --allow-unsafe-host --out .out
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "ascending" ]]
+}
+
+@test "S3-cascade: rejects a single tier (needs 2-3)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --cascade light --allow-unsafe-host --out .out
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "cascade" ]]
+}
+
+@test "S3-cascade: rejects more than 3 tiers" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --cascade light,standard,deep,light --allow-unsafe-host --out .out
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "cascade" ]]
+}
+
+@test "S3-cascade: absent --cascade never exports EIDOLONS_SANDBOX_MODEL_TIER to the fix-hook (byte-identical)" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'env > /tmp/s3-cascade-env-dump.txt; echo fixed > state.txt' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  ! grep -q 'EIDOLONS_SANDBOX_MODEL_TIER' /tmp/s3-cascade-env-dump.txt
+  rm -f /tmp/s3-cascade-env-dump.txt
+}
+
+@test "S3-cascade: cascade_tier_used defaults to empty string when --cascade is not used (additive back-compat field)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.cascade_tier_used')" = "" ]
+}
+
+# ── S3-ratchet: test-file anti-tamper ratchet (default-on; --allow-test-edits) ─
+# Evidence basis: strong policies exploit weak verifiers by tampering with
+# tests (deleting failing tests, editing assertions) — the verifier must
+# confirm the frozen checks are the ones that actually ran.
+
+@test "S3-ratchet: a fix-hook that EDITS a snapshotted test file is REJECTED as test-tamper; loop caps with tamper_rejections>=1" {
+  _git_project
+  echo "assert 1" > sometest.sh
+  git add -A && git commit -qm addtest
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo tampered > sometest.sh; echo fixed > state.txt' \
+    --max-attempts 2 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" -ge 1 ]
+  # the test file really was left tampered (the loop rejects, it does not revert)
+  grep -q tampered sometest.sh
+}
+
+@test "S3-ratchet: a fix-hook that DELETES a snapshotted test file is REJECTED as test-tamper" {
+  _git_project
+  echo "assert 1" > sometest.sh
+  git add -A && git commit -qm addtest
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'rm -f sometest.sh; echo fixed > state.txt' \
+    --max-attempts 2 --allow-unsafe-host --out .out --json
+  [ "$status" -eq 3 ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" -ge 1 ]
+}
+
+@test "S3-ratchet: a fix-hook that only ADDS a new test file is allowed (adding tests is legitimate)" {
+  _git_project
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo "new test" > newtest.sh; echo fixed > state.txt' \
+    --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" = "0" ]
+}
+
+@test "S3-ratchet: --allow-test-edits disables the ratchet — the same tampering fix-hook now passes" {
+  _git_project
+  echo "assert 1" > sometest.sh
+  git add -A && git commit -qm addtest
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fix-hook 'echo tampered > sometest.sh; echo fixed > state.txt' \
+    --allow-test-edits --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" = "0" ]
+}
+
+@test "S3-ratchet: tamper_rejections defaults to 0 on an ordinary loop (additive back-compat field)" {
+  _git_project
+  run eidolons sandbox loop --tests 'true' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" = "0" ]
+}
+
+@test "S3-ratchet: --fanout — a candidate that tampers with a test file is rejected, the next candidate can still win" {
+  _git_project
+  echo "assert 1" > sometest.sh
+  git add -A && git commit -qm addtest
+  # Candidate 1 tampers with the test file; candidate 2 fixes state.txt cleanly.
+  cat > cand.sh <<'SH'
+if [ "$EIDOLONS_SANDBOX_CANDIDATE" = "1" ]; then
+  echo tampered > sometest.sh
+  echo fixed > state.txt
+else
+  echo fixed > state.txt
+fi
+SH
+  run eidolons sandbox loop --tests 'grep -q fixed state.txt' \
+    --fanout 2 --fix-hook 'sh cand.sh' --allow-unsafe-host --out .out --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.final')" = "passed" ]
+  [ "$(echo "$output" | jq -r '.selected_candidate')" = "2" ]
+  [ "$(echo "$output" | jq -r '.attempts[0].rejected')" = "test-tamper" ]
+  [ "$(echo "$output" | jq -r '.tamper_rejections')" = "1" ]
+}
