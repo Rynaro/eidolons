@@ -27,6 +27,18 @@ SANDBOX_SH="$SELF_DIR/sandbox.sh"
 DEFAULT_SUITE="$EIDOLONS_NEXUS/evals/swe-suite.yaml"
 [[ -f "$DEFAULT_SUITE" ]] || DEFAULT_SUITE="$(cd "$SELF_DIR/../.." && pwd)/evals/swe-suite.yaml"
 
+# Absolute path to THIS script, used only by --matrix to re-invoke the whole
+# single-arm suite path (untouched) once per arm — mirrors how sandbox.sh's
+# --cascade re-invokes itself once per tier (cli/src/sandbox.sh:43).
+SELF_FILE="$SELF_DIR/eval_swe.sh"
+
+# Nexus root (normalised), for the scorecard store. EIDOLONS_EVAL_RESULTS_DIR
+# overrides the store location wholesale — tests (and anyone who does not
+# want to write into a real nexus checkout) MUST set this; production runs
+# leave it unset and the store lives at <nexus>/evals/results/ (committed).
+NEXUS_ROOT="$(cd "$(dirname "$ROSTER_FILE")/.." && pwd)"
+RESULTS_DIR="${EIDOLONS_EVAL_RESULTS_DIR:-$NEXUS_ROOT/evals/results}"
+
 usage() {
   cat <<EOF
 eidolons eval swe — SWE-task-solving harness (sandbox-mediated)
@@ -53,16 +65,197 @@ Options:
   --validate-suite    Self-test the suite shape and exit (no execution).
   --list              List task ids + descriptions and exit.
   --json              Emit the scorecard as JSON.
+  --matrix ARMS.json  Run every arm in ARMS.json (schema:
+                      schemas/eval-arms.schema.json) through THIS suite path,
+                      unmodified, once per arm — see 'MATRIX MODE' below.
+  --smoke             Under --matrix: every arm ignores its fix_hook and uses
+                      the suite's gold_fix instead (validates arm/scorecard
+                      plumbing without a model). Also honoured stand-alone:
+                      forces smoke mode even if --fix-hook is given.
+  --no-store          Under --matrix: skip writing scorecards/matrix summary
+                      to evals/results/ (default: written).
   -h, --help          Show this help.
 
 Suite task fields (optional, per task): holdout: <cmd> — a SEALED oracle the
 fix-hook never sees (held in the loop process only, NEVER materialised into the
 task workdir); failing it after a visible pass → final=reward-hacked.
 protect: <glob> — anchoring files the fix-hook must not mutate.
+description: <text> — exported to the fix-hook as EIDOLONS_EVAL_TASK_BRIEF
+(the task-context env var the reference hooks in evals/hooks/ read).
+
+MATRIX MODE (--matrix ARMS.json): for each arm ({label, fix_hook, env,
+control} — schemas/eval-arms.schema.json) this re-invokes the EXACT single-
+arm path above (all tasks x --k, every other flag on this invocation passed
+through unmodified) as a child process, with the arm's env exported and its
+fix_hook substituted for --fix-hook. The single-arm path itself is NEVER
+restructured — matrix wraps it, the same discipline 'eidolons sandbox loop
+--cascade' uses for tier escalation. Every arm's result is written as one
+evals/results/<UTC-date>-<suite>-<label>.scorecard.json (schema:
+schemas/eval-scorecard.schema.json; --no-store skips this). After all arms
+run, a pairwise summary vs the first control:true arm (resolved-rate delta,
+pass^k delta, per-task newly-resolved/regressed) is printed and written to
+evals/results/<UTC-date>-<suite>-matrix.json. See evals/results/README.md and
+'eidolons eval baseline --help' for reading the store back.
 
 SCOPE: the bundled suite is a harness self-test with reference fixes, NOT a
 capability benchmark. See 'eidolons sandbox --help' for the loop it drives.
 EOF
+}
+
+# ── --matrix: run every arm through the EXISTING single-arm path below,
+# unmodified, as a child process (wrap-don't-touch, mirrors --cascade). ──────
+_run_matrix() {
+  [[ -f "$MATRIX" ]] || die "Matrix arms file not found: $MATRIX"
+  local arms_json
+  arms_json="$(jq -c '.' "$MATRIX" 2>/dev/null)" || die "Could not parse arms JSON: $MATRIX"
+  local n_arms
+  n_arms="$(printf '%s' "$arms_json" | jq '(.arms // []) | length' 2>/dev/null || echo 0)"
+  [[ "$n_arms" -ge 1 ]] 2>/dev/null || die "arms file must declare >=1 arm under .arms[] (schemas/eval-arms.schema.json): $MATRIX"
+
+  local shape_problems
+  shape_problems="$(printf '%s' "$arms_json" | jq -r '
+    [ .arms | to_entries[] | .key as $i | .value as $a |
+        (if ($a.label // "") == "" then "arms[\($i)]: missing label" else empty end),
+        (if ($a.fix_hook // "") == "" then "arms[\($i)]: missing fix_hook" else empty end)
+    ] as $field_problems
+    | ( [.arms[].label] | group_by(.) | map(select(length>1)) | map("duplicate arm label: \(.[0])") ) as $dup_problems
+    | ($field_problems + $dup_problems) | .[]' 2>/dev/null | grep -v '^$' || true)"
+  if [[ -n "$shape_problems" ]]; then
+    warn "arms file invalid:"
+    printf '%s\n' "$shape_problems" | sed 's/^/  - /' >&2
+    die "eval swe --matrix: arms file failed validation: $MATRIX"
+  fi
+
+  local suite_label started_at run_date nexus_ver control_label
+  suite_label="$(basename "$SUITE" .yaml)"
+  started_at="$(date -u '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || echo "1970-01-01T00:00:00Z")"
+  run_date="$(date -u '+%Y-%m-%d' 2>/dev/null || echo "1970-01-01")"
+  nexus_ver="$(read_nexus_version 2>/dev/null || echo "0.0.0-dev")"
+  control_label="$(printf '%s' "$arms_json" | jq -r '[.arms[] | select(.control == true)][0].label // ""')"
+
+  [[ "$NO_STORE" == true ]] || mkdir -p "$RESULTS_DIR"
+
+  local matrix_arms_out labels
+  matrix_arms_out="[]"
+  labels="$(printf '%s' "$arms_json" | jq -r '.arms[].label')"
+  while IFS= read -r label; do
+    [[ -z "$label" ]] && continue
+    local arm arm_fix_hook arm_control env_keys
+    arm="$(printf '%s' "$arms_json" | jq -c --arg l "$label" '.arms[] | select(.label == $l)')"
+    arm_fix_hook="$(printf '%s' "$arm" | jq -r '.fix_hook')"
+    arm_control="$(printf '%s' "$arm" | jq -r '.control // false')"
+    env_keys="$(printf '%s' "$arm" | jq -r '(.env // {}) | keys[]')"
+
+    local child_args=(--suite-file "$SUITE" --max-attempts "$MAX_ATTEMPTS" --k "$K" --fanout "$FANOUT")
+    [[ "$REQUIRE_RED" == true ]]  && child_args+=(--require-red)
+    [[ -n "$JUDGE_HOOK" ]]        && child_args+=(--judge-hook "$JUDGE_HOOK")
+    [[ -n "$VIA" ]]               && child_args+=(--via "$VIA")
+    [[ "$ALLOW_UNSAFE" == true ]] && child_args+=(--allow-unsafe-host)
+    # Under --smoke every arm ignores its fix_hook (omit --fix-hook entirely
+    # so the child's own smoke-detection — MODE=smoke unless --fix-hook is
+    # given — engages identically to a plain no-flags run).
+    [[ "$SMOKE_FLAG" != true ]] && child_args+=(--fix-hook "$arm_fix_hook")
+    child_args+=(--json)
+
+    local env_assign=()
+    if [[ -n "$env_keys" ]]; then
+      local ek ev
+      while IFS= read -r ek; do
+        [[ -z "$ek" ]] && continue
+        ev="$(printf '%s' "$arm" | jq -r --arg k "$ek" '.env[$k]')"
+        env_assign+=("$ek=$ev")
+      done <<< "$env_keys"
+    fi
+
+    [[ "$OUT" != "json" ]] && say "matrix: running arm '$label'..."
+    local child_json rc=0
+    child_json="$(env "${env_assign[@]+"${env_assign[@]}"}" bash "$SELF_FILE" "${child_args[@]}")" || rc=$?
+    [[ "$rc" -eq 0 ]] || die "matrix: arm '$label' invocation failed (exit $rc) — see stderr above"
+
+    local smoke_actual sc
+    smoke_actual="$(printf '%s' "$child_json" | jq -r '.mode == "smoke"')"
+    sc="$(printf '%s' "$child_json" | jq -c \
+      --arg schema "1.0" --arg suite "$suite_label" --arg label "$label" \
+      --arg fix_hook "$arm_fix_hook" --argjson env "$(printf '%s' "$arm" | jq -c '.env // {}')" \
+      --argjson control "$([[ "$arm_control" == "true" ]] && echo true || echo false)" \
+      --arg started "$started_at" --argjson k "$K" --arg nexus_ver "$nexus_ver" \
+      --argjson smoke "$([[ "$smoke_actual" == "true" ]] && echo true || echo false)" \
+      '{
+        schema_version: $schema,
+        suite: $suite,
+        arm: {label:$label, fix_hook:$fix_hook, env:$env, control:$control},
+        started_at: $started,
+        k: $k,
+        tasks: [ .tasks[] | {id:.id, resolved:.resolved, passes:.resolved_runs, attempts:.k} ],
+        resolved_rate: .resolved_rate,
+        pass_k_rate: .pass_k,
+        harness: {nexus_version:$nexus_ver, smoke:$smoke}
+      }')"
+
+    if [[ "$NO_STORE" != true ]]; then
+      local outfile="$RESULTS_DIR/${run_date}-${suite_label}-${label}.scorecard.json"
+      printf '%s\n' "$sc" | jq '.' > "$outfile"
+      [[ "$OUT" != "json" ]] && info "matrix: wrote $outfile"
+    fi
+    matrix_arms_out="$(printf '%s' "$matrix_arms_out" | jq -c --argjson s "$sc" '. + [$s]')"
+  done <<< "$labels"
+
+  # ── Pairwise summary vs the first control:true arm ─────────────────────────
+  local summary
+  if [[ -n "$control_label" ]]; then
+    local cmp_jq
+    cmp_jq="$(cat <<'JQEOF'
+(map(select(.arm.label == $ctrl))[0]) as $c
+| map(select(.arm.label != $ctrl)) as $others
+| {
+    control: $ctrl,
+    comparisons: [
+      $others[] as $o
+      | ($o.tasks | map({(.id): .resolved}) | add // {}) as $om
+      | ($c.tasks  | map({(.id): .resolved}) | add // {}) as $cm
+      | {
+          label: $o.arm.label,
+          resolved_rate_delta: ($o.resolved_rate - $c.resolved_rate),
+          pass_k_rate_delta: ($o.pass_k_rate - $c.pass_k_rate),
+          newly_resolved: [ ($om | keys[]) as $id | select((($cm[$id]) // false) == false and (($om[$id]) // false) == true) | $id ],
+          regressed:      [ ($cm | keys[]) as $id | select((($cm[$id]) // false) == true  and (($om[$id]) // false) == false) | $id ]
+        }
+    ]
+  }
+JQEOF
+)"
+    summary="$(printf '%s' "$matrix_arms_out" | jq -c --arg ctrl "$control_label" "$cmp_jq")"
+  else
+    summary='{"control":null,"comparisons":[],"note":"no arm marked control:true — no pairwise comparison computed"}'
+    [[ "$OUT" != "json" ]] && warn "matrix: no arm has control:true — skipping pairwise comparison"
+  fi
+
+  local matrix_doc
+  matrix_doc="$(jq -nc --arg schema "1.0" --arg suite "$suite_label" --arg started "$started_at" \
+    --argjson arms "$matrix_arms_out" --argjson summary "$summary" \
+    '{schema_version:$schema, suite:$suite, started_at:$started, arms:[$arms[].arm], summary:$summary}')"
+
+  if [[ "$NO_STORE" != true ]]; then
+    local matrix_file="$RESULTS_DIR/${run_date}-${suite_label}-matrix.json"
+    printf '%s\n' "$matrix_doc" | jq '.' > "$matrix_file"
+    [[ "$OUT" != "json" ]] && info "matrix: wrote $matrix_file"
+  fi
+
+  if [[ "$OUT" == "json" ]]; then
+    printf '%s\n' "$matrix_doc"
+  else
+    echo ""
+    printf '%seval swe matrix summary%s  suite=%s  arms=%s\n' "${BOLD:-}" "${RESET:-}" "$suite_label" "$n_arms"
+    printf '%s' "$matrix_arms_out" | jq -r '.[] | [.arm.label, (.resolved_rate|tostring), (.pass_k_rate|tostring), (.arm.control|tostring)] | @tsv' \
+      | while IFS=$'\t' read -r lbl rr pk ctrl; do
+          tag=""; [[ "$ctrl" == "true" ]] && tag="  [control]"
+          printf '  %-20s resolved_rate=%-8s pass_k_rate=%-8s%s\n' "$lbl" "$rr" "$pk" "$tag"
+        done
+    if [[ -n "$control_label" ]]; then
+      printf '%s' "$summary" | jq -r --arg ctrl "$control_label" \
+        '.comparisons[] | "  \(.label) vs \($ctrl): Δresolved_rate=\(.resolved_rate_delta)  Δpass_k=\(.pass_k_rate_delta)  newly_resolved=\(.newly_resolved|length)  regressed=\(.regressed|length)"'
+    fi
+  fi
 }
 
 SUITE="$DEFAULT_SUITE"
@@ -79,6 +272,9 @@ KEEP=false
 VALIDATE=false
 LIST=false
 OUT="text"
+MATRIX=""
+SMOKE_FLAG=false
+NO_STORE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -96,6 +292,9 @@ while [[ $# -gt 0 ]]; do
     --validate-suite)   VALIDATE=true; shift ;;
     --list)             LIST=true; shift ;;
     --json)             OUT="json"; shift ;;
+    --matrix)           MATRIX="${2:-}"; shift 2 ;;
+    --smoke)            SMOKE_FLAG=true; shift ;;
+    --no-store)         NO_STORE=true; shift ;;
     -h|--help)          usage; exit 0 ;;
     *)                  die "Unknown option: $1 (see 'eidolons eval swe --help')" ;;
   esac
@@ -106,6 +305,11 @@ done
 [[ "$K" -ge 1 ]] 2>/dev/null || die "--k must be >= 1"
 [[ "$FANOUT" -ge 1 ]] 2>/dev/null || die "--fanout must be >= 1"
 suite_json="$(yaml_to_json "$SUITE")" || die "Could not parse suite YAML: $SUITE"
+
+# --smoke (stand-alone, i.e. without --matrix) forces smoke mode even if
+# --fix-hook was also given — matches the honest-scope framing everywhere
+# else in this file: an explicit ask for smoke always wins.
+[[ "$SMOKE_FLAG" == true ]] && FIX_HOOK=""
 
 # Mode = smoke (gold_fix reference) unless a real --fix-hook is supplied.
 MODE="smoke"; [[ -n "$FIX_HOOK" ]] && MODE="model-driven"
@@ -151,6 +355,15 @@ if [[ "$LIST" == true ]]; then
   exit 0
 fi
 
+# ── --matrix: dispatch to the matrix wrapper and stop. The single-arm path
+# below (isolation policy through the final scorecard emit) is REACHED ONLY
+# per-arm, as a fresh child-process invocation of this same script with
+# --matrix absent — it never executes directly in a --matrix parent run. ────
+if [[ -n "$MATRIX" ]]; then
+  _run_matrix
+  exit 0
+fi
+
 # ── Isolation policy (mirrors the sandbox loop's R8-03 refusal) ─────────────
 iso_flags=()
 if [[ -n "$VIA" ]]; then
@@ -181,6 +394,12 @@ while IFS= read -r tid; do
   test_cmd="$(printf '%s' "$task" | jq -r '.test')"
   hook="$FIX_HOOK"
   [[ -z "$hook" ]] && hook="$(printf '%s' "$task" | jq -r '.gold_fix // ""')"
+  # Task context for the fix-hook: exported (not passed on argv) so any
+  # --fix-hook — including the reference hooks in evals/hooks/ — can read the
+  # task's own description without the suite format growing a new plumbing
+  # path per hook. sandbox.sh's `bash -c "$hook"` inherits this process's
+  # exported environment, so no change to sandbox.sh is needed.
+  export EIDOLONS_EVAL_TASK_BRIEF="$(printf '%s' "$task" | jq -r '.description // ""')"
   # Stage 2: optional per-task sealed holdout + protected anchoring files. The
   # holdout command stays INLINE (loop-process memory only) — it is never
   # written into the task workdir, so the fix-hook cannot read it from disk.

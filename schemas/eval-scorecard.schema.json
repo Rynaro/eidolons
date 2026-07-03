@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/eval-scorecard.schema.json",
+  "title": "Eidolons Eval Scorecard (matrix arm result)",
+  "description": "Written by `eidolons eval swe --matrix <arms.json>` to evals/results/<UTC-date>-<suite>-<label>.scorecard.json, one file per arm (--no-store opts out). A committed, diffable record consumed by `eidolons eval baseline`. Smoke scorecards (harness.smoke:true) are plumbing-validation only — they prove the orchestration, not model capability. See evals/results/README.md.",
+  "type": "object",
+  "required": ["schema_version", "suite", "arm", "started_at", "k", "tasks", "resolved_rate", "pass_k_rate", "harness"],
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "type": "string" },
+    "suite": { "type": "string", "minLength": 1, "description": "Suite identifier (the suite file's basename without .yaml), e.g. \"swe-suite\" or \"kupo-keep-suite\"." },
+    "arm": {
+      "type": "object",
+      "required": ["label", "fix_hook", "control"],
+      "additionalProperties": true,
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "fix_hook": { "type": "string" },
+        "env": { "type": "object" },
+        "control": { "type": "boolean" }
+      }
+    },
+    "started_at": { "type": "string", "description": "UTC timestamp (date -u) at run start." },
+    "k": { "type": "integer", "minimum": 1 },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "resolved", "passes", "attempts"],
+        "additionalProperties": true,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "resolved": { "type": "boolean", "description": "true iff at least one of the k runs reached final=passed." },
+          "passes": { "type": "integer", "minimum": 0, "description": "Number of the k runs that reached final=passed." },
+          "attempts": { "type": "integer", "minimum": 1, "description": "k — the number of independent runs attempted for this task." }
+        }
+      }
+    },
+    "resolved_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+    "pass_k_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "Fraction of tasks resolved in ALL k runs (pass^k)." },
+    "harness": {
+      "type": "object",
+      "required": ["nexus_version", "smoke"],
+      "additionalProperties": true,
+      "properties": {
+        "nexus_version": { "type": "string" },
+        "smoke": { "type": "boolean", "description": "true iff this arm ran under --smoke (gold_fix reference, no model) — a plumbing-validation run, never a capability claim." }
+      }
+    }
+  }
+}
