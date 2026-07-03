@@ -1683,6 +1683,41 @@ STUB
   ! [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
 }
 
+# ─── Wave-2 CORTEX/MEMORY: procedural-skill surfacing hint (session_start) ────
+
+@test "harness: session_start memory digest carries the [skill/...] hint line when digest non-empty" {
+  seed_manifest
+  seed_cortex
+  # A digest containing a procedural ('[skill/tier]') record, as memory.sh's
+  # Step 8 now renders them.
+  export FAKE_PREFLIGHT_OUTPUT="[skill/T1] Safe merge protocol: run make test before merging"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+  [[ "$_ctx" =~ "Lines tagged [skill/...] are verified procedural skills" ]]
+  [[ "$_ctx" =~ "prefer invoking them over re-deriving the procedure" ]]
+  [[ "$_ctx" =~ "[skill/T1] Safe merge protocol" ]]
+}
+
+@test "harness: session_start carries no [skill/...] hint line when preflight digest is empty" {
+  seed_manifest
+  seed_cortex
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook claude-code --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Roster Index" ]]
+  ! [[ "$_ctx" =~ "Lines tagged" ]]
+  ! [[ "$_ctx" =~ "Prior project memory (CRYSTALIUM recall)" ]]
+}
+
 # ─── ESL forcing-function: M1 (SessionStart) + M2 (UPS rider) ─────────────────
 #
 # Gates encoded here: G-OPTIN (P0, RED-first), G-PRESENT, G-MODE, G-RESUME,

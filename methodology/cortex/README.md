@@ -14,6 +14,7 @@ here.
 | `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
 | `memory-protocol.md` | Full 8-tool CRYSTALIUM surface, layer × tier × operation matrix, Dream consolidation knobs, skill_invoke sandboxing, ECL-envelope → ingest mapping | Composing memory-aware chains, auditing tier gates, configuring Dream |
 | `esl-protocol.md` | ESL cortex protocol — Part 1: lifecycle orchestration (per-Eidolon adoption: state ownership SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG, right-sizing gate, maker≠checker, tonberry v0.4.0 ergonomics); Part 2: escalation RECORD→HONOR (`eidolons mcp assess` lock-write, two-layer verify-mode fallback, idempotency carry-forward, N/L/R knobs) | Composing a non-trivial change in an ESL-enabled project; verifying ESL changes; choosing the verify enforcement mode; recording an escalation |
+| `tier-execution.md` | Tier-indexed execution dial — how decomposition SHAPE scales with the WORKER's model tier (light/standard/deep): fixed pipeline vs bounded loop vs thin loop, edit-format and localization rules per tier, and the cross-tier constants (external verification, maker≠checker, read-only tests) that never dial down | Calibrating scaffolding density for a dispatched task; auditing why a step's shape looks heavier or lighter than expected |
 
 ## Token budget note
 

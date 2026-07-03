@@ -150,6 +150,7 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 - **I-C8** — `[GAP]` and `[DISPUTED]` over silent merge when routing is genuinely ambiguous.
 - **I-C9** — Bash 3.2 compatibility for any CLI helper consuming a cortex artifact.
 - **I-C10** — Stderr discipline for all tooling logs; stdout reserved for captured values.
+- **I-C11** — Single writer per chain step — at most one Eidolon holds write authority at a time; scouts and checkers never write. Mechanical form: read-only tool allowlists (member-side) + strict-tier PreToolUse recipes (host-side).
 
 ---
 
@@ -157,6 +158,6 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 
 **ESL — Spec Lifecycle.** Eidolons changes may follow the **Eidolons Spec Lifecycle (ESL v1.0)**: a right-sizable state machine + a mandatory mechanical right-sizing gate (trivial→Kupo / lite→one-page / full→full) + a drift/living-spec contract, with **maker≠checker** enforced on the verify envelope. The grammar (states, `change.json` schema, bash conformance checker) lives at [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl); it reuses SPECTRA artifacts, ECL envelopes, and CRYSTALIUM layers. Opt-in for v1.0. **Escalation HONOR:** before `tonberry verify` on a project's changes, read `enforcement` from the tonberry `eidolons.mcp.lock` entry — `block` ⇒ pass `--mode block`; field absent ⇒ live `tonberry assess`, honor `recommended_mode`; tonberry absent ⇒ advisory. Record it with `eidolons mcp assess tonberry` (see `methodology/cortex/esl-protocol.md`). **Lifecycle (opt-in):** for ESL-enabled projects, non-trivial changes run the full lifecycle by default — propose→[deliberate]→implement→verify→drift→archive across SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG (maker≠checker), orchestrator-composed via tonberry; trivial→Kupo direct.
 
-*Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, ESL protocol, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
+*Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, ESL protocol, tier execution dial, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 
 <!-- eidolon:cortex end -->

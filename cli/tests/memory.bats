@@ -378,6 +378,57 @@ DSHIM
   [[ "$_argv" =~ "--query" ]]
 }
 
+# ─── procedural layer / skill surfacing (Wave-2 CORTEX/MEMORY) ────────────────
+
+@test "memory: docker args include --layers semantic,episodic,procedural" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv-layers.log"
+  setup_fake_docker_recall
+  export FAKE_DOCKER_OUTPUT="$VALID_RECALL_JSON"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --no-cache
+  [ "$status" -eq 0 ]
+  [ -f "$argv_log" ]
+  _argv="$(cat "$argv_log")"
+  [[ "$_argv" =~ "--layers" ]]
+  [[ "$_argv" =~ "semantic,episodic,procedural" ]]
+  # execution is deliberately excluded from the session-start digest recall.
+  ! [[ "$_argv" =~ "procedural,execution" ]]
+}
+
+@test "memory: procedural record in RecallResult renders with [skill/tier] prefix" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  _proc_json='{"records":[{"id":"p1","layer":"procedural","trust_tier":"T1","summary":"Safe merge protocol: run make test before merging","validation_state":"valid","importance":0.9,"last_access":"2026-07-01T00:00:00Z","content_ref":null,"score":0.95}],"slot_breakdown":{"procedural":1},"total_tokens":30,"evicted_count":0}'
+  export FAKE_DOCKER_OUTPUT="$_proc_json"
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --no-cache
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  [[ "$output" =~ "[skill/T1]" ]]
+  [[ "$output" =~ "Safe merge protocol: run make test before merging" ]]
+  # Must NOT render the raw layer name for procedural records.
+  ! [[ "$output" =~ "[procedural/T1]" ]]
+}
+
+@test "memory: mixed semantic + procedural records render [semantic/tier] and [skill/tier] respectively" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  _mixed_json='{"records":[{"id":"s1","layer":"semantic","trust_tier":"T1","summary":"Prior spec note","validation_state":"valid","importance":0.7,"last_access":"2026-07-01T00:00:00Z","content_ref":null,"score":0.8},{"id":"p1","layer":"procedural","trust_tier":"T1","summary":"Regression-check procedure","validation_state":"valid","importance":0.9,"last_access":"2026-07-01T00:00:00Z","content_ref":null,"score":0.95}],"slot_breakdown":{"semantic":1,"procedural":1},"total_tokens":50,"evicted_count":0}'
+  export FAKE_DOCKER_OUTPUT="$_mixed_json"
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --no-cache
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "[semantic/T1] Prior spec note" ]]
+  [[ "$output" =~ "[skill/T1] Regression-check procedure" ]]
+}
+
 # ─── digest format + 1500-char cap ────────────────────────────────────────────
 
 @test "memory: digest format is [layer/tier] summary; <=1500 chars" {
