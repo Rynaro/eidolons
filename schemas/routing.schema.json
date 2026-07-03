@@ -38,7 +38,19 @@
           "refuse_verbs": { "type": "array", "items": { "type": "string" } },
           "downstream": { "type": "array", "items": { "type": "string" } },
           "default_for_class": { "type": "string", "description": "Capability class this member is the default for when multiple members share it (two-coder routing tiebreak; the named-Eidolon bonus still overrides)." },
-          "requires_host_tier": { "type": "string", "description": "Optional: the host_tier the project must declare for this member to win the default_for_class tiebreak. When set and the project's host_tier does not match, the routing kernel falls through to the next-ranked candidate. A NAMED member still wins via the name bonus regardless of this gate." }
+          "requires_host_tier": { "type": "string", "description": "Optional: the host_tier the project must declare for this member to win the default_for_class tiebreak. When set and the project's host_tier does not match, the routing kernel falls through to the next-ranked candidate. A NAMED member still wins via the name bonus regardless of this gate." },
+          "degraded_mode": { "type": "string", "enum": ["fanout", "sample-select"], "description": "v1.1: mechanical degradation shape on weak/undeclared hosts. 'fanout' = loop-native N-shot; 'sample-select' = N-sample deliberation + rubric-agreement selection. The kernel only surfaces this on the routing artifact; execution belongs to the orchestrator/sandbox." },
+          "fallback": { "type": "string", "description": "v1.1: declared conservative peer (an eidolons key) the S1.7 host-tier fallthrough gate routes to instead of the generic next-ranked candidate, when the peer is known and non-refusing." },
+          "escalation": {
+            "type": "object",
+            "description": "v1.1: verifier-failed micro-task escalation. The kernel only surfaces this data on the routing artifact; execution belongs to the orchestrator/sandbox.",
+            "additionalProperties": true,
+            "properties": {
+              "on_fail": { "type": "string", "enum": ["reroute", "escalate-tier"] },
+              "reroute_to": { "type": "string", "description": "An eidolons key this member escalates to on verifier failure." },
+              "max_escalations": { "type": "integer", "minimum": 1 }
+            }
+          }
         }
       }
     },
@@ -65,6 +77,15 @@
           "stakes": { "type": "boolean" },
           "note": { "type": "string" }
         }
+      }
+    },
+    "trance": {
+      "type": "object",
+      "description": "v1.1: TRANCE model-tier split — computed artifact data (EIDOLONS.md §TRANCE 'model-tier upgrade'). Absent block → the kernel omits model_tier_lead/model_tier_workers (fail-open).",
+      "additionalProperties": true,
+      "properties": {
+        "lead_tier": { "type": "string", "enum": ["light", "standard", "deep"] },
+        "workers_tier": { "type": "string", "enum": ["light", "standard", "deep"] }
       }
     },
     "chains": {

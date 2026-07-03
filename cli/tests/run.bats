@@ -320,3 +320,83 @@ EOF
   [ "$status" -eq 0 ]
   [ "$(echo "$output" | jq -r '.selected[0]')" = "vivi" ]
 }
+
+# ── Wave-2 KERNEL: routing.yaml 1.1 artifact fields ────────────────────────
+# vivi/forge gain degraded_mode; kupo gains escalation; trance: block adds
+# model_tier_lead/model_tier_workers on trance-tier routes; the S1.7 host-tier
+# fallthrough gate honors a declared `fallback:` peer. All additive to the
+# artifact JSON — no existing field is removed or renamed.
+
+@test "W2-1: vivi dispatch artifact carries degraded_mode=fanout" {
+  run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "vivi" ]
+  [ "$(_field '.degraded_mode')" = "fanout" ]
+}
+
+@test "W2-2: chain artifact carries degraded_mode_per_step aligned with .chain (nulls where unset)" {
+  run eidolons run "map the codebase, spec the change, then implement it" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "chain" ]
+  [ "$(_field '.selected | join(",")')" = "atlas,spectra,vivi,idg" ]
+  # degraded_mode_per_step must be the same length as .chain and align by index.
+  [ "$(echo "$output" | jq -r '.degraded_mode_per_step | length')" = "$(echo "$output" | jq -r '.chain | length')" ]
+  # Only vivi (index 2) declares degraded_mode: fanout; the rest are null.
+  # (jq's join() renders null elements as empty strings, not the word "null".)
+  [ "$(_field '.degraded_mode_per_step | join(",")')" = ",,fanout," ]
+  [ "$(echo "$output" | jq -r '.degraded_mode_per_step[2]')" = "fanout" ]
+  [ "$(echo "$output" | jq -r '.degraded_mode_per_step[0]')" = "null" ]
+}
+
+@test "W2-3: kupo dispatch surfaces the escalation object verbatim" {
+  run eidolons run "fix the import in auth.py" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "kupo" ]
+  [ "$(_field '.escalation.on_fail')" = "reroute" ]
+  [ "$(_field '.escalation.reroute_to')" = "vivi" ]
+  [ "$(_field '.escalation.max_escalations')" = "1" ]
+}
+
+@test "W2-4: TRANCE-tier route carries model_tier_lead=deep + model_tier_workers=light" {
+  run eidolons run "map the entire monorepo data layer" --surface-modules 9 --trance --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.tier')" = "trance" ]
+  [ "$(_field '.model_tier_lead')" = "deep" ]
+  [ "$(_field '.model_tier_workers')" = "light" ]
+}
+
+@test "W2-5: declared-fallback — host-tier fallthrough with fallback: apivr routes to apivr" {
+  local custom="$BATS_TEST_TMPDIR/thinking-gate-fallback"
+  mkdir -p "$custom/roster"
+  cat > "$custom/roster/routing.yaml" <<'YAML'
+routing_version: "1.1"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  vivi:  { capability_class: coder, suggested_tier: standard, default_for_class: coder, requires_host_tier: thinking, fallback: apivr, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+  apivr: { capability_class: coder, suggested_tier: standard, trigger_verbs: ["implement","build","fix","code"], refuse_verbs: ["greenfield"], downstream: ["idg"] }
+signals: []
+chains: []
+YAML
+  # No host_tier in manifest (conservative) — the gate triggers, and vivi
+  # declares fallback: apivr, so the kernel must route to apivr via the
+  # declared-fallback path (not just the generic next-ranked candidate).
+  cat > eidolons.yaml <<'EOF'
+version: 1
+members:
+  - name: apivr
+    version: "^1.0.0"
+EOF
+  EIDOLONS_NEXUS="$custom" run eidolons run "implement the widget" --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.decision')" = "dispatch" ]
+  [ "$(echo "$output" | jq -r '.selected[0]')" = "apivr" ]
+  [ "$(echo "$output" | jq -r '.fallthrough_reason')" = "declared-fallback" ]
+}
+
+@test "W2-6: regression — an eidolon without the new keys emits degraded_mode=null and no escalation" {
+  run eidolons run "map the auth flow" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.selected[0]')" = "atlas" ]
+  [ "$(_field '.degraded_mode')" = "null" ]
+  [ "$(_field '.escalation')" = "null" ]
+}

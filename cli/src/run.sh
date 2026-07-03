@@ -216,10 +216,32 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
 | ([ $ranked[] | select(.score == $maxscore) ]) as $tied
 | (($tied | map(select(.default_for_class == .class)) | .[0]) // $ranked[0]) as $dflt_top
 | ($R.eidolons[$dflt_top.name].requires_host_tier // null) as $rht
-| (if ($rht != null) and ($rht != $ctx.host_tier) and ($dflt_top.named | not)
-   then ([ $ranked[] | select((.name != $dflt_top.name) and (.score >= ($maxscore * 0.99))) ] | .[0]) // $dflt_top
+| (($rht != null) and ($rht != $ctx.host_tier) and ($dflt_top.named | not)) as $gate_triggered
+# S1.7b (Wave-2): when the gate triggers, prefer the winner's DECLARED fallback
+# (routing.yaml `fallback: <peer>` — I-C2 DATA, no eval) over the generic
+# next-ranked candidate, provided the peer is a known, non-refusing Eidolon.
+# Falls back to the pre-existing next-ranked behavior when the key is absent,
+# the peer is unknown, or the peer itself would refuse this prompt.
+| ($R.eidolons[$dflt_top.name].fallback // null) as $declared_fallback_name
+| (if $declared_fallback_name != null
+   then ([ $ranked[] | select(.name == $declared_fallback_name) ] | .[0])
+   else null end) as $declared_fallback_entry
+| ($declared_fallback_entry != null
+   and (($declared_fallback_entry.refuse | any(. as $r | hasword($prompt; $r))) | not)) as $declared_fallback_usable
+| (if $gate_triggered
+   then (if $declared_fallback_usable
+         then $declared_fallback_entry
+         else ([ $ranked[] | select((.name != $dflt_top.name) and (.score >= ($maxscore * 0.99))) ] | .[0]) // $dflt_top
+         end)
    else $dflt_top
    end) as $top
+# fallthrough_reason: null when the gate never triggered; "declared-fallback"
+# when routed via the winner's declared peer; "host-tier-fallthrough" for the
+# pre-existing generic next-ranked behavior (gate triggered, no usable peer).
+| (if $gate_triggered
+   then (if $declared_fallback_usable then "declared-fallback" else "host-tier-fallthrough" end)
+   else null
+   end) as $fallthrough_reason
 | [ $ranked[] | select(.score >= $T.chain_floor) ] as $contenders
 | ([ $contenders[] | .class ] | unique) as $classes
 # Step 4 inputs — flags. Stakes = a stakes-marked signal OR explicit TRANCE token.
@@ -255,6 +277,9 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
                    | {eidolon:$st, role:$e.capability_class, edge_origin:"routing", template:$chain.name} ],
           model_tier_per_step: [ $chain.steps[] as $st
                                   | ($R.eidolons[$st].suggested_tier // $R.eidolons[$st].model_tier // "standard") ],
+          degraded_mode_per_step: [ $chain.steps[] as $st | ($R.eidolons[$st].degraded_mode // null) ],
+          escalation: ($R.eidolons[$chain.steps[0]].escalation // null),
+          fallthrough_reason: null,
           confidence: ([ $contenders[].score ] | min | if . > 1 then 1 else . end),
           clarification_request: null,
           refusal_rerouting: false,
@@ -265,6 +290,9 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
        selected: [$reroute.name],
        chain: [{eidolon:$reroute.name, role:$reroute.class, edge_origin:"routing"}],
        model_tier_per_step: [$reroute.model_tier],
+       degraded_mode: ($R.eidolons[$reroute.name].degraded_mode // null),
+       escalation: ($R.eidolons[$reroute.name].escalation // null),
+       fallthrough_reason: $fallthrough_reason,
        confidence: ($reroute.score | if . > 1 then 1 else . end),
        clarification_request: null,
        refusal_rerouting: true,
@@ -275,6 +303,9 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
        selected: [$top.name],
        chain: [{eidolon:$top.name, role:$top.class, edge_origin:"routing"}],
        model_tier_per_step: [$top.model_tier],
+       degraded_mode: ($R.eidolons[$top.name].degraded_mode // null),
+       escalation: ($R.eidolons[$top.name].escalation // null),
+       fallthrough_reason: $fallthrough_reason,
        confidence: ($top.score | if . > 1 then 1 else . end),
        clarification_request: null,
        refusal_rerouting: false,
@@ -284,6 +315,9 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
        selected: [],
        chain: [],
        model_tier_per_step: [],
+       degraded_mode: null,
+       escalation: null,
+       fallthrough_reason: $fallthrough_reason,
        confidence: ($top.score | if . > 1 then 1 else . end),
        clarification_request: "No Eidolon scored ≥ \($T.tau_standard). Clarify: (1) read-only or write? (2) which file/area? (3) decision, build, or debug?",
        refusal_rerouting: false,
@@ -299,6 +333,12 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
         + (if .tier == "trance"
            then ["[DECISION] TRANCE tier: complexity flag AND stakes flag both hold; max_parallel=\($T.max_parallel) (C1)"]
            else [] end)) }
+# TRANCE model-tier split (Wave-2): model_tier_lead / model_tier_workers come
+# from routing.yaml's top-level `trance:` block. Fail-open — an absent block
+# omits the fields entirely rather than defaulting them.
+| (if (.tier == "trance") and ($R.trance != null)
+   then . + { model_tier_lead: $R.trance.lead_tier, model_tier_workers: $R.trance.workers_tier }
+   else . end)
 | { _scores: ($ranked | map({name, class, score: (.score | if . > 1 then 1 else . end), raw, named})) } + .
 JQ
 

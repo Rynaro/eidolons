@@ -52,6 +52,7 @@ Deep checks (--deep):
   D11  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
   D12  harness lock⇄files consistency           shims exist+exec, settings/hooks/opencode.json valid+entries present, strict surfaces only on verified-sound hosts, effective-tier report
   D13  memory recallability probe                crystalium doctor + a probe recall via the docker transform; SKIP when crystalium not gated in; WARN (never FAIL) on 0 records or unreachable
+  D14  routing.yaml 1.1 shape                    nexus-level: routing_version present, degraded_mode/fallback/reroute_to/escalation/trance shape conformance; FAIL on violation (data integrity, not an environment probe)
 EOF
 }
 
@@ -860,6 +861,105 @@ deep_check_memory_recallability() {
   return 0
 }
 
+#
+# D14: routing.yaml 1.1 shape validation (nexus data integrity)
+# Nexus-level gate, not project-level: routing.yaml is nexus-side data (like
+# roster/index.yaml), not something a consumer project owns, so this check
+# does not iterate installed members — it validates the single nexus
+# roster/routing.yaml file directly (mirrors D10's `dirname "$ROSTER_FILE"`
+# resolution, cli/src/lib.sh:2141).
+#
+# Validates the v1.1 shape mechanically (jq/yq, no eval — I-C2):
+#   - routing_version is present (non-empty)
+#   - every eidolons.<n>.degraded_mode ∈ {fanout, sample-select}
+#   - every eidolons.<n>.fallback / escalation.reroute_to names an existing
+#     eidolons key (referential integrity)
+#   - eidolons.<n>.escalation.on_fail ∈ {reroute, escalate-tier}
+#   - eidolons.<n>.escalation.max_escalations is an integer >= 1
+#   - trance.lead_tier / trance.workers_tier ∈ {light, standard, deep}
+#
+# This is nexus DATA integrity, not an environment probe (unlike D13): FAIL
+# is correct here (fatal), mirroring D10's severity for a structural routing
+# misconfiguration. Returns the violation count (0 = pass, >=1 = fatal).
+deep_check_routing_shape() {
+  local routing_file; routing_file="$(dirname "$ROSTER_FILE")/routing.yaml"
+  if [[ ! -f "$routing_file" ]]; then
+    pass "D14 routing shape: no routing.yaml — skip"
+    return 0
+  fi
+
+  local routing_json; routing_json="$(yaml_to_json "$routing_file" 2>/dev/null || true)"
+  if [[ -z "$routing_json" ]]; then
+    warn "D14 routing shape: could not parse routing.yaml — skip"
+    return 0
+  fi
+
+  local violations
+  violations="$(printf '%s' "$routing_json" | jq -r '
+    . as $r
+    | ($r.eidolons // {}) as $E
+    | ($E | keys) as $names
+    | (if (($r.routing_version // "") == "") then "routing_version missing" else empty end),
+      ( $E | to_entries[] as $e |
+        ( ($e.value.degraded_mode // null) as $dm
+          | if $dm != null and ($dm != "fanout" and $dm != "sample-select")
+            then "\($e.key).degraded_mode invalid: \($dm) (expected fanout|sample-select)"
+            else empty end
+        ),
+        ( ($e.value.fallback // null) as $fb
+          | if $fb != null and ($names | index($fb) | not)
+            then "\($e.key).fallback references unknown eidolon: \($fb)"
+            else empty end
+        ),
+        ( ($e.value.escalation // null) as $esc
+          | if $esc != null then
+              ( ($esc.reroute_to // null) as $rt
+                | if $rt != null and ($names | index($rt) | not)
+                  then "\($e.key).escalation.reroute_to references unknown eidolon: \($rt)"
+                  else empty end
+              ),
+              ( ($esc.on_fail // null) as $of
+                | if $of != null and ($of != "reroute" and $of != "escalate-tier")
+                  then "\($e.key).escalation.on_fail invalid: \($of) (expected reroute|escalate-tier)"
+                  else empty end
+              ),
+              ( ($esc.max_escalations // null) as $me
+                | if $me != null and (($me | type) != "number" or ($me | floor) != $me or $me < 1)
+                  then "\($e.key).escalation.max_escalations invalid: \($me) (expected integer >= 1)"
+                  else empty end
+              )
+            else empty end
+        )
+      ),
+      ( ($r.trance // null) as $tr
+        | if $tr != null then
+            ( ($tr.lead_tier // null) as $lt
+              | if $lt != null and ($lt != "light" and $lt != "standard" and $lt != "deep")
+                then "trance.lead_tier invalid: \($lt) (expected light|standard|deep)"
+                else empty end
+            ),
+            ( ($tr.workers_tier // null) as $wt
+              | if $wt != null and ($wt != "light" and $wt != "standard" and $wt != "deep")
+                then "trance.workers_tier invalid: \($wt) (expected light|standard|deep)"
+                else empty end
+            )
+          else empty end
+      )
+  ' 2>/dev/null)"
+
+  local rc=0
+  if [[ -n "$violations" ]]; then
+    while IFS= read -r _v; do
+      [[ -z "$_v" ]] && continue
+      err "D14 routing shape: $_v"
+      rc=$((rc + 1))
+    done <<< "$violations"
+  else
+    pass "D14 routing shape: routing.yaml conforms to the 1.1 shape"
+  fi
+  return "$rc"
+}
+
 # ─── Methodology integrity (--deep) ─────────────────────────────────────
 # D1..D7 run only when --deep is passed. The fast checks (1..14) always run
 # first. Within this section, checks do NOT short-circuit on early failures:
@@ -1077,6 +1177,15 @@ if [[ "$DEEP" == "true" ]]; then
       # release gate. Always returns 0; not accumulated into ERRORS.
       echo "  D13 — memory recallability probe"
       deep_check_memory_recallability || true
+
+      # D14 — routing.yaml 1.1 shape validation (nexus data integrity)
+      # Nexus-level gate (not per-member): validates roster/routing.yaml's
+      # degraded_mode/fallback/escalation/trance shape + referential
+      # integrity. Fatal — data integrity, not an environment probe.
+      echo "  D14 — routing.yaml shape"
+      _d14_rc=0
+      deep_check_routing_shape || _d14_rc=$?
+      ERRORS=$((ERRORS + _d14_rc))
     fi
 
     # Remedy hint when methodology errors were found.
