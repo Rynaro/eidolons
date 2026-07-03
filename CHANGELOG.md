@@ -8,9 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-
 ### Added
 - crystalium v1.6.0 published in the roster with release integrity metadata.
+- **Eval matrix runner — the H-WIN instrument.** `eidolons eval swe --matrix <arms.json>` runs the whole suite once per arm ({label, fix_hook, env, control} — schema `schemas/eval-arms.schema.json`), each arm re-invoking the untouched single-arm path as a child process (the sandbox `--cascade` wrap pattern); emits one scorecard per arm plus a pairwise matrix summary vs the first control arm (rate deltas, newly-resolved/regressed task flips). `--smoke` composes (gold_fix plumbing validation, free — what CI runs); `--no-store` opts out of persistence. Works against both `swe-suite` and `kupo-keep-suite` via `--suite-file`. The runner exports `EIDOLONS_EVAL_TASK_BRIEF` so hooks receive task context.
+- **Committed scorecard store** — `evals/results/` + `schemas/eval-scorecard.schema.json`; the matrix writes `<date>-<suite>-<label>.scorecard.json` + `<date>-<suite>-matrix.json`. Smoke scorecards are plumbing-validation only, never capability claims (`harness.smoke` records it in data).
+- **`eidolons eval baseline <suite> [--label] [--against]`** — mechanical scorecard diff (jq-only): resolved-rate and pass^k deltas plus per-task flips; exit 5 on regression, 0 clean. The regression-tracking primitive the v2.0 audit flagged missing ("results are ephemeral; no baselines").
+- **`eidolons canary --host <h> | --all-hosts`** — per-host effective-tier canary: mirrors doctor D12's probes but verdicts PASS/FAIL/SKIP per host against the lockfile's `harness.hosts_wired`/`strict` expectations. (Found+fixed en route: the probe's reason side-channel was swallowed by `$(...)` subshell scoping.)
+- **`.github/workflows/live-eval.yml`** — weekly cron runs the matrix in `--smoke` (free plumbing canary); live billed runs require BOTH `vars.EIDOLONS_LIVE_EVAL_ENABLED == 'true'` AND `ANTHROPIC_API_KEY`, else the job states why and degrades to smoke. Results upload as artifacts, never auto-commit.
+- **H-WIN reference arms** — `evals/arms/h-win.json` pins the campaign's honest comparison: (light-tier + system discipline) vs (standard-tier + bare prompt), via `evals/hooks/keep-system.sh` (Kupo keep-or-kick/patch-verify discipline + the tier-execution light row) and `evals/hooks/keep-bare.sh` (task brief only). Hook prompts are versioned artifacts — changing them invalidates baselines.
+
+### Added (roster)
 - spectra v4.11.0 published in the roster with release integrity metadata.
 - apivr v3.8.0 published in the roster with release integrity metadata.
 - vivi v1.3.0 published in the roster with release integrity metadata.

@@ -598,6 +598,31 @@ eidolons canary atlas --validate /path/to/response.md
 
 ---
 
+## `eidolons eval swe --matrix` / `eidolons eval baseline`
+
+The (arm × suite) matrix runner and its regression tracker — the H-WIN measurement instrument.
+
+```
+eidolons eval swe --matrix evals/arms/h-win.json [--smoke] [--no-store] [--suite-file evals/kupo-keep-suite.yaml] [--k N]
+eidolons eval baseline <suite> [--label <arm-label>] [--against <scorecard.json>]
+```
+
+- **Matrix**: runs the whole suite once per arm (`{label, fix_hook, env, control}` — schema `schemas/eval-arms.schema.json`); each arm re-invokes the untouched single-arm path as a child process. Emits one scorecard per arm (`evals/results/<date>-<suite>-<label>.scorecard.json`, schema `schemas/eval-scorecard.schema.json`) plus `<date>-<suite>-matrix.json` (pairwise vs the first `control: true` arm: rate deltas, newly-resolved/regressed flips). `--smoke` = gold_fix plumbing validation (free; what CI runs; scorecards record `harness.smoke: true` and are never capability claims). `--no-store` skips persistence. `EIDOLONS_EVAL_RESULTS_DIR` overrides the store location. Hooks receive `EIDOLONS_EVAL_TASK_BRIEF` + the arm's env (`EIDOLONS_EVAL_MODEL`, `EIDOLONS_SANDBOX_MODEL_TIER`).
+- **Baseline**: mechanical jq diff of the two most recent scorecards for (suite, label) — or latest vs `--against`. Exit `0` clean · `5` regression (rate drop or any resolved→unresolved flip) · `1` misuse.
+- **Reference arms**: `evals/arms/h-win.json` pins the honest headline comparison — (light-tier model + system discipline, `keep-system.sh`) vs (standard-tier model + bare prompt, `keep-bare.sh`). Hook prompts are versioned artifacts; changing them invalidates baselines.
+- **CI**: `.github/workflows/live-eval.yml` — weekly cron runs `--matrix --smoke`; live billed runs require `vars.EIDOLONS_LIVE_EVAL_ENABLED == 'true'` AND `ANTHROPIC_API_KEY`, else the job degrades to smoke and says why.
+
+### `eidolons canary --host`
+
+```
+eidolons canary --host <claude-code|codex|copilot|cursor|opencode>   # one host
+eidolons canary --all-hosts                                          # all five
+```
+
+Per-host effective-tier canary: probes the actual host surfaces (shims present+executable, settings/hooks wired, strict recipes) against the lockfile's `harness.hosts_wired`/`strict` expectations — PASS (reality matches lock) / FAIL (lock claims what reality doesn't back, with reasons) / SKIP (host not wired). Same probes as doctor D12, but per-host verdicts instead of one aggregate.
+
+---
+
 ## `eidolons eval compliance`
 
 A/B behavioural instrument: does the advisory harness injection actually change a host

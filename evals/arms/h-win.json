@@ -1,0 +1,23 @@
+{
+  "description": "H-WIN reference matrix: the HONEST comparison for the headline claim 'a light-tier model inside the system >= a standard-tier model bare' is (light+system) vs (standard+bare) — not bare-vs-system at the same tier. Model aliases (haiku/sonnet) are the tier->alias mapping from roster/model-profiles.yaml; review before a live (non --smoke) run.",
+  "arms": [
+    {
+      "label": "bare-standard",
+      "fix_hook": "evals/hooks/keep-bare.sh",
+      "env": {
+        "EIDOLONS_EVAL_MODEL": "sonnet",
+        "EIDOLONS_SANDBOX_MODEL_TIER": "standard"
+      },
+      "control": true
+    },
+    {
+      "label": "system-light",
+      "fix_hook": "evals/hooks/keep-system.sh",
+      "env": {
+        "EIDOLONS_EVAL_MODEL": "haiku",
+        "EIDOLONS_SANDBOX_MODEL_TIER": "light"
+      },
+      "control": false
+    }
+  ]
+}

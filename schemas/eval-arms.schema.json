@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Rynaro/eidolons/schemas/eval-arms.schema.json",
+  "title": "Eidolons Eval Matrix Arms",
+  "description": "Consumed by `eidolons eval swe --matrix <arms.json>` (and any suite it runs, e.g. evals/swe-suite.yaml or evals/kupo-keep-suite.yaml via --suite-file). Each arm re-runs the EXISTING single-arm suite path (all tasks x --k) with the arm's fix_hook + env exported, producing one scorecard (schemas/eval-scorecard.schema.json) per arm. Exactly one arm SHOULD carry control:true — the matrix summary's pairwise comparisons (resolved-rate delta, pass^k delta, per-task flips) are computed against it.",
+  "type": "object",
+  "required": ["arms"],
+  "additionalProperties": true,
+  "properties": {
+    "description": { "type": "string" },
+    "arms": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["label", "fix_hook"],
+        "additionalProperties": true,
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "description": "Unique arm identifier. Used verbatim in the stored scorecard filename (evals/results/<date>-<suite>-<label>.scorecard.json) — keep it filename-safe."
+          },
+          "fix_hook": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The edit/LLM step for this arm (passed to `eidolons sandbox loop --fix-hook`). Ignored under --smoke (every arm falls back to the suite's gold_fix so the matrix can validate plumbing without a model)."
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": { "type": "string" },
+            "description": "Environment variables exported for this arm's run (and inherited by fix_hook/judge_hook subprocesses), e.g. {\"EIDOLONS_SANDBOX_MODEL_TIER\": \"light\", \"EIDOLONS_EVAL_MODEL\": \"haiku\"}."
+          },
+          "control": {
+            "type": "boolean",
+            "default": false,
+            "description": "Marks this arm as the baseline the matrix summary's pairwise comparisons are computed against. At most one arm should set this true; the first control:true arm wins if more than one is marked."
+          }
+        }
+      }
+    }
+  }
+}

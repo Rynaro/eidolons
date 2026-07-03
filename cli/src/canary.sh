@@ -33,6 +33,8 @@ Usage:
   eidolons canary <name> --validate <file>     Validate saved LLM output
   eidolons canary --list                       List Eidolons with/without missions
   eidolons canary --memory                     Crystalium memory liveness probe
+  eidolons canary --host <h>                   Harness lock⇄reality PASS/FAIL/SKIP for host h
+  eidolons canary --all-hosts                  Same, iterated over all known hosts
 
 Options:
   --validate <file>    Validate LLM response from file against mission criteria
@@ -40,14 +42,17 @@ Options:
   --mission <id>       Select non-default mission by ID
   --memory             Recall-only crystalium liveness check (SKIP when
                         crystalium is not gated in .mcp.json + eidolons.mcp.lock)
+  --host <h>           Harness canary for one host (claude-code, codex, copilot,
+                        cursor, opencode) — see 'What --host/--all-hosts check' below
+  --all-hosts          Harness canary for every known host
   --json               Emit machine-readable JSON on stdout
   -h, --help           Show this help
 
 Exit codes:
   0   Prompt printed / validation PASS (or INCONCLUSIVE only) / list printed /
-      --memory SKIP or PASS or INCONCLUSIVE
-  1   Validation had ≥1 FAIL criterion / --memory FAIL
-  2   Misuse: unknown name, missing file, unknown flag
+      --memory SKIP or PASS or INCONCLUSIVE / --host,--all-hosts all PASS or SKIP
+  1   Validation had ≥1 FAIL criterion / --memory FAIL / --host,--all-hosts any FAIL
+  2   Misuse: unknown name, missing file, unknown flag, unknown host
 
 What it does:
   1. 'eidolons canary <name>' reads <cache>/evals/canary-missions.md and prints
@@ -63,6 +68,19 @@ What it does:
      `canary` CLI subcommand runs a 10-mission A/B eval against a fresh
      EPHEMERAL store (not the live project store), so it is not surfaced
      here; and the write (`commit`) path is MCP-only, unreachable from bash.
+
+What --host/--all-hosts check:
+  Compares the EFFECTIVE harness state on disk against eidolons.lock's
+  harness.{hosts_wired,strict,strict_modes,shim_paths} claim, mirroring the
+  probes doctor's D12 (deep_check_harness_consistency in cli/src/lib.sh)
+  derives — shims present+executable, host settings/hooks file present+valid
+  (+wired entries for claude-code/codex), strict recorded backed by a
+  PreToolUse shim (+ opencode's advisory strict_modes). Unlike D12 (which
+  aggregates every host into one pass/fail count), this emits one PASS/FAIL/
+  SKIP verdict per host:
+    PASS — lock claims host is wired AND every probe for it is backed by reality.
+    FAIL — lock claims host is wired but reality does not back the claim.
+    SKIP — lock does not claim host is wired (or no harness: key at all).
 
 Validation DSL verbs:
   MUST|SHOULD contain heading: <pattern>
@@ -81,6 +99,8 @@ NAME=""
 VALIDATE_FILE=""
 LIST_MODE=false
 MEMORY_MODE=false
+HOST_NAME=""
+ALL_HOSTS_MODE=false
 MISSION_ID=""
 JSON=false
 
@@ -92,6 +112,15 @@ while [[ $# -gt 0 ]]; do
       ;;
     --memory)
       MEMORY_MODE=true
+      shift
+      ;;
+    --host)
+      [[ $# -gt 1 ]] || { printf 'canary: --host requires a host argument\n' >&2; exit 2; }
+      HOST_NAME="$2"
+      shift 2
+      ;;
+    --all-hosts)
+      ALL_HOSTS_MODE=true
       shift
       ;;
     --validate)
@@ -577,6 +606,217 @@ run_memory_mode() {
   exit 0
 }
 
+# ─── MODE: host / all-hosts ───────────────────────────────────────────────────
+#
+# Compares the EFFECTIVE on-disk harness state against eidolons.lock's
+# harness.{hosts_wired,strict,strict_modes,shim_paths} claim, mirroring the
+# probes doctor's D12 (deep_check_harness_consistency, cli/src/lib.sh) derives
+# — shims present+executable, host settings/hooks file present+valid (+wired
+# entries for claude-code), strict recorded backed by a PreToolUse shim (+
+# opencode's advisory-only strict_modes rule; cursor strict is unsound/out of
+# scope, mirroring D12's err there). Unlike D12 (one aggregate pass/fail
+# count across every host), this emits ONE PASS/FAIL/SKIP verdict per host:
+#   SKIP — lock does not claim the host is wired (or no harness: key at all).
+#   FAIL — lock claims the host is wired but reality does not back the claim.
+#   PASS — lock claims the host is wired and every probe for it is backed.
+
+_CANARY_KNOWN_HOSTS="claude-code codex copilot cursor opencode"
+
+_canary_known_host() {
+  local h="$1" k
+  for k in $_CANARY_KNOWN_HOSTS; do
+    [[ "$h" == "$k" ]] && return 0
+  done
+  return 1
+}
+
+# _canary_host_probe HOST LOCK_JSON → sets _HOST_VERDICT (PASS|FAIL|SKIP) and
+# _HOST_REASONS (semicolon-joined) as PLAIN GLOBALS. Call as a bare statement
+# — NEVER via $(...) — command substitution runs the function body in a
+# subshell, and its variable assignments would never reach the caller.
+_canary_host_probe() {
+  local host="$1" lock_json="$2"
+  _HOST_VERDICT=""
+  _HOST_REASONS=""
+
+  local schema
+  schema="$(printf '%s' "$lock_json" | jq -r '.harness.schema_version // "absent"' 2>/dev/null || echo "absent")"
+  if [[ "$schema" == "absent" ]]; then
+    _HOST_REASONS="harness not installed (no harness: key in eidolons.lock)"
+    _HOST_VERDICT="SKIP"
+    return 0
+  fi
+
+  local hosts_wired
+  hosts_wired="$(printf '%s' "$lock_json" | jq -r '(.harness.hosts_wired // []) | join(",")' 2>/dev/null || echo "")"
+  if ! printf '%s' ",$hosts_wired," | grep -q ",$host,"; then
+    _HOST_REASONS="lock does not claim $host is wired (not in harness.hosts_wired)"
+    _HOST_VERDICT="SKIP"
+    return 0
+  fi
+
+  local strict_wired is_strict
+  strict_wired="$(printf '%s' "$lock_json" | jq -r '(.harness.strict // []) | join(",")' 2>/dev/null || echo "")"
+  is_strict=false
+  printf '%s' ",$strict_wired," | grep -q ",$host," && is_strict=true
+
+  local fail_count=0
+
+  if [[ "$host" == "cursor" && "$is_strict" == true ]]; then
+    _HOST_REASONS="${_HOST_REASONS}cursor in strict[] is unsound (out of P3 scope); "
+    fail_count=$((fail_count + 1))
+  fi
+
+  # Shim checks: every shim_path in the lock whose basename is prefixed
+  # "<host>-" must exist and be executable.
+  local sp
+  while IFS= read -r sp; do
+    [[ -z "$sp" ]] && continue
+    case "$(basename "$sp")" in
+      "${host}-"*) : ;;
+      *) continue ;;
+    esac
+    if [[ ! -f "$sp" ]]; then
+      _HOST_REASONS="${_HOST_REASONS}shim missing: $sp; "
+      fail_count=$((fail_count + 1))
+    elif [[ ! -x "$sp" ]]; then
+      _HOST_REASONS="${_HOST_REASONS}shim not executable: $sp; "
+      fail_count=$((fail_count + 1))
+    fi
+  done < <(printf '%s' "$lock_json" | jq -r '(.harness.shim_paths // [])[]' 2>/dev/null)
+
+  case "$host" in
+    claude-code)
+      if [[ ! -f .claude/settings.json ]]; then
+        _HOST_REASONS="${_HOST_REASONS}.claude/settings.json missing; "
+        fail_count=$((fail_count + 1))
+      elif ! jq empty .claude/settings.json 2>/dev/null; then
+        _HOST_REASONS="${_HOST_REASONS}.claude/settings.json is not valid JSON; "
+        fail_count=$((fail_count + 1))
+      else
+        local ups_n
+        ups_n="$(jq -r '(.hooks.UserPromptSubmit // []) | map(.hooks[]?.command? // "") | map(select(startswith(".eidolons/harness/"))) | length' .claude/settings.json 2>/dev/null || echo "0")"
+        if [[ "$ups_n" == "0" ]]; then
+          _HOST_REASONS="${_HOST_REASONS}.claude/settings.json missing eidolons UserPromptSubmit entry; "
+          fail_count=$((fail_count + 1))
+        fi
+      fi
+      if [[ "$is_strict" == true ]] && [[ ! -x .eidolons/harness/hooks/claude-code-PreToolUse.sh ]]; then
+        _HOST_REASONS="${_HOST_REASONS}strict recorded but claude-code-PreToolUse.sh missing/not-executable; "
+        fail_count=$((fail_count + 1))
+      fi
+      ;;
+    codex)
+      if [[ ! -f .codex/hooks.json ]]; then
+        _HOST_REASONS="${_HOST_REASONS}.codex/hooks.json missing; "
+        fail_count=$((fail_count + 1))
+      elif ! jq empty .codex/hooks.json 2>/dev/null; then
+        _HOST_REASONS="${_HOST_REASONS}.codex/hooks.json is not valid JSON; "
+        fail_count=$((fail_count + 1))
+      fi
+      if [[ "$is_strict" == true ]] && [[ ! -x .eidolons/harness/hooks/codex-PreToolUse.sh ]]; then
+        _HOST_REASONS="${_HOST_REASONS}strict recorded but codex-PreToolUse.sh missing/not-executable; "
+        fail_count=$((fail_count + 1))
+      fi
+      ;;
+    copilot)
+      if [[ ! -x .eidolons/harness/hooks/copilot-SessionStart.sh ]]; then
+        _HOST_REASONS="${_HOST_REASONS}copilot-SessionStart.sh missing/not-executable; "
+        fail_count=$((fail_count + 1))
+      fi
+      ;;
+    opencode)
+      if [[ "$is_strict" == true ]]; then
+        local oc_mode
+        oc_mode="$(printf '%s' "$lock_json" | jq -r '.harness.strict_modes.opencode // "absent"' 2>/dev/null || echo "absent")"
+        if [[ "$oc_mode" != "advisory" ]]; then
+          _HOST_REASONS="${_HOST_REASONS}strict_modes.opencode != advisory (got: $oc_mode); "
+          fail_count=$((fail_count + 1))
+        fi
+        if [[ ! -f .opencode/plugins/eidolons.js ]]; then
+          _HOST_REASONS="${_HOST_REASONS}strict recorded but .opencode/plugins/eidolons.js missing; "
+          fail_count=$((fail_count + 1))
+        fi
+      fi
+      ;;
+    cursor)
+      : # base tier has no dedicated on-disk surface (no shims, no settings
+        # file) — hosts_wired membership + the strict[] check above are all
+        # D12 checks for cursor.
+      ;;
+  esac
+
+  if [[ "$fail_count" -eq 0 ]]; then
+    _HOST_VERDICT="PASS"
+  else
+    _HOST_VERDICT="FAIL"
+  fi
+  return 0
+}
+
+_canary_load_lock_json() {
+  if [[ -f "$PROJECT_LOCK" ]]; then
+    yaml_to_json "$PROJECT_LOCK" 2>/dev/null || echo '{}'
+  else
+    echo '{}'
+  fi
+}
+
+run_host_mode() {
+  local host="$1"
+  if ! _canary_known_host "$host"; then
+    printf 'canary: unknown host: %s (want one of: %s)\n' "$host" "$_CANARY_KNOWN_HOSTS" >&2
+    exit 2
+  fi
+
+  local lock_json
+  lock_json="$(_canary_load_lock_json)"
+  _canary_host_probe "$host" "$lock_json"
+  local verdict="$_HOST_VERDICT" reasons="$_HOST_REASONS"
+
+  if [[ "$JSON" == "true" ]]; then
+    printf '{"schema_version":"1.0","mode":"host","results":[{"host":%s,"verdict":%s,"reason":%s}]}\n' \
+      "$(_json_string "$host")" "$(_json_string "$verdict")" "$(_json_string "$reasons")"
+  else
+    printf 'eidolons canary --host %s\n' "$host"
+    printf '  %s — %s\n' "$verdict" "${reasons:-lock claim backed by on-disk reality}"
+  fi
+
+  [[ "$verdict" == "FAIL" ]] && exit 1
+  exit 0
+}
+
+run_all_hosts_mode() {
+  local lock_json any_fail=false
+  lock_json="$(_canary_load_lock_json)"
+
+  [[ "$JSON" == "true" ]] || printf 'eidolons canary --all-hosts\n'
+
+  local json_entries="" first=true
+  local h verdict reasons
+  for h in $_CANARY_KNOWN_HOSTS; do
+    _canary_host_probe "$h" "$lock_json"
+    verdict="$_HOST_VERDICT"
+    reasons="$_HOST_REASONS"
+    [[ "$verdict" == "FAIL" ]] && any_fail=true
+    if [[ "$JSON" == "true" ]]; then
+      local entry
+      entry="$(printf '{"host":%s,"verdict":%s,"reason":%s}' \
+        "$(_json_string "$h")" "$(_json_string "$verdict")" "$(_json_string "$reasons")")"
+      if [[ "$first" == "true" ]]; then json_entries="$entry"; first=false; else json_entries="$json_entries,$entry"; fi
+    else
+      printf '  %-12s %s — %s\n' "$h" "$verdict" "${reasons:-lock claim backed by on-disk reality}"
+    fi
+  done
+
+  if [[ "$JSON" == "true" ]]; then
+    printf '{"schema_version":"1.0","mode":"all-hosts","results":[%s]}\n' "$json_entries"
+  fi
+
+  [[ "$any_fail" == "true" ]] && exit 1
+  exit 0
+}
+
 # ─── MODE: prompt ─────────────────────────────────────────────────────────────
 
 run_prompt_mode() {
@@ -878,6 +1118,14 @@ fi
 
 if [[ "$MEMORY_MODE" == "true" ]]; then
   run_memory_mode
+fi
+
+if [[ "$ALL_HOSTS_MODE" == "true" ]]; then
+  run_all_hosts_mode
+fi
+
+if [[ -n "$HOST_NAME" ]]; then
+  run_host_mode "$HOST_NAME"
 fi
 
 if [[ -z "$NAME" ]]; then

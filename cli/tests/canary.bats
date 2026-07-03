@@ -531,3 +531,160 @@ DSHIM
   [ "$status" -eq 1 ]
   [[ "$output" =~ "FAIL — crystalium unreachable for probe" ]]
 }
+
+# ─── CAN-20..CAN-28: --host / --all-hosts (harness lock⇄reality canary) ───────
+#
+# Mirrors the probes doctor's D12 (deep_check_harness_consistency, lib.sh)
+# derives, scoped to ONE host per call with a PASS/FAIL/SKIP verdict instead
+# of D12's single aggregate error count. Fixtures write eidolons.lock's
+# harness: block + the on-disk shim/settings files directly (no real
+# `eidolons harness install` run — same offline-fixture discipline as the
+# rest of this file).
+
+_can_seed_lock_harness_claude_codex_wired() {
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-07-01T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members: []
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+    - codex
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+    - .eidolons/harness/hooks/codex-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/codex-SessionStart.sh
+EOF
+}
+
+_can_seed_claude_code_shims_and_settings_ok() {
+  mkdir -p .eidolons/harness/hooks .claude
+  printf '#!/bin/sh\n' > .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  printf '#!/bin/sh\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'EOF'
+{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]}],"SessionStart":[{"hooks":[{"type":"command","command":".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}]}}
+EOF
+}
+
+@test "CAN-20: --host SKIP — no eidolons.lock at all" {
+  run eidolons canary --host claude-code
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "SKIP" ]]
+  [[ "$output" =~ "harness not installed" ]]
+}
+
+@test "CAN-21: --host SKIP — lock present but host not in harness.hosts_wired" {
+  _can_seed_lock_harness_claude_codex_wired
+  run eidolons canary --host opencode
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "SKIP" ]]
+  [[ "$output" =~ "does not claim opencode is wired" ]]
+}
+
+@test "CAN-22: --host PASS — claude-code fully backed by on-disk reality" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_ok
+  run eidolons canary --host claude-code
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "PASS" ]]
+}
+
+@test "CAN-23: --host FAIL — codex wired in lock but shims/hooks.json absent" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_ok
+  # codex deliberately left unbacked (no shims, no .codex/hooks.json).
+  run eidolons canary --host codex
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL" ]]
+  [[ "$output" =~ "shim missing" ]]
+}
+
+@test "CAN-24: --host FAIL — claude-code settings.json invalid JSON" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_ok
+  printf 'not json' > .claude/settings.json
+  run eidolons canary --host claude-code
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL" ]]
+  [[ "$output" =~ "not valid JSON" ]]
+}
+
+@test "CAN-25: --host unknown host name exits 2 (misuse)" {
+  run eidolons canary --host not-a-real-host
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "unknown host" ]]
+}
+
+@test "CAN-26: --all-hosts exits 1 when any host FAILs, prints one line per known host" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_ok
+  run eidolons canary --all-hosts
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "PASS" ]]
+  [[ "$output" =~ "claude-code" ]]
+  [[ "$output" =~ "codex" ]]
+  [[ "$output" =~ "copilot" ]]
+  [[ "$output" =~ "cursor" ]]
+  [[ "$output" =~ "opencode" ]]
+}
+
+@test "CAN-27: --all-hosts exits 0 when every wired host PASSes (unwired hosts SKIP, not FAIL)" {
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-07-01T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members: []
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+  _can_seed_claude_code_shims_and_settings_ok
+  run eidolons canary --all-hosts
+  [ "$status" -eq 0 ]
+}
+
+@test "CAN-28: --all-hosts --json emits one PASS/FAIL/SKIP result per known host" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_ok
+  run eidolons canary --all-hosts --json
+  [ "$status" -eq 1 ]
+  echo "$output" | jq -e '.schema_version and .mode == "all-hosts"' >/dev/null
+  [ "$(echo "$output" | jq -r '.results | length')" = "5" ]
+  [ "$(echo "$output" | jq -r '.results[] | select(.host == "claude-code") | .verdict')" = "PASS" ]
+  [ "$(echo "$output" | jq -r '.results[] | select(.host == "codex") | .verdict')" = "FAIL" ]
+  [ "$(echo "$output" | jq -r '.results[] | select(.host == "opencode") | .verdict')" = "SKIP" ]
+}
+
+@test "CAN-29: --host FAIL — strict recorded but claude-code PreToolUse shim absent" {
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-07-01T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members: []
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+  strict:
+    - claude-code
+  strict_modes:
+    claude-code: block
+EOF
+  _can_seed_claude_code_shims_and_settings_ok
+  # PreToolUse shim deliberately absent despite strict[] claiming it.
+  run eidolons canary --host claude-code
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL" ]]
+  [[ "$output" =~ "strict recorded" ]]
+}

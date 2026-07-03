@@ -29,7 +29,7 @@ usage() {
   cat <<EOF
 eidolons eval — measure the Eidolons against labelled ground truth (no LLM)
 
-Usage: eidolons eval <routing|quality|swe|compliance> [OPTIONS]
+Usage: eidolons eval <routing|quality|swe|compliance|baseline> [OPTIONS]
 
 routing     Run the DETERMINISTIC routing benchmark: drive 'eidolons run' against
             evals/routing-suite.yaml and score per-category accuracy + cost.
@@ -39,13 +39,21 @@ quality     HUMAN-IN-THE-LOOP contract-conformance quality benchmark (emit a mis
 swe         SWE-task-solving harness: drive 'eidolons sandbox loop' over a task
             suite (resolved-rate + pass^k). The bundled suite is a HARNESS
             SELF-TEST; a real number needs an external suite + a model --fix-hook
-            + a real --via sandbox. See 'eidolons eval swe --help'.
+            + a real --via sandbox. Also the MATRIX runner: 'eidolons eval swe
+            --matrix <arms.json>' runs several arms (schemas/eval-arms.schema.json)
+            through the same suite and writes evals/results/ scorecards
+            (schemas/eval-scorecard.schema.json). See 'eidolons eval swe --help'.
 compliance  A/B routing-compliance instrument: measures whether advisory harness
             injection changes host LLM delegation behaviour. ARM A (harness wired)
             vs ARM B (prose cortex only). Reports delegation_rate, correct_target_rate,
             Δ(A−B), per-class breakdown, pass^k, GATE vs 80% FORGE reversal threshold.
             --smoke runs the whole pipeline against a fake driver (CI never bills).
             See 'eidolons eval compliance --help'.
+baseline    Diff the two most recent evals/results/ scorecards for a
+            (suite, label) pair (or the latest vs --against <file>):
+            resolved-rate delta, pass^k delta, per-task newly-resolved /
+            regressed. Exit 0 = no regression, 5 = regression, 1 = misuse.
+            jq-only, mechanical — no LLM judge. See 'eidolons eval baseline --help'.
 
 Options (routing):
   --suite public|holdout|all   Which suite(s) to run (default: public).
@@ -68,7 +76,8 @@ case "$SUBCMD" in
   quality) exec bash "$SELF_DIR/eval_quality.sh" "$@" ;;
   swe) exec bash "$SELF_DIR/eval_swe.sh" "$@" ;;
   compliance) exec bash "$SELF_DIR/eval_compliance.sh" "$@" ;;
-  *) die "Unknown subcommand: $SUBCMD (want: routing | quality | swe | compliance). See 'eidolons eval --help'" ;;
+  baseline) exec bash "$SELF_DIR/eval_baseline.sh" "$@" ;;
+  *) die "Unknown subcommand: $SUBCMD (want: routing | quality | swe | compliance | baseline). See 'eidolons eval --help'" ;;
 esac
 
 SUITE_SEL="public"

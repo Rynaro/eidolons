@@ -1,0 +1,150 @@
+name: Live Eval (H-WIN matrix)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Skeleton for the Wave-5 measurement instrument: `eidolons eval swe --matrix`
+# run against a real model. SAFE BY DEFAULT — read this comment block before
+# touching the gating logic below.
+#
+#   - The WEEKLY CRON path runs `--matrix --smoke` ONLY. Smoke mode uses each
+#     task's gold_fix reference patch (no model, no network, no cost) — it is
+#     a plumbing canary that proves the matrix/scorecard machinery still
+#     works, never a capability measurement. See evals/results/README.md.
+#
+#   - The `workflow_dispatch` path is the ONLY way to run a LIVE (billed)
+#     measurement, and only when BOTH of the following hold:
+#       1. the repo (or environment) VARIABLE `EIDOLONS_LIVE_EVAL_ENABLED`
+#          is exactly the string 'true'
+#          (Settings -> Secrets and variables -> Actions -> Variables), AND
+#       2. the SECRET `ANTHROPIC_API_KEY` is set
+#          (Settings -> Secrets and variables -> Actions -> Secrets).
+#     If either is missing, the job prints EXACTLY why it degraded and runs
+#     `--matrix --smoke` instead — it never silently skips, and it never
+#     bills without both gates explicitly open.
+#
+#   - This is a SKELETON: the default arms preset (evals/arms/h-win.json)
+#     and the `claude` CLI install step are illustrative. Review the model
+#     aliases in evals/arms/h-win.json (they come from
+#     roster/model-profiles.yaml's tier->alias mapping) and the Claude Code
+#     CLI install command below against current docs before the first real
+#     (non-smoke) run — prompts and model ids are versioned/drift over time
+#     (see evals/hooks/*.sh header comments: prompts are versioned artifacts).
+#
+#   - Nothing in this workflow commits evals/results/ back to the repo. A
+#     live run's scorecards are uploaded as a build artifact for a human to
+#     review and commit deliberately (evals/results/ is a curated, committed
+#     log — see evals/results/README.md — not something CI should write to
+#     main unattended).
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Suite to run"
+        type: choice
+        options: [swe-suite, kupo-keep-suite]
+        default: swe-suite
+      arms_preset:
+        description: "Path (relative to repo root) to the arms.json to run"
+        type: string
+        default: evals/arms/h-win.json
+  schedule:
+    # Weekly Monday 06:00 UTC — the smoke-only plumbing canary described
+    # above. Free (no model call): every task's gold_fix stands in for a
+    # real --fix-hook, so this proves orchestration, not capability.
+    - cron: '0 6 * * 1'
+
+jobs:
+  matrix-eval:
+    name: eval swe --matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install jq + yq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+          sudo wget -qO /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Make CLI executable
+        run: chmod +x cli/eidolons cli/src/*.sh evals/hooks/*.sh
+
+      # ── The billed-run gate. Read the header comment above before editing. ──
+      - name: Decide mode (live vs smoke) — the billed-run gate
+        id: gate
+        env:
+          LIVE_ENABLED: ${{ vars.EIDOLONS_LIVE_EVAL_ENABLED }}
+          HAS_KEY: ${{ secrets.ANTHROPIC_API_KEY != '' && 'true' || 'false' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          MODE="smoke"
+          REASON=""
+
+          if [[ "$EVENT_NAME" == "schedule" ]]; then
+            REASON="scheduled (cron) run — this path is ALWAYS --smoke (a free plumbing canary), regardless of the live-run gate."
+          else
+            # workflow_dispatch: BOTH gates must be open for a live run.
+            if [[ "$LIVE_ENABLED" == "true" && "$HAS_KEY" == "true" ]]; then
+              MODE="live"
+            else
+              if [[ "$LIVE_ENABLED" != "true" ]]; then
+                REASON="${REASON}repo/environment variable EIDOLONS_LIVE_EVAL_ENABLED is not 'true' (got: '${LIVE_ENABLED:-<unset>}'). "
+              fi
+              if [[ "$HAS_KEY" != "true" ]]; then
+                REASON="${REASON}the ANTHROPIC_API_KEY secret is not set. "
+              fi
+              REASON="${REASON}Degrading to --smoke — no billed call will be made."
+            fi
+          fi
+
+          echo "mode=$MODE" >> "$GITHUB_OUTPUT"
+          if [[ "$MODE" == "smoke" ]]; then
+            echo "::notice::live-eval degraded to --smoke: ${REASON}"
+          else
+            echo "::notice::live-eval gates open — running a LIVE (billed) matrix eval."
+          fi
+
+      - name: Run eval swe --matrix
+        env:
+          EIDOLONS_NEXUS: ${{ github.workspace }}
+          EIDOLONS_HOME: ${{ github.workspace }}/.live-eval-home
+          # Only meaningful when steps.gate.outputs.mode == live; harmless
+          # (unused) under --smoke, which never invokes a --fix-hook that
+          # calls `claude`.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -euo pipefail
+          SUITE_FILE="evals/${{ github.event.inputs.suite || 'swe-suite' }}.yaml"
+          ARMS_FILE="${{ github.event.inputs.arms_preset || 'evals/arms/h-win.json' }}"
+          [[ -f "$SUITE_FILE" ]] || { echo "::error::suite file not found: $SUITE_FILE"; exit 1; }
+          [[ -f "$ARMS_FILE" ]]  || { echo "::error::arms file not found: $ARMS_FILE"; exit 1; }
+
+          MODE_FLAG=""
+          if [[ "${{ steps.gate.outputs.mode }}" == "smoke" ]]; then
+            MODE_FLAG="--smoke"
+          fi
+
+          # `claude` CLI is required for a LIVE run (the reference hooks in
+          # evals/hooks/ invoke it directly). Install it here rather than
+          # unconditionally above so the free smoke/cron path never pays for
+          # a network install it does not need. Verify this install command
+          # against current Claude Code docs before relying on it.
+          if [[ "${{ steps.gate.outputs.mode }}" == "live" ]]; then
+            npm install -g @anthropic-ai/claude-code
+            command -v claude >/dev/null 2>&1 || { echo "::error::claude CLI install failed — cannot run live"; exit 1; }
+          fi
+
+          bash cli/eidolons eval swe --suite-file "$SUITE_FILE" --matrix "$ARMS_FILE" $MODE_FLAG --json \
+            | tee "$RUNNER_TEMP/matrix-summary.json"
+
+      - name: Upload scorecards (evals/results/) as a build artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-scorecards-${{ github.run_id }}
+          path: evals/results/
+          if-no-files-found: warn
+          retention-days: 90
