@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-06-29T19:34Z"
+updated_at: "2026-07-03T12:23Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -255,9 +255,9 @@ eidolons:
       repo: Rynaro/SPECTRA
       default_ref: main
     versions:
-      latest: "4.10.0"
+      latest: "4.11.0"
       pins:
-        stable: "4.10.0"
+        stable: "4.11.0"
       releases:
         4.2.10:
           tag: v4.2.10
@@ -408,6 +408,15 @@ eidolons:
           commit: be06a1f20250f14ae51e1c7d43b5be2a6adb5503
           tree: 1d481fb4450d00ed2d811347785b2070fdeb8858
           archive_sha256: 9c152aef9214e598d59c4886c3a1263e2619a2971fc12c5f03c2fdc0abe79e65
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        4.11.0:
+          tag: v4.11.0
+          commit: a570f4380b58fb8945060943e1e1feceb1b8ed70
+          tree: bbc6546a50f1ba76aa62f8d5d6afbae27bf3b756
+          archive_sha256: 0e9fcbcb4bab1c018eb532a2ec6f79dccc10abdbd2312fd437a9d8f2cb0df9e7
           manifest_sha256:
           provenance:
             github_attestation: true
