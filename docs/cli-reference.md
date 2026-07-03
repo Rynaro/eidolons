@@ -311,6 +311,8 @@ Vendor-neutral routing kernel. Reads a prompt and emits a host-dialect hook arti
 | Flag | Purpose |
 |------|---------|
 | `--hook HOST` | Output mode: wrap routing artifact in HOST-dialect `hookSpecificOutput` JSON. The injected context includes the route, tier, chain, and the per-step model tiers (`model tier: <t>` / `model tiers: atlas=standard → spectra=deep → …`) with an instruction to honor them via the host's model selection mechanism. |
+
+Routing-1.1 artifact fields (additive, from `roster/routing.yaml`): `degraded_mode` / `degraded_mode_per_step` (weak-host loop shape per Eidolon), `escalation` (surfaced verbatim from the selected Eidolon — execution belongs to the orchestrator/sandbox), `fallthrough_reason` (`declared-fallback` when the host-tier gate routed to a declared `fallback:` peer), and — at trance tier only — `model_tier_lead` / `model_tier_workers`.
 | `--session-start` | Emit cortex digest (used by `SessionStart` shims). |
 | `--stdin` | Read prompt from event JSON `.prompt` field on stdin instead of positional arg. |
 | `--verify` | Verify the ECL envelope on an incoming hand-off before routing (warn mode). |
@@ -337,6 +339,10 @@ Exit 0 when D12 passes or skips; the harness error counter increments on FATAL i
 - Skips cleanly when crystalium is not in both `.mcp.json` and `eidolons.mcp.lock`.
 - Runs the container's `crystalium doctor` and a `recall --k 3` probe via the same docker-args transform as `memory preflight` (shared plumbing: `cli/src/lib_memory_probe.sh`); hard 10 s timeout each.
 - PASS with record count, or `WARN crystalium store returns 0 records — memory is effectively write-only (check scope keys, crystal status, embeddings)`. Unreachable/timeout ⇒ WARN. Never FATAL.
+
+### `doctor --deep` D14 gate
+
+**D14 — routing shape** (nexus-level, fatal — this is data integrity, not a probe): validates `roster/routing.yaml` 1.1 keys mechanically — `degraded_mode ∈ {fanout, sample-select}`, `fallback`/`escalation.reroute_to` reference existing eidolons (dangling = FAIL), `escalation.on_fail ∈ {reroute, escalate-tier}`, `max_escalations` int ≥ 1, `trance.{lead,workers}_tier ∈ {light, standard, deep}`.
 
 ---
 
