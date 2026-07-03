@@ -89,10 +89,16 @@ mcps:
       repo: "Rynaro/Junction"
       install_url: "https://raw.githubusercontent.com/Rynaro/Junction/main/install.sh"
     versions:
-      latest: "0.3.0"
+      latest: "0.4.0"
       pins:
-        stable: "0.3.0"
+        stable: "0.4.0"
       releases:
+        "0.4.0":
+          # harness.inject implemented (ISE gates: S-1 shape, S-2 authorization,
+          # S-3 high-trust); trace root migrated to ECL §5 (.eidolons/.trace/),
+          # JUNCTION_TRACE_ROOT env now honored; legacy read-fallback retained.
+          archive_sha256: ""
+          released_at: "2026-07-03T00:00:00Z"
         "0.3.0":
           archive_sha256: ""
           released_at: "2026-06-10T00:00:00Z"
@@ -135,10 +141,16 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.5.1"
+      latest: "1.6.0"
       pins:
-        stable: "1.5.1"
+        stable: "1.6.0"
       releases:
+        "1.6.0":
+          # Memory diagnosability + guards: canonical scope keys, summary quality
+          # gate, recall --explain, doctor arm/status stats, never-deprecate-last-
+          # checkpoint guard; serverInfo version fix. 9 tools.
+          digest: "sha256:66e17627164dbcec76b6daac7d28caafdd2ec0e6108974a9b3cff5e19e212e8f"
+          released_at: "2026-07-03T00:00:00Z"
         "0.1.0":
           digest: "sha256:f524654407dc50409713bfb156cb1e473597d81ab87a3f84730afa629f21d88d"
           released_at: "2026-05-28T00:00:00Z"
@@ -211,10 +223,16 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/tonberry"
     versions:
-      latest: "0.4.0"
+      latest: "0.5.0"
       pins:
-        stable: "0.4.0"
+        stable: "0.5.0"
       releases:
+        "0.5.0":
+          # ESL 1.1 re-vendor (closes the eidolons-esl#2 parity drift): C8 fresh-
+          # context attestation at byte-parity, memory_preflight accepted end-to-end.
+          # 11 tools; ESL_VERSION 1.1.
+          digest: "sha256:f78d1dc94cb5f4d05d607e86a1e83fc32daff1c73b3b2336e38ef504243e1bdf"
+          released_at: "2026-07-03T00:00:00Z"
         "0.3.0":
           # Multi-arch index (linux/amd64 + linux/arm64). 11 tools — lifecycle ops
           # + EARS C7 advisory; verify byte-identical to the ESL bash checker.
