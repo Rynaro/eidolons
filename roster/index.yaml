@@ -903,9 +903,9 @@ eidolons:
       repo: Rynaro/FORGE
       default_ref: main
     versions:
-      latest: "1.9.1"
+      latest: "1.10.0"
       pins:
-        stable: "1.9.1"
+        stable: "1.10.0"
       releases:
         1.2.1:
           tag: v1.2.1
@@ -1038,6 +1038,15 @@ eidolons:
           commit: 52bf9dd4577e7c9f976c4170679ca49b7cb3e467
           tree: 898e1d380177f01a9ee6bc1c4ba1c5b3a7a4a825
           archive_sha256: c054aaf512c631ba73c9543e1b53a3d65045ee24f42d36546799ce32058c3274
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.10.0:
+          tag: v1.10.0
+          commit: 9f18b7ec9334927cf181fcfa3d4cdb629be1efb1
+          tree: 18d8557aecca3f218b92ea3c6e91cab3a70c6d10
+          archive_sha256: 4b0467b24031f6105cc54a1e9dba19939f59bbbef25d83913b433f845fa863a0
           manifest_sha256:
           provenance:
             github_attestation: true
