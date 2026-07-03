@@ -320,3 +320,39 @@ print(",".join(str(x) for x in sorted(seen)))
 ')"
   [ "$widths" = "66" ]
 }
+
+# ─── ui_confirm non-TTY guard ─────────────────────────────────────────────
+# Regression: a raw `read` on an open-but-silent non-TTY stdin blocked
+# `eidolons sync`'s preview prompt forever (observed hanging a test runner
+# for 16+ minutes). Non-TTY stdin must resolve to the default immediately,
+# with a stderr note proving the guard branch fired (an EOF `read` would
+# print the prompt line instead).
+
+@test "ui: ui_confirm non-TTY EOF stdin resolves default-y to 0 immediately" {
+  run bash -c '. "$EIDOLONS_ROOT/cli/src/ui/theme.sh"; . "$EIDOLONS_ROOT/cli/src/ui/prompt.sh"; ui_confirm "Proceed?" default-y </dev/null'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"non-interactive stdin, assuming yes"* ]]
+}
+
+@test "ui: ui_confirm non-TTY EOF stdin resolves default-n to 1 immediately" {
+  run bash -c '. "$EIDOLONS_ROOT/cli/src/ui/theme.sh"; . "$EIDOLONS_ROOT/cli/src/ui/prompt.sh"; ui_confirm "Proceed?" default-n </dev/null'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"non-interactive stdin, assuming no"* ]]
+}
+
+@test "ui: ui_confirm non-TTY piped 'n' overrides default-y (R5 contract)" {
+  run bash -c '. "$EIDOLONS_ROOT/cli/src/ui/theme.sh"; . "$EIDOLONS_ROOT/cli/src/ui/prompt.sh"; printf "n\n" | ui_confirm "Proceed?" default-y'
+  [ "$status" -eq 1 ]
+}
+
+@test "ui: ui_confirm non-TTY piped 'y' overrides default-n" {
+  run bash -c '. "$EIDOLONS_ROOT/cli/src/ui/theme.sh"; . "$EIDOLONS_ROOT/cli/src/ui/prompt.sh"; printf "y\n" | ui_confirm "Proceed?" default-n'
+  [ "$status" -eq 0 ]
+}
+
+@test "ui: ui_confirm non-TTY silent-open stdin times out to default (no hang)" {
+  # stdin open but silent (sleep holds the pipe); must resolve in ~5s, not hang.
+  run bash -c '. "$EIDOLONS_ROOT/cli/src/ui/theme.sh"; . "$EIDOLONS_ROOT/cli/src/ui/prompt.sh"; sleep 8 | ui_confirm "Proceed?" default-y'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"non-interactive stdin, assuming yes"* ]]
+}
