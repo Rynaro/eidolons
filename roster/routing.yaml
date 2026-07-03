@@ -16,8 +16,8 @@
 # Vendor model strings live ONLY in roster/model-profiles.yaml (PD #162).
 # Tier ladder: light < standard < deep.
 
-routing_version: "1.0"
-updated_at: "2026-06-09T00:00Z"
+routing_version: "1.1"
+updated_at: "2026-07-02T00:00Z"
 
 # ─── Gate thresholds (Dispatch Protocol Step 2 / TRANCE Step 4) ─────────────────
 thresholds:
@@ -28,6 +28,16 @@ thresholds:
   max_parallel: 5          # TRANCE cost ceiling C1
   surface_files: 25        # large-surface complexity flag (C5)
   surface_modules: 5
+
+# ─── TRANCE model-tier split (EIDOLONS.md §TRANCE) ───────────────────────────
+# lead_tier / workers_tier are vendor-neutral tier words (light|standard|deep).
+# Computed artifact data — replaces the EIDOLONS.md §TRANCE prose "model-tier
+# upgrade (lead=deep, workers=light)". The kernel surfaces model_tier_lead /
+# model_tier_workers on the artifact only when tier == "trance" (fail-open:
+# absent block → fields omitted, not defaulted).
+trance:
+  lead_tier: deep
+  workers_tier: light
 
 # ─── Class-level tier defaults ───────────────────────────────────────────────
 # Used by the model resolver when a given Eidolon has no per-id suggested_tier.
@@ -61,6 +71,10 @@ eidolons:
                               # (iterate on thinking hosts / fanout on standard hosts)
     default_for_class: coder  # Stage 3b — the default coder seat (measurement-validated:
                               # fanout pass^2 1.00 vs APIVR-Δ 0.67, weak-host adversarial suite)
+    degraded_mode: fanout     # loop-shape on weak/undeclared hosts (replaces the
+                              # prose-only "degrade to APIVR-Δ")
+    fallback: apivr           # declared conservative peer for the S1.7 host-tier
+                              # fallthrough gate (routing.yaml is DATA; I-C2)
     trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
@@ -81,6 +95,9 @@ eidolons:
   forge:
     capability_class: reasoner
     suggested_tier: deep
+    degraded_mode: sample-select  # N-sample deliberation + rubric-agreement selection
+                                   # on weak hosts (sampling replaces unreliable
+                                   # single-trace self-correction)
     trigger_verbs: ["trade-off", "tradeoff", "which approach", "should we", "ambiguous", "counterfactual", "deliberate", "x or y", "decide between"]
     refuse_verbs: ["implement", "retrieve", "synthesize prose"]
     downstream: []
@@ -97,6 +114,10 @@ eidolons:
     # poaches APIVR-Δ/Vivi coding work. Kupo is orchestrator-dispatched (subagents cannot
     # spawn subagents); the localized_micro_task signal boosts Kupo over the coder when
     # a fix-family verb co-occurs with a localized-task marker (+0.15 → 0.95 > 0.8).
+    escalation:                # verifier-failed micro-task escalates once to the coder;
+      on_fail: reroute         # the kernel only SURFACES this data in the artifact —
+      reroute_to: vivi         # execution belongs to the orchestrator/sandbox.
+      max_escalations: 1
     trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "pin the version", "autofix lint", "format fix", "one-line fix", "single-line edit", "update fixture", "update snapshot", "grep-replace", "search-replace", "config key edit", "fix the typo", "fix the path"]
     refuse_verbs: ["design", "cross-cutting refactor", "refactor across", "plan", "novel architecture", "greenfield", "open-ended", "loop-native campaign", "implement feature"]
     downstream: []

@@ -162,6 +162,7 @@ _main() {
       cortex_digest="${cortex_digest}
 
 ## Prior project memory (CRYSTALIUM recall)
+Lines tagged [skill/...] are verified procedural skills — prefer invoking them over re-deriving the procedure.
 ${mem_digest}"
     fi
 

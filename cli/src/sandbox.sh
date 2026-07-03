@@ -37,6 +37,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_patch_applier.sh"
+# Absolute path to THIS script, used only by --cascade to re-invoke the whole
+# loop (untouched) per tier — mirrors how eval_swe.sh already shells out to
+# sandbox.sh by absolute path.
+SELF_FILE="$SELF_DIR/sandbox.sh"
 
 usage() {
   cat <<EOF
@@ -50,7 +54,8 @@ Usage:
                           [--protect <glob>] [--regression <cmd>] [--reproduction <cmd>]
                           [--k N] [--lint-hook <cmd>] [--holdout <cmd>]
                           [--fresh-context] [--require-red] [--fanout N]
-                          [--judge-hook <cmd>] [--allow-unsafe-host] [--json]
+                          [--judge-hook <cmd>] [--cascade <tier1,tier2[,tier3]>]
+                          [--allow-test-edits] [--allow-unsafe-host] [--json]
   eidolons sandbox replay <out_dir> [--json]
   eidolons sandbox apply  --proposal <edit-proposal.json> --root <scratch-dir> [--json]
 
@@ -103,8 +108,47 @@ apply   Deterministically apply an Eidolon's EMITTED edit-proposal (search/repla
                                 diff (EIDOLONS_SANDBOX_DIFF) before acceptance;
                                 non-zero exit rejects it (layered hack detection
                                 — a sealed holdout alone is insufficient).
+          --cascade <t1,t2[,t3]>  post-generation tier cascade: run the ENTIRE
+                                loop above (attempts, pass^k, fanout — all
+                                UNTOUCHED) at t1 with EIDOLONS_SANDBOX_MODEL_TIER=t1
+                                exported to --fix-hook/--judge-hook; on success,
+                                stop and report cascade_tier_used=t1. If the
+                                loop exhausts its attempts without a pass^k
+                                green, log an escalation to stderr, reset the
+                                tree to --base (same reset the fanout candidates
+                                already use), and re-run the WHOLE loop at t2
+                                (then t3 if given). Exhausting the last tier
+                                keeps the normal cap-out exit code. Tiers are
+                                vendor-neutral and MUST be a strictly ascending
+                                subsequence of light < standard < deep (2 or 3
+                                of them) — the LOOP decides when to escalate,
+                                never the model; every pre-generation difficulty
+                                router is ML-shaped, run-cheap→verify→escalate
+                                is the only deterministic-capable routing class.
+                                The sandbox stays model-agnostic: --fix-hook
+                                (and --judge-hook) is the one that maps a tier
+                                name to a concrete model. Omit --cascade and
+                                EIDOLONS_SANDBOX_MODEL_TIER is never exported —
+                                byte-identical to pre-cascade behavior.
+          --allow-test-edits    Opt OUT of the default-on test-tamper ratchet
+                                (see below). Logged once; use only when the
+                                fix-hook is trusted to edit its own tests.
         The fix-hook receives EIDOLONS_SANDBOX_FEEDBACK (structured JSON: failing
         markers, file:line loci, full-log path) — localized, not a raw tail.
+
+        Test-file anti-tamper ratchet (ON by default; --allow-test-edits opts
+        out): at loop start, every file under the workdir whose name matches
+        *test*/*spec* (case-insensitive; .git and --out excluded; capped at
+        5000 files with a warning) is snapshotted as path+sha256. After EACH
+        candidate patch (--fix-hook call, in both iterate and --fanout modes),
+        BEFORE the verifier runs, the snapshot is rechecked: a missing or
+        hash-changed file REJECTS that attempt/candidate as test-tamper (a
+        failed attempt, not a loop abort — the fix-hook gets another try) and
+        is counted in the summary as tamper_rejections=N. New test files are
+        always allowed (adding tests is legitimate). Strong policies routinely
+        exploit weak verifiers by deleting/editing the failing test instead of
+        fixing the code; the verifier must confirm the frozen checks are the
+        ones that actually ran.
 
 The nexus DELEGATES isolation (--via) and the edit step (--fix-hook); it owns only
 the bounded control flow, diff-not-apply discipline, the anti-reward-hacking gates,
@@ -149,6 +193,8 @@ FRESH_CONTEXT=false
 REQUIRE_RED=false
 FANOUT=1
 JUDGE_HOOK=""
+CASCADE=""
+ALLOW_TEST_EDITS=false
 TEST_CMD=()
 REPLAY_OUT_DIR=""
 PROPOSAL=""
@@ -175,6 +221,8 @@ while [[ $# -gt 0 ]]; do
     --require-red)       REQUIRE_RED=true; shift ;;
     --fanout)            FANOUT="${2:-1}"; shift 2 ;;
     --judge-hook)        JUDGE_HOOK="${2:-}"; shift 2 ;;
+    --cascade)           CASCADE="${2:-}"; shift 2 ;;
+    --allow-test-edits)  ALLOW_TEST_EDITS=true; shift ;;
     --proposal)          PROPOSAL="${2:-}"; shift 2 ;;
     --root)              ROOT_DIR="${2:-}"; shift 2 ;;
     --)                  _after_dd=true; shift ;;
@@ -392,6 +440,72 @@ _tree_reset() {
   return 0
 }
 
+# ── Test-file anti-tamper ratchet ──────────────────────────────────────────────
+# Weak-verifier exploitation counter-measure: a strong policy can pass a weak
+# verifier by deleting/editing the failing test instead of fixing the code. The
+# ratchet snapshots (path+sha256) every workdir file whose name matches the
+# common test-file convention (*test*/*spec*, case-insensitive) at loop start,
+# then rechecks after every candidate patch, BEFORE the verifier runs. Missing
+# or hash-changed files = tamper (that attempt/candidate is REJECTED, not the
+# whole loop — the fix-hook gets another try). New test files are always fine.
+_TEST_GLOB_CAP=5000
+
+_ratchet_find_files() {
+  # Excludes .git (noise/perf) and $OUT_DIR (the loop's own artifacts never
+  # look like tests, but excluding them keeps the manifest honestly scoped to
+  # the workdir under test). Case-insensitive *test*/*spec* filename match.
+  find . -path './.git' -prune -o -path "./$OUT_DIR" -prune -o -type f \
+    \( -iname '*test*' -o -iname '*spec*' \) -print 2>/dev/null \
+    | sed 's#^\./##' | sort
+}
+
+_ratchet_snapshot() {
+  local manifest="$OUT_DIR/.test-manifest.json" files total tmp f h
+  files="$(_ratchet_find_files)"
+  total=0
+  [[ -n "$files" ]] && total="$(printf '%s\n' "$files" | grep -c .)"
+  if [[ "$total" -gt "$_TEST_GLOB_CAP" ]]; then
+    [[ "$OUT" != "json" ]] && warn "sandbox loop: test-tamper ratchet — $total test-glob files found; capping the snapshot at $_TEST_GLOB_CAP"
+    files="$(printf '%s\n' "$files" | head -n "$_TEST_GLOB_CAP")"
+  fi
+  tmp="$(mktemp)"
+  : > "$tmp"
+  if [[ -n "$files" ]]; then
+    while IFS= read -r f; do
+      [[ -z "$f" ]] && continue
+      h="$(sha256_file "$f" 2>/dev/null || echo "")"
+      printf '%s\t%s\n' "$f" "$h" >> "$tmp"
+    done <<< "$files"
+  fi
+  jq -R -s -c '[split("\n") | .[] | select(length>0) | split("\t") | {path:.[0], sha256:.[1]}]' "$tmp" > "$manifest" 2>/dev/null \
+    || printf '[]' > "$manifest"
+  rm -f "$tmp"
+  return 0
+}
+
+# Echoes one "missing: <path>" / "changed: <path>" line per violation (empty
+# output = clean). Always returns 0 — callers test output emptiness, not $?.
+_ratchet_check() {
+  local manifest="$OUT_DIR/.test-manifest.json" n i path expect actual
+  [[ -f "$manifest" ]] || return 0
+  n="$(jq -r 'length' "$manifest" 2>/dev/null || echo 0)"
+  i=0
+  while [[ "$i" -lt "$n" ]]; do
+    path="$(jq -r ".[$i].path" "$manifest" 2>/dev/null || echo "")"
+    expect="$(jq -r ".[$i].sha256" "$manifest" 2>/dev/null || echo "")"
+    if [[ -n "$path" ]]; then
+      if [[ ! -f "$path" ]]; then
+        printf 'missing: %s\n' "$path"
+      else
+        actual="$(sha256_file "$path" 2>/dev/null || echo "")"
+        [[ "$actual" != "$expect" ]] && printf 'changed: %s\n' "$path"
+      fi
+    fi
+    i=$((i + 1))
+  done
+  return 0
+}
+
 case "$SUB" in
   # ── check: isolation preflight + refusal policy ─────────────────────────────
   check)
@@ -441,6 +555,123 @@ case "$SUB" in
       [[ -n "$FIX_HOOK" ]] || die "--fanout needs a --fix-hook (the candidate generator)"
     fi
 
+    # ── --cascade: validate the tier list (2-3 members, strictly ascending,
+    # drawn from the closed vendor-neutral ladder light < standard < deep). ────
+    CASCADE_TIERS=()
+    if [[ -n "$CASCADE" ]]; then
+      _casc_old_ifs="$IFS"; IFS=','
+      # shellcheck disable=SC2206
+      CASCADE_TIERS=($CASCADE)
+      IFS="$_casc_old_ifs"
+      [[ "${#CASCADE_TIERS[@]}" -ge 2 && "${#CASCADE_TIERS[@]}" -le 3 ]] \
+        || die "--cascade needs 2-3 comma-separated tiers from light,standard,deep (got: $CASCADE)"
+      _casc_prev_rank=0
+      for _casc_t in "${CASCADE_TIERS[@]}"; do
+        case "$_casc_t" in
+          light)    _casc_rank=1 ;;
+          standard) _casc_rank=2 ;;
+          deep)     _casc_rank=3 ;;
+          *) die "--cascade: unknown tier '$_casc_t' (want: light, standard, deep)" ;;
+        esac
+        [[ "$_casc_rank" -gt "$_casc_prev_rank" ]] \
+          || die "--cascade tiers must be strictly ascending (light < standard < deep); got: $CASCADE"
+        _casc_prev_rank="$_casc_rank"
+      done
+    fi
+
+    # ── --cascade dispatch: re-invoke THIS script once per tier, wrapping the
+    # entire loop below (attempts/pass^k/fanout — UNTOUCHED) untouched. The loop
+    # decides escalation, never the model; the fix-hook maps tier -> a concrete
+    # model. Runs as a SEPARATE process per tier so EIDOLONS_SANDBOX_MODEL_TIER
+    # is exported into that process's environment (and inherited by its own
+    # --fix-hook/--judge-hook `bash -c` calls) with zero changes to the loop's
+    # own fix-hook/judge-hook invocation code. ─────────────────────────────────
+    if [[ "${#CASCADE_TIERS[@]}" -gt 0 ]]; then
+      _casc_out_root="$OUT_DIR"
+      [[ -z "$_casc_out_root" ]] && _casc_out_root=".eidolons/sandbox/run-$(date +%Y%m%d-%H%M%S)"
+      mkdir -p "$_casc_out_root"
+
+      _casc_have_git=false
+      git rev-parse --git-dir >/dev/null 2>&1 && _casc_have_git=true
+      _casc_base_sha=""
+      [[ "$_casc_have_git" == true ]] && _casc_base_sha="$(git rev-parse "$BASE" 2>/dev/null || echo "")"
+      if [[ "$_casc_have_git" == true ]]; then
+        OUT_DIR="$_casc_out_root"; base_sha="$_casc_base_sha"
+        _untracked_snapshot   # baseline for the fresh-workdir reset between tiers
+      fi
+
+      _casc_ledger="{}"; _casc_child_rc=0; _casc_tier_used=""; _casc_first=true
+      for _casc_tier in "${CASCADE_TIERS[@]}"; do
+        if [[ "$_casc_first" != true && "$_casc_have_git" == true ]]; then
+          OUT_DIR="$_casc_out_root"; base_sha="$_casc_base_sha"
+          _tree_reset   # fresh workdir before the next tier (same reset --fanout uses)
+        fi
+        _casc_first=false
+        _casc_tier_out="$_casc_out_root/cascade-$_casc_tier"
+        mkdir -p "$_casc_tier_out"
+
+        _casc_args=()
+        [[ -n "$TESTS" ]]              && _casc_args+=(--tests "$TESTS")
+        [[ -n "$REGRESSION" ]]         && _casc_args+=(--regression "$REGRESSION")
+        [[ -n "$REPRODUCTION" ]]       && _casc_args+=(--reproduction "$REPRODUCTION")
+        [[ -n "$FIX_HOOK" ]]           && _casc_args+=(--fix-hook "$FIX_HOOK")
+        [[ -n "$VIA" ]]                && _casc_args+=(--via "$VIA")
+        [[ "$ALLOW_UNSAFE" == true ]]  && _casc_args+=(--allow-unsafe-host)
+        _casc_args+=(--max-attempts "$MAX_ATTEMPTS")
+        _casc_args+=(--base "$BASE")
+        [[ -n "$PROTECT" ]]            && _casc_args+=(--protect "$PROTECT")
+        _casc_args+=(--k "$K")
+        [[ -n "$LINT_HOOK" ]]          && _casc_args+=(--lint-hook "$LINT_HOOK")
+        [[ -n "$HOLDOUT" ]]            && _casc_args+=(--holdout "$HOLDOUT")
+        [[ "$FRESH_CONTEXT" == true ]] && _casc_args+=(--fresh-context)
+        [[ "$REQUIRE_RED" == true ]]   && _casc_args+=(--require-red)
+        _casc_args+=(--fanout "$FANOUT")
+        [[ -n "$JUDGE_HOOK" ]]         && _casc_args+=(--judge-hook "$JUDGE_HOOK")
+        [[ "$ALLOW_TEST_EDITS" == true ]] && _casc_args+=(--allow-test-edits)
+        _casc_args+=(--out "$_casc_tier_out" --json)
+        if [[ -z "$TESTS" && ${#TEST_CMD[@]} -gt 0 ]]; then
+          _casc_args+=(--)
+          _casc_args+=("${TEST_CMD[@]}")
+        fi
+
+        [[ "$OUT" != "json" ]] && [[ "$_casc_tier" != "${CASCADE_TIERS[0]}" ]] && \
+          warn "sandbox loop: cascade escalating to tier=$_casc_tier (previous tier exhausted its attempts without a pass^k green)"
+        _casc_child_rc=0
+        _casc_ledger="$(EIDOLONS_SANDBOX_MODEL_TIER="$_casc_tier" bash "$SELF_FILE" loop "${_casc_args[@]}")" || _casc_child_rc=$?
+        _casc_final="$(printf '%s' "$_casc_ledger" | jq -r '.final // "error"' 2>/dev/null || echo error)"
+        if [[ "$_casc_final" == "passed" ]]; then
+          _casc_tier_used="$_casc_tier"
+          break
+        fi
+        [[ "$OUT" != "json" ]] && warn "sandbox loop: cascade tier=$_casc_tier exhausted (final=$_casc_final)"
+      done
+
+      _casc_out_ledger="$(printf '%s' "$_casc_ledger" | jq -c --arg t "$_casc_tier_used" '. + {cascade_tier_used:$t}')"
+      printf '%s\n' "$_casc_out_ledger" > "$_casc_out_root/loop.json"
+      _casc_sha="$( { shasum -a 256 "$_casc_out_root/loop.json" 2>/dev/null || sha256sum "$_casc_out_root/loop.json" 2>/dev/null; } | awk '{print $1}' )"
+      _casc_size="$(cksum "$_casc_out_root/loop.json" 2>/dev/null | awk '{print $2}' || echo "0")"
+      jq -nc --arg sha "${_casc_sha:-}" --argjson sz "${_casc_size:-0}" --arg out "$_casc_out_root" \
+        '{envelope_version:"1.0", performative:"inform",
+          sender:{eidolon:"eidolons-sandbox",version:"1.0"}, receiver:{eidolon:"",version:""},
+          artifact:{kind:"loop-ledger",path:"loop.json"},
+          integrity:{method:"sha256",value:$sha,size_bytes:$sz}, trace:{out_dir:$out}}' \
+        > "$_casc_out_root/loop.json.envelope.json"
+
+      if [[ "$OUT" == "json" ]]; then
+        printf '%s\n' "$_casc_out_ledger"
+      else
+        printf '%ssandbox loop (cascade)%s  %s  cascade_tier_used=%s  tiers=%s\n' \
+          "${BOLD:-}" "${RESET:-}" "$(printf '%s' "$_casc_out_ledger" | jq -r '.final')" \
+          "${_casc_tier_used:-<none>}" "$CASCADE"
+        if [[ -n "$_casc_tier_used" ]]; then
+          ok "cascade: tests pass at tier=$_casc_tier_used — review the candidate diff and apply it yourself (diff-not-apply)"
+        else
+          warn "cascade: all tiers ($CASCADE) exhausted — see $_casc_out_root"
+        fi
+      fi
+      exit "$_casc_child_rc"
+    fi
+
     # Output dir (diff-not-apply artifacts + VIGIL hand-off live here).
     if [[ -z "$OUT_DIR" ]]; then OUT_DIR=".eidolons/sandbox/run-$(date +%Y%m%d-%H%M%S)"; fi
     mkdir -p "$OUT_DIR"
@@ -455,6 +686,15 @@ case "$SUB" in
 
     # Anti-reward-hacking: baseline signature of the protected anchoring tests.
     protect_baseline="$(_protect_snapshot)"
+
+    # ── Test-file anti-tamper ratchet (default-on; --allow-test-edits opts out).
+    # Snapshot BEFORE attempt 1 / candidate 1 — see the loop-start note above.
+    TAMPER_REJECTIONS=0
+    if [[ "$ALLOW_TEST_EDITS" == true ]]; then
+      [[ "$OUT" != "json" ]] && warn "sandbox loop: --allow-test-edits — the test-tamper ratchet is DISABLED for this run"
+    else
+      _ratchet_snapshot
+    fi
 
     # ── Red gate (--require-red): a reproduction test that PASSES on the base
     # tree is VACUOUS — it does not capture the bug and cannot anchor a fix
@@ -492,6 +732,7 @@ case "$SUB" in
     final="capped"
     last_flaky=false
     _lint_pending=false
+    _ratchet_pending=false
     selected_candidate=0
     judge_verdict=""
     n=0
@@ -548,6 +789,21 @@ case "$SUB" in
           final="protected-tests-mutated"
           [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci MUTATED a protected anchoring test (--protect) — ABORT + escalate (anti-reward-hacking)"
           break
+        fi
+        # Test-file anti-tamper ratchet per candidate (default-on): a candidate
+        # that deletes/edits a snapshotted test file is REJECTED, not fatal —
+        # the next candidate (fanout does not self-repair) starts fresh.
+        if [[ "$ALLOW_TEST_EDITS" != true ]]; then
+          _ratchet_violations="$(_ratchet_check)"
+          if [[ -n "$_ratchet_violations" ]]; then
+            TAMPER_REJECTIONS=$((TAMPER_REJECTIONS + 1))
+            [[ "$OUT" != "json" ]] && warn "sandbox loop: candidate $ci TAMPERED with a snapshotted test file — REJECTED as test-tamper"
+            attempts="$(printf '%s' "$attempts" | jq --argjson n "$ci" \
+              '. + [{attempt:$n, candidate:$n, passed:false, exit_code:1, duration_s:0,
+                     phase:"test-tamper", flaky:false, passk_runs:[], rejected:"test-tamper"}]')"
+            git diff "${base_sha:-$BASE}" > "$OUT_DIR/candidate-$ci.diff" 2>/dev/null || true
+            continue
+          fi
         fi
         # Lint gate per candidate: a candidate failing lint is REJECTED outright
         # (fanout candidates do not self-repair).
@@ -625,16 +881,20 @@ case "$SUB" in
     while [[ "$n" -lt "$MAX_ATTEMPTS" ]]; do
       n=$((n + 1))
       last_flaky=false
-      if [[ "$_lint_pending" == "true" ]]; then
-        # The previous attempt's fix-hook edit FAILED the lint gate. Do NOT re-run
-        # the tests on a known-bad edit (ACI edit-gate: reject invalid code BEFORE
-        # testing — SWE-agent edit-with-linter). The phase:"lint" feedback from the
-        # prior iteration stays the active feedback the fix-hook reads. Record a
-        # lint attempt, then fall straight through to the fix-hook re-invocation.
+      if [[ "$_lint_pending" == "true" || "$_ratchet_pending" == "true" ]]; then
+        # The previous attempt's fix-hook edit FAILED the lint gate OR the
+        # test-tamper ratchet. Do NOT re-run the tests on a known-bad/rejected
+        # edit (ACI edit-gate: reject invalid code BEFORE testing — SWE-agent
+        # edit-with-linter). The phase-specific feedback from the prior
+        # iteration stays the active feedback the fix-hook reads. Record the
+        # rejected attempt, then fall straight through to the fix-hook re-invocation.
+        _pending_phase="lint"
+        [[ "$_ratchet_pending" == "true" ]] && _pending_phase="test-tamper"
         _lint_pending=false
+        _ratchet_pending=false
         passed="false"
-        attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" \
-          '. + [{attempt:$n, passed:false, exit_code:1, duration_s:0, phase:"lint", flaky:false, passk_runs:[]}]')"
+        attempts="$(printf '%s' "$attempts" | jq --argjson n "$n" --arg phase "$_pending_phase" \
+          '. + [{attempt:$n, passed:false, exit_code:1, duration_s:0, phase:$phase, flaky:false, passk_runs:[]}]')"
       else
       result="$(_eval_once "$OUT_DIR/full-log.txt")"
       passed="$(printf '%s' "$result" | jq -r '.passed')"
@@ -743,6 +1003,24 @@ case "$SUB" in
         fi
       fi
 
+      # Test-file anti-tamper ratchet (default-on): did the fix-hook delete/edit
+      # a snapshotted test file? REJECT this attempt (not a loop abort — the
+      # fix-hook gets another try, unlike --protect's abort-the-whole-loop).
+      if [[ "$ALLOW_TEST_EDITS" != true ]]; then
+        _ratchet_violations="$(_ratchet_check)"
+        if [[ -n "$_ratchet_violations" ]]; then
+          TAMPER_REJECTIONS=$((TAMPER_REJECTIONS + 1))
+          [[ "$OUT" != "json" ]] && warn "sandbox loop: attempt $n's --fix-hook TAMPERED with a snapshotted test file — REJECTED as test-tamper (not accepted)"
+          jq -nc --argjson n "$n" --arg viol "$_ratchet_violations" \
+            '{contract_version:"1.0", attempt:$n, phase:"test-tamper", passed:false,
+              exit_code:1, flaky:false, failing:$viol,
+              loci:[], test_name:[], assertion:[],
+              full_log:"", output_tail:$viol}' > "$OUT_DIR/feedback.json"
+          _ratchet_pending=true
+          continue
+        fi
+      fi
+
       # Lint gate (ACI edit-gate): run --lint-hook AFTER fix-hook + protect check,
       # BEFORE the next test iteration. Failing lint short-circuits this iteration
       # and writes a phase:"lint" feedback artefact with compile loci.
@@ -836,12 +1114,14 @@ case "$SUB" in
       --argjson passk "$passk_summary" \
       --argjson fanout "$FANOUT" --argjson selected "$selected_candidate" \
       --arg red_gate "$red_gate" --arg judge "$judge_verdict" \
+      --argjson tamper_rejections "$TAMPER_REJECTIONS" --arg cascade_tier_used "" \
       '{final:$final, attempts_run:($attempts|length), max_attempts:$max, k:$k,
         protect:$protect, tier:$tier, base:$base, candidate_diff:$diff,
         feedback:$feedback, vigil_handoff:$vigil, out_dir:$out,
         merged:false, attempts:$attempts, passk:$passk,
         fanout:$fanout, selected_candidate:$selected,
-        red_gate:$red_gate, judge:$judge}')"
+        red_gate:$red_gate, judge:$judge,
+        tamper_rejections:$tamper_rejections, cascade_tier_used:$cascade_tier_used}')"
     printf '%s\n' "$ledger" > "$OUT_DIR/loop.json"
 
     # ECL sidecar: loop.json.envelope.json — inform performative, SHA-256 integrity.
@@ -870,7 +1150,7 @@ case "$SUB" in
 
     if [[ "$OUT" == "json" ]]; then printf '%s\n' "$ledger"
     else
-      printf '%ssandbox loop%s  %s  (%s/%s attempts, k=%s, tier=%s)\n' "${BOLD:-}" "${RESET:-}" "$final" "$n" "$MAX_ATTEMPTS" "$K" "$TIER"
+      printf '%ssandbox loop%s  %s  (%s/%s attempts, k=%s, tier=%s, tamper_rejections=%s)\n' "${BOLD:-}" "${RESET:-}" "$final" "$n" "$MAX_ATTEMPTS" "$K" "$TIER" "$TAMPER_REJECTIONS"
       printf '%s' "$attempts" | jq -r '.[] | "  attempt \(.attempt): \(if .passed then "PASS" else "FAIL" end)\(if .flaky then " (FLAKY)" else "" end) [\(.phase)] (\(.duration_s)s)"'
       [[ -n "$diff_path" ]] && printf '  candidate diff (NOT applied): %s\n' "$diff_path"
       if [[ "$final" == "passed" ]]; then ok "tests pass — review the candidate diff and apply it yourself (diff-not-apply)"

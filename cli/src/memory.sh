@@ -146,7 +146,7 @@ _memory_preflight_explain() {
   script="$(mktemp)"
   q_query="$(memory_probe_quote "$query")"
   q_slug="$(memory_probe_quote "$slug")"
-  recall_args="recall --query $q_query --scope-project $q_slug --k 5 --format json"
+  recall_args="recall --query $q_query --scope-project $q_slug --k 5 --format json --layers semantic,episodic,procedural"
 
   printf '\nResolved invocation:\n'
   if ! memory_probe_build_docker_script "$project_root" "$recall_args" "$script"; then
@@ -206,7 +206,7 @@ _memory_preflight_explain() {
   printf '  total_tokens   %s\n' "$tokens"
   printf '  slot_breakdown %s\n' "$slots"
   printf '  scope.project  %s\n' "$slug"
-  printf '  layers         episodic,semantic,procedural,execution (default: all four; --layers not passed)\n'
+  printf '  layers         semantic,episodic,procedural (explicit; execution excluded — not a session-start artifact)\n'
 
   if [ "$count" -eq 0 ]; then
     printf '\n0 records returned — store may be empty, mis-scoped, or filtered (status/scope); see crystalium recall defaults (active-only).\n'
@@ -352,7 +352,12 @@ trap 'rm -f "$_docker_script"' EXIT
 
 _q_query="$(memory_probe_quote "$_query")"
 _q_slug="$(memory_probe_quote "$_project_slug")"
-_recall_args="recall --query $_q_query --scope-project $_q_slug --k 5 --format json"
+# --layers explicitly includes procedural (skills) alongside semantic/episodic
+# so a weak orchestrator can spot reusable verified procedures at session
+# start (Step 8 renders procedural records with a '[skill/...]' prefix).
+# execution is excluded — plan-checkpoint state isn't a session-start digest
+# concern.
+_recall_args="recall --query $_q_query --scope-project $_q_slug --k 5 --format json --layers semantic,episodic,procedural"
 
 if ! memory_probe_build_docker_script "$PROJECT_ROOT" "$_recall_args" "$_docker_script"; then
   info "memory preflight: 'serve' not found in crystalium args — skipping"
@@ -412,8 +417,12 @@ if ! printf '%s' "$_docker_out" | jq empty >/dev/null 2>&1; then
   exit 0
 fi
 
+# Procedural-layer records render with a '[skill/tier]' prefix (instead of
+# '[procedural/tier]') so a verified reusable procedure stands out from plain
+# recall context — see the harness_hook.sh SessionStart hint that tells the
+# host to prefer invoking a '[skill/...]' line over re-deriving the procedure.
 _digest="$(printf '%s' "$_docker_out" \
-  | jq -r '.records[]? | "[" + .layer + "/" + .trust_tier + "] " + .summary' 2>/dev/null \
+  | jq -r '.records[]? | "[" + (if .layer == "procedural" then "skill" else .layer end) + "/" + .trust_tier + "] " + .summary' 2>/dev/null \
   | head -c 1500 || true)"
 
 if [ -z "$_digest" ]; then

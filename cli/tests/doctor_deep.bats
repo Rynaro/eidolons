@@ -745,3 +745,80 @@ DSHIM
   [[ "$output" =~ "D13 — memory recallability probe" ]]
   [[ "$output" =~ "crystalium returned 1 record(s)" ]]
 }
+
+# ─── DD-28..DD-30: D14 routing.yaml 1.1 shape validation ──────────────────
+#
+# D14 is a nexus-level gate (not per-member, not per-project): it validates
+# roster/routing.yaml directly, the same way D10 resolves it via
+# `dirname "$ROSTER_FILE"`. The real (shipped) roster/routing.yaml must
+# always pass; a custom EIDOLONS_NEXUS with a deliberately broken
+# routing.yaml exercises the FAIL paths.
+
+# Helper: build a minimal custom nexus (real index.yaml/schemas + a
+# caller-supplied routing.yaml body) so other doctor checks stay green.
+_dd28_nexus_with_routing() {
+  local nexus_dir="$1" routing_body="$2"
+  mkdir -p "$nexus_dir/roster"
+  cp -r "$EIDOLONS_ROOT/schemas" "$nexus_dir/schemas"
+  cp "$EIDOLONS_ROOT/roster/index.yaml" "$nexus_dir/roster/index.yaml"
+  for f in aci.yaml ecl.yaml mcps.yaml; do
+    [ -f "$EIDOLONS_ROOT/roster/$f" ] && cp "$EIDOLONS_ROOT/roster/$f" "$nexus_dir/roster/$f" || true
+  done
+  printf '%s\n' "$routing_body" > "$nexus_dir/roster/routing.yaml"
+}
+
+@test "DD-28: D14 PASS — shipped roster/routing.yaml conforms to the 1.1 shape" {
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  # Default EIDOLONS_NEXUS ($EIDOLONS_ROOT) — the real, shipped routing.yaml.
+  run eidolons doctor --deep
+  [[ "$output" =~ "D14 — routing.yaml shape" ]]
+  [[ "$output" =~ "D14 routing shape: routing.yaml conforms to the 1.1 shape" ]]
+}
+
+@test "DD-29: D14 FAIL — bad degraded_mode value exits 1 with diagnostic" {
+  local custom_nexus="$BATS_TEST_TMPDIR/dd29-nexus"
+  _dd28_nexus_with_routing "$custom_nexus" '
+routing_version: "1.1"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  atlas: { capability_class: scout, suggested_tier: standard, degraded_mode: "bogus-mode", trigger_verbs: ["map"], refuse_verbs: [], downstream: [] }
+signals: []
+chains: []
+'
+
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  EIDOLONS_NEXUS="$custom_nexus" run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "D14 — routing.yaml shape" ]]
+  [[ "$output" =~ "atlas.degraded_mode invalid: bogus-mode" ]]
+}
+
+@test "DD-30: D14 FAIL — dangling escalation.reroute_to exits 1 with diagnostic" {
+  local custom_nexus="$BATS_TEST_TMPDIR/dd30-nexus"
+  _dd28_nexus_with_routing "$custom_nexus" '
+routing_version: "1.1"
+thresholds: { tau_standard: 0.6, tau_trance: 0.8, chain_floor: 0.6, max_reroutes: 2, max_parallel: 5, surface_files: 25, surface_modules: 5 }
+eidolons:
+  kupo: { capability_class: executor, suggested_tier: light, escalation: { on_fail: reroute, reroute_to: "nonexistent", max_escalations: 1 }, trigger_verbs: ["fix the import"], refuse_verbs: [], downstream: [] }
+signals: []
+chains: []
+'
+
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  EIDOLONS_NEXUS="$custom_nexus" run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "D14 — routing.yaml shape" ]]
+  [[ "$output" =~ "kupo.escalation.reroute_to references unknown eidolon: nonexistent" ]]
+}

@@ -38,9 +38,9 @@ _ui_prompt_prefix() {
 
 # ─── Confirm (yes/no) ────────────────────────────────────────────────────
 # Returns exit 0 for yes, 1 for no. Default applies on empty reply, EOF,
-# or interrupt — so non-interactive callers should set EIDOLONS_NON_INTERACTIVE=1
-# (or check upstream); this helper does NOT honour that env itself, on
-# purpose, to stay single-responsibility.
+# interrupt, or non-TTY stdin — so non-interactive callers should set
+# EIDOLONS_NON_INTERACTIVE=1 (or check upstream); this helper does NOT honour
+# that env itself, on purpose, to stay single-responsibility.
 ui_confirm() {
   local question="$1"
   local default="${2:-default-n}"
@@ -51,6 +51,29 @@ ui_confirm() {
     default-n) hint="[y/N]" ;;
     *)         hint="[y/n]" ;;
   esac
+
+  # Non-TTY guard: a raw `read` on an open-but-silent non-TTY stdin (CI
+  # runners, hook contexts) blocks forever — observed live as an
+  # `eidolons sync` preview prompt hanging a test runner indefinitely.
+  # Piped replies stay honored (scripts/tests feeding "n\n" keep working —
+  # data present means read returns immediately); only a SILENT open stdin
+  # times out (5 s, bash-3.2-safe integer -t) and resolves to the default,
+  # same as EOF/empty reply, without the hang.
+  if [[ ! -t 0 ]]; then
+    local prefix; prefix="$(_ui_prompt_prefix)"
+    printf '%s%s %s ' "$prefix" "$question" "$hint" >&2
+    if ! read -r -t 5 reply; then
+      reply=""
+      printf '(non-interactive stdin, assuming %s)\n' \
+        "$([[ "$default" == "default-y" ]] && echo yes || echo no)" >&2
+    fi
+    reply="$(printf '%s' "$reply" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+    case "$reply" in
+      y|yes) return 0 ;;
+      n|no)  return 1 ;;
+      *)     [[ "$default" == "default-y" ]] && return 0 || return 1 ;;
+    esac
+  fi
 
   if command -v gum >/dev/null 2>&1 && [[ "${EIDOLONS_FANCY:-0}" == "1" ]]; then
     if [[ "$default" == "default-y" ]]; then
