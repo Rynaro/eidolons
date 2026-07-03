@@ -720,9 +720,9 @@ eidolons:
       repo: Rynaro/IDG
       default_ref: main
     versions:
-      latest: "1.9.0"
+      latest: "1.10.0"
       pins:
-        stable: "1.9.0"
+        stable: "1.10.0"
       releases:
         1.1.5:
           tag: v1.1.5
@@ -864,6 +864,15 @@ eidolons:
           commit: affbc6b643efdfd7bf199ca6dca09750a1ddbc49
           tree: 932a5282d8452feb46afc07beee581536aa67e18
           archive_sha256: 74724b4dfea266aa56b216cf6251542afcfeb0b5efa489816a4ffa0e3e78b415
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.10.0:
+          tag: v1.10.0
+          commit: 7ba0d2c066751371064780314728940ddd4d6545
+          tree: aec56a5d7b257e806bed846cae9354f7a74f79f2
+          archive_sha256: 5efb187705a92e53448c21ef062da52c7e197697fd7719acb2190d95a066b351
           manifest_sha256:
           provenance:
             github_attestation: true
