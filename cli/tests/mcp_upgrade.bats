@@ -6,7 +6,7 @@
 
 load helpers
 
-FAKE_JUNCTION_VERSION="0.3.0"
+FAKE_JUNCTION_VERSION="0.4.0"
 
 setup_fake_curl_and_gh_for_upgrade() {
   local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
@@ -19,7 +19,7 @@ DEST="${JUNCTION_INSTALL_DIR:-/usr/local/bin}"
 mkdir -p "$DEST"
 cat > "$DEST/junction" <<'JBIN'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "--version" ]]; then echo "junction 0.3.0"; exit 0; fi
+if [[ "${1:-}" == "--version" ]]; then echo "junction 0.4.0"; exit 0; fi
 echo "stub: $*"
 JBIN
 chmod +x "$DEST/junction"
@@ -93,7 +93,7 @@ EOF
 @test "mcp upgrade S16 no-op: installed_at unchanged when already at stable" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_upgrade
-  # Seed at the catalogue stable version (0.3.0).
+  # Seed at the catalogue stable version (0.4.0).
   seed_junction_lock_at_version "$FAKE_JUNCTION_VERSION"
   before_ts="$(grep 'installed_at' eidolons.mcp.lock | head -1)"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
@@ -106,12 +106,12 @@ EOF
 @test "mcp upgrade S15: upgrades when behind catalogue stable" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_upgrade
-  # Seed at an older version (0.1.0); catalogue stable is 0.3.0.
+  # Seed at an older version (0.1.0); catalogue stable is 0.4.0.
   seed_junction_lock_at_version "0.1.0"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
   [ "$status" -eq 0 ]
   # After upgrade, lockfile should reference stable version.
-  result="$(grep -c '0.3.0' eidolons.mcp.lock || true)"
+  result="$(grep -c '0.4.0' eidolons.mcp.lock || true)"
   [ "$result" -gt 0 ]
 }
 
@@ -418,7 +418,7 @@ EOF
   seed_junction_lock_at_version "0.1.0"
   run bash "$EIDOLONS_ROOT/cli/src/mcp_upgrade.sh" "junction"
   [ "$status" -eq 0 ]
-  result="$(grep -c '0.3.0' eidolons.mcp.lock || true)"
+  result="$(grep -c '0.4.0' eidolons.mcp.lock || true)"
   [ "$result" -gt 0 ]
 }
 

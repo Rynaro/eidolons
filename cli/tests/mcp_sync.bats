@@ -6,7 +6,7 @@
 
 load helpers
 
-FAKE_JUNCTION_VERSION="0.3.0"
+FAKE_JUNCTION_VERSION="0.4.0"
 
 setup_fake_curl_and_gh_for_sync() {
   local fake_bin="$BATS_TEST_TMPDIR/fake-bin"
@@ -19,7 +19,7 @@ DEST="${JUNCTION_INSTALL_DIR:-/usr/local/bin}"
 mkdir -p "$DEST"
 cat > "$DEST/junction" <<'JBIN'
 #!/usr/bin/env bash
-if [[ "${1:-}" == "--version" ]]; then echo "junction 0.3.0"; exit 0; fi
+if [[ "${1:-}" == "--version" ]]; then echo "junction 0.4.0"; exit 0; fi
 echo "stub: $*"
 JBIN
 chmod +x "$DEST/junction"
@@ -46,7 +46,7 @@ members:
     source: github:Rynaro/ATLAS
 mcps:
   - name: junction
-    version: "^0.3.0"
+    version: "^0.4.0"
 EOF
 }
 
