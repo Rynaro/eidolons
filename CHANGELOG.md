@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.47.0] — 2026-07-02 — feat: v2.0 Wave 0 — model-tier injection, memory diagnosability, harness-status truthfulness
+
 ### Added
 - **Routing artifacts now carry their model tiers into the host prompt.** The kernel has always computed a vendor-neutral tier per step (`model_tier` / `model_tier_per_step`, from `roster/routing.yaml`'s `suggested_tier` ladder `light<standard<deep`) — but no host ever saw it: `harness_hook.sh` injected route/tier/chain and dropped the model tiers on the floor. The UserPromptSubmit context now appends `model tier: <t>` (single dispatch) or `model tiers: atlas=standard → spectra=deep → …` (chains) plus a fixed one-line instruction to honor per-step tiers via the host's model selection mechanism. Derived from the already-parsed artifact (no kernel re-run); fail-open (absent/mismatched/non-string tiers ⇒ no line, JSON contract intact). First mechanical step of the v2.0 "weaker-model tiering" workstream (`.spectra/plans/eidolons-v2/`).
 - **`eidolons memory preflight --explain`** — diagnostic mode for the crystalium recall pre-flight: gate status (`.mcp.json` + lock), TTL-cache hit/miss/age (read-only — an explain run never masks the next real preflight), the resolved docker invocation, recall exit code, record count, `total_tokens`, `slot_breakdown`, scope/layers — and an explicit `0 records returned — store may be empty, mis-scoped, or filtered (status/scope)…` line. Motivated by a real incident: a store holding 9 crystals answered every recall with 0 records (deprecated-status filtering + scope-key fragmentation + null embeddings) and nothing surfaced it.
