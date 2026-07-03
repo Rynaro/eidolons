@@ -86,6 +86,45 @@ reliably versus flakily.
   tools), common to both arms — so the delta is robust but the absolute arm-A rate is a
   *floor* under a constrained surface. Note this when quoting the number.
 
+## 4b. Closing the SessionStart-only floor (`--driver claude-headless-ups`)
+
+The 2026-06-12 headline (66.7%, GATE FAIL) was explicitly a **floor** for a second reason:
+Claude Code **2.1.175**'s headless `claude -p` fired only `SessionStart` hooks, **not**
+`UserPromptSubmit` — the primary T3 per-prompt injection. That measured the always-loaded
+cortex digest, not the per-prompt "Route: <eidolon>" nudge the 80% gate was written about.
+
+**That floor is now closable.** On Claude Code **>= 2.1.200**, headless `claude -p` fires
+`UserPromptSubmit` (verified 2026-07 with a $0 hook-marker probe: a scratch project whose
+UPS hook `touch`es a marker, run under a dead `ANTHROPIC_BASE_URL` so the model call fails
+connection-refused before any tokens are sent — both the marker and a stream
+`hook_event:"UserPromptSubmit"` appeared). Use the built-in `claude-headless-ups` driver to
+rerun with the mechanism live **and certified**:
+
+```bash
+EIDOLONS_COMPLIANCE_NO_LIVE= \
+  eidolons eval compliance --arm both --k 2 --model sonnet --yes --json \
+    --driver claude-headless-ups \
+    --suite-file evals/compliance-suite.yaml \
+    > /tmp/compliance-scorecard-ups.json
+jq '{ups_fired, gate, armA: .arms.A.correct_target_rate, delta}' \
+  /tmp/compliance-scorecard-ups.json
+```
+
+- `--driver claude-headless-ups` is a **reserved built-in name** (not a shell command): it
+  runs the same `claude -p` path plus `--include-hook-events`, then records **`ups_fired`**
+  in the scorecard — `"true"` = every ARM-A session fired `UserPromptSubmit` (mechanism
+  live); `"false"` = it did not (the floor persists — check `eidolons harness status` /
+  `eidolons doctor --deep`); `"unknown"` = not certified (default/custom/fake driver).
+- **Confirm `ups_fired == "true"` before trusting the headline.** If it is `"false"` or
+  `"unknown"`, the number is still a SessionStart-only floor and the June caveat stands.
+- **Version gate.** The driver refuses to run below Claude Code `2.1.200` with an actionable
+  error (2.1.175 provably fired SessionStart only). Override the floor with
+  `EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR=<ver>` if a lower version is known to fire UPS —
+  `ups_fired` remains the per-run ground truth regardless.
+- The old SessionStart-only default driver still works and reports `ups_fired: "unknown"`;
+  prefer `claude-headless-ups` for any headline that quotes the absolute arm-A rate against
+  the 80% gate.
+
 ## 5. Record the result
 
 Commit the scorecard and a short interpretation to `.spectra/research/` following the

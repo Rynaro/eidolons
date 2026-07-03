@@ -590,3 +590,116 @@ YAML
   run diff -r "$a/src" "$b/src"
   [ "$status" -eq 0 ]
 }
+
+# ── UPS driver (claude-headless-ups) — flag validation + pure-helper unit tests ─
+# These NEVER spawn a billed session: the smoke tests use the fake driver, the
+# live-path tests die at the version gate or the NO_LIVE net before any model
+# call, and the helper tests exercise pure functions with no host at all.
+
+@test "compliance: scorecard exposes driver_mode and ups_fired (smoke → fake/unknown)" {
+  run --separate-stderr eval_compliance --smoke --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.driver_mode')" = "fake" ]
+  [ "$(echo "$output" | jq -r '.ups_fired')" = "unknown" ]
+}
+
+@test "compliance: --driver claude-headless-ups is a reserved built-in, not a missing binary" {
+  # Live path with the NO_LIVE net set: the reserved name must NOT be rejected as
+  # a missing custom-driver binary. It dies for a DIFFERENT reason (version gate
+  # if claude is absent, or the NO_LIVE net) — never a billed run.
+  run env EIDOLONS_COMPLIANCE_NO_LIVE=1 EIDOLONS_NEXUS="$EIDOLONS_ROOT" \
+      "$EIDOLONS_BIN" eval compliance \
+        --driver claude-headless-ups --yes --arm A --k 1 \
+        --suite-file "$EIDOLONS_ROOT/evals/compliance-suite.yaml"
+  [ "$status" -ne 0 ]
+  [[ ! "$output" =~ "custom driver not found" ]]
+}
+
+@test "compliance: claude-headless-ups version gate rejects a too-high floor (unbilled)" {
+  if ! command -v claude >/dev/null 2>&1; then
+    skip "claude not installed — version gate exercised via helper unit test instead"
+  fi
+  # Force an unsatisfiable floor. The gate fires BEFORE any session (no bill).
+  run env EIDOLONS_COMPLIANCE_NO_LIVE=1 \
+      EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR=99.9.9 \
+      EIDOLONS_NEXUS="$EIDOLONS_ROOT" \
+      "$EIDOLONS_BIN" eval compliance \
+        --driver claude-headless-ups --yes --arm A --k 1 \
+        --suite-file "$EIDOLONS_ROOT/evals/compliance-suite.yaml"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "requires Claude Code >= 99.9.9" ]]
+}
+
+@test "compliance: claude-headless-ups satisfiable floor passes gate, dies at NO_LIVE net (unbilled)" {
+  if ! command -v claude >/dev/null 2>&1; then
+    skip "claude not installed — NO_LIVE net path needs the version gate to pass first"
+  fi
+  # A trivially-satisfiable floor clears the gate; the NO_LIVE net then refuses
+  # the live claude driver before any model call.
+  run env EIDOLONS_COMPLIANCE_NO_LIVE=1 \
+      EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR=0.0.1 \
+      EIDOLONS_NEXUS="$EIDOLONS_ROOT" \
+      "$EIDOLONS_BIN" eval compliance \
+        --driver claude-headless-ups --yes --arm A --k 1 \
+        --suite-file "$EIDOLONS_ROOT/evals/compliance-suite.yaml"
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "EIDOLONS_COMPLIANCE_NO_LIVE" ]] || [[ "$output" =~ "refusing to invoke the live" ]]
+}
+
+# ── Pure-helper unit tests (inline copies, mirror the _parser_test convention) ─
+
+_ups_helpers_source() {
+  # Emit the two UPS helpers verbatim so tests lock the real logic shape.
+  cat > "$BATS_TEST_TMPDIR/ups_helpers.sh" <<'SH'
+_verpart() {
+  local p
+  p="$(printf '%s' "$1" | cut -d. -f"$2" | tr -cd '0-9')"
+  [ -n "$p" ] || p=0
+  printf '%s' "$((10#$p))"
+}
+_version_ge() {
+  local a1 a2 a3 b1 b2 b3
+  a1="$(_verpart "$1" 1)"; a2="$(_verpart "$1" 2)"; a3="$(_verpart "$1" 3)"
+  b1="$(_verpart "$2" 1)"; b2="$(_verpart "$2" 2)"; b3="$(_verpart "$2" 3)"
+  if [ "$a1" -ne "$b1" ]; then [ "$a1" -gt "$b1" ]; return; fi
+  if [ "$a2" -ne "$b2" ]; then [ "$a2" -gt "$b2" ]; return; fi
+  [ "$a3" -ge "$b3" ]
+}
+_stream_ups_fired() {
+  local stream="$1"
+  local hit
+  hit="$(printf '%s\n' "$stream" | jq -c -R 'fromjson? // empty' 2>/dev/null \
+    | jq -r 'select((.type? == "system")
+               and ((.subtype? == "hook_started") or (.subtype? == "hook_response"))
+               and (.hook_event? == "UserPromptSubmit")) | "yes"' 2>/dev/null \
+    | head -1 || true)"
+  if [ "$hit" = "yes" ]; then printf 'true'; else printf 'false'; fi
+}
+SH
+  # shellcheck source=/dev/null
+  . "$BATS_TEST_TMPDIR/ups_helpers.sh"
+}
+
+@test "compliance: _version_ge orders X.Y.Z (patch, minor dominance, leading zeros)" {
+  _ups_helpers_source
+  run _version_ge 2.1.200 2.1.200; [ "$status" -eq 0 ]   # equal → ge
+  run _version_ge 2.1.200 2.1.175; [ "$status" -eq 0 ]   # patch greater
+  run _version_ge 2.1.175 2.1.200; [ "$status" -ne 0 ]   # patch lesser
+  run _version_ge 2.1.200 2.2.0;   [ "$status" -ne 0 ]   # minor dominates patch (200 !> 2.2)
+  run _version_ge 2.2.0   2.1.200; [ "$status" -eq 0 ]   # minor greater
+  run _version_ge 2.1.200 2.1.201; [ "$status" -ne 0 ]   # patch off-by-one
+  run _version_ge 2.1.8   2.1.08;  [ "$status" -eq 0 ]   # leading zero == 8 (no octal)
+  run _version_ge "2.1.200 (Claude Code)" 2.1.200; [ "$status" -eq 0 ]  # version-string suffix
+}
+
+@test "compliance: _stream_ups_fired certifies a UserPromptSubmit hook event" {
+  _ups_helpers_source
+  local with_ups no_ups
+  with_ups='{"type":"system","subtype":"hook_started","hook_event":"UserPromptSubmit","session_id":"x"}
+{"type":"system","subtype":"init","session_id":"x"}'
+  no_ups='{"type":"system","subtype":"hook_started","hook_event":"SessionStart","session_id":"x"}
+{"type":"assistant","message":{"content":[]}}'
+  run _stream_ups_fired "$with_ups"; [ "$output" = "true" ]
+  run _stream_ups_fired "$no_ups";   [ "$output" = "false" ]
+  run _stream_ups_fired "";          [ "$output" = "false" ]
+}

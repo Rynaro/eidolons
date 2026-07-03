@@ -43,6 +43,12 @@ DEFAULT_SUITE="$NEXUS_ROOT/evals/compliance-suite.yaml"
 COMPLIANCE_VERSION="1.0"
 DEFAULT_GATE_THRESHOLD=80
 SESSION_TIMEOUT="${EIDOLONS_COMPLIANCE_SESSION_TIMEOUT:-120}"
+# Minimum Claude Code version the 'claude-headless-ups' driver needs: headless
+# `claude -p` must fire UserPromptSubmit AND accept --include-hook-events.
+# Empirical floor: 2.1.175 fired SessionStart only (June-2026 measurement);
+# 2.1.200 fires UserPromptSubmit in -p (verified 2026-07). Override when a lower
+# version is known to fire UPS — ups_fired in the scorecard is the ground truth.
+UPS_VERSION_FLOOR="${EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR:-2.1.200}"
 
 usage() {
   cat >&2 <<EOF
@@ -55,6 +61,12 @@ Options:
   --driver CMD         Driver command. Receives prompt on argv and stdin;
                        emits stream-json (one JSON object per line) to stdout.
                        Default: built-in claude -p invocation.
+                       Reserved name 'claude-headless-ups' selects the built-in
+                       headless driver that fires UserPromptSubmit (the primary
+                       T3 injection) and CERTIFIES it via --include-hook-events
+                       (adds ups_fired to the scorecard). Requires claude >=
+                       ${UPS_VERSION_FLOOR}; retires the June-2026
+                       SessionStart-only floor.
   --model NAME         Model for the default claude driver (default: sonnet).
   --max-turns N        Per-session turn cap (default: 3).
   --k N                Repeat each (prompt x arm) N times (default: 1).
@@ -145,6 +157,29 @@ if [[ "$SMOKE" == true && "$YES" == true ]]; then
   YES=false
 fi
 
+# ── Driver mode resolution ───────────────────────────────────────────────────
+# 'claude-headless-ups' is a RESERVED built-in driver name (not a shell command):
+# it selects the default claude -p path PLUS --include-hook-events so the run can
+# CERTIFY that UserPromptSubmit (the primary T3 injection mechanism) actually
+# fired. Retires the June-2026 SessionStart-only floor (compliance-eval-
+# 2026-06-12.md): headless `claude -p` fires UPS on claude >= $UPS_VERSION_FLOOR.
+# Resolve it BEFORE the custom-driver validation so it is never mistaken for a
+# missing binary.
+UPS_MODE=false
+if [[ "$DRIVER_CMD" == "claude-headless-ups" ]]; then
+  UPS_MODE=true
+  DRIVER_CMD=""   # fall through to the built-in claude path (with UPS extras)
+fi
+if [[ "$SMOKE" == true ]]; then
+  DRIVER_MODE="fake"
+elif [[ "$UPS_MODE" == true ]]; then
+  DRIVER_MODE="claude-headless-ups"
+elif [[ -n "$DRIVER_CMD" ]]; then
+  DRIVER_MODE="custom"
+else
+  DRIVER_MODE="claude-headless"
+fi
+
 # Custom driver validation (non-smoke path): fail early if driver is not executable
 if [[ "$SMOKE" == false && -n "$DRIVER_CMD" ]]; then
   # DRIVER_CMD may be a path or a shell invocation; extract the first word
@@ -161,6 +196,53 @@ KNOWN_CLASSES="scout planner coder scriber reasoner debugger executor control"
 
 # ── ALL FUNCTIONS DEFINED BEFORE FIRST CALL ───────────────────────────────
 # (bash 3.2: functions must be defined before any top-level code calls them)
+
+# ── _verpart VERSION N ───────────────────────────────────────────────────────
+# Echo the Nth dotted field of a version string as a base-10 integer (0 if
+# missing/non-numeric). bash 3.2-safe (no ${var//}); strips non-digits via tr.
+_verpart() {
+  local p
+  p="$(printf '%s' "$1" | cut -d. -f"$2" | tr -cd '0-9')"
+  [ -n "$p" ] || p=0
+  printf '%s' "$((10#$p))"
+}
+
+# ── _version_ge A B → exit 0 iff version A >= version B (X.Y.Z, numeric) ──────
+_version_ge() {
+  local a1 a2 a3 b1 b2 b3
+  a1="$(_verpart "$1" 1)"; a2="$(_verpart "$1" 2)"; a3="$(_verpart "$1" 3)"
+  b1="$(_verpart "$2" 1)"; b2="$(_verpart "$2" 2)"; b3="$(_verpart "$2" 3)"
+  if [ "$a1" -ne "$b1" ]; then [ "$a1" -gt "$b1" ]; return; fi
+  if [ "$a2" -ne "$b2" ]; then [ "$a2" -gt "$b2" ]; return; fi
+  [ "$a3" -ge "$b3" ]
+}
+
+# ── _ups_version_gate ─────────────────────────────────────────────────────────
+# Fail fast (with a clear, actionable error) when the local Claude Code is too
+# old to fire UserPromptSubmit in headless -p mode. Only called on the live
+# claude-headless-ups path. ups_fired in the scorecard remains the per-run
+# ground truth regardless of this gate.
+_ups_version_gate() {
+  if ! command -v claude >/dev/null 2>&1; then
+    die "the 'claude-headless-ups' driver needs the 'claude' binary on PATH and it is absent.
+Install Claude Code >= ${UPS_VERSION_FLOOR}, pass --driver <cmd> to substitute another host,
+or run --smoke for the fake-driver pipeline."
+  fi
+  local raw ver
+  raw="$(claude --version 2>/dev/null | head -1 || true)"
+  ver="$(printf '%s' "$raw" | awk '{print $1}')"
+  if [[ -z "$ver" ]]; then
+    warn "could not parse 'claude --version' (got: '${raw}'); proceeding — the scorecard's ups_fired field is the ground truth."
+    return 0
+  fi
+  if ! _version_ge "$ver" "$UPS_VERSION_FLOOR"; then
+    die "claude-headless-ups requires Claude Code >= ${UPS_VERSION_FLOOR} to fire UserPromptSubmit in
+headless -p mode (found ${ver}). Claude Code 2.1.175 fired only SessionStart in -p (the
+June-2026 floor, compliance-eval-2026-06-12.md); UPS-in-print was verified on 2.1.200.
+Upgrade Claude Code, set EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR=<ver> to override if your
+version is known to fire UPS, or use the default --driver (no ups_fired certification)."
+  fi
+}
 
 # ── _validate_suite ──────────────────────────────────────────────────────────
 _validate_suite() {
@@ -571,6 +653,23 @@ _parse_stream() {
     ' 2>/dev/null || echo '[]'
 }
 
+# ── _stream_ups_fired STREAM → "true"|"false" ────────────────────────────────
+# "true" iff the stream carries a UserPromptSubmit hook lifecycle event, i.e.
+# the driver ran with --include-hook-events AND the host fired UserPromptSubmit
+# in headless -p mode. This is the empirical certification that the primary T3
+# injection mechanism actually ran during the measurement (retires the
+# June-2026 SessionStart-only floor). Robust to non-JSON/partial lines.
+_stream_ups_fired() {
+  local stream="$1"
+  local hit
+  hit="$(printf '%s\n' "$stream" | jq -c -R 'fromjson? // empty' 2>/dev/null \
+    | jq -r 'select((.type? == "system")
+               and ((.subtype? == "hook_started") or (.subtype? == "hook_response"))
+               and (.hook_event? == "UserPromptSubmit")) | "yes"' 2>/dev/null \
+    | head -1 || true)"
+  if [ "$hit" = "yes" ]; then printf 'true'; else printf 'false'; fi
+}
+
 # ── _score_prompt GT_DECISION GT_SELECTED PARSED IS_CONTROL ─────────────────
 # Returns JSON: {delegated_any, delegated_correct}
 _score_prompt() {
@@ -716,13 +815,17 @@ variable for a real, billed measurement run (see runbook-compliance.md)."
       printf '%s' "$prompt" | with_timeout "$SESSION_TIMEOUT" bash -c "$DRIVER_CMD \"\$EIDOLONS_COMPLIANCE_PROMPT\"" 2>/dev/null
     )" || rc=$?
   else
-    # Default: claude -p
+    # Default: claude -p. Under claude-headless-ups, add --include-hook-events so
+    # UserPromptSubmit firing is observable in the stream (ups_fired certification).
+    local ups_flags=()
+    [[ "$DRIVER_MODE" == "claude-headless-ups" ]] && ups_flags=(--include-hook-events)
     stream="$(
       cd "$fixture_dir"
       printf '%s' "$prompt" | with_timeout "$SESSION_TIMEOUT" \
         claude -p "$prompt" \
           --output-format stream-json \
           --verbose \
+          ${ups_flags[@]+"${ups_flags[@]}"} \
           --max-turns "$MAX_TURNS" \
           --model "$MODEL" \
         2>/dev/null
@@ -852,6 +955,12 @@ _run_arm() {
       k_runs=$((k_runs + 1))
       local stream observed score d_any d_correct
       stream="$(_run_driver "$arm_prompt" "$fixture_dir")"
+      # ups_fired certification (ARM A only — ARM B wires no hooks): count how
+      # many arm-A sessions actually fired UserPromptSubmit. Globals, not local.
+      if [[ "$arm" == "A" && "$DRIVER_MODE" == "claude-headless-ups" ]]; then
+        UPS_SESSION_N=$((UPS_SESSION_N + 1))
+        [[ "$(_stream_ups_fired "$stream")" == "true" ]] && UPS_FIRED_N=$((UPS_FIRED_N + 1))
+      fi
       observed="$(_parse_stream "$stream" "$ROSTER_NAMES_JSON")"
       score="$(_score_prompt "$gt_decision" "$gt_selected" "$observed" "$arm_is_ctrl")"
       d_any="$(printf '%s' "$score" | jq -r '.delegated_any')"
@@ -928,6 +1037,12 @@ if [[ "$DRY_RUN" == true ]]; then
   exit 0
 fi
 
+# ── UPS driver version gate (fail fast on the live claude-headless-ups path) ──
+# SMOKE resolves DRIVER_MODE=fake (gate skipped); DRY_RUN exited above.
+if [[ "$DRIVER_MODE" == "claude-headless-ups" ]]; then
+  _ups_version_gate
+fi
+
 # ── Build fixtures ───────────────────────────────────────────────────────────
 say "building compliance fixtures (offline, deterministic)..."
 
@@ -998,6 +1113,11 @@ done <<< "$task_ids_all"
 RESULTS_A="[]"
 RESULTS_B="[]"
 
+# ups_fired accumulators (ARM-A live sessions under claude-headless-ups). Must be
+# initialised before _run_arm, which increments them as globals (set -u).
+UPS_SESSION_N=0
+UPS_FIRED_N=0
+
 MODE_LABEL="smoke"; [[ "$SMOKE" == false ]] && MODE_LABEL="live"
 
 say "running compliance sessions (mode=${MODE_LABEL}, k=${K}, arm=${ARM})..."
@@ -1050,11 +1170,27 @@ sessions_run=$(( n_prompts_total * n_arms_run * K ))
 
 scope_note="Non-deterministic (model in loop); k=${K}. k=1 is noise for a headline claim. Tool surface restricted to Task/Read/Grep/Glob — the A−B delta is the harness effect (common-mode bias cancels); absolute arm-A rate is a floor under a read-only surface."
 
+# ── ups_fired verdict ─────────────────────────────────────────────────────────
+# true  = every measured ARM-A session fired UserPromptSubmit (mechanism live)
+# false = claude-headless-ups measured >=1 ARM-A session but not all fired UPS
+#         (the June-2026 floor condition — the mechanism was silently disabled)
+# unknown = not certified (fake/default/custom driver, no ARM A, or not measured)
+UPS_FIRED="unknown"
+if [[ "$DRIVER_MODE" == "claude-headless-ups" && "$UPS_SESSION_N" -gt 0 ]]; then
+  if [[ "$UPS_FIRED_N" -eq "$UPS_SESSION_N" ]]; then
+    UPS_FIRED="true"
+  else
+    UPS_FIRED="false"
+  fi
+fi
+
 # ── Emit scorecard ───────────────────────────────────────────────────────────
 scorecard="$(jq -nc \
   --arg cv "$COMPLIANCE_VERSION" \
   --arg mode "$MODE_LABEL" \
   --arg driver "${DRIVER_CMD:-claude -p --model ${MODEL}}" \
+  --arg driver_mode "$DRIVER_MODE" \
+  --arg ups_fired "$UPS_FIRED" \
   --arg model "$MODEL" \
   --argjson max_turns "$MAX_TURNS" \
   --argjson k "$K" \
@@ -1076,6 +1212,8 @@ scorecard="$(jq -nc \
     compliance_version: $cv,
     mode: $mode,
     driver: $driver,
+    driver_mode: $driver_mode,
+    ups_fired: $ups_fired,
     model: $model,
     max_turns: $max_turns,
     k: $k,
@@ -1108,7 +1246,8 @@ else
   # Text scorecard (stdout, mirrors eval_swe / eval routing style)
   printf '\n'
   printf '%seidolons eval compliance scorecard%s\n' "${BOLD:-}" "${RESET:-}"
-  printf '  mode=%s  driver=%s  k=%s\n' "$MODE_LABEL" "${DRIVER_CMD:-claude -p}" "$K"
+  printf '  mode=%s  driver_mode=%s  k=%s\n' "$MODE_LABEL" "$DRIVER_MODE" "$K"
+  printf '  ups_fired=%s (UserPromptSubmit — primary T3 injection)\n' "$UPS_FIRED"
   printf '\n'
   printf '  ARM A (harness=ON):\n'
   printf '    delegation_rate:     %s\n' "$(printf '%s' "$ARM_A_DATA" | jq -r '.delegation_rate * 100 | floor / 100')"
