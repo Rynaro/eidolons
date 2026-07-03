@@ -1101,9 +1101,9 @@ eidolons:
       repo: Rynaro/VIGIL
       default_ref: main
     versions:
-      latest: "1.7.0"
+      latest: "1.8.0"
       pins:
-        stable: "1.7.0"
+        stable: "1.8.0"
       releases:
         1.0.3:
           tag: v1.0.3
@@ -1245,6 +1245,15 @@ eidolons:
           commit: ad4987b4a2df5538c983dfe8106e9c97975b39ab
           tree: 1526e26bb6f416c4fc51eff21a97754a347b6045
           archive_sha256: 5c7a9e267098f579569b7dad56f388d8530047fd16f8b322847fa0cec0e38103
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.8.0:
+          tag: v1.8.0
+          commit: d392b8faa7cd60299991aeed12c728909d1f0a64
+          tree: 72dd9707474c61ea59531b740de253f8684d989b
+          archive_sha256: 566647edc7c3b503e1db8862e6a9b02e465f5351969077576ce48b21836a7d5f
           manifest_sha256:
           provenance:
             github_attestation: true
