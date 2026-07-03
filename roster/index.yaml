@@ -27,9 +27,9 @@ eidolons:
       repo: Rynaro/ATLAS
       default_ref: main
     versions:
-      latest: "1.12.1"
+      latest: "1.13.0"
       pins:
-        stable: "1.12.1"
+        stable: "1.13.0"
       releases:
         1.3.0:
           tag: v1.3.0
@@ -216,6 +216,15 @@ eidolons:
           commit: 9ba9e04f3b1a0b4dbeb4ab3a5ff8f1c3734a3196
           tree: 0f9ead8d5ccb7100c82861514628d04a44827cb5
           archive_sha256: 3672a449de54634c7e367f6a3908a52f4f6fe81406e8855519583c7f515f1dea
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.13.0:
+          tag: v1.13.0
+          commit: 5d456e99bb256aae3836b81fedc60f7e5996b9e4
+          tree: 520753d575b2814e602ecd755b3d567ac16a6707
+          archive_sha256: 40da482639aedc157ac647863aaa3b04732a4e51afa56669e903c84c3dbc9686
           manifest_sha256:
           provenance:
             github_attestation: true
