@@ -419,3 +419,83 @@ DSHIM
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+# ─── --explain: human diagnostic report (GAP: silent-empty-recall incident) ──
+
+@test "memory: --explain prints gate/cache/invocation/exit-code/records/total_tokens fields" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  export FAKE_DOCKER_OUTPUT="$VALID_RECALL_JSON"
+
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --explain
+  [ "$status" -eq 0 ]
+
+  # Gate status.
+  [[ "$output" =~ "Gate:" ]]
+  [[ "$output" =~ ".mcp.json has mcpServers.crystalium     PASS" ]]
+  [[ "$output" =~ "eidolons.mcp.lock has crystalium entry  PASS" ]]
+
+  # Cache status (informational).
+  [[ "$output" =~ "Cache:" ]]
+  [[ "$output" =~ "status  MISS" ]]
+
+  # Resolved docker invocation (redacted nothing — must show the real args).
+  [[ "$output" =~ "Resolved invocation:" ]]
+  [[ "$output" =~ "recall" ]]
+  [[ "$output" =~ "--scope-project" ]]
+
+  # Recall outcome: exit code, records, total_tokens, scope/layers used.
+  [[ "$output" =~ "Recall:" ]]
+  [[ "$output" =~ "exit code      0" ]]
+  [[ "$output" =~ "records        1" ]]
+  [[ "$output" =~ "total_tokens   42" ]]
+  [[ "$output" =~ "scope.project" ]]
+  [[ "$output" =~ "layers" ]]
+}
+
+@test "memory: --explain on zero-record recall prints the explicit diagnostic line" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  export FAKE_DOCKER_OUTPUT='{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}'
+
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --explain
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "records        0" ]]
+  [[ "$output" =~ "0 records returned — store may be empty, mis-scoped, or filtered (status/scope); see crystalium recall defaults (active-only)." ]]
+}
+
+@test "memory: --explain never writes the TTL cache (pre-existing cache left untouched)" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  export FAKE_DOCKER_OUTPUT="$VALID_RECALL_JSON"
+
+  # Pre-seed a stale cache file with a sentinel digest.
+  mkdir -p .eidolons/harness/cache
+  printf '{"cached_at":0,"query":"sentinel","digest":"[sentinel/T0] must not change"}\n' \
+    > .eidolons/harness/cache/preflight.json
+  local before; before="$(cat .eidolons/harness/cache/preflight.json)"
+
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --explain
+  [ "$status" -eq 0 ]
+
+  local after; after="$(cat .eidolons/harness/cache/preflight.json)"
+  [ "$before" = "$after" ]
+}
+
+@test "memory: --explain does not create a cache file when none existed" {
+  seed_manifest
+  seed_mcp_with_crystalium
+  seed_mcp_lock_with_crystalium
+  setup_fake_docker_recall
+  export FAKE_DOCKER_OUTPUT="$VALID_RECALL_JSON"
+
+  run bash "$EIDOLONS_ROOT/cli/src/memory.sh" preflight --explain
+  [ "$status" -eq 0 ]
+  [ ! -f .eidolons/harness/cache/preflight.json ]
+}
