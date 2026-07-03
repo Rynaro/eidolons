@@ -454,9 +454,9 @@ eidolons:
       repo: Rynaro/APIVR-Delta
       default_ref: main
     versions:
-      latest: "3.7.1"
+      latest: "3.8.0"
       pins:
-        stable: "3.7.1"
+        stable: "3.8.0"
       releases:
         3.0.5:
           tag: v3.0.5
@@ -580,6 +580,15 @@ eidolons:
           commit: e6bf105ea5cfed4ffb7a885bc694a1d5110fd751
           tree: c1330d0d631f108332c7c0907a5921f969a9e5a5
           archive_sha256: 2d7391dcc5987af54ab7725d66702bc29a3202697d3ec26485a8d9963d090e7c
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        3.8.0:
+          tag: v3.8.0
+          commit: a8845b73f7727eaabf96a1ac8dd2b48e018a272c
+          tree: dbca79758e42a6d9c0d4a49d033ee790228b3761
+          archive_sha256: 40e3dde859318b1571fd1b6196b64dc16d48b7f36f7031a21247723282178a04
           manifest_sha256:
           provenance:
             github_attestation: true
