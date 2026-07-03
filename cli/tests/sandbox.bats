@@ -941,3 +941,36 @@ SH
   [ "$(echo "$output" | jq -r '.attempts[0].rejected')" = "test-tamper" ]
   [ "$(echo "$output" | jq -r '.tamper_rejections')" = "1" ]
 }
+
+# ─── --via single-argument composition (H-WIN probe regression, 2026-07-03) ──
+# A bare `eval "$VIA" "$cmd_str"` re-parsed the command: `sh -c sh .swe-test.sh`
+# ran bare `sh` (exit 0) with the script as stray argv — a fake-green verifier
+# on a BROKEN repo. The wrapper must receive the command as ONE argument.
+
+@test "via: test command reaches the wrapper as a single argument" {
+  cd "$(mktemp -d)"
+  git init -q . && git config user.email t@e.com && git config user.name t
+  cat > fakevia <<'FV'
+#!/usr/bin/env bash
+# argv: everything after the wrapper name; record count + last arg
+printf '%s\n' "$#" > via-argv-count
+printf '%s\n' "$1" > via-arg1
+exit 7
+FV
+  chmod +x fakevia
+  printf 'echo hi\n' > t.sh
+  git add -A && git commit -qm seed
+  run bash "$EIDOLONS_ROOT/cli/src/sandbox.sh" run --via "$PWD/fakevia" -- sh t.sh
+  [ "$(cat via-argv-count)" = "1" ]
+  [ "$(cat via-arg1)" = "sh t.sh" ]
+}
+
+@test "via: broken-repo verifier stays red through a sh -c wrapper (no fake green)" {
+  cd "$(mktemp -d)"
+  git init -q . && git config user.email t@e.com && git config user.name t
+  # verifier greps for output that the broken repo cannot produce
+  printf '. ./nope.sh\ngreet\n' > main.sh
+  git add -A && git commit -qm broken
+  run bash "$EIDOLONS_ROOT/cli/src/sandbox.sh" run --via 'bash -c' -- 'sh main.sh 2>/dev/null | grep -q hi_kupo'
+  [ "$status" -ne 0 ]
+}

@@ -154,6 +154,14 @@ _run_matrix() {
     # Under --smoke every arm ignores its fix_hook (omit --fix-hook entirely
     # so the child's own smoke-detection — MODE=smoke unless --fix-hook is
     # given — engages identically to a plain no-flags run).
+    # Absolutize repo-relative hook paths: the loop invokes the hook from the
+    # ephemeral per-attempt workdir, where a relative path (e.g.
+    # evals/hooks/keep-bare.sh) resolves to nothing → exit 127 and a silent
+    # UNRESOLVED arm (observed live, 2026-07-03). Command-string hooks
+    # (containing spaces / not a file) pass through untouched.
+    if [[ "$arm_fix_hook" != /* && -f "$arm_fix_hook" ]]; then
+      arm_fix_hook="$PWD/$arm_fix_hook"
+    fi
     [[ "$SMOKE_FLAG" != true ]] && child_args+=(--fix-hook "$arm_fix_hook")
     child_args+=(--json)
 
@@ -279,7 +287,10 @@ NO_STORE=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --suite-file)       SUITE="${2:-}"; shift 2 ;;
-    --fix-hook)         FIX_HOOK="${2:-}"; shift 2 ;;
+    --fix-hook)         FIX_HOOK="${2:-}"
+                        # Absolutize repo-relative hook FILES (see matrix note).
+                        if [[ "$FIX_HOOK" != /* && -f "$FIX_HOOK" ]]; then FIX_HOOK="$PWD/$FIX_HOOK"; fi
+                        shift 2 ;;
     --via)              VIA="${2:-}"; shift 2 ;;
     --allow-unsafe-host) ALLOW_UNSAFE=true; shift ;;
     --max-attempts)     MAX_ATTEMPTS="${2:-3}"; shift 2 ;;

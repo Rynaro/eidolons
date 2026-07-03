@@ -106,4 +106,8 @@ if ! command -v claude >/dev/null 2>&1; then
   exit 1
 fi
 
-_run_with_timeout 300 claude -p "$_prompt" --model "$EIDOLONS_EVAL_MODEL" >&2
+# --permission-mode acceptEdits: headless -p cannot Write/Edit without a
+# permission grant (verified: a live probe ran the model but left the repo
+# untouched). Edits are confined to the ephemeral per-attempt workdir the
+# loop creates — the exact scope acceptEdits is safe for.
+_run_with_timeout 300 claude -p "$_prompt" --model "$EIDOLONS_EVAL_MODEL" --permission-mode acceptEdits >&2
