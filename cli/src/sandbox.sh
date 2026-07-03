@@ -271,14 +271,24 @@ _run_in_sandbox() {
   # AND keeps `set -e` from exiting on a failing test.
   if [[ -n "$cmd_str" ]]; then
     if [[ -n "$VIA" ]]; then
+      # The command MUST reach the wrapper's shell as ONE argument. A bare
+      # `eval "$VIA" "$cmd_str"` re-parses cmd_str: `sh -c sh .swe-test.sh`
+      # runs bare `sh` (exit 0, no stdin) with the script as stray argv —
+      # observed as a fake-green verifier on a BROKEN repo (H-WIN probe,
+      # 2026-07-03). The single-quoted '"$cmd_str"' defers expansion to
+      # eval-parse time, delivering the intact string to sh -c.
       # shellcheck disable=SC2086
-      eval "$VIA" "$cmd_str" >"$logf" 2>&1 || rc=$?
+      eval "$VIA" '"$cmd_str"' >"$logf" 2>&1 || rc=$?
     else
       bash -c "$cmd_str" >"$logf" 2>&1 || rc=$?
     fi
   elif [[ -n "$VIA" ]]; then
+    # Same single-argument rule for the argv form: join words, deliver one
+    # string to the wrapper (a sh -c wrapper can only take one command arg).
+    local _via_joined
+    _via_joined="${TEST_CMD[*]+"${TEST_CMD[*]}"}"
     # shellcheck disable=SC2086
-    eval "$VIA" "${TEST_CMD[@]+"${TEST_CMD[@]}"}" >"$logf" 2>&1 || rc=$?
+    eval "$VIA" '"$_via_joined"' >"$logf" 2>&1 || rc=$?
   else
     "${TEST_CMD[@]}" >"$logf" 2>&1 || rc=$?
   fi

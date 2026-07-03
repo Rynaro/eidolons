@@ -282,3 +282,30 @@ EOF
   run jq -e '(.arms | length) == 2 and (.arms | map(.label) | index("bare-standard")) and (.arms | map(.label) | index("system-light")) and ([.arms[] | select(.control == true)] | length) == 1' "$EIDOLONS_ROOT/evals/arms/h-win.json"
   [ "$status" -eq 0 ]
 }
+
+# ─── relative fix-hook absolutization (H-WIN probe regression, 2026-07-03) ──
+# The loop invokes the hook from the ephemeral workdir; a repo-relative hook
+# path resolved to nothing (exit 127) and the arm silently scored UNRESOLVED.
+
+@test "matrix: repo-relative fix_hook file is absolutized before reaching the loop" {
+  cd "$(mktemp -d)"
+  mkdir -p hooks
+  cat > hooks/rel-hook.sh <<'H'
+#!/usr/bin/env bash
+exit 1
+H
+  chmod +x hooks/rel-hook.sh
+  cat > arms.json <<'A'
+{"arms":[{"label":"rel","fix_hook":"hooks/rel-hook.sh","env":{},"control":true}]}
+A
+  # --smoke skips hook use entirely; we only assert the parse-time transform,
+  # observable via the scorecard's recorded arm.fix_hook (absolute path).
+  export EIDOLONS_EVAL_RESULTS_DIR="$PWD/results"
+  run bash "$EIDOLONS_ROOT/cli/src/eval_swe.sh" --matrix arms.json --smoke \
+    --suite-file "$EIDOLONS_ROOT/evals/swe-suite.yaml" --k 1
+  [ "$status" -eq 0 ]
+  card="$(ls "$EIDOLONS_EVAL_RESULTS_DIR"/*-rel.scorecard.json 2>/dev/null | head -1)"
+  [ -n "$card" ]
+  hookpath="$(jq -r '.arm.fix_hook' "$card")"
+  [[ "$hookpath" = /* ]]
+}
