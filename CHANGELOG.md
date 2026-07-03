@@ -13,6 +13,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - spectra v4.11.0 published in the roster with release integrity metadata.
 - apivr v3.8.0 published in the roster with release integrity metadata.
 - vivi v1.3.0 published in the roster with release integrity metadata.
+- forge v1.10.0 published in the roster with release integrity metadata.
 
 ## [1.48.0] — 2026-07-03 — feat: v2.0 Wave 2 — routing 1.1 weak-host data, sandbox tier cascade + anti-tamper ratchet, tier-execution dial
 
