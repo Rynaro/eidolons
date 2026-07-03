@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-07-03T12:23Z"
+updated_at: "2026-07-03T13:23Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1300,9 +1300,9 @@ eidolons:
       # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
       signer_workflow: .github/workflows/release.yml
     versions:
-      latest: "1.5.1"
+      latest: "1.6.0"
       pins:
-        stable: "1.5.1"
+        stable: "1.6.0"
       releases:
         1.0.0:
           tag: v1.0.0
@@ -1353,6 +1353,15 @@ eidolons:
           commit: 8a785e70f590a51473e715f7f1c95aee0935fa40
           tree: 07a8dc7dce5c197688f0efcedcfddabfdb0fff25
           archive_sha256: cbaecd6c0388de57c8d3337d53e7634ffd81b36437bb81085b0921ba8d856b02
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.6.0:
+          tag: v1.6.0
+          commit: 6379ab98c4b53e182a0ed7b3301ae8630bad0a34
+          tree: 6763f9f42709cdb6b61eaffaf8b7b9c15d88489f
+          archive_sha256: ed242d7e78190c158da94cd5d7edb1ee00efd02a3b213119b19efc62a540016d
           manifest_sha256:
           provenance:
             github_attestation: true
