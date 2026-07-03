@@ -601,3 +601,147 @@ YAML
   [ "$status" -ne 0 ]
   [[ "$output" =~ "D10 host-tier gate" ]]
 }
+
+# ─── DD-25..DD-27: D13 memory recallability probe ─────────────────────────
+#
+# D13 is a project-level, diagnostic-only gate (never fails the run): it
+# probes crystalium via the same gate + docker-args transform as
+# 'eidolons memory preflight' (cli/src/lib_memory_probe.sh). These tests
+# mirror memory.bats' fake-docker-on-PATH pattern (see memory.bats:16-96).
+
+# Seed a .mcp.json with a crystalium entry (mirrors memory.bats' fixture).
+_dd25_seed_mcp_with_crystalium() {
+  cat > .mcp.json <<'JSON'
+{
+  "mcpServers": {
+    "crystalium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "crystalium-dd-test",
+        "-v",
+        "/tmp/crystalium-dd-test:/root/.crystalium/dd-test",
+        "-e",
+        "CRYSTALIUM_DATA_DIR=/root/.crystalium/dd-test",
+        "ghcr.io/rynaro/crystalium@sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894",
+        "python",
+        "-m",
+        "crystalium",
+        "serve"
+      ]
+    }
+  }
+}
+JSON
+}
+
+_dd25_seed_mcp_lock_with_crystalium() {
+  cat > eidolons.mcp.lock <<'LOCK'
+generated_at: "2026-06-11T00:00:00Z"
+eidolons_cli_version: "1.36.0"
+catalogue_version: "1.2"
+mcps:
+  - name: crystalium
+    kind: oci-image
+    version: "1.3.0"
+    source:
+      image: "ghcr.io/rynaro/crystalium"
+    integrity:
+      algo: oci-digest
+      value: "sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894"
+    target: ".mcp.json"
+    installed_at: "2026-06-11T00:00:00Z"
+LOCK
+}
+
+# Install a fake docker on PATH that answers the two D13 sub-invocations
+# (`... crystalium doctor` and `... crystalium recall ...`) independently,
+# controlled by env vars:
+#   FAKE_DOCKER_DOCTOR_OUTPUT / FAKE_DOCKER_DOCTOR_EXIT
+#   FAKE_DOCKER_RECALL_OUTPUT / FAKE_DOCKER_RECALL_EXIT
+_dd25_setup_fake_docker() {
+  local fake_bin="$BATS_TEST_TMPDIR/dd25-fake-bin"
+  mkdir -p "$fake_bin"
+  # NOTE: default values are assigned via separate `[ -z ... ]` checks rather
+  # than `${VAR:-literal-json}` — embedding unescaped JSON braces inside a
+  # `${VAR:-...}` default confuses bash's brace matching for the expansion
+  # terminator and corrupts the output (observed while authoring this test).
+  cat > "$fake_bin/docker" <<'DSHIM'
+#!/usr/bin/env bash
+ARGV="$*"
+case "$ARGV" in
+  *" doctor")
+    OUT="$FAKE_DOCKER_DOCTOR_OUTPUT"
+    if [ -z "$OUT" ]; then
+      OUT="CRYSTALIUM doctor
+
+  [OK]   core imports
+
+doctor: all P0 checks passed."
+    fi
+    printf '%s\n' "$OUT"
+    exit "${FAKE_DOCKER_DOCTOR_EXIT:-0}"
+    ;;
+  *" recall "*)
+    OUT="$FAKE_DOCKER_RECALL_OUTPUT"
+    if [ -z "$OUT" ]; then
+      OUT='{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}'
+    fi
+    printf '%s\n' "$OUT"
+    exit "${FAKE_DOCKER_RECALL_EXIT:-0}"
+    ;;
+esac
+exit 1
+DSHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+}
+
+@test "DD-25: D13 SKIP — crystalium not gated in (no .mcp.json)" {
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "D13 — memory recallability probe" ]]
+  [[ "$output" =~ "crystalium not gated in (skip)" ]]
+}
+
+@test "DD-26: D13 WARN — crystalium gated in but probe recall returns 0 records" {
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  _dd25_seed_mcp_with_crystalium
+  _dd25_seed_mcp_lock_with_crystalium
+  _dd25_setup_fake_docker
+  export FAKE_DOCKER_RECALL_OUTPUT='{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}'
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "D13 — memory recallability probe" ]]
+  [[ "$output" =~ "crystalium store returns 0 records — memory is effectively write-only (check scope keys, crystal status, embeddings)" ]]
+  # D13 is diagnostic-only: it must never fail the run by itself.
+  # (other unrelated fast checks may still fail in this minimal scaffold, so
+  # we only assert the WARN line is present, not overall doctor exit status.)
+}
+
+@test "DD-27: D13 PASS — crystalium gated in and probe recall returns records" {
+  scaffold_full atlas
+  write_agent_md atlas 5
+  write_spec_md atlas
+  write_host_agent_correct atlas
+
+  _dd25_seed_mcp_with_crystalium
+  _dd25_seed_mcp_lock_with_crystalium
+  _dd25_setup_fake_docker
+  export FAKE_DOCKER_RECALL_OUTPUT='{"records":[{"id":"c1","layer":"semantic","trust_tier":"T1","summary":"x","validation_state":"valid","importance":0.5,"last_access":"2026-06-11T00:00:00Z","content_ref":null,"score":0.9}],"slot_breakdown":{"semantic":1},"total_tokens":10,"evicted_count":0}'
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "D13 — memory recallability probe" ]]
+  [[ "$output" =~ "crystalium returned 1 record(s)" ]]
+}

@@ -12,6 +12,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib_model_resolve.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_model_wiring.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_memory_probe.sh"
 
 usage() {
   cat <<EOF
@@ -49,6 +51,7 @@ Deep checks (--deep):
   D10  host-tier gate structural check          when ≥2 coders exist and one requires a host_tier, assert a conservative fallback coder is present (routing tiebreak invariant)
   D11  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
   D12  harness lock⇄files consistency           shims exist+exec, settings/hooks/opencode.json valid+entries present, strict surfaces only on verified-sound hosts, effective-tier report
+  D13  memory recallability probe                crystalium doctor + a probe recall via the docker transform; SKIP when crystalium not gated in; WARN (never FAIL) on 0 records or unreachable
 EOF
 }
 
@@ -773,6 +776,90 @@ if [[ "$_c15_warned" == "false" ]]; then
 fi
 unset _c15_claude_wired _c15_warned
 
+#
+# D13: memory recallability probe (crystalium round-trip liveness)
+# Project-level gate (not per-member): when crystalium is gated in (same gate
+# as 'eidolons memory preflight' — .mcp.json AND eidolons.mcp.lock; shared via
+# lib_memory_probe.sh, NOT lib.sh), runs the crystalium CLI `doctor`
+# subcommand and a probe `recall --k 3` via the same docker-args transform as
+# memory preflight. Hard 10s timeout per invocation (with_timeout, lib.sh).
+#
+# This is a DIAGNOSTIC surface, not a release gate: it NEVER fails the run.
+#   - crystalium not gated in           -> SKIP (pass, informational)
+#   - docker absent / build / timeout   -> WARN "crystalium unreachable for probe"
+#   - probe recall returns 0 records    -> WARN (store may be write-only)
+#   - probe recall returns >0 records   -> PASS with the count
+# Always returns 0 (rc is not accumulated into ERRORS beyond warn's no-op).
+deep_check_memory_recallability() {
+  local root; root="$(pwd)"
+
+  if ! memory_probe_gated_in "$root"; then
+    pass "D13 memory recallability: crystalium not gated in (skip)"
+    return 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    warn "D13 memory recallability: crystalium unreachable for probe (docker not on PATH)"
+    return 0
+  fi
+
+  # ── crystalium doctor ────────────────────────────────────────────────────
+  local doctor_script; doctor_script="$(mktemp)"
+  if memory_probe_build_docker_script "$root" "doctor" "$doctor_script"; then
+    local doctor_out doctor_exit=0
+    doctor_out="$(with_timeout 10 bash "$doctor_script" 2>/dev/null)" || doctor_exit=$?
+    if [[ "$doctor_exit" -eq 0 ]]; then
+      local verdict
+      verdict="$(printf '%s' "$doctor_out" \
+        | grep -E 'all P0 checks passed|P0 checks FAILED' | tail -1)"
+      pass "D13 crystalium doctor: ${verdict:-ran (exit 0)}"
+    else
+      warn "D13 crystalium doctor: crystalium unreachable for probe (exit $doctor_exit)"
+    fi
+  else
+    warn "D13 crystalium doctor: crystalium unreachable for probe ('serve' not found in .mcp.json args)"
+  fi
+  rm -f "$doctor_script"
+
+  # ── probe recall (--k 3, generic query) ──────────────────────────────────
+  local recall_script; recall_script="$(mktemp)"
+  local slug; slug="$(memory_probe_project_slug "$root")"
+  local q_query q_slug recall_args
+  q_query="$(memory_probe_quote "project")"
+  q_slug="$(memory_probe_quote "$slug")"
+  recall_args="recall --query $q_query --scope-project $q_slug --k 3 --format json"
+
+  if ! memory_probe_build_docker_script "$root" "$recall_args" "$recall_script"; then
+    warn "D13 memory recallability probe: crystalium unreachable for probe ('serve' not found in .mcp.json args)"
+    rm -f "$recall_script"
+    return 0
+  fi
+
+  local recall_out recall_exit=0
+  recall_out="$(with_timeout 10 bash "$recall_script" 2>/dev/null)" || recall_exit=$?
+  rm -f "$recall_script"
+
+  if [[ "$recall_exit" -ne 0 ]]; then
+    warn "D13 memory recallability probe: crystalium unreachable for probe (exit $recall_exit)"
+    return 0
+  fi
+
+  if ! printf '%s' "$recall_out" | jq empty >/dev/null 2>&1; then
+    warn "D13 memory recallability probe: crystalium unreachable for probe (malformed output)"
+    return 0
+  fi
+
+  local count
+  count="$(printf '%s' "$recall_out" | jq -r '(.records // []) | length' 2>/dev/null || echo "0")"
+  if [[ "$count" -eq 0 ]]; then
+    warn "D13 memory recallability probe: crystalium store returns 0 records — memory is effectively write-only (check scope keys, crystal status, embeddings)"
+  else
+    pass "D13 memory recallability probe: crystalium returned $count record(s)"
+  fi
+
+  return 0
+}
+
 # ─── Methodology integrity (--deep) ─────────────────────────────────────
 # D1..D7 run only when --deep is passed. The fast checks (1..14) always run
 # first. Within this section, checks do NOT short-circuit on early failures:
@@ -983,6 +1070,13 @@ if [[ "$DEEP" == "true" ]]; then
       _d12_rc=0
       deep_check_harness_consistency || _d12_rc=$?
       ERRORS=$((ERRORS + _d12_rc))
+
+      # D13 — memory recallability probe (crystalium round-trip liveness)
+      # Project-level gate: SKIP when crystalium not gated in; WARN (never
+      # FAIL) on 0 records or unreachable — a diagnostic surface, not a
+      # release gate. Always returns 0; not accumulated into ERRORS.
+      echo "  D13 — memory recallability probe"
+      deep_check_memory_recallability || true
     fi
 
     # Remedy hint when methodology errors were found.

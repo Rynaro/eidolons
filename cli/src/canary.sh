@@ -10,6 +10,7 @@
 #   eidolons canary <name>                     → prompt mode  (print prompt + criteria)
 #   eidolons canary <name> --validate <file>   → validate mode
 #   eidolons canary --list                     → list mode    (cache scan)
+#   eidolons canary --memory                   → memory mode  (crystalium liveness probe)
 #
 # Bash 3.2 compatible: no associative arrays, no mapfile/readarray,
 # no ${var,,}, no &>>, no process-substitution with exit-code dependence.
@@ -18,6 +19,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_memory_probe.sh"
 
 # ─── Usage ────────────────────────────────────────────────────────────────────
 usage() {
@@ -29,17 +32,21 @@ Usage:
   eidolons canary <name>                       Print canary prompt + criteria
   eidolons canary <name> --validate <file>     Validate saved LLM output
   eidolons canary --list                       List Eidolons with/without missions
+  eidolons canary --memory                     Crystalium memory liveness probe
 
 Options:
   --validate <file>    Validate LLM response from file against mission criteria
   --list               Scan cache; report mission availability per Eidolon
   --mission <id>       Select non-default mission by ID
+  --memory             Recall-only crystalium liveness check (SKIP when
+                        crystalium is not gated in .mcp.json + eidolons.mcp.lock)
   --json               Emit machine-readable JSON on stdout
   -h, --help           Show this help
 
 Exit codes:
-  0   Prompt printed / validation PASS (or INCONCLUSIVE only) / list printed
-  1   Validation had ≥1 FAIL criterion
+  0   Prompt printed / validation PASS (or INCONCLUSIVE only) / list printed /
+      --memory SKIP or PASS or INCONCLUSIVE
+  1   Validation had ≥1 FAIL criterion / --memory FAIL
   2   Misuse: unknown name, missing file, unknown flag
 
 What it does:
@@ -50,6 +57,12 @@ What it does:
      the structured criteria (MUST/SHOULD × 4 verbs).
   4. '--list' scans the per-version cache for every lock member and reports
      which have canary missions authored.
+  5. '--memory' probes the live crystalium store via the same docker transform
+     as 'eidolons memory preflight' / doctor D13. This is a RECALL-ONLY
+     liveness check, not a write->recall round trip: crystalium's own
+     `canary` CLI subcommand runs a 10-mission A/B eval against a fresh
+     EPHEMERAL store (not the live project store), so it is not surfaced
+     here; and the write (`commit`) path is MCP-only, unreachable from bash.
 
 Validation DSL verbs:
   MUST|SHOULD contain heading: <pattern>
@@ -67,6 +80,7 @@ EOF
 NAME=""
 VALIDATE_FILE=""
 LIST_MODE=false
+MEMORY_MODE=false
 MISSION_ID=""
 JSON=false
 
@@ -74,6 +88,10 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --list)
       LIST_MODE=true
+      shift
+      ;;
+    --memory)
+      MEMORY_MODE=true
       shift
       ;;
     --validate)
@@ -465,6 +483,100 @@ run_list_mode() {
     "$parsed_count" "$legacy_count" "$miss_count"
 }
 
+# ─── MODE: memory ─────────────────────────────────────────────────────────────
+#
+# Recall-only crystalium liveness probe, reusing the same gate + docker-args
+# transform as 'eidolons memory preflight' and doctor D13
+# (deep_check_memory_recallability), via lib_memory_probe.sh.
+#
+# NOT a write->recall round trip. Investigated crystalium's own `canary` CLI
+# subcommand first (python -m crystalium canary): it dispatches to
+# evals.ab_memory_onoff.run_all, which runs a 10-mission memory-on/off A/B
+# ablation eval against a FRESH EPHEMERAL data_dir it creates per run — not
+# the live, mounted project store this command is meant to check. Surfacing
+# its result here would silently answer a different question than the one
+# asked ("is THIS project's live memory reachable and non-empty?"), so it is
+# deliberately not invoked. crystalium's write path (`commit`) is MCP-only
+# (server.py handlers) and not reachable from a one-shot CLI invocation, so a
+# true write->recall round trip isn't buildable from bash either. This mode
+# therefore degrades to a recall-only liveness check and says so explicitly.
+#
+# PASS/FAIL/SKIP/INCONCLUSIVE, consistent with the vocabulary used by the
+# --validate mode's criteria evaluator:
+#   crystalium not gated in       -> SKIP  (exit 0)
+#   docker not on PATH            -> SKIP  (exit 0)
+#   invocation cannot be built /
+#   docker unreachable / timeout /
+#   malformed output              -> FAIL  (exit 1)
+#   probe recall returns 0 records -> INCONCLUSIVE (exit 0)
+#   probe recall returns >0 records -> PASS (exit 0)
+run_memory_mode() {
+  local project_root; project_root="$(pwd)"
+
+  printf '═══════════════════════════════════════════════════════════════\n'
+  printf 'canary --memory — crystalium recall-only liveness probe\n'
+  printf '═══════════════════════════════════════════════════════════════\n'
+  printf '\n'
+  printf 'What this checks:\n'
+  printf '  - crystalium CLI reachability via the docker transform (same path as\n'
+  printf '    eidolons memory preflight / doctor --deep D13).\n'
+  printf '  - a probe recall (--k 3) against the live, mounted project store.\n'
+  printf '\n'
+  printf 'What this does NOT check:\n'
+  printf '  - a true write -> recall round trip. crystalium'"'"'s own `canary` CLI\n'
+  printf '    subcommand runs a 10-mission A/B eval against a fresh EPHEMERAL\n'
+  printf '    store (not the live project store), so it is not surfaced here.\n'
+  printf '  - the write (`commit`) path, which is MCP-only and unreachable from bash.\n'
+  printf '\n'
+
+  if ! memory_probe_gated_in "$project_root"; then
+    printf 'SKIP — crystalium not gated in (.mcp.json + eidolons.mcp.lock)\n'
+    exit 0
+  fi
+
+  if ! command -v docker >/dev/null 2>&1; then
+    printf 'SKIP — docker not on PATH\n'
+    exit 0
+  fi
+
+  local slug q_query q_slug recall_args script
+  slug="$(memory_probe_project_slug "$project_root")"
+  q_query="$(memory_probe_quote "project")"
+  q_slug="$(memory_probe_quote "$slug")"
+  recall_args="recall --query $q_query --scope-project $q_slug --k 3 --format json"
+
+  script="$(mktemp)"
+  if ! memory_probe_build_docker_script "$project_root" "$recall_args" "$script"; then
+    printf "FAIL — could not resolve a recall invocation ('serve' not found in .mcp.json crystalium args)\n"
+    rm -f "$script"
+    exit 1
+  fi
+
+  local out exit_code=0
+  out="$(with_timeout 10 bash "$script" 2>/dev/null)" || exit_code=$?
+  rm -f "$script"
+
+  if [[ "$exit_code" -ne 0 ]]; then
+    printf 'FAIL — crystalium unreachable for probe (exit %s)\n' "$exit_code"
+    exit 1
+  fi
+
+  if ! printf '%s' "$out" | jq empty >/dev/null 2>&1; then
+    printf 'FAIL — crystalium unreachable for probe (malformed output)\n'
+    exit 1
+  fi
+
+  local count
+  count="$(printf '%s' "$out" | jq -r '(.records // []) | length' 2>/dev/null || echo "0")"
+  if [[ "$count" -eq 0 ]]; then
+    printf 'INCONCLUSIVE — crystalium reachable; 0 records returned by probe recall (store may be empty/mis-scoped)\n'
+    exit 0
+  fi
+
+  printf 'PASS — crystalium reachable; probe recall returned %s record(s)\n' "$count"
+  exit 0
+}
+
 # ─── MODE: prompt ─────────────────────────────────────────────────────────────
 
 run_prompt_mode() {
@@ -762,6 +874,10 @@ nexus_refresh
 if [[ "$LIST_MODE" == "true" ]]; then
   run_list_mode
   exit 0
+fi
+
+if [[ "$MEMORY_MODE" == "true" ]]; then
+  run_memory_mode
 fi
 
 if [[ -z "$NAME" ]]; then

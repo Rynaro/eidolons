@@ -54,8 +54,82 @@ fi
 
 _hosts_json="$(printf '%s' "$_lock_json" | jq -r '(.harness.hosts_wired // [])[]' 2>/dev/null || echo "")"
 _shims_json="$(printf '%s' "$_lock_json" | jq -r '(.harness.shim_paths // [])[]' 2>/dev/null || echo "")"
-_settings_patched="$(printf '%s' "$_lock_json" | jq -r '.harness.settings_json_patched // false' 2>/dev/null || echo "false")"
-_codex_patched="$(printf '%s' "$_lock_json" | jq -r '.harness.codex_hooks_json_patched // false' 2>/dev/null || echo "false")"
+
+# ── Reality probes: settings/hooks patched ─────────────────────────────────
+# The lock never records `.harness.settings_json_patched` /
+# `.harness.codex_hooks_json_patched` (harness_install.sh writes only
+# schema_version/hosts_wired/shim_paths/strict/strict_modes/protect), so those
+# keys always read "absent" → the old jq reads below always displayed false.
+# Probe the actual host surface instead: true iff the file exists AND wires an
+# eidolons hook. Prefer an exact match against a recorded shim path (scoped to
+# the relevant host so a codex shim can't false-positive a claude-code probe);
+# when no shim path is recorded, fall back to a conservative "eidolons"
+# substring grep inside the hooks object. Read-only; any probe failure
+# (missing file, malformed JSON) degrades to "false" — never errors.
+_harness_probe_settings_patched() {
+  local settings_file=".claude/settings.json"
+  [[ -f "$settings_file" ]] || { printf 'false'; return 0; }
+  local _hooks_dump
+  _hooks_dump="$(jq -c '.hooks // {}' "$settings_file" 2>/dev/null)" || { printf 'false'; return 0; }
+  [[ -n "$_hooks_dump" && "$_hooks_dump" != "null" ]] || { printf 'false'; return 0; }
+
+  local _cc_shims
+  _cc_shims="$(printf '%s' "$_shims_json" | grep 'claude-code' 2>/dev/null || true)"
+  if [[ -n "$_cc_shims" ]]; then
+    while IFS= read -r _sp; do
+      [[ -z "$_sp" ]] && continue
+      if printf '%s' "$_hooks_dump" | grep -qF "$_sp"; then
+        printf 'true'
+        return 0
+      fi
+    done <<EOF
+$_cc_shims
+EOF
+    printf 'false'
+    return 0
+  fi
+
+  # No recorded shim paths for claude-code — conservative fallback grep.
+  if printf '%s' "$_hooks_dump" | grep -q "eidolons"; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+_harness_probe_codex_hooks_patched() {
+  local hooks_file=".codex/hooks.json"
+  [[ -f "$hooks_file" ]] || { printf 'false'; return 0; }
+  local _hooks_dump
+  _hooks_dump="$(jq -c '.hooks // {}' "$hooks_file" 2>/dev/null)" || { printf 'false'; return 0; }
+  [[ -n "$_hooks_dump" && "$_hooks_dump" != "null" ]] || { printf 'false'; return 0; }
+
+  local _codex_shims
+  _codex_shims="$(printf '%s' "$_shims_json" | grep 'codex' 2>/dev/null || true)"
+  if [[ -n "$_codex_shims" ]]; then
+    while IFS= read -r _sp; do
+      [[ -z "$_sp" ]] && continue
+      if printf '%s' "$_hooks_dump" | grep -qF "$_sp"; then
+        printf 'true'
+        return 0
+      fi
+    done <<EOF
+$_codex_shims
+EOF
+    printf 'false'
+    return 0
+  fi
+
+  # No recorded shim paths for codex — conservative fallback grep.
+  if printf '%s' "$_hooks_dump" | grep -q "eidolons"; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
+_settings_patched="$(_harness_probe_settings_patched 2>/dev/null || echo "false")"
+_codex_patched="$(_harness_probe_codex_hooks_patched 2>/dev/null || echo "false")"
 _strict_wired="$(printf '%s' "$_lock_json" | jq -r '(.harness.strict // []) | join(",")' 2>/dev/null || echo "")"
 _strict_modes="$(printf '%s' "$_lock_json" | jq -c '.harness.strict_modes // {}' 2>/dev/null || echo '{}')"
 _protect_globs_count="$(printf '%s' "$_lock_json" | jq -r '(.harness.protect // []) | length' 2>/dev/null || echo "0")"

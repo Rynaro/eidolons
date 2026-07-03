@@ -437,6 +437,73 @@ JSON
   [[ "$output" =~ "T3" ]]
 }
 
+# ─── Change 2: status probes REALITY, not never-written lock keys ─────────────
+# Defect: harness_install.sh never writes .harness.settings_json_patched /
+# .harness.codex_hooks_json_patched (it records schema_version/hosts_wired/
+# shim_paths/strict/strict_modes/protect only — harness_install.sh:780-850),
+# so the old jq reads of those lock keys always displayed false. status must
+# instead probe the actual .claude/settings.json / .codex/hooks.json surfaces.
+
+@test "harness: status reports settings.json + codex hooks.json patched TRUE after a real install" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex --non-interactive
+  [ "$status" -eq 0 ]
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "settings.json patched: true" ]]
+  [[ "$output" =~ "codex hooks.json patched: true" ]]
+}
+
+@test "harness: status reports settings.json patched FALSE when a foreign settings.json has no eidolons wiring" {
+  seed_manifest
+  seed_lock_with_harness "claude-code"
+  mkdir -p .eidolons/harness/hooks .claude
+  touch .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  touch .eidolons/harness/hooks/claude-code-SessionStart.sh
+  # Lock claims claude-code is wired, but the real settings.json on disk has
+  # ONLY a foreign hook entry — no eidolons shim command anywhere.
+  cat > .claude/settings.json <<'EOF'
+{"hooks": {"PreToolUse": [{"hooks": [{"type": "command", "command": "/usr/local/bin/other-tool.sh"}]}]}}
+EOF
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "settings.json patched: false" ]]
+}
+
+@test "harness: status reports patched FALSE when lock claims installed but host files are absent (post-remove reality)" {
+  seed_manifest
+  seed_lock_with_harness "claude-code,codex"
+  mkdir -p .eidolons/harness/hooks
+  touch .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  touch .eidolons/harness/hooks/claude-code-SessionStart.sh
+  touch .eidolons/harness/hooks/codex-UserPromptSubmit.sh
+  touch .eidolons/harness/hooks/codex-SessionStart.sh
+  # No .claude/settings.json and no .codex/hooks.json on disk at all — the
+  # state 'harness remove' leaves behind on the *host surfaces* (remove also
+  # strips the lock's harness: key entirely; seed_lock_with_harness isolates
+  # the reality-probe behavior from that early-exit branch).
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "settings.json patched: false" ]]
+  [[ "$output" =~ "codex hooks.json patched: false" ]]
+}
+
+@test "harness: status after a real install+remove cycle reports not installed (no stale true)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex --non-interactive
+  [ "$status" -eq 0 ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ ! -f ".codex/hooks.json" ]
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "not installed" ]]
+  [[ "$output" != *"settings.json patched: true"* ]]
+  [[ "$output" != *"codex hooks.json patched: true"* ]]
+}
+
 # ─── R2-AC6: codex hooks.json ─────────────────────────────────────────────────
 
 @test "harness: install codex writes hooks.json" {
@@ -548,6 +615,58 @@ SHIM
     # Must NOT degrade to the old bare pointer.
     [[ "$_ctx" != *"route per Eidolons dispatch protocol."* ]]
   fi
+}
+
+# ─── model_tier / model_tier_per_step injection (roster/routing.yaml ladder) ──
+# Derived from the SAME artifact JSON the hook already parses; no kernel re-run.
+
+@test "harness: run --hook claude-code single-dispatch UPS carries 'model tier: deep' for a VIGIL-routing prompt" {
+  seed_manifest
+  # 'root cause the flaky login test' matches VIGIL's trigger verbs
+  # (root cause / flaky); VIGIL has suggested_tier: deep in routing.yaml.
+  run eidolons run --hook claude-code "root cause the flaky login test"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+  [[ "$_ctx" == *"Route: vigil"* ]]
+  [[ "$_ctx" == *"model tier: deep"* ]]
+  [[ "$_ctx" == *"honor each step's model tier"* ]]
+  [[ "$_ctx" == *"roster/routing.yaml"* ]]
+  # Single dispatch must NOT emit the plural chain form.
+  [[ "$_ctx" != *"model tiers:"* ]]
+}
+
+@test "harness: run --hook claude-code chain UPS carries arrow-joined 'model tiers:' per step" {
+  seed_manifest
+  # 'map ... spec ... implement' co-triggers scout+planner+coder → the
+  # plan-before-build chain (atlas → spectra → vivi → idg).
+  run eidolons run --hook claude-code "map the codebase, spec the change, then implement it"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+  [[ "$_ctx" == *"Chain: atlas → spectra → vivi → idg"* ]]
+  [[ "$_ctx" == *"model tiers: atlas=standard → spectra=deep → vivi=standard → idg=light"* ]]
+  # Chain form must NOT emit the singular dispatch form.
+  [[ "$_ctx" != *"model tier: "* ]]
+}
+
+@test "harness: harness_hook.sh fail-open — artifact missing model_tier_per_step emits valid JSON with no tier lines" {
+  # Craft a routing-decision artifact (mirrors the existing ESL-rider fixtures)
+  # that lacks .chain / .model_tier_per_step entirely — the fields the hook
+  # would normally read to build the tier line(s).
+  local art='{"decision":"route","selected":["spectra"],"tier":"standard"}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="x" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  local _raw_json="$output"
+  # Output must still be valid JSON.
+  run jq -e '.hookSpecificOutput.additionalContext' <<< "$_raw_json"
+  [ "$status" -eq 0 ]
+  _ctx="$(jq -r '.hookSpecificOutput.additionalContext' <<< "$_raw_json")"
+  [[ "$_ctx" != *"model tier"* ]]
+  [[ "$_ctx" != *"honor each step's model tier"* ]]
 }
 
 # ─── R1-AC2: trivial prompt emits empty stdout ─────────────────────────────────

@@ -253,7 +253,8 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
           selected: $chain.steps,
           chain: [ $chain.steps[] as $st | ($R.eidolons[$st]) as $e
                    | {eidolon:$st, role:$e.capability_class, edge_origin:"routing", template:$chain.name} ],
-          model_tier_per_step: [ $chain.steps[] as $st | $R.eidolons[$st].model_tier ],
+          model_tier_per_step: [ $chain.steps[] as $st
+                                  | ($R.eidolons[$st].suggested_tier // $R.eidolons[$st].model_tier // "standard") ],
           confidence: ([ $contenders[].score ] | min | if . > 1 then 1 else . end),
           clarification_request: null,
           refusal_rerouting: false,

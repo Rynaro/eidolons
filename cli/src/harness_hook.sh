@@ -222,6 +222,30 @@ ${esl_block}"
     ctx_text="$ctx_text  Notes: $assumptions_str"
   fi
 
+  # ── Model tier line(s) — roster/routing.yaml tier ladder (light<standard<deep) ──
+  # Derived from the SAME artifact JSON parsed above (no kernel re-run). Single
+  # dispatch/refusal-reroute → "model tier: <t>"; chain → arrow-joined per-step
+  # "<eidolon>=<tier>" pairs aligned to .chain order. Fail-open: absent, empty,
+  # length-mismatched, or non-string tier values ⇒ jq emits nothing and no line
+  # (nor the fixed instruction line) is added — never breaks the JSON contract.
+  local tier_line
+  tier_line="$(printf '%s' "$artifact_json" | jq -r '
+    (.chain // []) as $c
+    | (.model_tier_per_step // []) as $mt
+    | if ($c | length) == 0 or ($mt | length) == 0 or (($c | length) != ($mt | length))
+        or ([$mt[] | select((type != "string") or (. == ""))] | length) > 0
+      then empty
+      elif ($c | length) == 1
+      then "model tier: " + $mt[0]
+      else "model tiers: "
+           + ([range(0; $c | length) | ($c[.].eidolon // "?") + "=" + $mt[.]] | join(" → "))
+      end
+  ' 2>/dev/null || true)"
+
+  if [[ -n "$tier_line" ]]; then
+    ctx_text="$ctx_text  $tier_line  When dispatching subagents, honor each step's model tier (light<standard<deep) via the host's model selection mechanism; tiers come from roster/routing.yaml."
+  fi
+
   # ── ESL rider (M2): append the "open a change first" clause on a real route ──
   # Only the non-trivial path reaches here (the clarify/trivial early-return at
   # the top already yields empty stdout = the inherited trivial escape, untouched

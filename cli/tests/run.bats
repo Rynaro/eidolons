@@ -179,6 +179,21 @@ _field() { echo "$output" | jq -r "$1"; }
   fi
 }
 
+@test "run: chain dispatch aligns model_tier_per_step with .chain (regression: raw eidolons entry has no .model_tier)" {
+  # Regression guard: the chain branch's jq previously read
+  # $R.eidolons[$st].model_tier directly off the RAW routing-YAML entry (which
+  # only ever has .suggested_tier), yielding [null, null, ...] for every chain.
+  # 'atlas, spectra, vivi, idg' co-triggers the plan-before-build chain.
+  run eidolons run "map the codebase, spec the change, then implement it" --json
+  [ "$status" -eq 0 ]
+  [ "$(_field '.decision')" = "chain" ]
+  [ "$(_field '.selected | join(",")')" = "atlas,spectra,vivi,idg" ]
+  # None of the four per-step tiers may be null.
+  [ "$(echo "$output" | jq -r '[.model_tier_per_step[] | select(. == null)] | length')" = "0" ]
+  # Values must match roster/routing.yaml suggested_tier per member, in order.
+  [ "$(_field '.model_tier_per_step | join(",")')" = "standard,deep,standard,light" ]
+}
+
 @test "run: routing data has no model_tier field (migrated to suggested_tier)" {
   # Verify the routing YAML no longer carries the old model_tier field.
   ! grep -q "model_tier:" "$EIDOLONS_ROOT/roster/routing.yaml"

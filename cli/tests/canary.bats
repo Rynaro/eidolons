@@ -402,3 +402,132 @@ EOF
   [[ "$output" =~ "1 with file-only (legacy format)" ]]
   [[ "$output" =~ "1 with no file" ]]
 }
+
+# ─── CAN-15..CAN-19: --memory mode (crystalium recall-only liveness probe) ────
+#
+# Mirrors memory.bats' fake-docker-on-PATH pattern (memory.bats:16-96) and
+# doctor_deep.bats' D13 fixtures — --memory reuses the exact same gate +
+# docker-args transform (cli/src/lib_memory_probe.sh).
+
+_can_seed_mcp_with_crystalium() {
+  cat > .mcp.json <<'JSON'
+{
+  "mcpServers": {
+    "crystalium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "crystalium-can-test",
+        "-v",
+        "/tmp/crystalium-can-test:/root/.crystalium/can-test",
+        "-e",
+        "CRYSTALIUM_DATA_DIR=/root/.crystalium/can-test",
+        "ghcr.io/rynaro/crystalium@sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894",
+        "python",
+        "-m",
+        "crystalium",
+        "serve"
+      ]
+    }
+  }
+}
+JSON
+}
+
+_can_seed_mcp_lock_with_crystalium() {
+  cat > eidolons.mcp.lock <<'LOCK'
+generated_at: "2026-06-11T00:00:00Z"
+eidolons_cli_version: "1.36.0"
+catalogue_version: "1.2"
+mcps:
+  - name: crystalium
+    kind: oci-image
+    version: "1.3.0"
+    source:
+      image: "ghcr.io/rynaro/crystalium"
+    integrity:
+      algo: oci-digest
+      value: "sha256:9f49f98bdb8a6628fec92d554a34680edc32c4034e293512dcc1004486252894"
+    target: ".mcp.json"
+    installed_at: "2026-06-11T00:00:00Z"
+LOCK
+}
+
+# Fake docker that answers a `... crystalium recall ...` invocation only
+# (--memory never invokes the `doctor` subcommand — that's D13's job).
+# Controlled by FAKE_DOCKER_RECALL_OUTPUT / FAKE_DOCKER_RECALL_EXIT.
+_can_setup_fake_docker() {
+  local fake_bin="$BATS_TEST_TMPDIR/can-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'DSHIM'
+#!/usr/bin/env bash
+ARGV="$*"
+case "$ARGV" in
+  *" recall "*)
+    OUT="$FAKE_DOCKER_RECALL_OUTPUT"
+    if [ -z "$OUT" ]; then
+      OUT='{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}'
+    fi
+    printf '%s\n' "$OUT"
+    exit "${FAKE_DOCKER_RECALL_EXIT:-0}"
+    ;;
+esac
+exit 1
+DSHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+}
+
+@test "CAN-15: --memory SKIP — crystalium not gated in (no .mcp.json)" {
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "SKIP — crystalium not gated in" ]]
+}
+
+@test "CAN-16: --memory SKIP — .mcp.json has crystalium but eidolons.mcp.lock does not" {
+  _can_seed_mcp_with_crystalium
+  # No eidolons.mcp.lock written at all.
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "SKIP — crystalium not gated in" ]]
+}
+
+@test "CAN-17: --memory PASS — crystalium gated in, stubbed docker returns records" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker
+  export FAKE_DOCKER_RECALL_OUTPUT='{"records":[{"id":"c1","layer":"semantic","trust_tier":"T1","summary":"x","validation_state":"valid","importance":0.5,"last_access":"2026-06-11T00:00:00Z","content_ref":null,"score":0.9}],"slot_breakdown":{"semantic":1},"total_tokens":10,"evicted_count":0}'
+
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "PASS — crystalium reachable; probe recall returned 1 record(s)" ]]
+  # Must state what was and wasn't checked (recall-only liveness, not a
+  # write->recall round trip).
+  [[ "$output" =~ "recall-only liveness probe" ]]
+  [[ "$output" =~ "does NOT check" ]]
+}
+
+@test "CAN-18: --memory INCONCLUSIVE — crystalium reachable but 0 records returned" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker
+  export FAKE_DOCKER_RECALL_OUTPUT='{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}'
+
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "INCONCLUSIVE — crystalium reachable; 0 records returned by probe recall" ]]
+}
+
+@test "CAN-19: --memory FAIL — docker unreachable exits 1" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker
+  export FAKE_DOCKER_RECALL_EXIT=1
+
+  run eidolons canary --memory
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL — crystalium unreachable for probe" ]]
+}
