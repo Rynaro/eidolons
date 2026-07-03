@@ -195,7 +195,7 @@ skipped entirely when `eidolons.yaml` is missing.
 Mechanical memory pre-flight (GAP-2). Surfaces prior project context from CRYSTALIUM into the SessionStart harness injection.
 
 ```
-eidolons memory preflight [--query <s>] [--ttl <sec>] [--no-cache] [--timeout <sec>]
+eidolons memory preflight [--query <s>] [--ttl <sec>] [--no-cache] [--timeout <sec>] [--explain]
 ```
 
 ### `eidolons memory preflight`
@@ -208,6 +208,7 @@ Runs a bounded one-shot CRYSTALIUM recall (out-of-MCP-session path) and emits a 
 | `--ttl <sec>` | Cache TTL in seconds. Default: 900 (15 min). Env: `EIDOLONS_MEMORY_PREFLIGHT_TTL`. |
 | `--no-cache` | Bypass cache read AND write. Always runs live; never persists the result. |
 | `--timeout <sec>` | Docker kill timeout in seconds. Default: 8. Env: `EIDOLONS_MEMORY_PREFLIGHT_TIMEOUT`. |
+| `--explain` | Human-readable diagnostic mode (NOT for hook injection): gate status, cache hit/miss/age (read-only — never writes the cache), resolved docker invocation, recall exit code, record count, `total_tokens`, `slot_breakdown`, scope/layers. On a successful recall returning 0 records, prints an explicit `0 records returned — store may be empty, mis-scoped, or filtered (status/scope)…` line. Use when memory "works" but nothing ever comes back. |
 
 **Docker args source:** reads `.mcp.json` `mcpServers.crystalium.args` (the already-rendered invocation). Transforms:
 - Strips `-i` (interactive stdin flag — one-shot needs no stdin).
@@ -299,6 +300,7 @@ Read-only report of the current harness state. Reads `eidolons.lock` and perform
 - Reports per-host effective tier and enforcement mode (`[inject-only]`, `[strict:block]`, `[strict:advisory]`).
 - Lists strict-refused hosts (e.g., cursor in manifest wire set).
 - Reports shim presence (`[present]` / `[MISSING]`).
+- `settings.json patched` / `codex hooks patched` are **reality probes**, not lock reads: true iff the host file exists AND wires an eidolons hook (exact match on the host-scoped recorded shim path when available; conservative `eidolons` grep fallback; probe failures degrade to `false`).
 - Reports cursor static surfaces (`.mdc` + AGENTS.md dispatch-pointer) when cursor is in `hosts.wire`.
 - Warns about `.codex/agents/<name>.md` files (Codex only reads `.toml` — G10).
 
@@ -308,7 +310,7 @@ Vendor-neutral routing kernel. Reads a prompt and emits a host-dialect hook arti
 
 | Flag | Purpose |
 |------|---------|
-| `--hook HOST` | Output mode: wrap routing artifact in HOST-dialect `hookSpecificOutput` JSON. |
+| `--hook HOST` | Output mode: wrap routing artifact in HOST-dialect `hookSpecificOutput` JSON. The injected context includes the route, tier, chain, and the per-step model tiers (`model tier: <t>` / `model tiers: atlas=standard → spectra=deep → …`) with an instruction to honor them via the host's model selection mechanism. |
 | `--session-start` | Emit cortex digest (used by `SessionStart` shims). |
 | `--stdin` | Read prompt from event JSON `.prompt` field on stdin instead of positional arg. |
 | `--verify` | Verify the ECL envelope on an incoming hand-off before routing (warn mode). |
@@ -327,6 +329,14 @@ Vendor-neutral routing kernel. Reads a prompt and emits a host-dialect hook arti
 - Skips entirely when `harness.schema_version` is absent from the lock.
 
 Exit 0 when D12 passes or skips; the harness error counter increments on FATAL items.
+
+### `doctor --deep` D13 gate
+
+**D13 — memory recallability** (project-level, crystalium-gated):
+
+- Skips cleanly when crystalium is not in both `.mcp.json` and `eidolons.mcp.lock`.
+- Runs the container's `crystalium doctor` and a `recall --k 3` probe via the same docker-args transform as `memory preflight` (shared plumbing: `cli/src/lib_memory_probe.sh`); hard 10 s timeout each.
+- PASS with record count, or `WARN crystalium store returns 0 records — memory is effectively write-only (check scope keys, crystal status, embeddings)`. Unreachable/timeout ⇒ WARN. Never FATAL.
 
 ---
 
@@ -458,6 +468,7 @@ Layer 3 integrity: print an Eidolon's canary mission prompt or validate a saved 
 eidolons canary <name>                       # prompt mode
 eidolons canary <name> --validate <file>     # validate mode
 eidolons canary --list                       # list mode
+eidolons canary --memory                     # memory liveness mode
 ```
 
 ### Modes
@@ -467,6 +478,7 @@ eidolons canary --list                       # list mode
 | **prompt** | `eidolons canary <name>` | Print mission prompt + expected output shape + validation criteria |
 | **validate** | `eidolons canary <name> --validate <file>` | Check saved LLM output against mission criteria |
 | **list** | `eidolons canary --list` | Scan cache; report mission status per Eidolon (three states) |
+| **memory** | `eidolons canary --memory` | Recall-only liveness probe of the live crystalium project store: PASS (records returned) / INCONCLUSIVE (reachable, 0 records) / FAIL (unreachable) / SKIP (crystalium not gated in). Deliberately not a write→recall round-trip (needs a commit-capable CLI path — crystalium 1.6) and deliberately not crystalium's own `canary` subcommand (that A/B-evals a fresh ephemeral store, a different question). Output states exactly what is and isn't checked. |
 
 ### Flags
 
