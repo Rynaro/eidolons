@@ -8,8 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [1.49.0] — 2026-07-03 — feat: v2.0 Wave 5 — eval matrix (H-WIN instrument), scorecard store, baseline diff, per-host tier canary
+
 ### Added
-- crystalium v1.6.0 published in the roster with release integrity metadata.
+- **Compliance driver `claude-headless-ups` — the SessionStart-only floor is now closable.** Investigation (verified at **$0** via a dead-endpoint probe: `ANTHROPIC_BASE_URL` → connection-refused after both hooks fired, zero tokens) established that current `claude -p` (v2.1.200) DOES fire `UserPromptSubmit` — the June measurement's floor was a 2.1.175 artifact. The new driver adds `--include-hook-events`, a version-floor gate (default 2.1.200, env-overridable), and per-run certification: the scorecard gains additive `driver_mode` + `ups_fired` (true = every ARM-A session fired UPS). ARM semantics unchanged; runbook §4b documents the rerun guidance. The A/B rerun with the primary mechanism ON is now one operator command away.
+- crystalium v1.6.0 published in the roster with release integrity metadata (memory diagnosability + guards; MCP catalogue simultaneously bumped to crystalium 1.6.0 / junction 0.4.0 / tonberry 0.5.0).
 - **Eval matrix runner — the H-WIN instrument.** `eidolons eval swe --matrix <arms.json>` runs the whole suite once per arm ({label, fix_hook, env, control} — schema `schemas/eval-arms.schema.json`), each arm re-invoking the untouched single-arm path as a child process (the sandbox `--cascade` wrap pattern); emits one scorecard per arm plus a pairwise matrix summary vs the first control arm (rate deltas, newly-resolved/regressed task flips). `--smoke` composes (gold_fix plumbing validation, free — what CI runs); `--no-store` opts out of persistence. Works against both `swe-suite` and `kupo-keep-suite` via `--suite-file`. The runner exports `EIDOLONS_EVAL_TASK_BRIEF` so hooks receive task context.
 - **Committed scorecard store** — `evals/results/` + `schemas/eval-scorecard.schema.json`; the matrix writes `<date>-<suite>-<label>.scorecard.json` + `<date>-<suite>-matrix.json`. Smoke scorecards are plumbing-validation only, never capability claims (`harness.smoke` records it in data).
 - **`eidolons eval baseline <suite> [--label] [--against]`** — mechanical scorecard diff (jq-only): resolved-rate and pass^k deltas plus per-task flips; exit 5 on regression, 0 clean. The regression-tracking primitive the v2.0 audit flagged missing ("results are ephemeral; no baselines").
@@ -17,7 +20,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - **`.github/workflows/live-eval.yml`** — weekly cron runs the matrix in `--smoke` (free plumbing canary); live billed runs require BOTH `vars.EIDOLONS_LIVE_EVAL_ENABLED == 'true'` AND `ANTHROPIC_API_KEY`, else the job states why and degrades to smoke. Results upload as artifacts, never auto-commit.
 - **H-WIN reference arms** — `evals/arms/h-win.json` pins the campaign's honest comparison: (light-tier + system discipline) vs (standard-tier + bare prompt), via `evals/hooks/keep-system.sh` (Kupo keep-or-kick/patch-verify discipline + the tier-execution light row) and `evals/hooks/keep-bare.sh` (task brief only). Hook prompts are versioned artifacts — changing them invalidates baselines.
 
-### Added (roster)
+### Added (roster — Wave-3 member releases)
 - spectra v4.11.0 published in the roster with release integrity metadata.
 - apivr v3.8.0 published in the roster with release integrity metadata.
 - vivi v1.3.0 published in the roster with release integrity metadata.

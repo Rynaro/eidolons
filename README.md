@@ -24,6 +24,8 @@ Most AI coding tools ship a **single generalist** that plans, scouts, builds, an
 
 And the routing is **mechanical, not hopeful.** Most multi-agent setups are a paragraph in `CLAUDE.md` the model is free to ignore — so it does, until you name an agent yourself. Eidolons installs real per-host hooks: at session start a deterministic, non-LLM kernel computes the routing decision and injects it — plus recalled memory — into context, **on its own, every time.** The team travels across Claude Code, Codex, GitHub Copilot, Cursor, and OpenCode, and degrades gracefully to documentary routing wherever a host's hooks aren't sound.
 
+The v2.0 line adds a deliberate design bet: **push the difficulty into the system so cheaper models win more often.** Routing carries a per-step model tier into every prompt; weak-host behavior is declared roster *data* (fanout shapes, conservative fallbacks, escalation contracts), not prose; the sandbox runs a run-cheap → verify → **escalate-on-verifier-failure** tier cascade with a default-on anti-tamper ratchet (a candidate that edits an existing test is rejected, mechanically); and every handoff envelope now carries a typed trust grade — `validated` is only emittable behind a real external verifier, and the implementer of a change is never its checker. The claim that this makes light-tier models beat bare standard-tier models is *instrumented, not yet measured* — see the eval matrix below.
+
 ## Try it in 60 seconds
 
 Evaluation, not commitment — this drops a read-only ATLAS into a throwaway folder:
@@ -49,7 +51,7 @@ Two questions, both measured against a **bare host running the same model** — 
 | Correct target overall | 58.3% | 66.7% |
 | False delegation on control prompts | 0% | 0% |
 
-The signature win is **consistency** — the injection makes routing far more deterministic. (This is a SessionStart-only *lower bound*: headless hosts don't fire per-prompt hooks, so the interactive number is expected higher. Honest writeup: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).)
+The signature win is **consistency** — the injection makes routing far more deterministic. (These numbers are a SessionStart-only *lower bound*: the headless driver available in June didn't fire per-prompt hooks. That floor is now closable — current `claude -p` fires `UserPromptSubmit`, verified at $0 via a dead-endpoint probe, and the instrument ships a `--driver claude-headless-ups` mode that certifies `ups_fired` per run. A re-measurement with the primary mechanism ON is pending. Honest writeup: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).)
 
 **2. Does the specialist shape beat one generalist pass?** On an adversarial-hard coding suite (budget-matched, k=2) — measured in [Vivi's own repo](https://github.com/Rynaro/Vivi) — **Vivi's** parallel-candidate shape lands every fix where a single pass lands two-thirds:
 
@@ -66,6 +68,8 @@ eidolons eval routing --suite public      # 15 labelled tasks across 12 routing 
 ```
 
 It grades the kernel's output against Eidolons-authored ground truth ([`evals/routing-suite.yaml`](evals/routing-suite.yaml)); because the kernel is deterministic, `pass^k == pass^1` and you'll get the exact same result we do. (`--validate-suite` self-tests the suite; `--json` for machine output.) This is the reproducible floor the billed evals build on — verify it, then weigh the rest.
+
+**3. Does the system make cheaper models win?** This is v2.0's headline question, and we ship the instrument rather than the assertion: `eidolons eval swe --matrix evals/arms/h-win.json --suite-file evals/kupo-keep-suite.yaml` runs the same task cohort through two arms — a light-tier model wrapped in the system's discipline vs a standard-tier model with a bare prompt — and writes schema'd scorecards plus a pairwise flip table to [`evals/results/`](evals/results/), with `eidolons eval baseline` as the regression tracker (exit 5 on any regression). The honest comparison is pinned as data in [`evals/arms/h-win.json`](evals/arms/h-win.json); the hook prompts are versioned artifacts. **No measured number is published here yet** — smoke scorecards are plumbing-validation only and are marked as such in the data.
 
 These are early, small-N signals, framed honestly in the research digests and [`CHANGELOG.md`](CHANGELOG.md) — not marketing.
 
@@ -109,7 +113,7 @@ ATLAS ───▶ SPECTRA ───▶  Vivi  ───▶ IDG
 
 </details>
 
-Handoffs are structured artifacts written to disk, not free-form messages. See [`methodology/composition.md`](methodology/composition.md) for the contract table and partial-team matrix.
+Handoffs are structured artifacts written to disk, not free-form messages — every one carries an [ECL 2.1](https://github.com/Rynaro/eidolons-ecl) sidecar envelope with a SHA-256 integrity tag and a typed **trust grade**: `validated` is only emittable when a real external verifier passed (Vivi's pass^k gate, Kupo's named verifier, VIGIL's counterfactual flip); everything self-reviewed says so (`self-attested`), and a downstream member can read the difference from a field instead of judging it from prose. Since v2.0, **maker ≠ checker holds across all eight members** — the implementer of a change never advances it to `verified`; a distinct checker does, in a fresh context ([ESL 1.1 C8](https://github.com/Rynaro/eidolons-esl)). See [`methodology/composition.md`](methodology/composition.md) for the contract table and partial-team matrix.
 
 ## Mechanical routing — the harness
 
@@ -125,7 +129,7 @@ eidolons harness install --strict   # opt-in: add tool-boundary delegate-or-deny
 eidolons harness status             # per-host effective enforcement tier
 ```
 
-For a hard backstop, `--strict` adds a `PreToolUse` **delegate-or-deny** tier that mechanically blocks direct main-loop edits (only delegated subagents may write), with soundness graded per host. When CRYSTALIUM is installed, the session-start hook also runs `eidolons memory preflight` — a one-shot recall that injects prior project memory, fail-open and bounded. The full per-host capability matrix is in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
+For a hard backstop, `--strict` adds a `PreToolUse` **delegate-or-deny** tier that mechanically blocks direct main-loop edits (only delegated subagents may write), with soundness graded per host. Per-prompt injection also carries the kernel's **model tiers** (`model tiers: atlas=standard → spectra=deep → …`) so the host can put cheap models on cheap steps. When CRYSTALIUM is installed, the session-start hook also runs `eidolons memory preflight` — a one-shot recall that injects prior project memory (including `[skill/…]`-tagged verified procedures a weak orchestrator can invoke instead of re-deriving), fail-open and bounded; `--explain` diagnoses a silent-empty store, and `eidolons canary --all-hosts` verifies the effective tier per host against the lockfile. The full per-host capability matrix is in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
 
 ## Spec-Driven lifecycle — ESL
 
