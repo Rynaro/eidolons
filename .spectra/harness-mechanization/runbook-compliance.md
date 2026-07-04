@@ -117,6 +117,12 @@ jq '{ups_fired, gate, armA: .arms.A.correct_target_rate, delta}' \
   `eidolons doctor --deep`); `"unknown"` = not certified (default/custom/fake driver).
 - **Confirm `ups_fired == "true"` before trusting the headline.** If it is `"false"` or
   `"unknown"`, the number is still a SessionStart-only floor and the June caveat stands.
+  Before concluding the mechanism is dead on a `"false"`, check the run log for session
+  timeouts: prior to the partial-stream fix (post-1.49.0), any timed-out ARM-A session
+  counted as never-fired (the 2026-07-03 run reported `"false"` from 5 timeouts while a
+  $0 dead-URL probe in the identical fixture proved UPS fired). On current code a
+  timed-out session's already-emitted events still count; a `"false"` now means at least
+  one ARM-A session genuinely produced no UPS event.
 - **Version gate.** The driver refuses to run below Claude Code `2.1.200` with an actionable
   error (2.1.175 provably fired SessionStart only). Override the floor with
   `EIDOLONS_COMPLIANCE_UPS_VERSION_FLOOR=<ver>` if a lower version is known to fire UPS —

@@ -71,4 +71,8 @@ fi
 # permission grant (verified: a live probe ran the model but left the repo
 # untouched). Edits are confined to the ephemeral per-attempt workdir the
 # loop creates — the exact scope acceptEdits is safe for.
-_run_with_timeout 300 claude -p "$_prompt" --model "$EIDOLONS_EVAL_MODEL" --permission-mode acceptEdits >&2
+# Prompt via STDIN, never positional argv: a prompt whose first character is
+# '-' (e.g. a methodology excerpt starting with markdown bullets or YAML
+# frontmatter '---') is parsed by the CLI as an option and rejected —
+# observed live as the system arm scoring 0/12 while echoing its own prompt.
+printf '%s' "$_prompt" | _run_with_timeout 300 claude -p --model "$EIDOLONS_EVAL_MODEL" --permission-mode acceptEdits >&2

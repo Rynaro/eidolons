@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+- **H-WIN measured (n=12, k=3): haiku+system 12/12 (pass³ 1.00) vs sonnet+bare 12/12 (pass³ 1.00) — exact tie at ceiling.** Non-inferiority of the light tier inside the system at roughly ⅓ the per-token price is demonstrated; superiority is not claimable on this cohort (ceiling effect). Scorecards + matrix summaries committed under `evals/results/2026-07-03-*` (kupo-keep suite on `alpine:3.20`; the 2 jq-verifier tasks re-run on a `+jq` image as a separately-labelled top-up). Four instrument artifacts were caught adversarially before any number was accepted — fake-green `--via` re-parsing (fixed in #425), missing `--permission-mode acceptEdits`, relative fix-hook paths (fixed in #425), argv-poisoned prompts (below).
+- **Compliance A/B rerun scorecard committed** (`evals/results/2026-07-03-compliance-ups-k2.scorecard.json`; claude-headless-ups driver, sonnet, k=2, 56 sessions): ARM A 41.7% correct-target vs ARM B 0.0% — the harness effect is unambiguous (bare sonnet never delegated), but the 80% gate FAILs → the FORGE dossier:106 reversal recommendation (advisory → block default) stands for v2.1. The scorecard's `ups_fired=false` is an instrument artifact (next bullet), not a mechanism failure: a $0 dead-URL probe in the byte-identical fixture proved UserPromptSubmit fired and injected the route.
+
+### Fixed
+- **Three eval-instrument bugs caught by adversarial pre-measurement probing** (#425, landed post-1.49.0): sandbox `--via` single-argument re-parsing (a broken repo could score fake-green: `sh -c sh .swe-test.sh` ran bare `sh` → exit 0), headless `claude -p` calls lacking `--permission-mode acceptEdits` (the model ran but could not edit), and relative `--fix-hook` paths resolving against the ephemeral per-attempt workdir (exit 127).
+- **Reference eval hooks send the prompt via stdin, never positional argv** (`evals/hooks/keep-{bare,system}.sh`): a prompt whose first character is `-` (e.g. a cached Kupo SPEC.md starting with `---` YAML frontmatter) was parsed by `claude -p` as an option and rejected — observed live as the system arm scoring 0/12 while echoing its own prompt.
+- **`eval compliance` keeps and scores a timed-out session's partial stream** instead of discarding it: events the host already emitted (the `ups_fired` certification event, early Task dispatches) are facts about the session. The discard made the all-sessions `ups_fired` verdict a guaranteed false negative whenever any ARM-A session timed out, and scored killed-after-dispatch sessions as non-delegating (under-measuring compliance). Caught live 2026-07-03; regression-tested via a custom driver that dispatches then exits 124.
+
 ## [1.49.0] — 2026-07-03 — feat: v2.0 Wave 5 — eval matrix (H-WIN instrument), scorecard store, baseline diff, per-host tier canary
 
 ### Added

@@ -1,0 +1,35 @@
+{
+  "schema_version": "1.0",
+  "suite": "json-tasks",
+  "arm": {
+    "label": "bare-standard",
+    "fix_hook": "/home/rynaro/workspace/oss/agents/eidolons/evals/hooks/keep-bare.sh",
+    "env": {
+      "EIDOLONS_EVAL_MODEL": "sonnet",
+      "EIDOLONS_SANDBOX_MODEL_TIER": "standard"
+    },
+    "control": true
+  },
+  "started_at": "2026-07-03T18:56:27Z",
+  "k": 3,
+  "tasks": [
+    {
+      "id": "keep-json-syntax-fix",
+      "resolved": true,
+      "passes": 3,
+      "attempts": 3
+    },
+    {
+      "id": "keep-json-value-edit",
+      "resolved": true,
+      "passes": 3,
+      "attempts": 3
+    }
+  ],
+  "resolved_rate": 1,
+  "pass_k_rate": 1,
+  "harness": {
+    "nexus_version": "1.49.0",
+    "smoke": false
+  }
+}

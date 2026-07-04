@@ -52,3 +52,10 @@ the underlying `eidolons eval swe` harness — it just also applies per-arm
 here. Only `harness.smoke: false` scorecards (a real `--fix-hook`, e.g. one
 of `evals/hooks/keep-bare.sh` / `evals/hooks/keep-system.sh`) are evidence
 for a headline claim like H-WIN.
+
+## Compliance scorecards land here too
+
+`eidolons eval compliance --json` output may be committed alongside the matrix
+scorecards as `<UTC-date>-compliance-<qualifier>.scorecard.json` (a different
+instrument, a different schema — see `cli/src/eval_compliance.sh`'s emitted
+shape). Same store rationale: measurements are diffable history, not ephemera.

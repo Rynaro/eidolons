@@ -1,0 +1,20 @@
+{
+  "schema_version": "1.0",
+  "suite": "kupo-keep-suite",
+  "started_at": "2026-07-03T18:35:49Z",
+  "arms": [
+    {
+      "label": "system-light",
+      "fix_hook": "/home/rynaro/workspace/oss/agents/eidolons/evals/hooks/keep-system.sh",
+      "env": {
+        "EIDOLONS_EVAL_MODEL": "haiku",
+        "EIDOLONS_SANDBOX_MODEL_TIER": "light"
+      },
+      "control": true
+    }
+  ],
+  "summary": {
+    "control": "system-light",
+    "comparisons": []
+  }
+}
