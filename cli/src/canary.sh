@@ -40,8 +40,10 @@ Options:
   --validate <file>    Validate LLM response from file against mission criteria
   --list               Scan cache; report mission availability per Eidolon
   --mission <id>       Select non-default mission by ID
-  --memory             Recall-only crystalium liveness check (SKIP when
-                        crystalium is not gated in .mcp.json + eidolons.mcp.lock)
+  --memory             Crystalium memory round-trip probe: commit -> recall ->
+                        forget (SKIP when crystalium is not gated in .mcp.json
+                        + eidolons.mcp.lock; liveness-only fallback when the
+                        installed crystalium predates 1.7's `commit` verb)
   --host <h>           Harness canary for one host (claude-code, codex, copilot,
                         cursor, opencode) — see 'What --host/--all-hosts check' below
   --all-hosts          Harness canary for every known host
@@ -63,11 +65,16 @@ What it does:
   4. '--list' scans the per-version cache for every lock member and reports
      which have canary missions authored.
   5. '--memory' probes the live crystalium store via the same docker transform
-     as 'eidolons memory preflight' / doctor D13. This is a RECALL-ONLY
-     liveness check, not a write->recall round trip: crystalium's own
-     `canary` CLI subcommand runs a 10-mission A/B eval against a fresh
-     EPHEMERAL store (not the live project store), so it is not surfaced
-     here; and the write (`commit`) path is MCP-only, unreachable from bash.
+     as 'eidolons memory preflight' / doctor D13. When the installed
+     crystalium is >= 1.7 (has the one-shot `commit` CLI verb, checked via a
+     `commit --help` capability probe first), this is a TRUE write->recall
+     round trip: commit a uniquely-tokened canary record, recall it back by
+     that token, then best-effort forget it. When the capability probe fails
+     (crystalium < 1.7, no `commit` verb), this degrades to the ORIGINAL
+     RECALL-ONLY liveness check (crystalium reachable + probe recall
+     non-empty) and says so explicitly. Either way, crystalium's own
+     `canary` CLI subcommand (a 10-mission A/B eval against a fresh EPHEMERAL
+     store, not the live project store) is deliberately not surfaced here.
 
 What --host/--all-hosts check:
   Compares the EFFECTIVE harness state on disk against eidolons.lock's
@@ -514,48 +521,73 @@ run_list_mode() {
 
 # ─── MODE: memory ─────────────────────────────────────────────────────────────
 #
-# Recall-only crystalium liveness probe, reusing the same gate + docker-args
+# Crystalium memory ROUND-TRIP probe, reusing the same gate + docker-args
 # transform as 'eidolons memory preflight' and doctor D13
 # (deep_check_memory_recallability), via lib_memory_probe.sh.
 #
-# NOT a write->recall round trip. Investigated crystalium's own `canary` CLI
-# subcommand first (python -m crystalium canary): it dispatches to
-# evals.ab_memory_onoff.run_all, which runs a 10-mission memory-on/off A/B
-# ablation eval against a FRESH EPHEMERAL data_dir it creates per run — not
-# the live, mounted project store this command is meant to check. Surfacing
-# its result here would silently answer a different question than the one
-# asked ("is THIS project's live memory reachable and non-empty?"), so it is
-# deliberately not invoked. crystalium's write path (`commit`) is MCP-only
-# (server.py handlers) and not reachable from a one-shot CLI invocation, so a
-# true write->recall round trip isn't buildable from bash either. This mode
-# therefore degrades to a recall-only liveness check and says so explicitly.
+# crystalium 1.7 adds a one-shot `commit` CLI verb (previously the write path
+# was MCP-only — server.py handlers, unreachable from a one-shot CLI
+# invocation, so only a recall-only liveness check was buildable from bash).
+# That constraint is now gone: this mode first runs a CAPABILITY PROBE
+# (`commit --help`) to check whether the installed crystalium image is new
+# enough to have the verb at all.
+#
+#   - capability probe exits 0 (>= 1.7)  -> TRUE round trip: commit a
+#     uniquely-tokened canary record, recall it back by that token, then
+#     best-effort forget it (cleanup failure never changes the verdict).
+#   - capability probe exits non-zero (< 1.7, e.g. click's "No such command")
+#     -> falls back to the ORIGINAL recall-only liveness check (crystalium
+#     reachable + probe recall non-empty) and says so explicitly in the
+#     PASS/INCONCLUSIVE reason text.
+#
+# Investigated crystalium's own `canary` CLI subcommand too (python -m
+# crystalium canary): it dispatches to evals.ab_memory_onoff.run_all, which
+# runs a 10-mission memory-on/off A/B ablation eval against a FRESH EPHEMERAL
+# data_dir it creates per run — not the live, mounted project store this
+# command is meant to check. Surfacing its result here would silently answer
+# a different question than the one asked ("is THIS project's live memory
+# reachable and read/write-capable?"), so it is deliberately not invoked
+# either way.
 #
 # PASS/FAIL/SKIP/INCONCLUSIVE, consistent with the vocabulary used by the
 # --validate mode's criteria evaluator:
-#   crystalium not gated in       -> SKIP  (exit 0)
-#   docker not on PATH            -> SKIP  (exit 0)
-#   invocation cannot be built /
-#   docker unreachable / timeout /
-#   malformed output              -> FAIL  (exit 1)
-#   probe recall returns 0 records -> INCONCLUSIVE (exit 0)
-#   probe recall returns >0 records -> PASS (exit 0)
+#   crystalium not gated in        -> SKIP  (exit 0)
+#   docker not on PATH             -> SKIP  (exit 0)
+#   invocation cannot be built     -> FAIL  (exit 1)
+#   commit-capable (>= 1.7):
+#     commit fails / malformed     -> FAIL  (exit 1)
+#     recall doesn't find token    -> FAIL  (exit 1)
+#     recall finds token           -> PASS  (exit 0)
+#   liveness fallback (< 1.7):
+#     docker unreachable / timeout /
+#     malformed output             -> FAIL  (exit 1)
+#     probe recall returns 0 records -> INCONCLUSIVE (exit 0)
+#     probe recall returns >0 records -> PASS (exit 0)
 run_memory_mode() {
   local project_root; project_root="$(pwd)"
 
   printf '═══════════════════════════════════════════════════════════════\n'
-  printf 'canary --memory — crystalium recall-only liveness probe\n'
+  printf 'canary --memory — crystalium memory round-trip probe\n'
   printf '═══════════════════════════════════════════════════════════════\n'
   printf '\n'
-  printf 'What this checks:\n'
-  printf '  - crystalium CLI reachability via the docker transform (same path as\n'
-  printf '    eidolons memory preflight / doctor --deep D13).\n'
-  printf '  - a probe recall (--k 3) against the live, mounted project store.\n'
+  printf 'What this checks (crystalium >= 1.7, has the `commit` CLI verb):\n'
+  printf '  - a true write -> recall round trip against the live, mounted project\n'
+  printf '    store: commit a uniquely-tokened canary record via the crystalium\n'
+  printf '    `commit` CLI verb, recall it back by that token, then best-effort\n'
+  printf '    forget it. PASS iff the committed record is found on recall.\n'
   printf '\n'
-  printf 'What this does NOT check:\n'
-  printf '  - a true write -> recall round trip. crystalium'"'"'s own `canary` CLI\n'
-  printf '    subcommand runs a 10-mission A/B eval against a fresh EPHEMERAL\n'
-  printf '    store (not the live project store), so it is not surfaced here.\n'
-  printf '  - the write (`commit`) path, which is MCP-only and unreachable from bash.\n'
+  printf 'Fallback recall-only liveness probe (crystalium < 1.7, no `commit`\n'
+  printf 'verb — checked via a `commit --help` capability probe first):\n'
+  printf '  - crystalium CLI reachability via the docker transform + a probe\n'
+  printf '    recall (--k 3) against the live, mounted project store. This is\n'
+  printf '    the ONLY check this mode could run before crystalium 1.7 shipped\n'
+  printf '    a commit verb, and it does NOT check a true write -> recall\n'
+  printf '    round trip.\n'
+  printf '\n'
+  printf 'Deliberately not checked either way:\n'
+  printf '  - crystalium'"'"'s own `canary` CLI subcommand, which runs a 10-mission\n'
+  printf '    A/B eval against a fresh EPHEMERAL store (not the live project\n'
+  printf '    store), so it is not surfaced here.\n'
   printf '\n'
 
   if ! memory_probe_gated_in "$project_root"; then
@@ -567,6 +599,33 @@ run_memory_mode() {
     printf 'SKIP — docker not on PATH\n'
     exit 0
   fi
+
+  # ── Capability probe: does this crystalium CLI have a `commit` verb? ───────
+  local cap_script cap_exit=0
+  cap_script="$(mktemp)"
+  if ! memory_probe_build_docker_script "$project_root" "commit --help" "$cap_script"; then
+    printf "FAIL — could not resolve a crystalium invocation ('serve' not found in .mcp.json crystalium args)\n"
+    rm -f "$cap_script"
+    exit 1
+  fi
+  with_timeout 10 bash "$cap_script" >/dev/null 2>&1 || cap_exit=$?
+  rm -f "$cap_script"
+
+  if [[ "$cap_exit" -ne 0 ]]; then
+    _run_memory_mode_liveness_fallback "$project_root"
+    return
+  fi
+
+  _run_memory_mode_roundtrip "$project_root"
+}
+
+# _run_memory_mode_liveness_fallback PROJECT_ROOT — the ORIGINAL recall-only
+# liveness check (crystalium reachable + probe recall non-empty), run when
+# the commit capability probe indicates the installed crystalium predates
+# 1.7. Exits directly (never returns) to mirror run_memory_mode's contract.
+_run_memory_mode_liveness_fallback() {
+  local project_root="$1"
+  local fallback_note=" — liveness only: crystalium CLI has no commit verb (< 1.7); round-trip unavailable"
 
   local slug q_query q_slug recall_args script
   slug="$(memory_probe_project_slug "$project_root")"
@@ -598,12 +657,116 @@ run_memory_mode() {
   local count
   count="$(printf '%s' "$out" | jq -r '(.records // []) | length' 2>/dev/null || echo "0")"
   if [[ "$count" -eq 0 ]]; then
-    printf 'INCONCLUSIVE — crystalium reachable; 0 records returned by probe recall (store may be empty/mis-scoped)\n'
+    printf 'INCONCLUSIVE — crystalium reachable; 0 records returned by probe recall (store may be empty/mis-scoped)%s\n' "$fallback_note"
     exit 0
   fi
 
-  printf 'PASS — crystalium reachable; probe recall returned %s record(s)\n' "$count"
+  printf 'PASS — crystalium reachable; probe recall returned %s record(s)%s\n' "$count" "$fallback_note"
   exit 0
+}
+
+# _run_memory_mode_roundtrip PROJECT_ROOT — the TRUE write->recall->cleanup
+# round trip, run when the commit capability probe indicates the installed
+# crystalium is >= 1.7. Exits directly (never returns).
+_run_memory_mode_roundtrip() {
+  local project_root="$1"
+
+  local slug q_slug
+  slug="$(memory_probe_project_slug "$project_root")"
+  q_slug="$(memory_probe_quote "$slug")"
+
+  local epoch token q_token
+  epoch="$(date +%s 2>/dev/null || echo "0")"
+  token="eidolons-canary-${epoch}-$$"
+  q_token="$(memory_probe_quote "$token")"
+
+  # Deliberately long/sentence-shaped so it clears crystalium's mechanical
+  # summary-quality gate (min length + content words).
+  local summary q_summary
+  summary="Eidolons nexus memory canary probe ${token}: mechanical round-trip verification record written by eidolons canary to confirm commit and recall work end to end."
+  q_summary="$(memory_probe_quote "$summary")"
+
+  # ── Commit ──────────────────────────────────────────────────────────────
+  local commit_args commit_script commit_exit=0 commit_out
+  commit_args="commit --summary $q_summary --scope-project $q_slug --source environment --author-agent eidolons-canary --format json"
+  commit_script="$(mktemp)"
+  if ! memory_probe_build_docker_script "$project_root" "$commit_args" "$commit_script"; then
+    printf "FAIL — could not resolve a commit invocation ('serve' not found in .mcp.json crystalium args)\n"
+    rm -f "$commit_script"
+    exit 1
+  fi
+
+  commit_out="$(with_timeout 10 bash "$commit_script" 2>/dev/null)" || commit_exit=$?
+  rm -f "$commit_script"
+
+  if [[ "$commit_exit" -ne 0 ]]; then
+    printf 'FAIL — commit-capable crystalium refused the canary write (exit %s)\n' "$commit_exit"
+    exit 1
+  fi
+
+  local committed_id
+  committed_id="$(printf '%s' "$commit_out" | jq -r '.id // empty' 2>/dev/null || true)"
+  if [[ -z "$committed_id" ]]; then
+    printf 'FAIL — commit-capable crystalium refused the canary write (malformed commit output, no id)\n'
+    exit 1
+  fi
+
+  # ── Recall ──────────────────────────────────────────────────────────────
+  local recall_args recall_script recall_exit=0 recall_out
+  recall_args="recall --query $q_token --scope-project $q_slug --format json --k 5"
+  recall_script="$(mktemp)"
+  local found=false
+  if memory_probe_build_docker_script "$project_root" "$recall_args" "$recall_script"; then
+    recall_out="$(with_timeout 10 bash "$recall_script" 2>/dev/null)" || recall_exit=$?
+    if [[ "$recall_exit" -eq 0 ]] && printf '%s' "$recall_out" | jq empty >/dev/null 2>&1; then
+      if printf '%s' "$recall_out" \
+        | jq -e --arg t "$token" '(.records // []) | any(.summary // "" | contains($t))' \
+        >/dev/null 2>&1; then
+        found=true
+      fi
+    fi
+  fi
+  rm -f "$recall_script"
+
+  # ── Cleanup (best-effort; never changes the verdict) ────────────────────
+  _memory_mode_cleanup "$project_root" "$committed_id"
+
+  if [[ "$found" == "true" ]]; then
+    printf 'PASS — memory round-trip verified (commit → recall → found)\n'
+    exit 0
+  fi
+
+  printf 'FAIL — round-trip broken: canary record committed (id %s) but recall did not return it\n' "$committed_id"
+  exit 1
+}
+
+# _memory_mode_cleanup PROJECT_ROOT ID — best-effort `forget` of the canary
+# record written by _run_memory_mode_roundtrip. Never affects the mode's
+# verdict; failures are WARNed to stderr only (per memory_probe_* convention,
+# each call site owns its own messaging).
+_memory_mode_cleanup() {
+  local project_root="$1" id="$2"
+  [[ -z "$id" ]] && return 0
+
+  local q_id q_reason forget_args script exit_code=0
+  q_id="$(memory_probe_quote "$id")"
+  q_reason="$(memory_probe_quote "eidolons canary cleanup")"
+  forget_args="forget $q_id --reason $q_reason --yes"
+
+  script="$(mktemp)"
+  if ! memory_probe_build_docker_script "$project_root" "$forget_args" "$script"; then
+    warn "canary --memory cleanup: could not resolve a forget invocation for canary record $id — leaving it in the store"
+    rm -f "$script"
+    return 0
+  fi
+
+  with_timeout 10 bash "$script" >/dev/null 2>&1 || exit_code=$?
+  rm -f "$script"
+
+  if [[ "$exit_code" -ne 0 ]]; then
+    warn "canary --memory cleanup: forget failed for canary record $id (exit $exit_code) — leaving it in the store"
+  fi
+  return 0
 }
 
 # ─── MODE: host / all-hosts ───────────────────────────────────────────────────
