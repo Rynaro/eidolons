@@ -143,5 +143,17 @@ PR-CI in all 8 member repos; UPS-capable compliance driver (#422).
   sourced from the spec repos' shipped changelogs; consumers act on nothing, shipped
   members already migrated (Wave 3), steps are for new/third-party Eidolons.
 
-Remaining to the v2.0 cut: **the true memory round-trip canary only** (blocked on
-crystalium 1.7's commit-capable CLI — `consolidate` verb + install stamp).
+- **Memory round-trip canary: CLOSED (2026-07-04).** crystalium v1.7.0 shipped the
+  one-shot `commit` CLI verb (crystalium#30; `consolidate` deferred to 1.8 explicitly);
+  nexus #428 upgraded `canary --memory` to commit → recall → forget behind a
+  `commit --help` capability probe; #429 published 1.7.0 to roster + catalogue
+  atomically. Live run against the released image (by GHCR digest, through the real
+  docker transform): **`PASS — memory round-trip verified (commit → recall → found)`,
+  exit 0, cleanup clean.** The FAIL path was also validated live by accident — a
+  non-root-writable store under `--cap-drop ALL` produced the correct
+  `FAIL … refused the canary write` with exit 1 before the environment was fixed.
+
+**ALL v2.0 CUT CRITERIA ARE GREEN** (REPO-PLAN.md §Cut criteria): Waves 0–3 merged;
+doctor --deep green on 5 hosts; memory round-trip canary green; H-WIN measured
+(tie at ceiling — ship the number, not the claim); MIGRATION.md shipped. The v2.0
+version cut is an operator decision from here.
