@@ -703,3 +703,25 @@ SH
   run _stream_ups_fired "$no_ups";   [ "$output" = "false" ]
   run _stream_ups_fired "";          [ "$output" = "false" ]
 }
+
+@test "compliance: timed-out session (rc=124) keeps and scores the partial stream" {
+  # Regression (caught live 2026-07-03): a timed-out session had its partial
+  # stream DISCARDED (stream=""), so the all-sessions ups_fired certification
+  # counted every ARM-A timeout as "UPS never fired" — a false negative (a $0
+  # dead-URL probe in the identical fixture proved the mechanism fired). Events
+  # a session already emitted are facts: a driver that dispatches Task and then
+  # dies at the timeout (rc=124, the with_timeout convention) must still score
+  # the dispatch.
+  local drv="$BATS_TEST_TMPDIR/timeout-driver.sh"
+  cat > "$drv" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Task","input":{"subagent_type":"atlas"}}]}}'
+exit 124
+SH
+  chmod +x "$drv"
+  run --separate-stderr eval_compliance --yes --arm A --k 1 --json --driver "$drv"
+  [ "$status" -eq 0 ]
+  # Every routed prompt's dispatch arrived before the "timeout" — all count.
+  [ "$(echo "$output" | jq -r '.arms.A.delegation_rate')" = "1" ]
+  [[ "$stderr" =~ "scoring the partial stream" ]]
+}

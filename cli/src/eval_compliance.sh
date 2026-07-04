@@ -832,10 +832,15 @@ variable for a real, billed measurement run (see runbook-compliance.md)."
     )" || rc=$?
   fi
 
-  # rc=124 = timeout (with_timeout convention); treat as empty stream
+  # rc=124 = timeout (with_timeout convention). KEEP the partial stream:
+  # events the host already emitted (the UserPromptSubmit certification event,
+  # early Task dispatches) are facts about the session regardless of how it
+  # ended. Discarding them scored every timed-out ARM-A session as "UPS never
+  # fired", flipping the all-sessions ups_fired verdict to a false negative —
+  # caught live 2026-07-03 (5 timeouts → ups_fired=false while a $0 dead-URL
+  # probe in the identical fixture proved the mechanism fired every session).
   if [[ "$rc" -eq 124 ]]; then
-    warn "session timed out after ${SESSION_TIMEOUT}s (prompt: '${prompt:0:60}...')"
-    stream=""
+    warn "session timed out after ${SESSION_TIMEOUT}s (prompt: '${prompt:0:60}...') — scoring the partial stream"
   fi
 
   # Under --keep / --capture-sample: save raw stream

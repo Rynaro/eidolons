@@ -65,6 +65,7 @@ this environment.
 - **H-WIN is unproven.** The measured compliance number (66.7%, floor driver) FAILED its
   gate; nothing yet demonstrates light-tier+system ≥ standard-tier bare. Wave 5 exists
   to measure it; do not market the claim before the number exists.
+  *Update 2026-07-04: measured — see the addendum at the end of this document.*
 - **Codex surfaces are [ASSUMPTION A1/A2]** — unverified against the real vendor; its
   "T3" is aspirational (effective T1-T2). Verify or downgrade honestly.
 - **harness.sh not deleted**: referenced by dead `_mcp_source_harness()`
@@ -92,3 +93,45 @@ this environment.
 - Full sequential suite: see PR description (run at commit time).
 - Live smokes: tier lines verified on real prompts; `--explain` reproduced the
   9-crystals/0-records incident; D13 WARNs write-only; canary --memory INCONCLUSIVE.
+
+## Measured results (addendum, 2026-07-04 — session 2)
+
+All five waves shipped and released: nexus v1.47.0 / v1.48.0 / v1.49.0; ECL 2.1
+Published (adoption gate satisfied 8/8) + ESL 1.1 + EIIS 1.5; 8 member minors with
+ISE + maker≠checker, rostered; crystalium 1.6.0 / Junction 0.4.0 / tonberry 0.5.0;
+PR-CI in all 8 member repos; UPS-capable compliance driver (#422).
+
+**H-WIN (n=12 tasks, k=3, kupo-keep suite + 2-task jq top-up):**
+
+- haiku + system (`keep-system.sh`): 12/12 resolved, pass³ = 1.00
+- sonnet + bare (`keep-bare.sh`):    12/12 resolved, pass³ = 1.00
+- **Exact tie at ceiling.** Non-inferiority of light-tier-inside-the-system at
+  roughly ⅓ the per-token price is demonstrated; superiority is NOT demonstrable
+  on this cohort (ceiling effect — a harder task cohort is the follow-up).
+- Methodology disclosures: two sandbox images (alpine:3.20 for 10 tasks;
+  eidolons-eval:alpine-jq for the 2 jq-verifier tasks); four instrument artifacts
+  were caught adversarially BEFORE any number was accepted (fake-green `--via`
+  re-parsing, missing `--permission-mode acceptEdits`, relative fix-hook path
+  exit-127, argv-poisoned prompts starting with `---`). Scorecards committed under
+  `evals/results/2026-07-03-*.json`.
+
+**Compliance A/B rerun (claude-headless-ups driver, sonnet, k=2, 56 sessions):**
+
+- ARM A (harness) correct_target_rate 41.7% vs ARM B (bare) 0.0% → Δ = +41.7pp.
+  The harness effect is unambiguous: bare sonnet NEVER delegated under the
+  read-only tool surface, across all 24 routed sessions.
+- Gate vs 80%: **FAIL** → per FORGE dossier:106 the reversal recommendation
+  stands: escalate the advisory hook toward a blocking default (v2.1 decision).
+- `ups_fired=false` in the scorecard is **instrument artifact #5**, not a
+  mechanism failure: timed-out sessions (5×120s) had their partial streams
+  discarded while the certification demands all-sessions evidence. A $0 dead-URL
+  probe in the byte-identical fixture shows UserPromptSubmit fired and the kernel
+  injected `Route: …` on claude 2.1.201. Fixed (partial streams are now scored)
+  + regression-tested in `feat/h-win-measurement`; the fix would only RAISE a
+  rerun's measured rates (killed-after-dispatch sessions currently score 0).
+- Not directly comparable to June's 66.7% (different driver, k, timeout scoring).
+  Treat 41.7% as a floor under 120s timeouts and max-turns 3.
+
+Remaining to the v2.0 cut (unchanged): doctor --deep green on 5 hosts, true memory
+round-trip canary (needs crystalium 1.7 commit-capable CLI), MIGRATION.md
+(ECL 2.0→2.1, EIIS 1.4→1.5).
