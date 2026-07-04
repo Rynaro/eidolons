@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.0.0] — 2026-07-04 — v2.0: push the difficulty into the system so cheaper models win — measured, not asserted
+
+> The v2.0 campaign's product major. Every cut criterion green (REPO-PLAN.md §Cut
+> criteria): Waves 0–3 merged across the ecosystem (ECL 2.1 Published, ESL 1.1,
+> EIIS 1.5, all 8 members with typed ISE trust grades + mechanical maker≠checker);
+> `doctor --deep` green on all five hosts' effective-tier reports; **H-WIN measured**
+> (haiku+system 12/12 pass³ 1.00 vs sonnet+bare 12/12 pass³ 1.00 — non-inferiority
+> at ~⅓ price at ceiling; the number is shipped, not the superiority claim);
+> **memory round-trip canary green live** (commit → recall → forget on crystalium
+> 1.7.0 by GHCR digest); MIGRATION.md for both contract bumps. The consumer
+> contract is unchanged — existing `eidolons.yaml` projects drive v2.0 without
+> modification; the major marks the measured-system milestone, not a breaking API.
+
 ### Added
 - crystalium v1.7.0 published in the roster with release integrity metadata (one-shot `commit` CLI verb — the write half of the out-of-session pairing, unblocking the round-trip memory canary; install.sh version stamp single-sourced; `consolidate` deferred to 1.8). MCP catalogue bumped in the same PR (latest/stable → 1.7.0, GHCR digest recorded) to keep index⇄catalogue skew-parity atomic.
 - **`MIGRATION.md`** — operational guide for the two v2.0 contract bumps (ECL 2.0 → 2.1, EIIS 1.4 → 1.5): who has to act (consumer projects: nobody — both bumps are opt-in and version-scoped; shipped members: already migrated in Wave 3), emitter/installer migration steps, and the compatibility matrix. Closes a v2.0 ship-gate item.
