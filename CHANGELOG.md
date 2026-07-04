@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **RAMZA intaken as `in_construction`** (Stage 1 of the SPECTRA succession, Vivi-pattern). Planner-class successor whose differentiator is mechanized gates: `bin/` tools for right-sizing tiers, phase state-machine transitions, rubric arithmetic with calibration logging, EARS criteria linting, SHA-256 criteria freeze/amend chains, plan-vs-diff drift detection, and mechanical maker≠checker on plan critique (Rynaro/Ramza v0.1.0 scaffold). SPECTRA remains the shipped planner and conservative fallback; presets/routing/cortex are untouched until the Stage 2 measurement gates the seat flip. Campaign record: `.spectra/plans/spectra-v2/` (research dossiers, CURATION verdicts, GAP-MAP, succession brief, repo plan).
+
 ## [2.0.0] — 2026-07-04 — v2.0: push the difficulty into the system so cheaper models win — measured, not asserted
 
 > The v2.0 campaign's product major. Every cut criterion green (REPO-PLAN.md §Cut
