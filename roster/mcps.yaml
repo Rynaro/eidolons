@@ -141,10 +141,17 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.6.0"
+      latest: "1.7.0"
       pins:
-        stable: "1.6.0"
+        stable: "1.7.0"
       releases:
+        "1.7.0":
+          # One-shot `commit` CLI verb (write half of the out-of-session CLI
+          # pairing; unblocks the nexus round-trip memory canary) + install.sh
+          # version stamp single-sourced from pyproject.toml (was stale 1.0.0).
+          # `consolidate` deferred to 1.8. 9 tools (MCP surface unchanged).
+          digest: "sha256:b6978817f06706c23a7b9134bb235a57ccc2f5c0bdafd318b2a6b41fc6719b07"
+          released_at: "2026-07-04T00:00:00Z"
         "1.6.0":
           # Memory diagnosability + guards: canonical scope keys, summary quality
           # gate, recall --explain, doctor arm/status stats, never-deprecate-last-
