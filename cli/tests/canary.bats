@@ -7,6 +7,9 @@
 
 load helpers
 
+# CAN-33 uses `run --separate-stderr` (memory round-trip cleanup WARN check).
+bats_require_minimum_version 1.5.0
+
 # ─── Fixture helpers ──────────────────────────────────────────────────────────
 
 # Seed an eidolons.lock with atlas@1.7.1 and vigil@1.1.0
@@ -687,4 +690,130 @@ EOF
   [ "$status" -eq 1 ]
   [[ "$output" =~ "FAIL" ]]
   [[ "$output" =~ "strict recorded" ]]
+}
+
+# ─── CAN-30..CAN-33: --memory round trip (crystalium >= 1.7 `commit` verb) ────
+#
+# The fake docker below dispatches on the REPLACEMENT verb embedded by
+# memory_probe_build_docker_script (cli/src/lib_memory_probe.sh) into the
+# generated one-shot invocation, same mechanism as _can_setup_fake_docker
+# above (CAN-15..19) — it just recognizes more verbs (commit --help, commit,
+# recall, forget) instead of only recall. Order matters in the case
+# statement: "commit --help" must be checked before the more general
+# "commit " pattern, since the former is a substring-superset of the latter.
+#
+# The recall branch echoes the queried --query value back inside a canned
+# summary (FAKE_DOCKER_RECALL_MATCH=1, the default) so tests don't need to
+# predict the runtime-generated `eidolons-canary-<epoch>-<pid>` token ahead
+# of time — whatever canary.sh queries for is what comes back "found".
+# FAKE_DOCKER_RECALL_MATCH=0 returns an unrelated record (simulating a miss).
+# FAKE_DOCKER_RECALL_EMPTY=1 returns zero records (used by the capability-
+# probe-fails fixture, which exercises the ORIGINAL liveness fallback path).
+_can_setup_fake_docker_roundtrip() {
+  local fake_bin="$BATS_TEST_TMPDIR/can-fake-bin-rt"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'DSHIM'
+#!/usr/bin/env bash
+ARGV="$*"
+case "$ARGV" in
+  *"crystalium commit --help"*)
+    if [ -n "${FAKE_DOCKER_CAP_STDERR:-}" ]; then
+      printf '%s\n' "$FAKE_DOCKER_CAP_STDERR" >&2
+    fi
+    exit "${FAKE_DOCKER_CAP_EXIT:-0}"
+    ;;
+  *"crystalium commit "*)
+    OUT="${FAKE_DOCKER_COMMIT_OUTPUT:-}"
+    if [ -z "$OUT" ]; then
+      OUT='{"id":"canary-fake-id"}'
+    fi
+    printf '%s\n' "$OUT"
+    exit "${FAKE_DOCKER_COMMIT_EXIT:-0}"
+    ;;
+  *"crystalium recall "*)
+    if [ "${FAKE_DOCKER_RECALL_EMPTY:-0}" = "1" ]; then
+      printf '{"records":[],"slot_breakdown":{},"total_tokens":0,"evicted_count":0}\n'
+    elif [ "${FAKE_DOCKER_RECALL_MATCH:-1}" = "1" ]; then
+      QVAL=""
+      PREV=""
+      for a in "$@"; do
+        if [ "$PREV" = "--query" ]; then
+          QVAL="$a"
+        fi
+        PREV="$a"
+      done
+      printf '{"records":[{"id":"r1","layer":"episodic","trust_tier":"T1","summary":"Eidolons nexus memory canary probe %s: mechanical round-trip verification record written by eidolons canary.","validation_state":"valid","importance":0.5,"last_access":"2026-07-04T00:00:00Z","content_ref":null,"score":0.9}],"slot_breakdown":{"episodic":1},"total_tokens":10,"evicted_count":0}\n' "$QVAL"
+    else
+      printf '{"records":[{"id":"r1","layer":"episodic","trust_tier":"T1","summary":"unrelated record, no canary token here","validation_state":"valid","importance":0.5,"last_access":"2026-07-04T00:00:00Z","content_ref":null,"score":0.9}],"slot_breakdown":{"episodic":1},"total_tokens":10,"evicted_count":0}\n'
+    fi
+    exit "${FAKE_DOCKER_RECALL_EXIT:-0}"
+    ;;
+  *"crystalium forget "*)
+    exit "${FAKE_DOCKER_FORGET_EXIT:-0}"
+    ;;
+esac
+exit 1
+DSHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+}
+
+@test "CAN-30: --memory INCONCLUSIVE — capability probe fails (<1.7), old liveness path runs" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker_roundtrip
+  # click-style rejection of an unknown subcommand on a pre-1.7 crystalium CLI.
+  export FAKE_DOCKER_CAP_EXIT=2
+  export FAKE_DOCKER_CAP_STDERR="Error: No such command 'commit'."
+  export FAKE_DOCKER_RECALL_EMPTY=1
+
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "INCONCLUSIVE — crystalium reachable; 0 records returned by probe recall" ]]
+  [[ "$output" =~ "< 1.7" ]]
+}
+
+@test "CAN-31: --memory PASS — full round trip (commit -> recall -> found)" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker_roundtrip
+  export FAKE_DOCKER_CAP_EXIT=0
+  export FAKE_DOCKER_COMMIT_OUTPUT='{"id":"canary-roundtrip-ok"}'
+  export FAKE_DOCKER_RECALL_MATCH=1
+
+  run eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "PASS — memory round-trip verified" ]]
+  [[ "$output" =~ "commit" ]]
+  [[ "$output" =~ "recall" ]]
+}
+
+@test "CAN-32: --memory FAIL — commit-capable but recall misses the token" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker_roundtrip
+  export FAKE_DOCKER_CAP_EXIT=0
+  export FAKE_DOCKER_COMMIT_OUTPUT='{"id":"canary-miss-id"}'
+  export FAKE_DOCKER_RECALL_MATCH=0
+
+  run eidolons canary --memory
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL — round-trip broken" ]]
+  [[ "$output" =~ "canary-miss-id" ]]
+}
+
+@test "CAN-33: --memory PASS — round trip succeeds even when cleanup (forget) fails; WARN on stderr" {
+  _can_seed_mcp_with_crystalium
+  _can_seed_mcp_lock_with_crystalium
+  _can_setup_fake_docker_roundtrip
+  export FAKE_DOCKER_CAP_EXIT=0
+  export FAKE_DOCKER_COMMIT_OUTPUT='{"id":"canary-forget-fails"}'
+  export FAKE_DOCKER_RECALL_MATCH=1
+  export FAKE_DOCKER_FORGET_EXIT=1
+
+  run --separate-stderr eidolons canary --memory
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "PASS — memory round-trip verified" ]]
+  [[ "$stderr" =~ "forget failed" ]]
+  [[ "$stderr" =~ "canary-forget-fails" ]]
 }

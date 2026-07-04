@@ -474,7 +474,7 @@ Layer 3 integrity: print an Eidolon's canary mission prompt or validate a saved 
 eidolons canary <name>                       # prompt mode
 eidolons canary <name> --validate <file>     # validate mode
 eidolons canary --list                       # list mode
-eidolons canary --memory                     # memory liveness mode
+eidolons canary --memory                     # memory round-trip mode
 ```
 
 ### Modes
@@ -484,7 +484,7 @@ eidolons canary --memory                     # memory liveness mode
 | **prompt** | `eidolons canary <name>` | Print mission prompt + expected output shape + validation criteria |
 | **validate** | `eidolons canary <name> --validate <file>` | Check saved LLM output against mission criteria |
 | **list** | `eidolons canary --list` | Scan cache; report mission status per Eidolon (three states) |
-| **memory** | `eidolons canary --memory` | Recall-only liveness probe of the live crystalium project store: PASS (records returned) / INCONCLUSIVE (reachable, 0 records) / FAIL (unreachable) / SKIP (crystalium not gated in). Deliberately not a write→recall round-trip (needs a commit-capable CLI path — crystalium 1.6) and deliberately not crystalium's own `canary` subcommand (that A/B-evals a fresh ephemeral store, a different question). Output states exactly what is and isn't checked. |
+| **memory** | `eidolons canary --memory` | crystalium memory probe against the live project store: SKIP (crystalium not gated in / docker not on PATH). Otherwise runs a capability probe (`commit --help`) first. **crystalium >= 1.7** (has the `commit` CLI verb): TRUE write→recall round trip — commits a uniquely-tokened canary record, recalls it back by that token, best-effort forgets it (cleanup failure never changes the verdict, WARN to stderr only) — PASS (record found on recall) / FAIL (commit refused, or committed but not recallable). **crystalium < 1.7** (capability probe fails): falls back to the original recall-only liveness check — PASS (records returned) / INCONCLUSIVE (reachable, 0 records) / FAIL (unreachable) — and the PASS/INCONCLUSIVE text says explicitly it's liveness-only. Deliberately not crystalium's own `canary` subcommand either way (that A/B-evals a fresh ephemeral store, a different question). Output always states exactly what is and isn't checked. |
 
 ### Flags
 
