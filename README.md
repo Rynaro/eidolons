@@ -24,7 +24,7 @@ Most AI coding tools ship a **single generalist** that plans, scouts, builds, an
 
 And the routing is **mechanical, not hopeful.** Most multi-agent setups are a paragraph in `CLAUDE.md` the model is free to ignore — so it does, until you name an agent yourself. Eidolons installs real per-host hooks: at session start a deterministic, non-LLM kernel computes the routing decision and injects it — plus recalled memory — into context, **on its own, every time.** The team travels across Claude Code, Codex, GitHub Copilot, Cursor, and OpenCode, and degrades gracefully to documentary routing wherever a host's hooks aren't sound.
 
-The v2.0 line adds a deliberate design bet: **push the difficulty into the system so cheaper models win more often.** Routing carries a per-step model tier into every prompt; weak-host behavior is declared roster *data* (fanout shapes, conservative fallbacks, escalation contracts), not prose; the sandbox runs a run-cheap → verify → **escalate-on-verifier-failure** tier cascade with a default-on anti-tamper ratchet (a candidate that edits an existing test is rejected, mechanically); and every handoff envelope now carries a typed trust grade — `validated` is only emittable behind a real external verifier, and the implementer of a change is never its checker. The claim that this makes light-tier models beat bare standard-tier models is *instrumented, not yet measured* — see the eval matrix below.
+The v2.0 line adds a deliberate design bet: **push the difficulty into the system so cheaper models win more often.** Routing carries a per-step model tier into every prompt; weak-host behavior is declared roster *data* (fanout shapes, conservative fallbacks, escalation contracts), not prose; the sandbox runs a run-cheap → verify → **escalate-on-verifier-failure** tier cascade with a default-on anti-tamper ratchet (a candidate that edits an existing test is rejected, mechanically); and every handoff envelope now carries a typed trust grade — `validated` is only emittable behind a real external verifier, and the implementer of a change is never its checker. The bet has its first measured number: on the initial cohort, **a light-tier model inside the system matched a standard-tier model bare — 12/12 vs 12/12 at pass³** — the tier drop was free. Details, and the caveats that keep that sentence honest, below.
 
 ## Try it in 60 seconds
 
@@ -40,18 +40,17 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. Full flow in [Install](
 
 ## Does it actually work?
 
-Two questions, both measured against a **bare host running the same model** — no hand-waving.
+Three questions, each measured against a **bare host** running the same model — or a stronger one. No hand-waving.
 
-**1. Does wiring in the team change what the host actually does?** `eidolons eval compliance` runs one prompt suite through a headless host twice — once with the harness wired, once with only the prose cortex (≈ a bare host) — and scores how it routes.
+**1. Does wiring in the team change what the host actually does?** `eidolons eval compliance` runs one prompt suite through a headless host twice — once with the harness wired, once with only the prose cortex (≈ a bare host) — and scores how it routes. July 2026 measurement, with the per-prompt injection mechanism **certified live in-stream** (`--driver claude-headless-ups` records hook events; a $0 dead-endpoint probe independently confirmed the injection fires):
 
-| Routing &nbsp;<sub>(Claude Code · k=2 · 56 sessions)</sub> | Prose only | With Eidolons |
+| Routing &nbsp;<sub>(Claude Code · sonnet · k=2 · 56 sessions)</sub> | Prose only | With Eidolons |
 |---|:---:|:---:|
-| **Stability** — picks the right specialist on *both* runs | 16.7% | **58.3%** &nbsp;<sub>(3.5×)</sub> |
-| Routes *"which approach?"* → the reasoner | 0% | **100%** |
-| Correct target overall | 58.3% | 66.7% |
+| Ever delegates to a specialist | **0%** | **41.7%** |
+| Delegates to the *correct* specialist | 0% | **41.7%** |
 | False delegation on control prompts | 0% | 0% |
 
-The signature win is **consistency** — the injection makes routing far more deterministic. (These numbers are a SessionStart-only *lower bound*: the headless driver available in June didn't fire per-prompt hooks. That floor is now closable — current `claude -p` fires `UserPromptSubmit`, verified at $0 via a dead-endpoint probe, and the instrument ships a `--driver claude-headless-ups` mode that certifies `ups_fired` per run. A re-measurement with the primary mechanism ON is pending. Honest writeup: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).)
+The bare arm **never delegated once** across 24 routed sessions: whatever routing a prose file suggests, the model ignores it until an Eidolon is named by hand — the entire effect is the mechanical injection. Two honest caveats, recorded in the committed scorecard ([`evals/results/`](evals/results/)): 41.7% is a *floor* (120-second session timeout and a 3-turn cap — sessions killed mid-flight score as failures), and it **fails** the 80% gate that decides advisory-vs-blocking — which is precisely the evidence the v2.1 escalation (advisory → blocking default) will be argued from. The June SessionStart-only measurement this supersedes is kept for the record: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).
 
 **2. Does the specialist shape beat one generalist pass?** On an adversarial-hard coding suite (budget-matched, k=2) — measured in [Vivi's own repo](https://github.com/Rynaro/Vivi) — **Vivi's** parallel-candidate shape lands every fix where a single pass lands two-thirds:
 
@@ -69,7 +68,14 @@ eidolons eval routing --suite public      # 15 labelled tasks across 12 routing 
 
 It grades the kernel's output against Eidolons-authored ground truth ([`evals/routing-suite.yaml`](evals/routing-suite.yaml)); because the kernel is deterministic, `pass^k == pass^1` and you'll get the exact same result we do. (`--validate-suite` self-tests the suite; `--json` for machine output.) This is the reproducible floor the billed evals build on — verify it, then weigh the rest.
 
-**3. Does the system make cheaper models win?** This is v2.0's headline question, and we ship the instrument rather than the assertion: `eidolons eval swe --matrix evals/arms/h-win.json --suite-file evals/kupo-keep-suite.yaml` runs the same task cohort through two arms — a light-tier model wrapped in the system's discipline vs a standard-tier model with a bare prompt — and writes schema'd scorecards plus a pairwise flip table to [`evals/results/`](evals/results/), with `eidolons eval baseline` as the regression tracker (exit 5 on any regression). The honest comparison is pinned as data in [`evals/arms/h-win.json`](evals/arms/h-win.json); the hook prompts are versioned artifacts. **No measured number is published here yet** — smoke scorecards are plumbing-validation only and are marked as such in the data.
+**3. Does the system make cheaper models win?** v2.0's headline question — and it now has its first measured answer. The comparison is pinned as data in [`evals/arms/h-win.json`](evals/arms/h-win.json) and deliberately cross-tier: a light-tier model wrapped in the system's discipline vs a **stronger** standard-tier model with a bare prompt.
+
+| H-WIN &nbsp;<sub>(12 real fix-the-bug tasks · k=3 · sandboxed, verifier-gated)</sub> | resolved | pass³ |
+|---|:---:|:---:|
+| **haiku** + system discipline (`keep-system.sh`) | 12/12 | **1.00** |
+| **sonnet** + bare prompt (`keep-bare.sh`, control) | 12/12 | **1.00** |
+
+An exact tie, at roughly **⅓ the per-token price** for the system arm: on this cohort the tier drop was free — that is **non-inferiority**, demonstrated. What this cohort *cannot* show is superiority: both arms saturated it (ceiling effect), so "cheaper models win *more*" remains open until a harder cohort exists. Every scorecard, the pairwise flip table, and the full methodology disclosure — including the **four instrument bugs we caught adversarially before accepting any number** (a fake-green verifier path among them) — are committed in [`evals/results/`](evals/results/); `eidolons eval baseline` tracks regressions from here (exit 5 on any). Hook prompts are versioned artifacts; smoke scorecards are plumbing-validation only and marked as such in the data.
 
 These are early, small-N signals, framed honestly in the research digests and [`CHANGELOG.md`](CHANGELOG.md) — not marketing.
 
@@ -169,7 +175,7 @@ Keep the nexus current with `eidolons upgrade self` (atomic, integrity-verified,
 
 ## Verified releases
 
-Every shipped Eidolon publishes attestation-backed releases through one canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) hosted here. Each release records its commit, tree, and archive SHA-256 into `roster/index.yaml` via [Roster Intake](.github/workflows/roster-intake.yml). Under the default `integrity.enforcement: strict` posture, `eidolons sync` and `eidolons verify` abort with exit 1 if any installed Eidolon's checksum drifts from the signed metadata — the same gate `Roster Health` runs nightly. Nexus releases use the same model. Read the trust model at [`docs/release-integrity.md`](docs/release-integrity.md).
+Every shipped Eidolon publishes attestation-backed releases through one canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) hosted here. Each release records its commit, tree, and archive SHA-256 into `roster/index.yaml` via [Roster Intake](.github/workflows/roster-intake.yml). Under the default `integrity.enforcement: strict` posture, `eidolons sync` and `eidolons verify` abort with exit 1 if any installed Eidolon's checksum drifts from the signed metadata — the same gate `Roster Health` runs nightly. Nexus releases use the same model. Read the trust model at [`docs/release-integrity.md`](docs/release-integrity.md). Contract-version bumps (ECL 2.0 → 2.1, EIIS 1.4 → 1.5) are additive and opt-in — [`MIGRATION.md`](MIGRATION.md) covers who has to act (consumers: nobody) and how.
 
 ## What's in this repo
 

@@ -132,6 +132,16 @@ PR-CI in all 8 member repos; UPS-capable compliance driver (#422).
 - Not directly comparable to June's 66.7% (different driver, k, timeout scoring).
   Treat 41.7% as a floor under 120s timeouts and max-turns 3.
 
-Remaining to the v2.0 cut (unchanged): doctor --deep green on 5 hosts, true memory
-round-trip canary (needs crystalium 1.7 commit-capable CLI), MIGRATION.md
-(ECL 2.0→2.1, EIIS 1.4→1.5).
+**Gate closures (2026-07-04, session 2):**
+
+- **doctor --deep green on 5 hosts: CLOSED.** Fresh minimal-preset project wired for
+  all five hosts (`harness install --hosts claude-code,codex,copilot,cursor,opencode`);
+  `doctor --deep` exit 0, zero ✗. D12 effective-tier report: claude-code **T3**,
+  codex **T3**, copilot **T2**, cursor **T2**, opencode **T1** — all `[inject-only]`,
+  lock⇄files consistent; D14 routing shape green; D13 correctly SKIPs (no crystalium).
+- **MIGRATION.md: CLOSED.** Committed at the repo root — ECL 2.0→2.1 and EIIS 1.4→1.5,
+  sourced from the spec repos' shipped changelogs; consumers act on nothing, shipped
+  members already migrated (Wave 3), steps are for new/third-party Eidolons.
+
+Remaining to the v2.0 cut: **the true memory round-trip canary only** (blocked on
+crystalium 1.7's commit-capable CLI — `consolidate` verb + install stamp).
