@@ -1,0 +1,114 @@
+# Planner A/B Suite — RAMZA vs SPECTRA (AC-003, Stage-2)
+# ───────────────────────────────────────────────────────
+# Arm-NEUTRAL contract-conformance tasks for the planner-seat A/B. Rubrics assert
+# the PLAN's outcome contract (stories, criteria, gates, boundaries, risks,
+# rejected alternatives) — never either methodology's internal tooling — so the
+# same rubric grades both arms without favour. Consumed via:
+#   eidolons eval quality emit  <task-id> --suite-file evals/planner-ab-suite.yaml
+#   eidolons eval quality grade <task-id> <files...> --suite-file evals/planner-ab-suite.yaml
+# The `eidolon:` field is nominal (harness requires one); BOTH arms run every task.
+# Pre-registration (margin, protocol, blindness): .spectra/research/ramza-stage2/AC-003-PREREGISTRATION.md
+# Tasks AB-H* are HOLDOUT: excluded from any prompt/criteria tuning; results on
+# them gate the aggregate claim (Vivi Stage-2 precedent).
+
+quality_version: "1.0"
+created_at: "2026-07-05"
+grades: "contract-conformance (structural), pass^k over independent runs; arm-neutral"
+
+tasks:
+  - id: AB-T1
+    eidolon: spectra
+    mission: |
+      Produce a decision-ready specification for a webhook delivery subsystem for a
+      multi-tenant SaaS: customers register webhook endpoints; events must be
+      delivered with retries and backoff; failures must be observable to customers.
+      Include user stories, acceptance criteria, scope boundaries, and at least one
+      rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["out of scope", "non-goal", "deferred"], desc: "explicit scope boundary" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["retry", "backoff"], desc: "addresses delivery retries" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["idempoten", "duplicate delivery", "at-least-once"], desc: "delivery-semantics risk surfaced" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["signature", "secret", "hmac"], desc: "endpoint authentication considered" }
+
+  - id: AB-T2
+    eidolon: spectra
+    mission: |
+      Produce a decision-ready specification for adding soft-delete (recoverable
+      deletion) to the `Account` model of a mature Rails application. The model has
+      dependent associations, destroy callbacks that other teams rely on, and
+      existing admin tooling that lists records. Include user stories, acceptance
+      criteria, an impact assessment of existing call sites, and at least one
+      rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["callback", "dependent", "association"], desc: "impact on callbacks/associations assessed" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["call site", "call-site", "existing quer", "admin"], desc: "existing consumers/call sites covered" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["migration", "backfill"], desc: "schema/migration path addressed" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["unique", "index", "constraint"], desc: "uniqueness/index implications surfaced" }
+
+  - id: AB-T3
+    eidolon: spectra
+    mission: |
+      Customers are intermittently double-charged when a payment retry races the
+      original attempt's delayed confirmation. Produce a decision-ready FIX
+      specification: root-cause hypothesis, the fix approach, regression scope,
+      acceptance criteria proving the double-charge cannot recur, and at least one
+      rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["root cause", "root-cause", "race"], desc: "root-cause hypothesis stated" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["idempoten", "lock", "unique constraint", "transaction"], desc: "concrete anti-double-charge mechanism" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["regression", "existing test", "test suite"], desc: "regression scope defined" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["reconcil", "audit", "refund"], desc: "remediation of past incidents considered" }
+
+  - id: AB-T4
+    eidolon: spectra
+    mission: |
+      A stakeholder says: "make the dashboard faster." Produce a decision-ready
+      specification. The request is underspecified — handle that explicitly:
+      state what you must clarify or assume (with risk-if-wrong), define a
+      measurable performance target, bound the scope, and include acceptance
+      criteria and at least one rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["assumption", "clarif"], desc: "ambiguity handled explicitly" }
+      - { must: true,  kind: regex, pattern: "[0-9]+ ?(ms|milliseconds|seconds|s\\b|%)", desc: "measurable performance target" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["out of scope", "non-goal", "deferred"], desc: "explicit scope boundary" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["baseline", "p95", "p99", "percentile"], desc: "baseline/percentile framing" }
+
+  - id: AB-H1
+    eidolon: spectra
+    mission: |
+      Produce a decision-ready specification for deprecating the public v1 REST API
+      of a developer platform with an 18-month sunset: versioning policy, customer
+      migration path and communications, telemetry to track adoption, the brownout
+      /shutdown sequence, and acceptance criteria. Include at least one rejected
+      alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["sunset", "deprecat"], desc: "sunset/deprecation policy defined" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["telemetry", "usage", "adoption", "metric"], desc: "adoption tracking defined" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["communicat", "notice", "email", "changelog"], desc: "customer communications planned" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["brownout", "410", "gone", "shutdown window"], desc: "staged shutdown mechanics" }
+
+  - id: AB-H2
+    eidolon: spectra
+    mission: |
+      Produce a decision-ready specification for adding SAML single sign-on to an
+      application with existing email/password authentication and a session model
+      other services depend on. Cover identity linking for existing accounts,
+      security risks with severity, rollout strategy, acceptance criteria, and at
+      least one rejected alternative.
+    rubric:
+      - { must: true,  kind: contains_all, patterns: ["GIVEN", "WHEN", "THEN"], desc: "GIVEN/WHEN/THEN acceptance criteria" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["identity linking", "account linking", "existing account", "link.* account"], desc: "existing-account identity linking covered" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["P0", "P1", "P2", "severity", "critical"], desc: "security risks carry severity" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rollout", "feature flag", "phased", "pilot"], desc: "rollout strategy present" }
+      - { must: true,  kind: contains_any, ci: true, patterns: ["rejected", "alternative"], desc: "rejected alternative present" }
+      - { must: false, kind: contains_any, ci: true, patterns: ["session fixation", "assertion", "replay", "clock skew", "certificate"], desc: "SAML-specific attack surface named" }

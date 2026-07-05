@@ -1,0 +1,1 @@
+{"task":"AB-T1","eidolon":"spectra","k":1,"passes":1,"pass_at_1":1,"pass_k":true,"measures":"contract-conformance (structural), not rival-comparable task-solving","per_file":[{"file":"/tmp/ramza-s2/ac003/AB-T1-ramza-r2.out.md","pass":true,"must_fail":[],"should_incon":[]}]}
