@@ -1,0 +1,5 @@
+{"rubric":"complexity","total":7,"dims":{"scope":2,"ambiguity":1,"dependencies":2,"risk":2},"verdict":"extended","at":"2026-07-05T00:16:39Z","label":"stage2-scope"}
+{"rubric":"explore","total":79.5,"dims":{"alignment":9,"correctness":8,"maintainability":8,"performance":7,"simplicity":8,"risk":8,"innovation":5},"verdict":"solid","at":"2026-07-05T00:16:39Z","label":"hyp-B-canary-first-then-scoped-AB"}
+{"rubric":"explore","total":62,"dims":{"alignment":7,"correctness":8,"maintainability":6,"performance":5,"simplicity":4,"risk":5,"innovation":6},"verdict":"weak","at":"2026-07-05T00:16:39Z","label":"hyp-A-full-HWIN-matrix-now"}
+{"rubric":"explore","total":55,"dims":{"alignment":5,"correctness":5,"maintainability":6,"performance":7,"simplicity":8,"risk":3,"innovation":4},"verdict":"weak","at":"2026-07-05T00:16:39Z","label":"hyp-C-ship-and-measure-in-wild"}
+{"rubric":"confidence","total":82.5,"dims":{"pattern_match":85,"requirement_clarity":80,"decomposition_stability":75,"constraint_compliance":90},"verdict":"VALIDATE","at":"2026-07-05T00:17:33Z","label":"stage2-assemble"}
