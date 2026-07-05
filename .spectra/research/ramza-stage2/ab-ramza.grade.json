@@ -1,0 +1,1 @@
+{"task":"Q-SPECTRA-1","eidolon":"spectra","k":2,"passes":2,"pass_at_1":1,"pass_k":true,"measures":"contract-conformance (structural), not rival-comparable task-solving","per_file":[{"file":"/tmp/ramza-s2/ab-ramza-run1.out.md","pass":true,"must_fail":[],"should_incon":[]},{"file":"/tmp/ramza-s2/ab-ramza-run2.out.md","pass":true,"must_fail":[],"should_incon":[]}]}
