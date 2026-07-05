@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-07-04T17:38Z"
+updated_at: "2026-07-05T00:25Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -449,6 +449,55 @@ eidolons:
       persists: []
     references:
       - "research/production-patterns.md#plan-mode"
+  - name: ramza
+    display_name: "RAMZA"
+    capability_class: planner
+    status: in_construction # Stage 1 intake (Vivi-pattern succession of spectra) — measurement (Stage 2) gates the shipped flip; default-planner seat (Stage 3b) gates on the measurement
+    methodology:
+      name: "RAMZA"
+      version: "1.0"
+      cycle: "RS→S→P→E→C→T→R→A"
+      summary: "Mechanized planning. Tier-gated cycle (mechanical right-sizing), code-enforced gates — rubric arithmetic, EARS criteria lint, SHA-256 criteria freeze/amend, plan-vs-diff drift, maker≠checker critique. Successor to SPECTRA (retained as conservative fallback)."
+    source:
+      type: github
+      repo: Rynaro/Ramza
+      default_ref: main
+    versions:
+      latest: "0.2.0"
+      pins:
+        stable: "0.2.0"
+      releases:
+        0.2.0:
+          tag: v0.2.0
+          commit: af5f546885852e8f9441e0509f89d82c6a2ac559
+          tree: 80d24100074dcecf7447da481ec9977be581e5e1
+          archive_sha256: 6d15577bd7578753d8017a058c60a53687d43703e13f3882c6daa9e2e5b06f30
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+    install:
+      target_default: "./.eidolons/ramza"
+      standalone: true
+    handoffs:
+      upstream: [atlas]
+      downstream: [vivi, apivr]
+      lateral: [forge, vigil]
+    comm:
+      envelope_version: "2.0"
+    working_set_tokens:
+      entry: 900
+      target: 3500
+    security:
+      reads_repo: true
+      reads_network: false
+      writes_repo: false
+      persists: [".spectra/"]
+    references:
+      - "DESIGN-RATIONALE.md (succession decisions D1-D8, in Rynaro/Ramza)"
+      - ".spectra/plans/spectra-v2/CURATION.md"
+      - ".spectra/plans/spectra-v2/GAP-MAP.md"
+      - ".spectra/plans/spectra-v2/SUCCESSION-BRIEF.md"
   - name: apivr
     display_name: "APIVR-Δ"
     capability_class: coder
