@@ -232,14 +232,15 @@ evaluate_criterion() {
   case "$verb" in
     "contain heading")
       # grep -Fxq against lines stripped of leading whitespace
-      if sed 's/^[[:space:]]*//' "$output_file" | grep -Fxq "$arg" 2>/dev/null; then
+      if sed 's/^[[:space:]]*//' "$output_file" | grep -Fxq -- "$arg" 2>/dev/null; then
         echo "PASS"
       else
         echo "FAIL"
       fi
       ;;
     "contain phrase")
-      if grep -Eq "$arg" "$output_file" 2>/dev/null; then
+      # `--` guard: mission phrases legitimately start with dashes (`--verify`)
+      if grep -Eq -- "$arg" "$output_file" 2>/dev/null; then
         echo "PASS"
       else
         echo "FAIL"
@@ -258,7 +259,7 @@ evaluate_criterion() {
         set +f
         token="$(printf '%s' "$token" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')"
         if [[ -n "$token" ]]; then
-          if ! grep -Fq "$token" "$output_file" 2>/dev/null; then
+          if ! grep -Fq -- "$token" "$output_file" 2>/dev/null; then
             result="FAIL"
             break
           fi
@@ -343,6 +344,31 @@ parse_criterion() {
       return 1
       ;;
   esac
+
+  # Mission files author args wrapped in markdown backticks for readability
+  # (`## Scope`, `ramza-rightsize`) — the shipped SPECTRA/RAMZA missions all do.
+  # Two authoring conventions are honoured here:
+  #   1. `X` OR `Y` [OR `Z`]  →  ERE alternation (X|Y|Z)   (contain phrase only)
+  #   2. a single surrounding backtick pair is stripped so the matcher sees the
+  #      bare pattern. Not applied to token counts, which are never backticked.
+  # bash 3.2: no ${var:0:-1}, no arrays needed.
+  if [[ "$_crit_verb" == "contain phrase" && "$_crit_arg" == *'` OR `'* ]]; then
+    local _alts="" _rest="$_crit_arg"
+    while [[ "$_rest" == *" OR "* ]]; do
+      _alts="${_alts}${_rest%% OR *}|"
+      _rest="${_rest#* OR }"
+    done
+    _alts="${_alts}${_rest}"
+    _alts="$(printf '%s' "$_alts" | tr -d '\140')"
+    _crit_arg="(${_alts})"
+  elif [[ "$_crit_verb" != "have token count" ]]; then
+    case "$_crit_arg" in
+      \`*\`)
+        _crit_arg="${_crit_arg#\`}"
+        _crit_arg="${_crit_arg%\`}"
+        ;;
+    esac
+  fi
 
   return 0
 }

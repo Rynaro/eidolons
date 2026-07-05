@@ -817,3 +817,76 @@ DSHIM
   [[ "$stderr" =~ "forget failed" ]]
   [[ "$stderr" =~ "canary-forget-fails" ]]
 }
+
+# CAN-BT: backticked criteria (the shipped SPECTRA/RAMZA mission authoring
+# convention) match bare text — regression for the validator/authoring seam
+# where fixtures were bare but every real mission file wraps args in backticks.
+@test "CAN-BT: backtick-wrapped criteria args match un-backticked output" {
+  seed_canary_lock_atlas_only
+  mkdir -p "$EIDOLONS_HOME/cache/atlas@1.7.1/.git" "$EIDOLONS_HOME/cache/atlas@1.7.1/evals"
+  cat > "$EIDOLONS_HOME/cache/atlas@1.7.1/evals/canary-missions.md" <<'MISSION'
+# Canary missions (vDSL)
+
+## Mission: smoke-default
+
+### Prompt
+
+Do the thing.
+
+### Expected output shape
+
+Shape.
+
+### Validation criteria
+
+- MUST contain heading: `## Mission Brief`
+- MUST contain phrase: `FINDING-`
+- SHOULD contain phrase: `synthesis`
+MISSION
+
+  local out="$BATS_TEST_TMPDIR/bt-output.md"
+  cat > "$out" <<'RESPONSE'
+## Mission Brief
+
+FINDING-1: plain text, no backticks anywhere.
+RESPONSE
+
+  run eidolons canary atlas --validate "$out"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "2 pass, 0 fail, 1 inconclusive" ]]
+}
+
+# CAN-OR: the `X` OR `Y` authoring convention (used by shipped SPECTRA/RAMZA
+# missions) becomes ERE alternation; dash-leading phrases survive grep.
+@test "CAN-OR: OR-alternation criteria and dash-leading phrases evaluate correctly" {
+  seed_canary_lock_atlas_only
+  mkdir -p "$EIDOLONS_HOME/cache/atlas@1.7.1/.git" "$EIDOLONS_HOME/cache/atlas@1.7.1/evals"
+  cat > "$EIDOLONS_HOME/cache/atlas@1.7.1/evals/canary-missions.md" <<'MISSION'
+# Canary missions (vDSL)
+
+## Mission: smoke-default
+
+### Prompt
+
+Do the thing.
+
+### Expected output shape
+
+Shape.
+
+### Validation criteria
+
+- MUST contain phrase: `sha256` OR `SHA-256`
+- MUST contain phrase: `--verify`
+- MUST contain phrase: `missing-thing` OR `also-missing`
+MISSION
+
+  local out="$BATS_TEST_TMPDIR/or-output.md"
+  cat > "$out" <<'RESPONSE'
+The SHA-256 digest is checked by --verify before anything ships.
+RESPONSE
+
+  run eidolons canary atlas --validate "$out"
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "2 pass, 1 fail, 0 inconclusive" ]]
+}
