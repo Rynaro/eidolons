@@ -18,7 +18,7 @@ The second wave tried **sub-agent pipelines inside a single system** — one har
 
 ### 1. Each member is an individual
 
-The Eidolons are not interchangeable cogs. Each has a name, a capability class, a named methodology with a phase cycle, and a refusal boundary. ATLAS refuses to write; SPECTRA refuses to implement; IDG refuses to research. This isn't a limitation — it's the point. Sharp boundaries let each member go deeper in its domain than a generalist ever could.
+The Eidolons are not interchangeable cogs. Each has a name, a capability class, a named methodology with a phase cycle, and a refusal boundary. ATLAS refuses to write; RAMZA refuses to implement; IDG refuses to research. This isn't a limitation — it's the point. Sharp boundaries let each member go deeper in its domain than a generalist ever could.
 
 ### 2. The team is portable
 
@@ -30,7 +30,7 @@ No "because it feels right." Every design decision in every Eidolon maps to a re
 
 ### 4. Composition is first-class
 
-The team is more than the sum of its members. The canonical pipeline — ATLAS → SPECTRA → APIVR-Δ → IDG, with FORGE (reasoning) and VIGIL (forensic debugging) as lateral specialists — is a real compositional asset. Handoff contracts are structured artifacts, not free-form messages. Partial-team deployment is supported by design: bring just ATLAS to an audit-heavy project, bring the whole pipeline to a greenfield, bring ATLAS + IDG when you want to understand and document without changing anything.
+The team is more than the sum of its members. The canonical pipeline — ATLAS → RAMZA → Vivi → IDG, with FORGE (reasoning) and VIGIL (forensic debugging) as lateral specialists — is a real compositional asset. Handoff contracts are structured artifacts, not free-form messages. Partial-team deployment is supported by design: bring just ATLAS to an audit-heavy project, bring the whole pipeline to a greenfield, bring ATLAS + IDG when you want to understand and document without changing anything.
 
 ---
 
@@ -40,7 +40,7 @@ The team is more than the sum of its members. The canonical pipeline — ATLAS �
 
 **Unbounded reflection loops.** Research (CorrectBench 2025) shows they degrade prose quality. Every Eidolon has a fixed verification gate and a bounded revision budget.
 
-**Internal sub-agent pipelines inside one member.** If ATLAS needs planning, it hands off to SPECTRA; it does not grow an internal SPECTRA. Roster bloat dilutes the team.
+**Internal sub-agent pipelines inside one member.** If ATLAS needs planning, it hands off to RAMZA; it does not grow an internal planner. Roster bloat dilutes the team.
 
 **Hard-coded vendor names.** We speak in capability classes — reasoning-class, speed-class — not model names. An Eidolon must work on Claude, GPT, Gemini, a local Llama.
 
@@ -63,11 +63,15 @@ The Eidolons are opinionated. They are also humble about where the evidence is t
 | Eidolon | Role | Status |
 |---------|------|--------|
 | **ATLAS** | Scout — read-only codebase intelligence | shipped |
-| **SPECTRA** | Planner — decision-ready specifications | shipped |
-| **APIVR-Δ** | Coder — brownfield feature implementation | shipped |
+| **RAMZA** | Planner (default) — mechanized, gate-enforced specifications | shipped |
+| **SPECTRA** | Planner (opt-in fallback) — prose-methodology specifications | shipped |
+| **Vivi** | Coder (default) — loop-native brownfield implementation | shipped |
+| **APIVR-Δ** | Coder (opt-in fallback) — conservative non-loop implementation | shipped |
 | **IDG** | Scriber — documentation synthesis | shipped |
 | **FORGE** | Reasoner — deep reasoning, trade-offs, counterfactuals | shipped |
 | **VIGIL** | Debugger — forensic root-cause attribution | shipped |
+| **Kupo** | Executor — localized, verifier-backed micro-tasks | shipped |
+| **CRYSTALIUM** | Memory — shared four-layer memory substrate | shipped |
 
 See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry and [`methodology/composition.md`](methodology/composition.md) for how they work together.
 
@@ -75,9 +79,9 @@ See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry a
 
 ## What you can do with them
 
-- **Plan-before-build.** ATLAS maps the unfamiliar codebase, SPECTRA turns the scout report into a decision-ready spec, APIVR-Δ implements against that spec, IDG chronicles what happened.
+- **Plan-before-build.** ATLAS maps the unfamiliar codebase, RAMZA turns the scout report into a decision-ready spec, Vivi implements against that spec, IDG chronicles what happened.
 - **Audit without touching.** ATLAS + IDG. Explore a codebase, produce a read-only findings report and a change-narrative — no code modified.
-- **Ship a feature fast.** SPECTRA + APIVR-Δ. Skip the scout if you know the terrain; plan, then build.
+- **Ship a feature fast.** RAMZA + Vivi. Skip the scout if you know the terrain; plan, then build.
 - **Bring rigor to ambiguous decisions.** FORGE. Deliberate on trade-offs, name counterfactuals, produce a verdict with confidence tier.
 
 ---
