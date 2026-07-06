@@ -20,11 +20,13 @@
 
 ---
 
-Most AI coding tools ship a **single generalist** that plans, scouts, builds, and documents all at once — and hits a ceiling fast. Eidolons is a different shape: **eight independently-versioned specialists across seven roles**, one CLI, dropped into any project. You get sharp boundaries instead of one confused generalist — the right specialist for each phase, over a shared memory that carries context between them.
+Most AI coding tools ship a **single generalist** that plans, scouts, builds, and documents all at once — and hits a ceiling fast. Eidolons is a different shape: **nine independently-versioned specialists across seven roles**, one CLI, dropped into any project. You get sharp boundaries instead of one confused generalist — the right specialist for each phase, over a shared memory that carries context between them.
 
 And the routing is **mechanical, not hopeful.** Most multi-agent setups are a paragraph in `CLAUDE.md` the model is free to ignore — so it does, until you name an agent yourself. Eidolons installs real per-host hooks: at session start a deterministic, non-LLM kernel computes the routing decision and injects it — plus recalled memory — into context, **on its own, every time.** The team travels across Claude Code, Codex, GitHub Copilot, Cursor, and OpenCode, and degrades gracefully to documentary routing wherever a host's hooks aren't sound.
 
 The v2.0 line adds a deliberate design bet: **push the difficulty into the system so cheaper models win more often.** Routing carries a per-step model tier into every prompt; weak-host behavior is declared roster *data* (fanout shapes, conservative fallbacks, escalation contracts), not prose; the sandbox runs a run-cheap → verify → **escalate-on-verifier-failure** tier cascade with a default-on anti-tamper ratchet (a candidate that edits an existing test is rejected, mechanically); and every handoff envelope now carries a typed trust grade — `validated` is only emittable behind a real external verifier, and the implementer of a change is never its checker. The bet has its first measured number: on the initial cohort, **a light-tier model inside the system matched a standard-tier model bare — 12/12 vs 12/12 at pass³** — the tier drop was free. Details, and the caveats that keep that sentence honest, below.
+
+The v2.1 line carries the bet into planning itself: **RAMZA** — a planner whose gates are *mechanized* (rubric arithmetic, EARS lint, SHA-256 criteria freeze, plan-vs-diff drift, maker≠checker), not a prose checklist the model may skip — takes the default planner seat from SPECTRA. It earned the seat through a pre-registered A/B measured **non-inferior to its prose predecessor at ~half the ceremony** (question 4 below); SPECTRA is retained as the conservative opt-in fallback.
 
 ## Try it in 60 seconds
 
@@ -40,7 +42,7 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. Full flow in [Install](
 
 ## Does it actually work?
 
-Three questions, each measured against a **bare host** running the same model — or a stronger one. No hand-waving.
+Four questions, each measured — no hand-waving. The first three pit the system against a **bare host** running the same model (or a stronger one); the fourth is the pre-registered A/B that promoted RAMZA to the default planner seat.
 
 **1. Does wiring in the team change what the host actually does?** `eidolons eval compliance` runs one prompt suite through a headless host twice — once with the harness wired, once with only the prose cortex (≈ a bare host) — and scores how it routes. July 2026 measurement, with the per-prompt injection mechanism **certified live in-stream** (`--driver claude-headless-ups` records hook events; a $0 dead-endpoint probe independently confirmed the injection fires):
 
@@ -76,6 +78,15 @@ It grades the kernel's output against Eidolons-authored ground truth ([`evals/ro
 | **sonnet** + bare prompt (`keep-bare.sh`, control) | 12/12 | **1.00** |
 
 An exact tie, at roughly **⅓ the per-token price** for the system arm: on this cohort the tier drop was free — that is **non-inferiority**, demonstrated. What this cohort *cannot* show is superiority: both arms saturated it (ceiling effect), so "cheaper models win *more*" remains open until a harder cohort exists. Every scorecard, the pairwise flip table, and the full methodology disclosure — including the **four instrument bugs we caught adversarially before accepting any number** (a fake-green verifier path among them) — are committed in [`evals/results/`](evals/results/); `eidolons eval baseline` tracks regressions from here (exit 5 on any). Hook prompts are versioned artifacts; smoke scorecards are plumbing-validation only and marked as such in the data.
+
+**4. Does mechanizing the planner's gates cost quality?** No — and it roughly halves the ceremony. When **RAMZA** took the default planner seat from SPECTRA, the flip was gated on a **pre-registered** A/B (protocol and holdout frozen at a commit *before* any run): 6 planner tasks (2 held out), k=2, the same Sonnet executor on both arms and blind to the rubrics, graded mechanically. Data pinned in [`.spectra/research/ramza-stage2/ramza-planner-ab.json`](.spectra/research/ramza-stage2/ramza-planner-ab.json):
+
+| Planner A/B &nbsp;<sub>(pass² · 6 tasks incl. 2 holdout · sonnet · mechanical grading)</sub> | tasks pass² | mean words / spec |
+|---|:---:|:---:|
+| **RAMZA** (mechanized gates) | **6/6** | **5,059** |
+| SPECTRA (prose methodology, control) | 6/6 | 9,897 |
+
+Both arms cleared every task on both runs with **0 MUST failures across all 24 runs** — RAMZA is **non-inferior** (holdout consistent) at **~51% of SPECTRA's verbosity**, and every RAMZA spec ships a machine-verifiable gate audit trail (right-size → rubric scores → EARS lint → SHA-256 criteria freeze → verify-emit) where SPECTRA self-reports its cycle. The honest caveat, recorded in the [adjudication](.spectra/research/ramza-stage2/AC-003-ADJUDICATION.md): both arms *saturated* the suite (ceiling), so this is non-inferiority, not superiority — "mechanized planning wins *more*" needs a harder cohort. One holdout run's own maker≠checker critic caught and closed a real criteria-desync (an audit-enumeration gap) at cycle-2, with an independent cycle-3 PASS — the methodology catching its flagship failure class live, before the plan was called done.
 
 These are early, small-N signals, framed honestly in the research digests and [`CHANGELOG.md`](CHANGELOG.md) — not marketing.
 
@@ -120,7 +131,7 @@ ATLAS ───▶  RAMZA  ───▶  Vivi  ───▶ IDG
 
 </details>
 
-Handoffs are structured artifacts written to disk, not free-form messages — every one carries an [ECL 2.1](https://github.com/Rynaro/eidolons-ecl) sidecar envelope with a SHA-256 integrity tag and a typed **trust grade**: `validated` is only emittable when a real external verifier passed (Vivi's pass^k gate, Kupo's named verifier, VIGIL's counterfactual flip); everything self-reviewed says so (`self-attested`), and a downstream member can read the difference from a field instead of judging it from prose. Since v2.0, **maker ≠ checker holds across all eight members** — the implementer of a change never advances it to `verified`; a distinct checker does, in a fresh context ([ESL 1.1 C8](https://github.com/Rynaro/eidolons-esl)). See [`methodology/composition.md`](methodology/composition.md) for the contract table and partial-team matrix.
+Handoffs are structured artifacts written to disk, not free-form messages — every one carries an [ECL 2.1](https://github.com/Rynaro/eidolons-ecl) sidecar envelope with a SHA-256 integrity tag and a typed **trust grade**: `validated` is only emittable when a real external verifier passed (Vivi's pass^k gate, Kupo's named verifier, VIGIL's counterfactual flip); everything self-reviewed says so (`self-attested`), and a downstream member can read the difference from a field instead of judging it from prose. Since v2.0, **maker ≠ checker holds across every shipped member** — the implementer of a change never advances it to `verified`; a distinct checker does, in a fresh context ([ESL 1.1 C8](https://github.com/Rynaro/eidolons-esl)). RAMZA takes this furthest: the distinct-checker critique is one of its mechanized gates, and one holdout A/B run's critic caught a real defect before the plan shipped (question 4). See [`methodology/composition.md`](methodology/composition.md) for the contract table and partial-team matrix.
 
 ## Mechanical routing — the harness
 
@@ -140,7 +151,7 @@ For a hard backstop, `--strict` adds a `PreToolUse` **delegate-or-deny** tier th
 
 ## Spec-Driven lifecycle — ESL
 
-Routing decides *who* works. **ESL** — the Eidolons Spec Lifecycle — decides *how a change moves*, so non-trivial work runs through a right-sized, auditable lifecycle instead of a one-shot prompt. It isn't a second framework bolted on: the specialists you already have **are** the lifecycle — SPECTRA specifies, FORGE deliberates, Vivi implements, Kupo/VIGIL verify, IDG archives — and ESL is the thin grammar that sequences them, change by change, on disk under `.spectra/changes/`. Each Eidolon ships its own lifecycle hop; the cortex orchestrates the rest.
+Routing decides *who* works. **ESL** — the Eidolons Spec Lifecycle — decides *how a change moves*, so non-trivial work runs through a right-sized, auditable lifecycle instead of a one-shot prompt. It isn't a second framework bolted on: the specialists you already have **are** the lifecycle — RAMZA specifies, FORGE deliberates, Vivi implements, Kupo/VIGIL verify, IDG archives — and ESL is the thin grammar that sequences them, change by change, on disk under `.spectra/changes/`. Each Eidolon ships its own lifecycle hop; the cortex orchestrates the rest.
 
 It's built deliberately against [the documented failure modes of spec-driven development](https://github.com/Rynaro/eidolons-esl/blob/main/docs/rationale.md) — over-specification, instruction bloat, spec-as-waterfall, "spec" as a throwaway prompt:
 
