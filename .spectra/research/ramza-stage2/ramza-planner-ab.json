@@ -1,0 +1,56 @@
+{
+  "description": "RAMZA-PLANNER-AB: the pre-registered planner-seat A/B that gated RAMZA's promotion to the default planner (Stage 3 of the SPECTRA succession). Question: does a MECHANIZED-gate planner (RAMZA — right-sizing, rubric arithmetic, EARS lint, SHA-256 criteria freeze, plan-vs-diff drift, maker!=checker) match a prose-methodology planner (SPECTRA, control) on contract-conformance, at lower ceremony? Protocol frozen BEFORE any run at nexus commit f09f54f. Non-inferiority, not superiority, is the claim tested at this sample size.",
+  "protocol": {
+    "suite": "evals/planner-ab-suite.yaml",
+    "pre_registration": ".spectra/research/ramza-stage2/AC-003-PREREGISTRATION.md",
+    "adjudication": ".spectra/research/ramza-stage2/AC-003-ADJUDICATION.md",
+    "tasks": 6,
+    "holdout_tasks": ["AB-H1", "AB-H2"],
+    "k": 2,
+    "primary_metric": "per-task pass^2 (both runs pass all MUST rubric items)",
+    "grading": "mechanical, grep-based (eidolons eval quality grade) — no LLM judge",
+    "executor_model": "sonnet (same for both arms; blind to rubrics)",
+    "non_inferiority_margin": "ramza_tasks_pass2 >= spectra_tasks_pass2 - 1",
+    "holdout_gate": "aggregate claim void if either arm's holdout diverges in direction from its public results by more than 1 task"
+  },
+  "arms": [
+    {
+      "label": "ramza (mechanized gates)",
+      "eidolon": "ramza",
+      "version": "1.0.0",
+      "control": false
+    },
+    {
+      "label": "spectra (prose methodology, control)",
+      "eidolon": "spectra",
+      "version": "4.11.0",
+      "control": true
+    }
+  ],
+  "results": {
+    "per_task": [
+      { "task": "AB-T1", "kind": "public",  "mission": "webhook delivery subsystem",   "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 5104, "spectra_mean_words": 10560 },
+      { "task": "AB-T2", "kind": "public",  "mission": "soft-delete brownfield Rails",  "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 4624, "spectra_mean_words": 8165 },
+      { "task": "AB-T3", "kind": "public",  "mission": "double-charge fix spec",        "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 3852, "spectra_mean_words": 9534 },
+      { "task": "AB-T4", "kind": "public",  "mission": "underspecified dashboard perf", "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 4632, "spectra_mean_words": 7999 },
+      { "task": "AB-H1", "kind": "holdout", "mission": "v1 REST API deprecation",       "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 6174, "spectra_mean_words": 10599 },
+      { "task": "AB-H2", "kind": "holdout", "mission": "SAML SSO",                      "ramza_pass2": true, "spectra_pass2": true, "ramza_mean_words": 5970, "spectra_mean_words": 12528 }
+    ],
+    "aggregate": {
+      "ramza_tasks_pass2": 6,
+      "spectra_tasks_pass2": 6,
+      "total_tasks": 6,
+      "must_failures_across_all_24_runs": 0,
+      "ramza_mean_words": 5059,
+      "spectra_mean_words": 9897,
+      "ramza_ceremony_ratio": 0.51
+    }
+  },
+  "verdict": {
+    "non_inferiority": "MET (6 >= 6 - 1)",
+    "holdout_consistency": "CONSISTENT (both arms perfect on public and holdout)",
+    "superiority": "NOT claimed — both arms saturated the suite (ceiling); superiority remains open until a harder cohort exists",
+    "outcome": "PASS — RAMZA promoted to the default planner seat; SPECTRA retained as the conservative opt-in fallback",
+    "descriptive_note": "RAMZA produced contract-conformant plans at ~51% of SPECTRA's verbosity, with a machine-verifiable gate audit trail (tier decision, rubric scores, EARS lint, SHA-256 freeze, verify-emit) where SPECTRA self-reports its cycle. One holdout run's maker!=checker critic caught and closed a real criteria-desync (an audit-enumeration gap) at cycle-2, with an independent cycle-3 PASS."
+  }
+}

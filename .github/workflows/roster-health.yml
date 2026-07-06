@@ -442,3 +442,72 @@ jobs:
           fi
 
           echo "::notice::nexus@$latest integrity verified (commit=$actual_commit)"
+
+  verify-ecl-pin:
+    name: Verify composition ECL pin
+    runs-on: ubuntu-latest
+    # Nightly belt-and-suspenders for the composition-drift contract. The
+    # dedicated composition-drift.yml gate only fires when composition.md /
+    # its template / that workflow change; it cannot catch a pinned ECL tag
+    # that is later moved or deleted upstream, nor silent drift on nights when
+    # nothing in the nexus touched composition.md. This job re-runs the same
+    # regeneration on the nightly cron so the pin (currently v2.1.1) stays
+    # honest against Rynaro/eidolons-ecl.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Read the pinned ECL tag from composition-drift.yml
+        id: pin
+        run: |
+          set -euo pipefail
+          tag="$(grep -oE 'ECL_PINNED_TAG:[[:space:]]*v[0-9]+\.[0-9]+\.[0-9]+' \
+            .github/workflows/composition-drift.yml | awk '{print $2}')"
+          [[ -n "$tag" ]] || { echo "::error::could not read ECL_PINNED_TAG from composition-drift.yml"; exit 1; }
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Pinned ECL tag: $tag"
+
+      - name: Verify the pinned tag still exists upstream
+        run: |
+          set -euo pipefail
+          tag="${{ steps.pin.outputs.tag }}"
+          if ! git ls-remote --tags https://github.com/Rynaro/eidolons-ecl "refs/tags/${tag}" \
+              | grep -q "refs/tags/${tag}"; then
+            echo "::error::pinned ECL tag ${tag} no longer resolves on Rynaro/eidolons-ecl (moved or deleted)."
+            exit 1
+          fi
+          echo "::notice::ECL pin ${tag} is reachable upstream."
+
+      - name: Clone eidolons-ecl at the pinned tag
+        run: |
+          git clone --depth 1 --branch "${{ steps.pin.outputs.tag }}" \
+            https://github.com/Rynaro/eidolons-ecl /tmp/ecl
+
+      - name: Install eidolons-ecl-sdk from the pinned source
+        run: pip install --quiet /tmp/ecl/reference-sdk/py
+
+      - name: Verify local template matches the pinned ecl template
+        run: |
+          diff -u \
+            /tmp/ecl/reference-sdk/py/src/eidolons_ecl/compose_gen/templates/composition.md.j2 \
+            methodology/composition.md.j2 \
+            || {
+              echo "::error::methodology/composition.md.j2 drifted from pinned eidolons-ecl@${{ steps.pin.outputs.tag }}."
+              exit 1
+            }
+
+      - name: Regenerate and diff composition.md against the pinned contracts
+        run: |
+          eidolons-ecl compose-gen \
+            --contracts /tmp/ecl/contracts \
+            --template methodology/composition.md.j2 \
+            --out /tmp/regen.md
+          diff -u methodology/composition.md /tmp/regen.md \
+            || {
+              echo "::error::methodology/composition.md drifted from the regenerated output for pinned tag ${{ steps.pin.outputs.tag }}."
+              exit 1
+            }
+          echo "::notice::composition.md matches eidolons-ecl@${{ steps.pin.outputs.tag }} (pin verified)."
