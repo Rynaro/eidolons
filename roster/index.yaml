@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-07-05T00:25Z"
+updated_at: "2026-07-05T20:45Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -452,7 +452,7 @@ eidolons:
   - name: ramza
     display_name: "RAMZA"
     capability_class: planner
-    status: in_construction # Stage 1 intake (Vivi-pattern succession of spectra) — measurement (Stage 2) gates the shipped flip; default-planner seat (Stage 3b) gates on the measurement
+    status: shipped # Stage 3: measurement complete (AC-001/002/003 all green; pre-registered planner A/B non-inferior + holdout-consistent, 2026-07-05) → default planner seat; SPECTRA retained as conservative opt-in fallback
     methodology:
       name: "RAMZA"
       version: "1.0"
@@ -463,10 +463,19 @@ eidolons:
       repo: Rynaro/Ramza
       default_ref: main
     versions:
-      latest: "0.2.0"
+      latest: "1.0.0"
       pins:
-        stable: "0.2.0"
+        stable: "1.0.0"
       releases:
+        1.0.0:
+          tag: v1.0.0
+          commit: fd7dd0dd3ec5cf8eff386ff8f6e7cfbf18daf461
+          tree: 0c6b1fecf3239f2d86f0ddb25a5f58886d84bcdd
+          archive_sha256: 90c83884431024c4be9ad231004a5aa1210be78b12768deb348f31682aea48a7
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
         0.2.0:
           tag: v0.2.0
           commit: af5f546885852e8f9441e0509f89d82c6a2ac559
@@ -1908,14 +1917,14 @@ presets:
     description: "Solo scout. For read-only exploration of unfamiliar codebases."
     members: [atlas]
   pipeline:
-    description: "Full pipeline. Scout → Plan → Build → Chronicle. (Vivi is the default coder; APIVR-Δ stays opt-in via `eidolons add apivr`.)"
-    members: [atlas, spectra, vivi, idg]
+    description: "Full pipeline. Scout → Plan → Build → Chronicle. (RAMZA is the default planner and Vivi the default coder; SPECTRA/APIVR-Δ stay opt-in via `eidolons add spectra|apivr`.)"
+    members: [atlas, ramza, vivi, idg]
   plan-and-build:
     description: "Skip scouting and documentation. Plan and implement only."
-    members: [spectra, vivi]
+    members: [ramza, vivi]
   full:
-    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL) and the Kupo executor. Single-coder by design; APIVR-Δ is the opt-in conservative fallback (`eidolons add apivr`)."
-    members: [atlas, spectra, vivi, idg, forge, vigil, kupo]
+    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL) and the Kupo executor. Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
+    members: [atlas, ramza, vivi, idg, forge, vigil, kupo]
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]
@@ -1924,4 +1933,4 @@ presets:
     members: [apivr, vigil, forge]
   errands:
     description: "Pipeline plus the low-effort executor — delegate quick localized micro-tasks to Kupo (in_construction until eval-gated)."
-    members: [atlas, spectra, apivr, kupo]
+    members: [atlas, ramza, apivr, kupo]

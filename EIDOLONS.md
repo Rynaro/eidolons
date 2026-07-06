@@ -16,8 +16,9 @@
 
 | Name | Capability class | Trigger verbs | Refuses | Hands off to |
 |------|-----------------|---------------|---------|--------------|
-| **ATLAS** | scout | map, trace, find where, who calls, build call graph, list entrypoints, audit (read-only) | implement, fix, edit, write, commit | SPECTRA, Vivi, IDG |
-| **SPECTRA** | planner | spec, plan, decompose, clarify requirements, GIVEN/WHEN/THEN, decision-ready | implement code, modify files | Vivi, IDG |
+| **ATLAS** | scout | map, trace, find where, who calls, build call graph, list entrypoints, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
+| **RAMZA** | planner (default) | spec, plan, decompose, clarify requirements, GIVEN/WHEN/THEN, decision-ready — mechanized gates: right-size · rubric arithmetic · EARS lint · SHA-256 criteria freeze · plan-vs-diff drift · maker≠checker | implement code, modify files | Vivi, IDG |
+| **SPECTRA** | planner (opt-in fallback) | named dispatch only ("SPECTRA, …"); conservative prose-methodology posture (`eidolons add spectra`) | implement code, modify files | Vivi, IDG |
 | **Vivi** | coder (default) | implement, build, fix, extend, wire up, make tests pass — loop-native: drives `eidolons sandbox loop`, host-adaptive (iterate/fanout) | design from scratch, novel architecture | IDG |
 | **APIVR-Δ** | coder (opt-in fallback) | named dispatch only ("APIVR-Δ, …"); conservative non-loop posture (`eidolons add apivr`) | design from scratch, novel architecture | IDG |
 | **IDG** | scriber | document, ADR, runbook, chronicle, synthesize, record decisions | explore repo, find calls, retrieve | (terminal) |
@@ -62,11 +63,11 @@ refusal_rerouting: <bool>
 
 | Template | Steps | When |
 |----------|-------|------|
-| **plan-before-build** | ATLAS → SPECTRA → Vivi → IDG | Unfamiliar code + multi-component change |
+| **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
-| **ship-fast** | SPECTRA → Vivi | Known terrain, scoped feature |
-| **direct-implementation-bypass** | ATLAS → Vivi (skip SPECTRA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
-| **decide-then-implement** | FORGE → SPECTRA → Vivi | "Should we use X or Y, then build it" |
+| **ship-fast** | RAMZA → Vivi | Known terrain, scoped feature |
+| **direct-implementation-bypass** | ATLAS → Vivi (skip RAMZA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
+| **decide-then-implement** | FORGE → RAMZA → Vivi | "Should we use X or Y, then build it" |
 | **forensic-then-fix** | VIGIL → Vivi | Bug with reproduction + verified patch suggestion |
 | **failed-attempt-recovery** | (prior coder failure) → VIGIL → Vivi | Conversation shows prior coder Reflect-exhaustion |
 | **decision-only** | FORGE | No code touching; deliberation emitting verdict + assumptions |
@@ -83,12 +84,12 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 |------|---------|-----------|
 | G1 — Discovery scatter | ATLAS | Surface > 25 files OR > 5 modules → scatter sub-agents per module, aggregate via Abstract phase |
 | G2 — Hard-decision consistency | FORGE | ≥ 3 plausible alternatives AND (high-stakes flag OR explicit TRANCE token) → N=3 reasoning traces, majority-vote |
-| G3 — Spec evaluator-optimizer | SPECTRA | Complexity ≥ 7/12 AND (high-stakes OR ambiguous reqs) → generator + evaluator, max 3 iterations |
-| G4 — Parallel implementation | Vivi | SPECTRA emitted > 1 independent story AND budget bounded → one Vivi per track, worktree isolation |
+| G3 — Spec evaluator-optimizer | RAMZA | Complexity ≥ 7/12 AND (high-stakes OR ambiguous reqs) → generator + evaluator, max 3 iterations |
+| G4 — Parallel implementation | Vivi | RAMZA emitted > 1 independent story AND budget bounded → one Vivi per track, worktree isolation |
 | G5 — Doc parallel synthesis | IDG | Large source artifact set AND topological order allows parallelism → per-section parallel, CHT per section, one-revision cap preserved |
 | G6 — Forensic counterfactuals | VIGIL | ≥ 2 plausible root-cause hypotheses AND bisect surface allows independent testing → parallel hypothesis tests on isolated bisects |
 
-**TRANCE refusals (immutable):** A refused capability does not become available at TRANCE. ATLAS still does not write. SPECTRA still does not implement. IDG still does not retrieve. FORGE still does not tool-call. VIGIL still does not auto-apply patches. Per-Eidolon retry budgets remain enforced inside TRANCE.
+**TRANCE refusals (immutable):** A refused capability does not become available at TRANCE. ATLAS still does not write. RAMZA still does not implement. IDG still does not retrieve. FORGE still does not tool-call. VIGIL still does not auto-apply patches. Per-Eidolon retry budgets remain enforced inside TRANCE.
 
 ---
 
@@ -99,7 +100,7 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 | Stack trace, panic, "still failing after retry" | +0.3 | VIGIL |
 | Surface > 25 files or 5 modules | +0.2 | ATLAS-TRANCE |
 | "Greenfield", "from scratch", "novel" | −0.3 | the coder class (Vivi and APIVR-Δ refuse greenfield) |
-| "I don't have a spec yet" | +0.2 | SPECTRA |
+| "I don't have a spec yet" | +0.2 | RAMZA |
 | Prior failed coder attempt in conversation | +0.4 | VIGIL |
 | Eidolon named explicitly in prompt | +0.5 | that Eidolon (still check refusal table) |
 | Multiple SDLC phases ("scout and spec and build") | chain trigger | (see Chain Templates) |
@@ -156,7 +157,7 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 
 **ECL — Wire Format.** Inter-Eidolon hand-offs use the **Eidolons Communication Layer (ECL v1.0)** wire format: every emitted artefact carries a JSON sidecar envelope (`ecl-envelope.json`) containing the performative, sender/receiver identities, a SHA-256 integrity tag, and a JSONL trace stream. ECL is opt-in for v1.0; existing Eidolons remain conformant unchanged. Machine-readable hand-off contracts live at [`Rynaro/eidolons-ecl/contracts/`](https://github.com/Rynaro/eidolons-ecl/tree/main/contracts).
 
-**ESL — Spec Lifecycle.** Eidolons changes may follow the **Eidolons Spec Lifecycle (ESL v1.0)**: a right-sizable state machine + a mandatory mechanical right-sizing gate (trivial→Kupo / lite→one-page / full→full) + a drift/living-spec contract, with **maker≠checker** enforced on the verify envelope. The grammar (states, `change.json` schema, bash conformance checker) lives at [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl); it reuses SPECTRA artifacts, ECL envelopes, and CRYSTALIUM layers. Opt-in for v1.0. **Escalation HONOR:** before `tonberry verify` on a project's changes, read `enforcement` from the tonberry `eidolons.mcp.lock` entry — `block` ⇒ pass `--mode block`; field absent ⇒ live `tonberry assess`, honor `recommended_mode`; tonberry absent ⇒ advisory. Record it with `eidolons mcp assess tonberry` (see `methodology/cortex/esl-protocol.md`). **Lifecycle (opt-in):** for ESL-enabled projects, non-trivial changes run the full lifecycle by default — propose→[deliberate]→implement→verify→drift→archive across SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG (maker≠checker), orchestrator-composed via tonberry; trivial→Kupo direct.
+**ESL — Spec Lifecycle.** Eidolons changes may follow the **Eidolons Spec Lifecycle (ESL v1.0)**: a right-sizable state machine + a mandatory mechanical right-sizing gate (trivial→Kupo / lite→one-page / full→full) + a drift/living-spec contract, with **maker≠checker** enforced on the verify envelope. The grammar (states, `change.json` schema, bash conformance checker) lives at [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl); it reuses SPECTRA artifacts, ECL envelopes, and CRYSTALIUM layers. Opt-in for v1.0. **Escalation HONOR:** before `tonberry verify` on a project's changes, read `enforcement` from the tonberry `eidolons.mcp.lock` entry — `block` ⇒ pass `--mode block`; field absent ⇒ live `tonberry assess`, honor `recommended_mode`; tonberry absent ⇒ advisory. Record it with `eidolons mcp assess tonberry` (see `methodology/cortex/esl-protocol.md`). **Lifecycle (opt-in):** for ESL-enabled projects, non-trivial changes run the full lifecycle by default — propose→[deliberate]→implement→verify→drift→archive across RAMZA→FORGE→Vivi→Kupo/VIGIL→IDG (maker≠checker), orchestrator-composed via tonberry; trivial→Kupo direct.
 
 *Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, ESL protocol, tier execution dial, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 

@@ -45,13 +45,13 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$(_field '.tier')" = "trance" ]
 }
 
-# ── V3 — discovery + spec verbs co-occur → ATLAS → SPECTRA chain ──────────────
-@test "V3: spec + unknown call graph → ATLAS→SPECTRA chain" {
+# ── V3 — discovery + spec verbs co-occur → ATLAS → RAMZA chain ────────────────
+@test "V3: spec + unknown call graph → ATLAS→RAMZA chain" {
   run eidolons run "I need a spec for refactoring the dispatcher; I don't know the call graph yet" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "chain" ]
   [ "$(_field '.selected[0]')" = "atlas" ]
-  [ "$(_field '.selected[1]')" = "spectra" ]
+  [ "$(_field '.selected[1]')" = "ramza" ]
 }
 
 # ── V4 — brownfield bug fix → Vivi (default coder); "flowmap" must NOT hit ATLAS ──
@@ -72,12 +72,12 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$(_field '.selected[0]')" = "forge" ]
 }
 
-# ── V8 — design + implement → SPECTRA → Vivi chain ────────────────────────────
-@test "V8: design and implement the --json flag routes to SPECTRA then Vivi chain" {
+# ── V8 — design + implement → RAMZA → Vivi chain ──────────────────────────────
+@test "V8: design and implement the --json flag routes to RAMZA then Vivi chain" {
   run eidolons run "design and implement the --json flag for doctor" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "chain" ]
-  [ "$(_field '.selected[0]')" = "spectra" ]
+  [ "$(_field '.selected[0]')" = "ramza" ]
   [ "$(_field '.selected[-1]')" = "vivi" ]
 }
 
@@ -166,13 +166,13 @@ _field() { echo "$output" | jq -r "$1"; }
   [ "$tier" = "standard" ]
 }
 
-@test "run: spectra dispatch produces deep tier in model_tier_per_step" {
+@test "run: ramza dispatch produces deep tier in model_tier_per_step" {
   run eidolons run "spec out the requirements" --json
   [ "$status" -eq 0 ]
-  # spectra has suggested_tier: deep; selected may be spectra
+  # ramza (default planner) has suggested_tier: deep; selected may be ramza
   local sel
   sel="$(_field '.selected[0]')"
-  if [ "$sel" = "spectra" ]; then
+  if [ "$sel" = "ramza" ]; then
     local tier
     tier="$(_field '.model_tier_per_step[0]')"
     [ "$tier" = "deep" ]
@@ -183,11 +183,11 @@ _field() { echo "$output" | jq -r "$1"; }
   # Regression guard: the chain branch's jq previously read
   # $R.eidolons[$st].model_tier directly off the RAW routing-YAML entry (which
   # only ever has .suggested_tier), yielding [null, null, ...] for every chain.
-  # 'atlas, spectra, vivi, idg' co-triggers the plan-before-build chain.
+  # 'atlas, ramza, vivi, idg' co-triggers the plan-before-build chain.
   run eidolons run "map the codebase, spec the change, then implement it" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "chain" ]
-  [ "$(_field '.selected | join(",")')" = "atlas,spectra,vivi,idg" ]
+  [ "$(_field '.selected | join(",")')" = "atlas,ramza,vivi,idg" ]
   # None of the four per-step tiers may be null.
   [ "$(echo "$output" | jq -r '[.model_tier_per_step[] | select(. == null)] | length')" = "0" ]
   # Values must match roster/routing.yaml suggested_tier per member, in order.
@@ -338,7 +338,7 @@ EOF
   run eidolons run "map the codebase, spec the change, then implement it" --json
   [ "$status" -eq 0 ]
   [ "$(_field '.decision')" = "chain" ]
-  [ "$(_field '.selected | join(",")')" = "atlas,spectra,vivi,idg" ]
+  [ "$(_field '.selected | join(",")')" = "atlas,ramza,vivi,idg" ]
   # degraded_mode_per_step must be the same length as .chain and align by index.
   [ "$(echo "$output" | jq -r '.degraded_mode_per_step | length')" = "$(echo "$output" | jq -r '.chain | length')" ]
   # Only vivi (index 2) declares degraded_mode: fanout; the rest are null.

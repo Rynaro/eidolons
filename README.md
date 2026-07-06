@@ -84,8 +84,9 @@ These are early, small-N signals, framed honestly in the research digests and [`
 | Eidolon | What it does | Reach for it when… | Latest |
 |---|---|---|:---:|
 | **[ATLAS](https://github.com/Rynaro/ATLAS)** <sub>scout</sub> | Maps an unfamiliar codebase without writing a line. Evidence-anchored, read-only by construction. | Auditing a new repo, onboarding, before any change. | ![](https://img.shields.io/github/v/release/Rynaro/ATLAS?sort=semver&label=&color=blue) |
-| **[SPECTRA](https://github.com/Rynaro/SPECTRA)** <sub>planner</sub> | Turns a rough idea or scout report into a decision-ready spec — rubrics, gates, GIVEN/WHEN/THEN. | Planning a feature before you build it. | ![](https://img.shields.io/github/v/release/Rynaro/SPECTRA?sort=semver&label=&color=blue) |
-| **[Vivi](https://github.com/Rynaro/Vivi)** <sub>coder · default</sub> | **The default coder.** Brownfield, pattern-first, test-anchored — drives a closed edit-run-test loop and gates on `pass^k` instead of one green run. | Shipping the change SPECTRA planned, on a loop-capable host. | ![](https://img.shields.io/github/v/release/Rynaro/Vivi?sort=semver&label=&color=blue) |
+| **[RAMZA](https://github.com/Rynaro/Ramza)** <sub>planner · default</sub> | **The default planner.** Turns a rough idea or scout report into a decision-ready spec, with the gates *mechanized* — right-sizing, rubric arithmetic, EARS lint, SHA-256 criteria freeze, plan-vs-diff drift, maker≠checker critique — enforced by code, not prose. | Planning a feature before you build it. | ![](https://img.shields.io/github/v/release/Rynaro/Ramza?sort=semver&label=&color=blue) |
+| **[SPECTRA](https://github.com/Rynaro/SPECTRA)** <sub>planner · fallback</sub> | RAMZA's prose-methodology predecessor — decision-ready specs with rubrics, gates, GIVEN/WHEN/THEN. Same discipline, unmechanized posture — add with `eidolons add spectra`. | Preferring the narrative planning cycle, or a conservative fallback. | ![](https://img.shields.io/github/v/release/Rynaro/SPECTRA?sort=semver&label=&color=blue) |
+| **[Vivi](https://github.com/Rynaro/Vivi)** <sub>coder · default</sub> | **The default coder.** Brownfield, pattern-first, test-anchored — drives a closed edit-run-test loop and gates on `pass^k` instead of one green run. | Shipping the change RAMZA planned, on a loop-capable host. | ![](https://img.shields.io/github/v/release/Rynaro/Vivi?sort=semver&label=&color=blue) |
 | **[APIVR-Δ](https://github.com/Rynaro/APIVR-Delta)** <sub>coder · fallback</sub> | Vivi's conservative predecessor, for hosts without the closed loop. Same discipline, non-loop posture — add with `eidolons add apivr`. | A loop-incompetent host, or a cautious builder. | ![](https://img.shields.io/github/v/release/Rynaro/APIVR-Delta?sort=semver&label=&color=blue) |
 | **[IDG](https://github.com/Rynaro/IDG)** <sub>scriber</sub> | Synthesizes docs from sessions, specs, and deltas — provenance-first, with `[GAP]`/`[DISPUTED]` markers. | Chronicling what you just built. | ![](https://img.shields.io/github/v/release/Rynaro/IDG?sort=semver&label=&color=blue) |
 | **[FORGE](https://github.com/Rynaro/FORGE)** <sub>reasoner</sub> | Deliberates on ambiguous trade-offs. Names alternatives, surfaces assumptions, returns a verdict + confidence. | Two patterns apply and the choice isn't obvious. | ![](https://img.shields.io/github/v/release/Rynaro/FORGE?sort=semver&label=&color=blue) |
@@ -93,17 +94,17 @@ These are early, small-N signals, framed honestly in the research digests and [`
 | **[Kupo](https://github.com/Rynaro/Kupo)** <sub>executor</sub> | Low-effort delegate target. Patches an ephemeral sandbox, proves it with a real verifier, and *proposes* the patch back — never writes the real tree. | Offloading trivial localized edits to keep a session lean. | ![](https://img.shields.io/github/v/release/Rynaro/Kupo?sort=semver&label=&color=blue) |
 | **[CRYSTALIUM](https://github.com/Rynaro/crystalium)** <sub>memory</sub> | The shared four-layer memory substrate every member writes to and recalls from — tier-gated writes, hybrid recall, Dream consolidation, principled forgetting. | Carrying context and learned patterns across sessions and members. | ![](https://img.shields.io/github/v/release/Rynaro/crystalium?sort=semver&label=&color=blue) |
 
-> Eight shipped specialists across seven capability classes — **scout, planner, coder, scriber, reasoner, debugger, executor** — plus **CRYSTALIUM**, the `memory` substrate underneath them all. Versions and handoff contracts live in [`roster/index.yaml`](roster/index.yaml), the machine-readable source of truth.
+> Nine shipped specialists across seven capability classes — **scout, planner, coder, scriber, reasoner, debugger, executor** — plus **CRYSTALIUM**, the `memory` substrate underneath them all. Versions and handoff contracts live in [`roster/index.yaml`](roster/index.yaml), the machine-readable source of truth.
 
 ## How they compose
 
-The team has a default shape: **ATLAS** scouts, **SPECTRA** plans, **Vivi** builds, **IDG** chronicles. **FORGE** and **VIGIL** are lateral specialists — consultable at any stage. **CRYSTALIUM** sits underneath all of them, the shared memory every member writes handoffs into and recalls from. Partial teams are first-class: bring just ATLAS to an audit, or the full pipeline to a greenfield.
+The team has a default shape: **ATLAS** scouts, **RAMZA** plans, **Vivi** builds, **IDG** chronicles. **FORGE** and **VIGIL** are lateral specialists — consultable at any stage. **CRYSTALIUM** sits underneath all of them, the shared memory every member writes handoffs into and recalls from. Partial teams are first-class: bring just ATLAS to an audit, or the full pipeline to a greenfield.
 
 <details>
 <summary>Canonical pipeline</summary>
 
 ```
-ATLAS ───▶ SPECTRA ───▶  Vivi  ───▶ IDG
+ATLAS ───▶  RAMZA  ───▶  Vivi  ───▶ IDG
   scout      plan         build       chronicle
              ▲             │ ▲
            FORGE ◀── (ambiguity, trade-offs, novel problems)

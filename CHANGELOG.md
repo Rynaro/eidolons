@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **RAMZA takes the default planner seat (Stage 3 of the SPECTRA succession).** Promoted from `in_construction` to `shipped` at v1.0.0 (attested release) after the Stage-2 measurement closed green: AC-001 (scorer calibration), AC-002 (7/7 canary missions, 0 MUST-fail), and AC-003 — a pre-registered, budget-matched, holdout-gated planner A/B vs `spectra@4.11.0`. **24/24 cells, both arms 6/6 tasks pass², 0 MUST failures; RAMZA non-inferior (6 ≥ spectra 6 − 1) with holdout consistency intact.** Descriptive (not gated): RAMZA produced contract-conformant plans at ~51% of SPECTRA's verbosity with machine-verifiable gate audit trails; one run's maker≠checker critic caught and closed a real criteria-desync (an audit-enumeration gap) at cycle-2, independent cycle-3 PASS. Adjudication + full matrix: `.spectra/research/ramza-stage2/AC-003-ADJUDICATION.md`.
+  - **Seat flip (routing is DATA):** `roster/routing.yaml` now carries a `ramza` planner block with `default_for_class: planner` + `fallback: spectra`; the four planner chains (plan-before-build, ship-fast, decide-then-implement, scout-then-spec) and the no-spec confidence signal reseat to RAMZA. `EIDOLONS.md` cortex, the `pipeline`/`plan-and-build`/`full`/`errands` presets, and the README reseat to RAMZA-default.
+  - **SPECTRA retained as the conservative opt-in fallback** (`eidolons add spectra`) — still shipped, still reachable by named dispatch (the +0.5 name bonus). Mirrors the Vivi/APIVR-Δ coder precedent. Deferred follow-up (matching that precedent): `methodology/composition.md` ECL contract reseat.
+
 ### Added
 
 - **RAMZA intaken as `in_construction`** (Stage 1 of the SPECTRA succession, Vivi-pattern). Planner-class successor whose differentiator is mechanized gates: `bin/` tools for right-sizing tiers, phase state-machine transitions, rubric arithmetic with calibration logging, EARS criteria linting, SHA-256 criteria freeze/amend chains, plan-vs-diff drift detection, and mechanical maker≠checker on plan critique (Rynaro/Ramza v0.1.0 scaffold). SPECTRA remains the shipped planner and conservative fallback; presets/routing/cortex are untouched until the Stage 2 measurement gates the seat flip. Campaign record: `.spectra/plans/spectra-v2/` (research dossiers, CURATION verdicts, GAP-MAP, succession brief, repo plan).

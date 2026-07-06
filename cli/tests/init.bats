@@ -179,7 +179,8 @@ EOF
 @test "init recovers from populated stale cache for every shipped Eidolon (full preset)" {
   # This test wires through the fake-git-for-upgrade harness which strips
   # release metadata so fetch_eidolon runs in compatibility mode. It seeds
-  # stale caches for atlas and spectra, then runs init --preset full.
+  # stale caches for atlas and ramza (the default planner in the full preset),
+  # then runs init --preset full.
   # The init → sync path must complete without fatal cache-mismatch errors.
   setup_fake_git_for_upgrade
 
@@ -189,10 +190,10 @@ EOF
   echo "stalestalestalestalestalestalestalestale" > "$atlas_cache/.git/FAKE_COMMIT"
   echo "ref: refs/heads/main" > "$atlas_cache/.git/HEAD"
 
-  local spectra_cache="$EIDOLONS_HOME/cache/spectra@latest"
-  mkdir -p "$spectra_cache/.git"
-  echo "stalestalestalestalestalestalestalestale" > "$spectra_cache/.git/FAKE_COMMIT"
-  echo "ref: refs/heads/main" > "$spectra_cache/.git/HEAD"
+  local ramza_cache="$EIDOLONS_HOME/cache/ramza@latest"
+  mkdir -p "$ramza_cache/.git"
+  echo "stalestalestalestalestalestalestalestale" > "$ramza_cache/.git/FAKE_COMMIT"
+  echo "ref: refs/heads/main" > "$ramza_cache/.git/HEAD"
 
   run eidolons init --preset full --hosts claude-code --non-interactive --force
   # Sync may fail because fake-git clones don't produce versioned cache dirs
@@ -200,7 +201,7 @@ EOF
   # but the manifest must be written.
   [ -f eidolons.yaml ]
   grep -q '^  - name: atlas' eidolons.yaml
-  grep -q '^  - name: spectra' eidolons.yaml
+  grep -q '^  - name: ramza' eidolons.yaml
 }
 
 # ─── G9: init leaves no partial state when fetch_eidolon recovers mid-run ──

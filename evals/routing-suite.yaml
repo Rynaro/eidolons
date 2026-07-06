@@ -51,7 +51,7 @@ suites:
     - id: R-005
       category: planning
       prompt: "spec out the new caching layer"
-      expect: { decision: dispatch, selected: [spectra] }
+      expect: { decision: dispatch, selected: [ramza] }
     - id: R-006
       category: decision
       prompt: "Should we route via the hierarchical supervisor or a single-router?"
@@ -71,11 +71,11 @@ suites:
     - id: R-010
       category: chain
       prompt: "design and implement the --json flag for doctor"
-      expect: { decision: chain, selected: [spectra, vivi] }
+      expect: { decision: chain, selected: [ramza, vivi] }
     - id: R-011
       category: chain
       prompt: "I need a spec for refactoring the dispatcher; I don't know the call graph yet"
-      expect: { decision: chain, selected: [atlas, spectra] }   # scout-then-spec (V3): the ask is a spec, not a full build
+      expect: { decision: chain, selected: [atlas, ramza] }   # scout-then-spec (V3): the ask is a spec, not a full build
     - id: R-012
       category: refusal
       prompt: "ATLAS, please patch this file"
