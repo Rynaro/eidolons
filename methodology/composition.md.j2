@@ -13,23 +13,23 @@ The power of Eidolons is not in any single member — it is in their **compositi
 ## The canonical pipeline
 
 ```
-ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
-  scout      plan         build        chronicle
-             ▲              │ ▲
-             │              │ │
+ATLAS ───▶ RAMZA ───▶ Vivi ───▶ IDG
+  scout      plan       build      chronicle
+             ▲           │ ▲
+             │           │ │
            FORGE ◀─── (ambiguity, trade-offs, novel problems)
-                            │ │
-                          VIGIL ◀─── (failure resisted repair; forensic attribution)
+                         │ │
+                        VIGIL ◀─── (failure resisted repair; forensic attribution)
 ```
 
 **Reading left to right:**
 
 1. **ATLAS** maps an unfamiliar codebase or problem area and emits a `scout-report.md` with evidence-anchored findings.
-2. **SPECTRA** consumes the scout report, produces a spec (Markdown + YAML + state JSON) with stories, validation gates, and agent hints.
-3. **APIVR-Δ** consumes the spec, implements the feature, emits a completion artifact (session log, delta history, completion report).
+2. **RAMZA** consumes the scout report, produces a gate-frozen spec (Markdown + YAML + state JSON) with stories, mechanically-enforced validation gates, and agent hints. (RAMZA is the default planner; SPECTRA is the conservative opt-in fallback.)
+3. **Vivi** consumes the spec, implements the feature through its closed edit-run-test loop, emits a completion artifact (session log, delta history, completion report). (Vivi is the default coder; APIVR-Δ is the opt-in fallback.)
 4. **IDG** consumes the session artifacts, produces documentation (chronicle, ADR, runbook, change-narrative) with structural markers.
 5. **FORGE** is called at any point where ambiguity, trade-offs, or novel reasoning is needed — a consultable specialist, not always in-line.
-6. **VIGIL** is called when a failure resists normal repair — APIVR-Δ's Reflect loop exhausted, a heisenbug surfaces, or a compound failure needs root-cause attribution. A consultable forensic specialist, not always in-line.
+6. **VIGIL** is called when a failure resists normal repair — the coder's Reflect loop exhausted, a heisenbug surfaces, or a compound failure needs root-cause attribution. A consultable forensic specialist, not always in-line.
 
 **This pipeline is the default shape, not the only shape.** Partial configurations are first-class (see §3).
 
@@ -52,27 +52,27 @@ kinds, with this context-budget ceiling, at this trust level".
 1. **Artifacts are written to disk, not passed in-context.** This keeps working-set tokens bounded across the pipeline.
 2. **Each artifact has a schema.** Structured outputs validated by JSON Schema 2020-12. Downstream Eidolons parse structured data, not prose.
 3. **Provenance travels.** Every claim in a downstream artifact traces back to a specific line in the upstream artifact.
-4. **Handoffs are labeled explicitly.** `→ SPECTRA (needs spec)`, `→ APIVR-Δ (ready to implement)`, `→ FORGE (trade-off deliberation)`, `→ human (out of scope)` — no implicit transitions.
+4. **Handoffs are labeled explicitly.** `→ RAMZA (needs spec)`, `→ Vivi (ready to implement)`, `→ FORGE (trade-off deliberation)`, `→ human (out of scope)` — no implicit transitions.
 
 ### The consultation pattern (FORGE, VIGIL)
 
 FORGE and VIGIL are not in the linear pipeline. Any other Eidolon — or the user — can consult them at any point:
 
 ```
-APIVR-Δ during Plan phase
+Vivi during Plan phase
   → "Two patterns apply here; trade-off unclear"
   → emits reasoning-request.md to FORGE
   → FORGE emits reasoning-report.md with verdict + confidence
-  → APIVR-Δ resumes Plan phase
+  → Vivi resumes Plan phase
 ```
 
 ```
-APIVR-Δ during Reflect phase
+Vivi during Reflect phase
   → 3 repair attempts exhausted; flaky test still failing
   → emits repair-failed-report.md to VIGIL (sandbox authority)
   → VIGIL runs V→I→G→I→L: reproduction, IDG, ≤5 counterfactuals
   → VIGIL emits root-cause-report.md + verified-patch.diff
-  → APIVR-Δ applies patch, verifies, resumes
+  → Vivi applies patch, verifies, resumes
 ```
 
 FORGE reasons; it does not implement, retrieve, or synthesize. VIGIL attributes; it does not build, plan, or document. Both emit structured deliberation artifacts, not specs or code.
@@ -97,7 +97,7 @@ FORGE reasons; it does not implement, retrieve, or synthesize. VIGIL attributes;
 **Not every project uses every Eidolon.** Design implications:
 
 1. **Every Eidolon is independently installable.** No hidden dependencies on teammates. ATLAS works solo; IDG works solo.
-2. **Handoff contracts are optional inputs.** An Eidolon must function even when its upstream partner isn't deployed. If ATLAS isn't installed, SPECTRA accepts a human-authored scout-like brief instead.
+2. **Handoff contracts are optional inputs.** An Eidolon must function even when its upstream partner isn't deployed. If ATLAS isn't installed, RAMZA accepts a human-authored scout-like brief instead.
 3. **The installer exposes granular flags** — `eidolons init --members atlas,idg` picks just those two.
 4. **Documentation for each member lists** "works standalone: yes/no" (always yes), "benefits from upstream": [list], "benefits from downstream": [list].
 
@@ -108,8 +108,8 @@ FORGE reasons; it does not implement, retrieve, or synthesize. VIGIL attributes;
 | **Solo scout** | `atlas` | Audit an unfamiliar codebase without changing anything |
 | **Solo chronicle** | `idg` | Document an existing session or decision |
 | **Explore + document** | `atlas, idg` | Understand and document, read-only |
-| **Plan + build** | `spectra, apivr` | Feature work where the team already knows the codebase |
-| **Full pipeline** | `atlas, spectra, apivr, idg` | New feature in unfamiliar code |
+| **Plan + build** | `ramza, vivi` | Feature work where the team already knows the codebase |
+| **Full pipeline** | `atlas, ramza, vivi, idg` | New feature in unfamiliar code |
 | **With reasoner** | add `forge` to any | Ambiguous trade-offs expected |
 | **With debugger** | add `vigil` to any | Flaky tests, regressions, or post-mortems likely |
 | **Diagnostics** | `apivr, vigil, forge` | Brownfield debugging; APIVR-Δ builds/fixes, VIGIL attributes, FORGE deliberates on ambiguous cases |
@@ -118,7 +118,7 @@ These map to presets in [`../roster/index.yaml`](../roster/index.yaml) — `eido
 
 ### Host mismatches
 
-A team may span hosts — e.g., the user runs ATLAS in Claude Code for exploration, then switches to Cursor to run APIVR-Δ for implementation. Supported:
+A team may span hosts — e.g., the user runs ATLAS in Claude Code for exploration, then switches to Cursor to run Vivi for implementation. Supported:
 
 - Each Eidolon's files live in `.eidolons/<n>/` — host-independent
 - Host dispatch (`CLAUDE.md`, `.cursor/rules/`, etc.) is auto-wired per the consumer's tooling

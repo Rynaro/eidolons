@@ -13,23 +13,23 @@ The power of Eidolons is not in any single member — it is in their **compositi
 ## The canonical pipeline
 
 ```
-ATLAS ───▶ SPECTRA ───▶ APIVR-Δ ───▶ IDG
-  scout      plan         build        chronicle
-             ▲              │ ▲
-             │              │ │
+ATLAS ───▶ RAMZA ───▶ Vivi ───▶ IDG
+  scout      plan       build      chronicle
+             ▲           │ ▲
+             │           │ │
            FORGE ◀─── (ambiguity, trade-offs, novel problems)
-                            │ │
-                          VIGIL ◀─── (failure resisted repair; forensic attribution)
+                         │ │
+                        VIGIL ◀─── (failure resisted repair; forensic attribution)
 ```
 
 **Reading left to right:**
 
 1. **ATLAS** maps an unfamiliar codebase or problem area and emits a `scout-report.md` with evidence-anchored findings.
-2. **SPECTRA** consumes the scout report, produces a spec (Markdown + YAML + state JSON) with stories, validation gates, and agent hints.
-3. **APIVR-Δ** consumes the spec, implements the feature, emits a completion artifact (session log, delta history, completion report).
+2. **RAMZA** consumes the scout report, produces a gate-frozen spec (Markdown + YAML + state JSON) with stories, mechanically-enforced validation gates, and agent hints. (RAMZA is the default planner; SPECTRA is the conservative opt-in fallback.)
+3. **Vivi** consumes the spec, implements the feature through its closed edit-run-test loop, emits a completion artifact (session log, delta history, completion report). (Vivi is the default coder; APIVR-Δ is the opt-in fallback.)
 4. **IDG** consumes the session artifacts, produces documentation (chronicle, ADR, runbook, change-narrative) with structural markers.
 5. **FORGE** is called at any point where ambiguity, trade-offs, or novel reasoning is needed — a consultable specialist, not always in-line.
-6. **VIGIL** is called when a failure resists normal repair — APIVR-Δ's Reflect loop exhausted, a heisenbug surfaces, or a compound failure needs root-cause attribution. A consultable forensic specialist, not always in-line.
+6. **VIGIL** is called when a failure resists normal repair — the coder's Reflect loop exhausted, a heisenbug surfaces, or a compound failure needs root-cause attribution. A consultable forensic specialist, not always in-line.
 
 **This pipeline is the default shape, not the only shape.** Partial configurations are first-class (see §3).
 
@@ -50,61 +50,80 @@ kinds, with this context-budget ceiling, at this trust level".
 | `atlas` | `apivr` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `atlas` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `atlas` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | scout-report | 4000 | `standard` | `roster` |
+| `atlas` | `ramza` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `atlas` | `spectra` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
+| `atlas` | `vivi` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `forge` | `apivr` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `atlas` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `idg` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | reasoning-report | 4000 | `standard` | `roster` |
+| `forge` | `ramza` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `spectra` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `vigil` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
+| `forge` | `vivi` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `human` | `apivr` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `atlas` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `forge` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `idg` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `kupo` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `implicit` |
+| `human` | `ramza` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `spectra` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `vigil` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `vivi` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `idg` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `kupo` | `apivr` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `atlas` | INFORM, ESCALATE, REFUSE, ACKNOWLEDGE | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `forge` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `ramza` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `spectra` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `vigil` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `kupo` | `vivi` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `ramza` | `apivr` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
+| `ramza` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
+| `ramza` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | spec | 4000 | `standard` | `roster` |
+| `ramza` | `vivi` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
 | `spectra` | `apivr` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
 | `spectra` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `spectra` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | spec | 4000 | `standard` | `roster` |
+| `spectra` | `vivi` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
 | `vigil` | `apivr` | PROPOSE, CRITIQUE, INFORM | root-cause-report | 4000 | `high` | `roster` |
 | `vigil` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `vigil` | `idg` | PROPOSE, INFORM | root-cause-report | 4000 | `standard` | `roster` |
 | `vigil` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | root-cause-report | 4000 | `standard` | `roster` |
+| `vigil` | `ramza` | PROPOSE, INFORM, ESCALATE | root-cause-report | 4000 | `high` | `roster` |
 | `vigil` | `spectra` | PROPOSE, INFORM, ESCALATE | root-cause-report | 4000 | `high` | `roster` |
+| `vigil` | `vivi` | PROPOSE, CRITIQUE, INFORM | root-cause-report | 4000 | `high` | `roster` |
+| `vivi` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
+| `vivi` | `idg` | PROPOSE, INFORM | vivi-completion-report | 5000 | `standard` | `roster` |
+| `vivi` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | vivi-completion-report | 4000 | `standard` | `roster` |
+| `vivi` | `vigil` | ESCALATE, REQUEST, ACKNOWLEDGE | repair-failed-report | 4000 | `high` | `roster` |
 
 ### Hand-off invariants
 
 1. **Artifacts are written to disk, not passed in-context.** This keeps working-set tokens bounded across the pipeline.
 2. **Each artifact has a schema.** Structured outputs validated by JSON Schema 2020-12. Downstream Eidolons parse structured data, not prose.
 3. **Provenance travels.** Every claim in a downstream artifact traces back to a specific line in the upstream artifact.
-4. **Handoffs are labeled explicitly.** `→ SPECTRA (needs spec)`, `→ APIVR-Δ (ready to implement)`, `→ FORGE (trade-off deliberation)`, `→ human (out of scope)` — no implicit transitions.
+4. **Handoffs are labeled explicitly.** `→ RAMZA (needs spec)`, `→ Vivi (ready to implement)`, `→ FORGE (trade-off deliberation)`, `→ human (out of scope)` — no implicit transitions.
 
 ### The consultation pattern (FORGE, VIGIL)
 
 FORGE and VIGIL are not in the linear pipeline. Any other Eidolon — or the user — can consult them at any point:
 
 ```
-APIVR-Δ during Plan phase
+Vivi during Plan phase
   → "Two patterns apply here; trade-off unclear"
   → emits reasoning-request.md to FORGE
   → FORGE emits reasoning-report.md with verdict + confidence
-  → APIVR-Δ resumes Plan phase
+  → Vivi resumes Plan phase
 ```
 
 ```
-APIVR-Δ during Reflect phase
+Vivi during Reflect phase
   → 3 repair attempts exhausted; flaky test still failing
   → emits repair-failed-report.md to VIGIL (sandbox authority)
   → VIGIL runs V→I→G→I→L: reproduction, IDG, ≤5 counterfactuals
   → VIGIL emits root-cause-report.md + verified-patch.diff
-  → APIVR-Δ applies patch, verifies, resumes
+  → Vivi applies patch, verifies, resumes
 ```
 
 FORGE reasons; it does not implement, retrieve, or synthesize. VIGIL attributes; it does not build, plan, or document. Both emit structured deliberation artifacts, not specs or code.
@@ -141,9 +160,17 @@ ATLAS consults FORGE during the Locate or Synthesize phase when a forensic findi
 
 ATLAS DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own scout-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-atlas. Declared in roster: kupo.handoffs.upstream contains atlas.
 
+### `atlas → ramza`
+
+ATLAS hands off a finalised scout report for RAMZA to consume during the RS (right-size) and S (scope) phases. Listed in roster: atlas.handoffs.downstream contains ramza. RAMZA is the default planner seat; SPECTRA is retained as the conservative opt-in fallback via atlas-to-spectra.yaml (same artifact kind).
+
 ### `atlas → spectra`
 
 ATLAS hands off a finalised scout report for SPECTRA to consume during the SCOPE phase. Listed in roster: atlas.handoffs.downstream contains spectra. Source-of-truth row in methodology/composition.md ("ATLAS | SPECTRA | scout-report.md + findings.json").
+
+### `atlas → vivi`
+
+ATLAS hands off directly to Vivi when SPECTRA is not deployed (partial team) or when the work is small enough to skip spec authoring. Same artefact kind as the ATLAS→SPECTRA edge but with the additional required_section reuse_first_assets, which Vivi uses to satisfy its Internal-First P0 (I-1: USE → EXTEND → WRAP → CREATE). Vivi is the loop-native default coder (A→P→I→V→Δ/R cycle); this edge mirrors atlas-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat. Declared in roster: vivi.handoffs.upstream contains atlas.
 
 ### `forge → apivr`
 
@@ -161,6 +188,10 @@ FORGE returns a reasoning report to IDG in response to idg→forge consultation.
 
 FORGE DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own reasoning-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-forge. Declared in roster: kupo.handoffs.upstream contains forge.
 
+### `forge → ramza`
+
+FORGE returns a reasoning report to RAMZA in response to ramza→forge consultation. Listed in roster: forge.handoffs.lateral contains ramza. CRITIQUE is reserved for the REFORGE case where FORGE refuses the scoring frame (e.g. because the rubric dimensions themselves are mis-calibrated for the change in scope) rather than picking a winner.
+
 ### `forge → spectra`
 
 FORGE returns a reasoning report to SPECTRA in response to spectra→forge consultation. Listed in roster: forge.handoffs.lateral contains spectra. CRITIQUE is reserved for the REFORGE case where FORGE refuses the scoring frame (e.g. because the rubric dimensions themselves are mis-calibrated for the change in scope) rather than picking a winner.
@@ -168,6 +199,10 @@ FORGE returns a reasoning report to SPECTRA in response to spectra→forge consu
 ### `forge → vigil`
 
 FORGE returns a reasoning report to VIGIL in response to vigil→forge consultation. Listed in roster: forge.handoffs.lateral contains vigil. CRITIQUE is reserved for the REFORGE case where FORGE refuses the blame-target frame — typically when reproduction evidence is too thin for any of VIGIL's hypotheses to be reasoned about, and an extra observation pass is the right next step.
+
+### `forge → vivi`
+
+FORGE returns the reasoning report to Vivi, which consulted it during the Plan phase when ambiguity or trade-offs surfaced. Listed in roster: vivi.handoffs.lateral contains forge. CRITIQUE is reserved for the case where FORGE deliberately reframes the question rather than answering it (REFORGE pass). This edge mirrors forge-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat. Inbound fixture at templates/inbound/reasoning-report.envelope.fixture.json.
 
 ### `human → apivr`
 
@@ -189,6 +224,10 @@ Human-origin edge into IDG. The originator may REQUEST IDG to chronicle a sessio
 
 Human-origin edge into Kupo. The originator may REQUEST a quick localized, verifier-backed micro-task (rename, import fix, lockfile bump, lint autofix), INFORM additional context, CRITIQUE a prior edit-proposal for revision, REFUSE a target/framing, ACKNOWLEDGE to close a gate, or ESCALATE a blocker. Humans MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME (PROPOSE collapses to REQUEST; DECIDE is reserved for an evaluator Eidolon; DELEGATE is reserved for Eidolon-origin task binding; RESUME is harness-emitted). edge_origin: implicit — a human may invoke the executor directly, outside a roster chain.
 
+### `human → ramza`
+
+Human-origin edge into RAMZA. The originator may REQUEST RAMZA to author a decision-ready specification, INFORM it with additional context (a reference doc, an updated requirement, a fact discovered mid-cycle), CRITIQUE a prior spec for revision (tightening a gate, reframing a story), REFUSE a proposed spec, ACKNOWLEDGE a spec to close a pause-on gate before Vivi proceeds, or ESCALATE a blocker outside the current chain (e.g. "this needs ATLAS first"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
 ### `human → spectra`
 
 Human-origin edge into SPECTRA. The originator may REQUEST SPECTRA to author a decision-ready specification, INFORM it with additional context (a reference doc, an updated requirement, a fact discovered mid-cycle), CRITIQUE a prior spec for revision (tightening a gate, reframing a story), REFUSE a proposed spec, ACKNOWLEDGE a spec to close a pause-on gate before APIVR-Δ proceeds, or ESCALATE a blocker outside the current chain (e.g. "this needs ATLAS first"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
@@ -196,6 +235,10 @@ Human-origin edge into SPECTRA. The originator may REQUEST SPECTRA to author a d
 ### `human → vigil`
 
 Human-origin edge into VIGIL. The originator may REQUEST VIGIL to investigate or patch a defect, INFORM it with additional context (a reproducer, a suspect commit, a log excerpt), CRITIQUE a prior root-cause report for revision, REFUSE a proposed patch, ACKNOWLEDGE a patch or root-cause report to close a pause-on gate, or ESCALATE a blocker outside the current chain. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → vivi`
+
+Human-origin edge into Vivi. The originator may REQUEST Vivi to implement a feature or run the A→P→I→V→Δ/R cycle on a spec, INFORM it with additional context (a test case to anchor against, a constraint surfaced after planning), CRITIQUE a prior implementation report or a proposed plan during the Plan phase, REFUSE a proposed artefact, ACKNOWLEDGE a completion report to close a pause-on gate, or ESCALATE a blocker (e.g. "this should route to VIGIL"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). This edge mirrors human-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
 
 ### `idg → forge`
 
@@ -213,6 +256,10 @@ Kupo replies to ATLAS with INFORM/ESCALATE/REFUSE/ACKNOWLEDGE only — never PRO
 
 Kupo returns a verified edit-proposal to forge (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of forge-to-kupo (roster handoff).
 
+### `kupo → ramza`
+
+Kupo returns a verified edit-proposal to ramza (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of ramza-to-kupo (roster handoff).
+
 ### `kupo → spectra`
 
 Kupo returns a verified edit-proposal to spectra (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of spectra-to-kupo (roster handoff).
@@ -220,6 +267,26 @@ Kupo returns a verified edit-proposal to spectra (the parent that DELEGATEd): se
 ### `kupo → vigil`
 
 Kupo returns a verified edit-proposal to vigil (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of vigil-to-kupo (roster handoff).
+
+### `kupo → vivi`
+
+Kupo returns a verified edit-proposal to Vivi (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT (Vivi) applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of vivi-to-kupo.yaml. Closes the deferred vivi↔kupo item noted in the v2.1.0 Kupo-executor release (contracts/README.md §Kupo edges). Mirrors kupo-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
+
+### `ramza → apivr`
+
+RAMZA hands off a decision-ready specification for APIVR-Δ (the conservative opt-in fallback coder) to implement. Listed in roster: apivr.handoffs.upstream contains ramza. Same dual-format spec as ramza-to-vivi.yaml; used when the host lacks Vivi's closed loop. Mirrors spectra-to-apivr.yaml under the new default planner seat.
+
+### `ramza → forge`
+
+RAMZA consults FORGE during the Explore or Construct phase when its rubric arithmetic scores two candidate strategies within the decision-band noise floor, or when a stakeholder constraint forces a trade-off the rubric cannot disambiguate. Listed in roster: ramza.handoffs.lateral contains forge. Same lightweight body shape as apivr-to-forge; FORGE owns the response.
+
+### `ramza → kupo`
+
+RAMZA DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own spec. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-ramza. Declared in roster: kupo.handoffs.upstream contains ramza.
+
+### `ramza → vivi`
+
+RAMZA hands off a decision-ready, gate-frozen specification for Vivi to implement through its closed A→P→I→V→Δ/R loop. Listed in roster: vivi.handoffs.upstream contains ramza. RAMZA emits the spec in dual format (Markdown + YAML/JSON state) per its mechanized methodology — the acceptance criteria are SHA-256 frozen and the envelope.artifact.path points at the Markdown file while the YAML state lives alongside it. This edge mirrors spectra-to-vivi.yaml — RAMZA succeeds SPECTRA as the default planner seat.
 
 ### `spectra → apivr`
 
@@ -232,6 +299,10 @@ SPECTRA consults FORGE during the Explore or Construct phase when the scoring ru
 ### `spectra → kupo`
 
 SPECTRA DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own spec. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-spectra. Declared in roster: kupo.handoffs.upstream contains spectra.
+
+### `spectra → vivi`
+
+SPECTRA hands off a decision-ready specification for Vivi to implement through its closed A→P→I→V→Δ/R loop. Listed in roster: vivi.handoffs.upstream contains spectra. SPECTRA emits the spec in dual format (Markdown + YAML/JSON state) per its methodology; the envelope.artifact.path points at the Markdown file and the YAML state lives alongside it. This edge mirrors spectra-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat. Inbound fixture at templates/inbound/spec.envelope.fixture.json.
 
 ### `vigil → apivr`
 
@@ -249,9 +320,33 @@ VIGIL routes a finalised attribution to IDG when the incident merits chronicling
 
 VIGIL DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own root-cause-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-vigil. Declared in roster: kupo.handoffs.upstream contains vigil.
 
+### `vigil → ramza`
+
+VIGIL routes a root cause to RAMZA when the systemic finding indicates the spec itself is defective and re-planning is required (SPEC_DEFECT routing per VIGIL methodology). Listed in roster: vigil.handoffs.lateral contains ramza. The added structural_fix_notes section flags the re-plan target.
+
 ### `vigil → spectra`
 
 VIGIL routes a root cause to SPECTRA when the systemic finding indicates the spec itself is defective and re-planning is required (SPEC_DEFECT routing per VIGIL methodology). Listed in roster: vigil.handoffs.lateral contains spectra. The added structural_fix_notes section flags the re-plan target.
+
+### `vigil → vivi`
+
+VIGIL returns a root-cause attribution (and, when authority allows, a verified patch) to the Vivi instance that escalated. Listed in roster: vivi.handoffs.lateral contains vigil. CRITIQUE is reserved for the case where VIGIL disputes Vivi's repair hypothesis without yet supplying a verified alternative. Vivi's bounded recovery gate (I-5) escalates on the 3-failure threshold for the same failure category via a repair-failed-report envelope (see vivi-to-vigil.yaml). This edge mirrors vigil-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat. Inbound fixture at templates/inbound/root-cause-report.envelope.fixture.json.
+
+### `vivi → forge`
+
+Vivi consults FORGE during the Plan phase (P) when ambiguity or trade-offs surface. Listed in roster: vivi.handoffs.lateral contains forge. The reasoning-request profile is intentionally lightweight (base profile only); FORGE methodology owns the body shape. Emitted from templates/reasoning-request.envelope.json. Mirrors apivr-to-forge.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
+
+### `vivi → idg`
+
+Vivi hands off the completion artefact (session log + delta history + completion report) for IDG to chronicle at the end of the A→P→I→V→Δ/R cycle. Listed in roster: vivi.handoffs.downstream contains idg. Emitted from templates/vivi-completion-report.envelope.json. Uses a dedicated vivi-completion-report profile (not the apivr profile) because Vivi pins eidolon: vivi and kind: vivi-completion-report. Mirrors apivr-to-idg.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
+
+### `vivi → kupo`
+
+Vivi DELEGATEs a localized, verifier-backed micro-task to Kupo (the low-effort executor) — e.g. a rename, import fix, lockfile/dep-pin bump, config-key edit, or one-line fix identified within its own vivi-completion-report. Kupo KEEPs only localized (<= 2 files), named-verifier-backed work (else REFUSE/ESCALATE cheaply), patches an ephemeral sandbox, proves it with an external verifier, and returns a verified edit-proposal via kupo-to-vivi. Vivi applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). Closes the deferred vivi↔kupo item noted in the v2.1.0 Kupo-executor release (contracts/README.md §Kupo edges). Mirrors apivr-to-kupo.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
+
+### `vivi → vigil`
+
+Vivi escalates to VIGIL when the Reflect phase (R) exhausts its 3-failure threshold on the same category (I-5: Bounded recovery). Performative MUST be ESCALATE for the threshold path; REQUEST is reserved for ad-hoc forensic asks that do not cross the threshold. Listed in roster: vivi.handoffs.lateral contains vigil. Emitted from templates/repair-failed-report.envelope.json. Uses the dedicated vivi-repair-failed-report.v1.json profile (pins eidolon: vivi, same body shape as repair-failed-report.v1.json which pins eidolon: apivr; the kind slug 'repair-failed-report' is shared — emitter distinguished by envelope from.eidolon). Mirrors apivr-to-vigil.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
 
 
 ---
@@ -261,7 +356,7 @@ VIGIL routes a root cause to SPECTRA when the systemic finding indicates the spe
 **Not every project uses every Eidolon.** Design implications:
 
 1. **Every Eidolon is independently installable.** No hidden dependencies on teammates. ATLAS works solo; IDG works solo.
-2. **Handoff contracts are optional inputs.** An Eidolon must function even when its upstream partner isn't deployed. If ATLAS isn't installed, SPECTRA accepts a human-authored scout-like brief instead.
+2. **Handoff contracts are optional inputs.** An Eidolon must function even when its upstream partner isn't deployed. If ATLAS isn't installed, RAMZA accepts a human-authored scout-like brief instead.
 3. **The installer exposes granular flags** — `eidolons init --members atlas,idg` picks just those two.
 4. **Documentation for each member lists** "works standalone: yes/no" (always yes), "benefits from upstream": [list], "benefits from downstream": [list].
 
@@ -272,8 +367,8 @@ VIGIL routes a root cause to SPECTRA when the systemic finding indicates the spe
 | **Solo scout** | `atlas` | Audit an unfamiliar codebase without changing anything |
 | **Solo chronicle** | `idg` | Document an existing session or decision |
 | **Explore + document** | `atlas, idg` | Understand and document, read-only |
-| **Plan + build** | `spectra, apivr` | Feature work where the team already knows the codebase |
-| **Full pipeline** | `atlas, spectra, apivr, idg` | New feature in unfamiliar code |
+| **Plan + build** | `ramza, vivi` | Feature work where the team already knows the codebase |
+| **Full pipeline** | `atlas, ramza, vivi, idg` | New feature in unfamiliar code |
 | **With reasoner** | add `forge` to any | Ambiguous trade-offs expected |
 | **With debugger** | add `vigil` to any | Flaky tests, regressions, or post-mortems likely |
 | **Diagnostics** | `apivr, vigil, forge` | Brownfield debugging; APIVR-Δ builds/fixes, VIGIL attributes, FORGE deliberates on ambiguous cases |
@@ -282,7 +377,7 @@ These map to presets in [`../roster/index.yaml`](../roster/index.yaml) — `eido
 
 ### Host mismatches
 
-A team may span hosts — e.g., the user runs ATLAS in Claude Code for exploration, then switches to Cursor to run APIVR-Δ for implementation. Supported:
+A team may span hosts — e.g., the user runs ATLAS in Claude Code for exploration, then switches to Cursor to run Vivi for implementation. Supported:
 
 - Each Eidolon's files live in `.eidolons/<n>/` — host-independent
 - Host dispatch (`CLAUDE.md`, `.cursor/rules/`, etc.) is auto-wired per the consumer's tooling
