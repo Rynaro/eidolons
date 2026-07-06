@@ -1,0 +1,13 @@
+task,arm,r1_words,r2_words,pass_k,must_fails
+AB-T1,spectra,10385,10734,true,0
+AB-T1,ramza,6517,3690,true,0
+AB-T2,spectra,9664,6666,true,0
+AB-T2,ramza,5327,3920,true,0
+AB-T3,spectra,9213,9856,true,0
+AB-T3,ramza,4100,3604,true,0
+AB-T4,spectra,8034,7964,true,0
+AB-T4,ramza,4796,4467,true,0
+AB-H1,spectra,11880,9318,true,0
+AB-H1,ramza,6262,6085,true,0
+AB-H2,spectra,12483,12572,true,0
+AB-H2,ramza,6307,5633,true,0

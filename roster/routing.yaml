@@ -17,7 +17,7 @@
 # Tier ladder: light < standard < deep.
 
 routing_version: "1.1"
-updated_at: "2026-07-02T00:00Z"
+updated_at: "2026-07-05T20:45Z"
 
 # ─── Gate thresholds (Dispatch Protocol Step 2 / TRANCE Step 4) ─────────────────
 thresholds:
@@ -57,10 +57,25 @@ eidolons:
     suggested_tier: standard
     trigger_verbs: ["map", "trace", "find where", "who calls", "call graph", "list entrypoints", "entrypoints", "audit", "explore", "where is", "scout", "understand the codebase", "make sense of"]
     refuse_verbs: ["implement", "fix", "edit", "write", "commit", "deploy", "migrate", "refactor", "patch"]
-    downstream: ["spectra", "apivr", "idg"]
+    downstream: ["ramza", "vivi", "idg"]
+  ramza:
+    capability_class: planner
+    suggested_tier: deep
+    default_for_class: planner  # Stage 3b — the default planner seat (measurement-validated:
+                                # pre-registered A/B non-inferior 6/6 vs spectra 6/6, holdout-consistent,
+                                # 0 MUST failures over 24 cells, 2026-07-05). Mechanized gates
+                                # (right-size, rubric, EARS lint, SHA-256 freeze, drift, maker≠checker).
+    fallback: spectra           # declared conservative peer for the host-tier fallthrough gate
+                                # (routing.yaml is DATA; I-C2 — the kernel interprets, no eval)
+    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
+    refuse_verbs: ["implement code", "modify files", "write the code"]
+    downstream: ["vivi", "idg"]
   spectra:
     capability_class: planner
     suggested_tier: deep
+    # conservative prose-methodology fallback; opt-in (`eidolons add spectra`);
+    # named dispatch still routes to it (the +0.5 name bonus). RAMZA holds the
+    # default planner seat via default_for_class above.
     trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
     refuse_verbs: ["implement code", "modify files", "write the code"]
     downstream: ["apivr", "idg"]
@@ -144,7 +159,7 @@ signals:
     note: "the coder class refuses greenfield (Vivi and APIVR-Δ alike)"
   - id: no_spec_yet
     match: ["don't have a spec", "no spec yet", "i don't know the call graph", "not sure what to build"]
-    boost: { spectra: 0.2 }
+    boost: { ramza: 0.2 }
   - id: large_surface
     match: ["entire monorepo", "whole codebase", "all modules", "across all"]
     boost: { atlas: 0.2 }
@@ -168,11 +183,11 @@ signals:
 # most specific (longest requires_classes) matching template.
 chains:
   - name: plan-before-build
-    steps: ["atlas", "spectra", "vivi", "idg"]
+    steps: ["atlas", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]
     when: "Unfamiliar code + multi-component change"
   - name: decide-then-implement
-    steps: ["forge", "spectra", "vivi"]
+    steps: ["forge", "ramza", "vivi"]
     requires_classes: ["reasoner", "coder"]
     when: "Should we use X or Y, then build it"
   - name: audit-without-touching
@@ -180,7 +195,7 @@ chains:
     requires_classes: ["scout", "scriber"]
     when: "Audit/explain/review with no write intent"
   - name: ship-fast
-    steps: ["spectra", "vivi"]
+    steps: ["ramza", "vivi"]
     requires_classes: ["planner", "coder"]
     when: "Known terrain, scoped feature"
   - name: forensic-then-fix
@@ -188,6 +203,6 @@ chains:
     requires_classes: ["debugger", "coder"]
     when: "Bug with reproduction + verified patch"
   - name: scout-then-spec
-    steps: ["atlas", "spectra"]
+    steps: ["atlas", "ramza"]
     requires_classes: ["scout", "planner"]
     when: "Discovery + spec verbs co-occur (V3)"

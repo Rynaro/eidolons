@@ -639,13 +639,13 @@ SHIM
 @test "harness: run --hook claude-code chain UPS carries arrow-joined 'model tiers:' per step" {
   seed_manifest
   # 'map ... spec ... implement' co-triggers scout+planner+coder → the
-  # plan-before-build chain (atlas → spectra → vivi → idg).
+  # plan-before-build chain (atlas → ramza → vivi → idg).
   run eidolons run --hook claude-code "map the codebase, spec the change, then implement it"
   [ "$status" -eq 0 ]
   [ -n "$output" ]
   _ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
-  [[ "$_ctx" == *"Chain: atlas → spectra → vivi → idg"* ]]
-  [[ "$_ctx" == *"model tiers: atlas=standard → spectra=deep → vivi=standard → idg=light"* ]]
+  [[ "$_ctx" == *"Chain: atlas → ramza → vivi → idg"* ]]
+  [[ "$_ctx" == *"model tiers: atlas=standard → ramza=deep → vivi=standard → idg=light"* ]]
   # Chain form must NOT emit the singular dispatch form.
   [[ "$_ctx" != *"model tier: "* ]]
 }
