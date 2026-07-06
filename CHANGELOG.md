@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **RAMZA sigil** (`art/eidolons/ramza.txt`) — the tactician takes the planner seat: 12×6 frameless tile (isometric tactics board: unit standing on the back tile, move-range shading on the destination tile), `art-lint` G1–G8 clean, rendered via `ui_load_sigil` in the `init`/`add` cards. Completes the roster tile set after the Stage-3 default-planner flip (every member again has a portrait).
+
 ## [2.1.0] — 2026-07-06 — RAMZA takes the default planner seat
 
 ### Changed
