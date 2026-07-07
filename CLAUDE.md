@@ -102,3 +102,22 @@ Schema:    `schema/change.v1.json` (vendorable change manifest)
 ESL is the **spec-lifecycle coordination grammar** for Eidolons changes — a right-sizable state machine (`proposed → [deliberated] → in_progress → verified → archived`), a mandatory mechanical **right-sizing gate** (trivial→Kupo/no-spec, lite→one-page, full→full), and a **living-spec/drift contract**. It is a thin grammar over the *existing* Eidolons: it **OWNS** the lifecycle and **DEFERS** artifact schema→SPECTRA, transport→ECL, persistence→CRYSTALIUM, bus→Junction. Sibling spec to ECL/EIIS — ESL governs the spec lifecycle, ECL governs the wire format.
 
 **P0 (non-negotiable):** anti-scope — ESL *names* fields and *references* schemas by version, but **NEVER re-declares** a deferred schema/performative/memory-layer; opt-in for v1.0; **maker≠checker** is mechanically enforced on the verify envelope; the right-sizing gate is mechanical (observable signals only), never LLM-discretionary; conformance checker is bash 3.2 compatible (warn/block).
+
+## ECM — Eidolons Context Management (v0.1.0)
+
+Entry:     `https://github.com/Rynaro/eidolons-ecm`
+Spec:      `spec/ecm-0.1.md` in that repo
+Policy:    `roster/context-policy.yaml` + `roster/pins.yaml` (shipped P1); schema `schema/policy.v1.json` in that repo
+Deep table: `methodology/cortex/context-protocol.md`
+
+ECM is the **context-lifecycle** grammar for a running Eidolons session — a deterministic meter + zone ladder (amber 0.50 / red 0.75 / critical 0.90) and a table-driven decision policy (first-match rules P1–P7, **never LLM-discretionary**) that fires context operations (externalize · prune · compact · handoff-fresh · wrap-up) **autonomously, with no human backstop**. Kernel verbs `eidolons context status|policy|externalize|handoff` + host-hook recipes; a pin set survives every lossy op; externalize-before-compact rides CRYSTALIUM's existing surface; the session-handoff brief travels as an ECL `INFORM` (`ecm/handoff-brief@0.1`). Fourth sibling spec (EIIS install / ECL wire / ESL lifecycle / **ECM context**). It **OWNS** meter/zones/decision-table/pins/handoff-content-schema/budget-ceiling and **DEFERS** transport→ECL, persistence→CRYSTALIUM, lifecycle→ESL, install→EIIS, compaction-execution→host.
+
+**P0 (non-negotiable):** opt-in for v0.1 (projects without a `context:` block are unchanged); mechanical gates only (observable signals, never LLM-discretionary); sidecar-on-disk (meter/log/brief never in-context only); pin set survives every lossy op (post-op verify + repair); externalize-before-compact mandatory when CRYSTALIUM present (file-floor + warn when absent, never block); compaction depth cap = 2; anti-scope — never re-declare CRYSTALIUM layers/tiers, never extend ECL's ten performatives, never re-implement host compaction, never touch serving-layer concerns; bash 3.2 conformance checker + ≤ 300 ms prompt path; **fail-open** everywhere (the only stop is the budget ceiling's graceful wrap-up).
+
+**Host coverage** (each host wired only to the injection channel it actually exposes): Claude Code full (P1 shipped); Codex full, OpenCode start+per-prompt, Copilot/Cursor static-floor (P2). **Atomos MCP: GO** (maintainer decision 2026-07-07) — a committed P3 build: a compose/verify executor MCP (tonberry-analog), fenced to brief composition + pin/envelope verification, never injection/meter/policy/trigger. Additive to the canonical kernel-verbs path, which stays always-available (atomos does not solve cross-host injection — nothing host-external can); see `docs/specs/ecm/decisions/atomos-go-no-go.md`.
+
+<!-- eidolon:dispatch-pointer start -->
+## Eidolons
+
+This project uses [Eidolons](https://github.com/Rynaro/eidolons). The canonical agent dispatch table, methodology references, and per-Eidolon hand-off contracts live at [`./EIDOLONS.md`](./EIDOLONS.md). Read that file before any non-trivial prompt — this is the default operating mode, not an opt-in.
+<!-- eidolon:dispatch-pointer end -->

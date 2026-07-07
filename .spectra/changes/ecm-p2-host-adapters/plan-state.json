@@ -1,0 +1,69 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "ecm-p2-host-adapters",
+  "created_at": "2026-07-07T16:53:17Z",
+  "tier": "full",
+  "phase": "RS",
+  "phases_done": [
+    "RS"
+  ],
+  "rightsize": {
+    "score": 6,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 8,
+      "new_dep": false,
+      "public_api": true,
+      "migration": true,
+      "security": false,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 10,
+      "dims": {
+        "scope": 3,
+        "ambiguity": 2,
+        "dependencies": 3,
+        "risk": 2
+      },
+      "verdict": "human_loop",
+      "at": "2026-07-07T16:54:30Z"
+    },
+    {
+      "rubric": "confidence",
+      "total": 84,
+      "dims": {
+        "pattern_match": 80,
+        "requirement_clarity": 78,
+        "decomposition_stability": 88,
+        "constraint_compliance": 90
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-07-07T16:58:18Z"
+    }
+  ],
+  "amendments": [],
+  "declared_scope": [
+    "cli/src/harness_install.sh",
+    "cli/src/harness_hook.sh",
+    "cli/src/harness_remove.sh",
+    "cli/templates/harness/opencode-eidolons.js",
+    "schemas/eidolons.lock.schema.json",
+    "cli/tests/context.bats",
+    "cli/tests/harness.bats",
+    "docs/specs/ecm/spec.md"
+  ],
+  "criteria_sha256": "629b0f10200d9fba6e01c187b9a8af3961953042c2de7a63c4a5335c8573281f",
+  "critic": {
+    "author": null,
+    "checker": null
+  },
+  "scope_declared_at": "2026-07-07T16:57:55Z",
+  "criteria_frozen_at": "2026-07-07T16:57:55Z"
+}
