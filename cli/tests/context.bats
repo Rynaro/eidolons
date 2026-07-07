@@ -1,0 +1,405 @@
+#!/usr/bin/env bats
+#
+# cli/tests/context.bats — coverage for 'eidolons context' verb family (ECM P1)
+#
+# ECM P1 — context-lifecycle kernel: status|policy|externalize|handoff verbs,
+# the meter/policy-log/budget-ledger sidecars, and the harness_install.sh /
+# harness_hook.sh / run.sh recipes (SessionStart pin+handoff digest,
+# UserPromptSubmit meter/policy line, PostToolUse meter refresh,
+# compactThreshold don't-clobber). AC-4/AC-9 (handoff round-trip + the D5
+# quarantine-vs-recall regression) are verified by 'eidolons canary
+# --context-handoff' (a live-crystalium canary), not bats — see canary.sh.
+#
+# Design (mirrors harness.bats/memory.bats conventions, FINDING-030-034):
+#   - load helpers; seed_manifest/seed_lock from shared helpers.bash.
+#   - LOCAL seed helpers below (seed_manifest_ecm_on, seed_lock_with_context,
+#     fake docker/eidolons stubs) — do NOT edit shared helpers.bash (FINDING-031).
+#   - jq -cS / sha256 comparisons for idempotency and determinism checks.
+#   - # ─── AC-N ─── block headers, one test per frozen acceptance criterion.
+
+bats_require_minimum_version 1.5.0
+
+load helpers
+
+# ─── Local seed helpers (FINDING-031: do NOT edit shared helpers.bash) ───────
+
+# seed_manifest_ecm_on — eidolons.yaml with a 'context:' block present
+# (ECM opt-in, AC-15's positive case).
+seed_manifest_ecm_on() {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+context:
+  enabled: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+# seed_lock_with_context — eidolons.lock already carrying a context: block
+# (used by refresh-shims-only style tests; local per FINDING-031).
+seed_lock_with_context() {
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-07-07T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+context:
+  schema_version: 1
+  ecm_version: "0.1"
+  host_tier: "T3"
+  thresholds:
+    amber: 0.50
+    red: 0.75
+    critical: 0.90
+  compactthreshold_managed: true
+EOF
+}
+
+# seed_mcp_crystalium_local — .mcp.json + eidolons.mcp.lock crystalium
+# entries (trimmed local copy of memory.bats's fixture, FINDING-031: bats
+# test files do not share functions across files, only shared helpers.bash).
+seed_mcp_crystalium_local() {
+  cat > .mcp.json <<'JSON'
+{
+  "mcpServers": {
+    "crystalium": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--name", "crystalium-test", "ghcr.io/rynaro/crystalium@sha256:deadbeef", "python", "-m", "crystalium", "serve"]
+    }
+  }
+}
+JSON
+  cat > eidolons.mcp.lock <<'LOCK'
+generated_at: "2026-07-07T00:00:00Z"
+eidolons_cli_version: "1.36.0"
+catalogue_version: "1.2"
+mcps:
+  - name: crystalium
+    kind: oci-image
+    version: "1.7.0"
+    target: ".mcp.json"
+LOCK
+}
+
+# setup_fake_docker_argv_log — a fake docker on PATH that logs its argv to
+# $FAKE_DOCKER_ARGV_LOG and always "succeeds" with a minimal JSON object
+# (so callers treat every one-shot invocation as a success).
+setup_fake_docker_argv_log() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-docker-bin"
+  mkdir -p "$fake_bin"
+  local log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$log"
+  cat > "$fake_bin/docker" <<DSHIM
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$log"
+printf '{"id":"fake-id"}\n'
+exit 0
+DSHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+}
+
+# setup_fake_eidolons_bin — a fake 'eidolons' on PATH that delegates
+# everything to the real checkout CLI. Needed because harness_hook.sh's
+# ECM additions resolve their own binary via `command -v eidolons`, which
+# is otherwise unresolvable from inside a spawned hook subprocess in a dev
+# checkout (mirrors harness.bats's setup_fake_eidolons_for_memory, local copy).
+setup_fake_eidolons_bin() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-eidolons-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/eidolons" <<STUB
+#!/usr/bin/env bash
+exec bash "$EIDOLONS_ROOT/cli/eidolons" "\$@"
+STUB
+  chmod +x "$fake_bin/eidolons"
+  export PATH="$fake_bin:$PATH"
+}
+
+# ─── Dispatcher sanity ────────────────────────────────────────────────────
+
+@test "context: dispatcher routes context --help" {
+  run eidolons context --help
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "eidolons context" ]]
+}
+
+@test "context: unknown subcommand exits 2 with usage hint" {
+  run eidolons context bogus
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "Unknown context subcommand" ]]
+}
+
+# ─── AC-1: status writes meter.json with a zone field, exit 0 ───────────────
+
+@test "status_writes_meter_and_zone" {
+  printf '%s' "some transcript content for the bytes heuristic" > transcript.jsonl
+  run eidolons context status --transcript transcript.jsonl
+  [ "$status" -eq 0 ]
+  [ -f .eidolons/.context/meter.json ]
+  run jq -e 'has("zone")' .eidolons/.context/meter.json
+  [ "$status" -eq 0 ]
+}
+
+# ─── AC-2: policy --json is deterministic (same meter in, same verdict out) ─
+
+@test "policy_is_deterministic" {
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter.json <<'EOF'
+{"ecm_version":"0.1","zone":"amber","compaction_count":0,"tool_result_share_est":0.10,"budget":{"ceiling_tokens":null,"spent_tokens_est":100}}
+EOF
+  run eidolons context policy --json
+  [ "$status" -eq 0 ]
+  first="$output"
+  run eidolons context policy --json
+  [ "$status" -eq 0 ]
+  second="$output"
+  [ "$first" = "$second" ]
+  op1="$(jq -r '.operation' <<< "$first")"
+  op2="$(jq -r '.operation' <<< "$second")"
+  [ "$op1" = "$op2" ]
+  [ "$op1" = "externalize" ]  # zone=amber, tool_result_share < 0.40 -> P6
+}
+
+# ─── AC-3: externalize writes file-floor manifest when crystalium absent ────
+
+@test "externalize_file_floor_when_crystalium_absent" {
+  # No .mcp.json / eidolons.mcp.lock -> memory_probe_gated_in fails.
+  # --separate-stderr: the warn() line goes to stderr, keeping $output pure JSON.
+  run --separate-stderr eidolons context externalize --summary "checkpoint before compaction" --json
+  [ "$status" -eq 0 ]
+  gated="$(jq -r '.gated_in' <<< "$output")"
+  [ "$gated" = "false" ]
+  floor_path="$(jq -r '.file_floor_path' <<< "$output")"
+  [ "$floor_path" != "null" ]
+  [ -f "$floor_path" ]
+  run jq -e '.summary == "checkpoint before compaction"' "$floor_path"
+  [ "$status" -eq 0 ]
+}
+
+# ─── AC-5: harness install writes ECM recipes idempotently ──────────────────
+
+@test "harness_install_idempotent" {
+  seed_manifest_ecm_on
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  [ -f .claude/settings.json ]
+  [ -f .eidolons/harness/hooks/claude-code-PostToolUse.sh ]
+
+  settings1="$(jq -cS . .claude/settings.json)"
+  lock1="$(cat eidolons.lock)"
+  shim1_sum="$(context_sha256_of .eidolons/harness/hooks/claude-code-PostToolUse.sh)"
+
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+
+  settings2="$(jq -cS . .claude/settings.json)"
+  lock2="$(cat eidolons.lock)"
+  shim2_sum="$(context_sha256_of .eidolons/harness/hooks/claude-code-PostToolUse.sh)"
+
+  [ "$settings1" = "$settings2" ]
+  [ "$lock1" = "$lock2" ]
+  [ "$shim1_sum" = "$shim2_sum" ]
+}
+
+# local helper (defined after use is fine in bash; kept near its single caller)
+context_sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+# ─── AC-6: D1 rung-1 host telemetry preferred over bytes/4 estimation ───────
+
+@test "meter_prefers_host_telemetry" {
+  printf '%s' "some transcript content" > transcript.jsonl
+  run eidolons context status --used-percentage 42 --transcript transcript.jsonl --json
+  [ "$status" -eq 0 ]
+  src="$(jq -r '.estimate_source' <<< "$output")"
+  [ "$src" = "host" ]
+  util="$(jq -r '.utilization' <<< "$output")"
+  [ "$util" = "0.420000" ]
+}
+
+# ─── AC-7: D1 rung-3 unknown -> policy continue (fail-open floor) ───────────
+
+@test "meter_fail_open_unknown" {
+  run eidolons context status --json
+  [ "$status" -eq 0 ]
+  zone="$(jq -r '.zone' <<< "$output")"
+  [ "$zone" = "unknown" ]
+
+  run eidolons context policy --json
+  [ "$status" -eq 0 ]
+  op="$(jq -r '.operation' <<< "$output")"
+  [ "$op" = "continue" ]
+}
+
+# ─── AC-8: brief over the 1500-token advisory target is logged, never truncated
+
+@test "brief_advisory_target_never_truncates" {
+  big="$(python3 -c "print('lorem ipsum dolor sit amet ' * 400 + 'THE_VERY_LAST_WORD')" 2>/dev/null || perl -e 'print "lorem ipsum dolor sit amet " x 400 . "THE_VERY_LAST_WORD"')"
+  # --separate-stderr: the oversize warn() line goes to stderr, keeping $output pure JSON.
+  run --separate-stderr eidolons context handoff --narrative "$big" --json
+  [ "$status" -eq 0 ]
+  oversize="$(jq -r '.oversize' <<< "$output")"
+  [ "$oversize" = "true" ]
+  brief_path="$(jq -r '.brief_path' <<< "$output")"
+  [ -f "$brief_path" ]
+  # Never truncated: the last word of the oversized narrative survives verbatim.
+  grep -q "THE_VERY_LAST_WORD" "$brief_path"
+  # The oversize event was logged to the policy log, not silently dropped.
+  grep -q '"event":"handoff_brief_oversize"' .eidolons/.context/policy-log.jsonl
+}
+
+# ─── AC-10: D6 don't-clobber an existing non-75 compactThreshold ────────────
+
+@test "compactthreshold_dont_clobber" {
+  seed_manifest_ecm_on
+  seed_lock
+  mkdir -p .claude
+  printf '{"compactThreshold": 42}\n' > .claude/settings.json
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  val="$(jq -r '.compactThreshold' .claude/settings.json)"
+  [ "$val" = "42" ]
+  managed="$(yaml_to_json_local eidolons.lock | jq -r '.context.compactthreshold_managed')"
+  [ "$managed" = "false" ]
+}
+
+yaml_to_json_local() {
+  yq -o=json eval '.' "$1" 2>/dev/null || yq . "$1"
+}
+
+# ─── AC-11: D6 absent compactThreshold -> write 75, managed=true in lock ────
+
+@test "compactthreshold_written_when_absent" {
+  seed_manifest_ecm_on
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  val="$(jq -r '.compactThreshold' .claude/settings.json)"
+  [ "$val" = "75" ]
+  managed="$(yaml_to_json_local eidolons.lock | jq -r '.context.compactthreshold_managed')"
+  [ "$managed" = "true" ]
+}
+
+# ─── AC-12: C-4 UserPromptSubmit injected artifact <= 200 tokens ────────────
+
+@test "ups_inject_within_200_tokens" {
+  seed_manifest_ecm_on
+  setup_fake_eidolons_bin
+  # A readable transcript gives the meter a real (non-unknown) zone.
+  dd if=/dev/zero of=transcript.jsonl bs=1 count=400000 2>/dev/null
+  stdin_json="$(jq -n --arg p "implement the authentication flow" --arg tp "$PWD/transcript.jsonl" '{prompt:$p, transcript_path:$tp}')"
+  run bash -c "printf '%s' '$stdin_json' | '$EIDOLONS_ROOT/cli/eidolons' run --hook claude-code --stdin"
+  [ "$status" -eq 0 ]
+  if [[ -n "$output" ]]; then
+    ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+    [[ "$ctx" == *"Context: zone="* ]] || return 1
+    line="$(printf '%s' "$ctx" | grep -o 'Context: zone=[^.]*\.' | head -1)"
+    len="$(printf '%s' "$line" | wc -m | tr -d ' ')"
+    [ "$len" -le 800 ]
+  fi
+}
+
+# ─── AC-13: D3 subagent remaps handoff_fresh -> finish_and_return ───────────
+
+@test "subagent_remaps_handoff_fresh" {
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter-sub1.json <<'EOF'
+{"ecm_version":"0.1","zone":"critical","compaction_count":0,"tool_result_share_est":0,"budget":{"ceiling_tokens":null,"spent_tokens_est":0}}
+EOF
+  run eidolons context policy --session-id sub1 --subagent --json
+  [ "$status" -eq 0 ]
+  op="$(jq -r '.operation' <<< "$output")"
+  raw="$(jq -r '.raw_operation' <<< "$output")"
+  [ "$raw" = "handoff_fresh" ]
+  [ "$op" = "finish_and_return" ]
+}
+
+# ─── AC-14: D3 budget-ledger is append-only JSONL, never rewritten in place ─
+
+@test "budget_ledger_is_append_only" {
+  run eidolons context externalize --summary "first checkpoint" --json
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < .eidolons/.context/budget-ledger.jsonl | tr -d ' ')" -eq 1 ]
+  first_line="$(head -1 .eidolons/.context/budget-ledger.jsonl)"
+
+  run eidolons context externalize --summary "second checkpoint" --json
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < .eidolons/.context/budget-ledger.jsonl | tr -d ' ')" -eq 2 ]
+  # The first line is untouched (append-only, never rewritten in place).
+  [ "$(head -1 .eidolons/.context/budget-ledger.jsonl)" = "$first_line" ]
+}
+
+# ─── AC-15: opt-in — eidolons.yaml with no context block => ECM off ─────────
+
+@test "ecm_opt_in_absent_block" {
+  seed_manifest   # no 'context:' block
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  # No ECM artifacts written when the project never opted in.
+  [ ! -f .eidolons/harness/hooks/claude-code-PostToolUse.sh ]
+  if [ -f .claude/settings.json ]; then
+    run jq -e 'has("compactThreshold")' .claude/settings.json
+    [ "$status" -ne 0 ]
+  fi
+  run yaml_to_json_local eidolons.lock
+  [ "$status" -eq 0 ]
+  run bash -c "yaml_to_json_local eidolons.lock | jq -e 'has(\"context\")'"
+  [ "$status" -ne 0 ]
+}
+
+# ─── AC-16: D5 crystalium_ingest is canonical, no commit fallback branch ────
+
+@test "handoff_ingest_is_canonical" {
+  seed_mcp_crystalium_local
+  setup_fake_docker_argv_log
+  run eidolons context handoff --task-state "shipping ECM P1" --json
+  [ "$status" -eq 0 ]
+  gated="$(jq -r '.gated_in' <<< "$output")"
+  [ "$gated" = "true" ]
+  attempted="$(jq -r '.ingest_attempted' <<< "$output")"
+  ok="$(jq -r '.ingest_ok' <<< "$output")"
+  [ "$attempted" = "true" ]
+  [ "$ok" = "true" ]
+  # The one-shot docker invocation used 'ingest' — and NEVER 'commit' (AC-16:
+  # no commit-fallback branch for the handoff artifact).
+  grep -q ' ingest ' "$FAKE_DOCKER_ARGV_LOG"
+  ! grep -qE '(^| )commit( |$)' "$FAKE_DOCKER_ARGV_LOG"
+}
+
+# ─── AC-17: GAP-003 — eidolons.lock context block covered by the schema ─────
+
+@test "lock_schema_covers_context" {
+  run jq -e '.properties.context.properties | keys | length > 0' \
+    "$EIDOLONS_ROOT/schemas/eidolons.lock.schema.json"
+  [ "$status" -eq 0 ]
+
+  seed_manifest_ecm_on
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+
+  # Every key the installer wrote under context: must be a declared schema
+  # property (structural coverage check — mirrors 'make schema's jq-based
+  # parse-and-shape checks; this repo has no full JSON-Schema validator wired).
+  written_keys="$(yaml_to_json_local eidolons.lock | jq -r '.context | keys[]' | sort)"
+  schema_keys="$(jq -r '.properties.context.properties | keys[]' "$EIDOLONS_ROOT/schemas/eidolons.lock.schema.json" | sort)"
+  for k in $written_keys; do
+    printf '%s\n' "$schema_keys" | grep -qx "$k" || { echo "undeclared key: $k"; return 1; }
+  done
+}

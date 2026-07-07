@@ -1,0 +1,26 @@
+# roster/pins.yaml — ECM P1 default pin set (spec §3.2).
+#
+# Pins are what MUST survive every lossy operation (compaction, handoff,
+# clear). Consumer projects may APPEND to this set via eidolons.yaml's
+# context.pins_extra — they may never shrink it. Pins never include
+# T3-origin content (Gap G3 posture).
+#
+# Mechanics: pins are re-injected via the post-compaction hook surface
+# (Claude Code SessionStart matcher `compact`); a post-op verification
+# probe greps the injected artifact for pin markers and repairs by
+# re-injection on miss. Advisory, never blocking.
+schema_version: 1
+
+pins:
+  - id: cortex_routing_digest
+    why: "Routing dies silently without it (measured: DOSSIER-HARNESS §1)."
+  - id: active_eidolon_refusal_table
+    why: "ACL 2026 pitfall class: lossy ops drop instructions first."
+  - id: esl_enforcement_mode
+    why: "Advisory-vs-block posture (tonberry enforcement) must not flip mid-session."
+  - id: crystalium_trust_tier_map
+    why: "Tier confusion after compaction = quarantine bypass (T0/T1/T3)."
+  - id: active_plan_step_and_criteria_sha256
+    why: "RAMZA's criteria freeze is meaningless if the SHA doesn't survive."
+  - id: session_budget_and_compaction_count
+    why: "The policy's own inputs must survive the operations they trigger."

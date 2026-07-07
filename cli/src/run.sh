@@ -38,6 +38,11 @@ Options:
                          (mechanical SHA-256 gate; records the verdict on the
                          artifact). In block mode a failure refuses to route.
   --verify-block         Run the --verify gate in block mode (ECL §6.2.2)
+  --hook <host> --post-tool-use
+                         ECM P1 meter-refresh hook mode (harness-internal):
+                         reads the PostToolUse event JSON on stdin, refreshes
+                         .eidolons/.context/meter.json, and injects
+                         additionalContext ONLY on a zone transition.
   -h, --help             Show this help
 
 Tiers: 'standard' is always the default. 'trance' is emitted only when a
@@ -63,6 +68,7 @@ VERIFY_MODE="${EIDOLONS_ECL_VERIFY_MODE:-warn}"
 HOOK_HOST=""
 HOOK_SESSION_START=false
 HOOK_STDIN=false
+HOOK_POST_TOOL_USE=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -77,6 +83,7 @@ while [[ $# -gt 0 ]]; do
     --hook)            HOOK_HOST="${2:-}"; shift 2 ;;
     --session-start)   HOOK_SESSION_START=true; shift ;;
     --stdin)           HOOK_STDIN=true; shift ;;
+    --post-tool-use)   HOOK_POST_TOOL_USE=true; shift ;;
     -h|--help)         usage; exit 0 ;;
     --)                shift; PROMPT="${PROMPT}${PROMPT:+ }$*"; break ;;
     -*)                die "Unknown option: $1 (see 'eidolons run --help')" ;;
@@ -88,6 +95,17 @@ done
 if [[ -n "$HOOK_HOST" && "$HOOK_SESSION_START" == "true" ]]; then
   export HOOK_HOST HOOK_MODE="session_start" HOOK_EVENT_NAME="SessionStart"
   export ARTIFACT_JSON="" PROMPT HOOK_STDIN_INPUT=""
+  bash "$SELF_DIR/harness_hook.sh"
+  exit 0
+fi
+
+# ── Hook: PostToolUse mode (ECM P1, T-F) — meter refresh; inject only on a
+# zone transition (evidence C6). No prompt required; reads the tool-call
+# event JSON on stdin and hands it to harness_hook.sh untouched. ─────────────
+if [[ -n "$HOOK_HOST" && "$HOOK_POST_TOOL_USE" == "true" ]]; then
+  _ptu_stdin="$(cat 2>/dev/null || true)"
+  export HOOK_HOST HOOK_MODE="post_tool_use" HOOK_EVENT_NAME="PostToolUse"
+  export ARTIFACT_JSON="" PROMPT="" HOOK_STDIN_INPUT="$_ptu_stdin"
   bash "$SELF_DIR/harness_hook.sh"
   exit 0
 fi

@@ -25,6 +25,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_context.sh"
 
 # ── ESL forcing-function helpers (M1 + M2) ────────────────────────────────────
 # Pure file reads (jq / grep / glob / awk) — NO docker, NO network. Each is
@@ -102,6 +104,55 @@ _esl_render_block() {
     rst="${resume#* }"
     printf '\nRESUME: in-flight change %s (%s) — finish it before opening a new one.' "$rid" "$rst"
   fi
+}
+
+# ── ECM P1 (context-lifecycle kernel) helpers (T-F) ───────────────────────
+# Pure reads + a bounded 'eidolons memory preflight' reuse. Fail-open: any
+# absence/error degrades to an empty string, never breaks the caller.
+
+# _ecm_project_enabled [ROOT] — 0 iff the CONSUMER PROJECT's eidolons.yaml
+# declares a 'context:' block with enabled != false (P0-1 opt-in gate,
+# mirrors _esl_tonberry_present's shape). Absent eidolons.yaml/context block
+# -> disabled (AC-15) — this is what keeps ECM's SessionStart/UserPromptSubmit
+# additions byte-silent for every project that has not opted in, even though
+# the nexus-shipped roster/pins.yaml / roster/context-policy.yaml always
+# exist on disk (those are nexus config, not a per-project opt-in signal).
+_ecm_project_enabled() {
+  local root="${1:-$(pwd)}"
+  [ -f "$root/eidolons.yaml" ] || return 1
+  local en
+  en="$(yaml_to_json "$root/eidolons.yaml" 2>/dev/null \
+    | jq -r 'if (.context // null) == null then "false"
+             elif (.context.enabled // true) then "true"
+             else "false" end' 2>/dev/null || echo false)"
+  [ "$en" = "true" ]
+}
+
+# _ecm_pins_reminder — echo a compact comma-joined pin-id reminder from
+# roster/pins.yaml (the nexus default pin set, spec §3.2). Empty on any
+# read failure.
+_ecm_pins_reminder() {
+  local pins_file
+  pins_file="$(context_pins_file 2>/dev/null || true)"
+  [ -n "$pins_file" ] && [ -f "$pins_file" ] || return 0
+  yaml_to_json "$pins_file" 2>/dev/null \
+    | jq -r '(.pins // []) | map(.id) | join(", ")' 2>/dev/null || true
+}
+
+# _ecm_handoff_digest — reuse 'eidolons memory preflight --query' verbatim
+# (FINDING-015, no new docker plumbing) to recall the latest session_handoff
+# record for the successor-session SessionStart inject. Empty on any failure
+# (gate absent, docker absent, zero records) — memory preflight already
+# guarantees empty-stdout/exit-0 on every failure mode.
+_ecm_handoff_digest() {
+  local _bin=""
+  if _bin="$(command -v eidolons 2>/dev/null)"; then
+    :
+  else
+    _bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+    [[ -x "$_bin" ]] || return 0
+  fi
+  "$_bin" memory preflight --query "session_handoff recent context" 2>/dev/null || true
 }
 
 # ── Fail-open wrapper: any unhandled error → empty stdout, exit 0 ──────────
@@ -183,10 +234,73 @@ ${esl_block}"
       fi
     fi
 
+    # ── ECM P1 (T-F): context-policy block — pin re-inject + handoff digest ──
+    # Opt-in (P0-1/AC-15): only when THIS project's eidolons.yaml declares a
+    # 'context:' block — the nexus-shipped roster/pins.yaml is config, not a
+    # per-project signal. The SessionStart matcher already covers every
+    # source (startup|resume|clear|compact, FINDING-008) — pin naming and
+    # handoff recall are idempotent and harmless on any cold start, so this
+    # fires on all four sources rather than gating narrowly on
+    # source=="compact" (a superset of the literal "post-compact only"
+    # reading, never a narrower one; no stdin payload is read in
+    # session_start mode today to discriminate source).
+    if _ecm_project_enabled; then
+      local ecm_pins ecm_handoff ecm_block
+      ecm_pins="$(_ecm_pins_reminder)"
+      ecm_handoff="$(_ecm_handoff_digest)"
+      if [[ -n "$ecm_pins" || -n "$ecm_handoff" ]]; then
+        ecm_block="## Context policy"
+        [[ -n "$ecm_pins" ]] && ecm_block="${ecm_block}
+Pins (must survive compaction/handoff): ${ecm_pins}."
+        [[ -n "$ecm_handoff" ]] && ecm_block="${ecm_block}
+Prior session handoff (session_handoff): ${ecm_handoff}"
+        cortex_digest="${cortex_digest}
+
+${ecm_block}"
+      fi
+    fi
+
     # Emit JSON.
     jq -n \
       --arg en "SessionStart" \
       --arg ctx "$cortex_digest" \
+      '{"hookSpecificOutput": {"hookEventName": $en, "additionalContext": $ctx}}'
+    return 0
+  fi
+
+  # ── PostToolUse mode (ECM P1, T-F): meter refresh; inject ONLY on a zone
+  # transition (evidence C6). Most firings are silent, cheap sidecar
+  # refreshes — no injection, no cost to the cache-discipline C-1/C-4 rules.
+  if [[ "$hook_mode" == "post_tool_use" ]]; then
+    _ecm_project_enabled || return 0  # opt-in gate (P0-1/AC-15)
+    local ptu_stdin="${HOOK_STDIN_INPUT:-}"
+    [[ -n "$ptu_stdin" ]] || return 0
+
+    local ecm_bin=""
+    if ecm_bin="$(command -v eidolons 2>/dev/null)"; then
+      :
+    else
+      ecm_bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+      [[ -x "$ecm_bin" ]] || return 0
+    fi
+
+    local meter_path=".eidolons/.context/meter.json"
+    local prev_zone="unknown"
+    [[ -f "$meter_path" ]] && prev_zone="$(jq -r '.zone // "unknown"' "$meter_path" 2>/dev/null || echo unknown)"
+
+    printf '%s' "$ptu_stdin" | "$ecm_bin" context status --stdin >/dev/null 2>&1 || return 0
+
+    local new_zone="unknown"
+    [[ -f "$meter_path" ]] && new_zone="$(jq -r '.zone // "unknown"' "$meter_path" 2>/dev/null || echo unknown)"
+
+    [[ "$new_zone" == "$prev_zone" ]] && return 0  # no transition -> silent refresh only
+
+    local ptu_ctx
+    ptu_ctx="Context zone changed: ${prev_zone} -> ${new_zone}."
+    ptu_ctx="$(printf '%s' "$ptu_ctx" | cut -c1-800)"
+    jq -n \
+      --arg en "PostToolUse" \
+      --arg ctx "$ptu_ctx" \
       '{"hookSpecificOutput": {"hookEventName": $en, "additionalContext": $ctx}}'
     return 0
   fi
@@ -261,6 +375,40 @@ ${esl_block}"
       esl_clause="ESL project: open a change first (SHOULD) — mcp__tonberry__propose -> right_size; trivial routes need no spec."
     fi
     ctx_text="$ctx_text  $esl_clause"
+  fi
+
+  # ── ECM P1 (T-F, AC-12): meter-zone + policy-verdict line ─────────────────
+  # Opt-in (P0-1/AC-15): only when THIS project's eidolons.yaml declares a
+  # 'context:' block. Hard-bounded to <=200 tokens (injected_artifact_max_tokens,
+  # C-4) via its OWN cut -c1-800, independent of the overall 4000-char
+  # ctx_text trim below. Reuses the SAME stdin payload run.sh already
+  # captured for this firing (HOOK_STDIN_INPUT) so 'context status' can read
+  # transcript_path (C7) without a second stdin read. Fail-open: absent
+  # binary/meter/policy -> no line.
+  local ecm_bin=""
+  if _ecm_project_enabled && ecm_bin="$(command -v eidolons 2>/dev/null)"; then
+    :
+  elif _ecm_project_enabled; then
+    ecm_bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+    [[ -x "$ecm_bin" ]] || ecm_bin=""
+  fi
+  if [[ -n "$ecm_bin" ]]; then
+    local ecm_status_json
+    ecm_status_json="$(printf '%s' "${HOOK_STDIN_INPUT:-}" | "$ecm_bin" context status --stdin --json 2>/dev/null || true)"
+    if [[ -n "$ecm_status_json" ]]; then
+      local ecm_zone ecm_util ecm_verdict_json
+      ecm_zone="$(printf '%s' "$ecm_status_json" | jq -r '.zone // "unknown"' 2>/dev/null || echo unknown)"
+      ecm_util="$(printf '%s' "$ecm_status_json" | jq -r '.utilization // "null"' 2>/dev/null || echo null)"
+      ecm_verdict_json="$("$ecm_bin" context policy --json 2>/dev/null || true)"
+      if [[ -n "$ecm_verdict_json" ]]; then
+        local ecm_op ecm_rule ecm_line
+        ecm_op="$(printf '%s' "$ecm_verdict_json" | jq -r '.operation // "continue"' 2>/dev/null || echo continue)"
+        ecm_rule="$(printf '%s' "$ecm_verdict_json" | jq -r '.rule // "?"' 2>/dev/null || echo "?")"
+        ecm_line="Context: zone=${ecm_zone} util=${ecm_util} policy=${ecm_op}(${ecm_rule})."
+        ecm_line="$(printf '%s' "$ecm_line" | cut -c1-800)"
+        ctx_text="$ctx_text  $ecm_line"
+      fi
+    fi
   fi
 
   # Trim to ≤4000 chars to stay well under 1000 tokens.

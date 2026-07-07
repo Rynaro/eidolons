@@ -118,6 +118,12 @@ Commands:
                              One-shot crystalium recall; emits compact digest.
                              Stdout IS the digest; all failures = empty/exit-0.
                  Run 'eidolons memory --help' for full usage.
+  context <sub> Deterministic context-lifecycle kernel (ECM P1, opt-in). Subcommands:
+                   status       Write .eidolons/.context/meter.json (D1 3-rung ladder)
+                   policy       Evaluate roster/context-policy.yaml over the meter
+                   externalize  Checkpoint identifiers to crystalium (file-floor fallback)
+                   handoff      Compose a session handoff brief + ECL envelope
+                 Run 'eidolons context --help' for full usage.
   telemetry <sub> Opt-in token-cost telemetry (audited spend, not estimated).
                    capture --hook STOP_<HOST> --stdin   Capture turn rows at session Stop
                    rollup  [--by ...] [--since ...]     Pure-jq M1/M2/M3 aggregation (Phase D)
@@ -306,6 +312,7 @@ case "$cmd" in
          printf 'Available: preflight\n' >&2; exit 2 ;;
     esac
     ;;
+  context)      exec bash "$CLI_SRC/context.sh"    "$@" ;;
   version|--version|-v)
     # --quiet → single-line grep-compat form (legacy CI surface preserved)
     _quiet=false
