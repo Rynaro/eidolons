@@ -1,0 +1,99 @@
+# spec-crystalium-1.8.yaml — machine-readable companion to spec-crystalium-1.8.md
+# Change: ecm-context-kernel (nexus-side ESL folder; target repo is NOT ESL-enabled)
+spec: spec-crystalium-1.8
+change: ecm-context-kernel
+eidolon: ramza
+maker: vivi
+checker: kupo            # maker != checker (ESL verify-envelope enforcement)
+created_at: "2026-07-07"
+target:
+  repo: /home/rynaro/workspace/oss/agents/crystalium
+  baseline_ref: origin/main
+  baseline_sha: b6adf99
+  baseline_version: 1.7.0
+  read_protocol: "git -C <repo> show origin/main:<path>  # working tree STALE+DIRTY, never read directly"
+release:
+  version: 1.8.0
+  ships: ["one-shot `ingest` CLI verb"]
+  scope_fence_out:
+    - "consolidate verb (re-deferred; CHANGELOG ledger note only)"
+    - "schema migrations / new columns (topic_key, contains_tool_origin stay convention)"
+    - "recall filter changes (quarantine keeps surfacing; AC-104 is the regression lock)"
+    - "MCP surface changes (build_tool_manifest stays exactly 9 tools; AC-115)"
+    - "server.py / ingest_adapter.py / scope.py / ecl.py / quality.py (parity core reused untouched)"
+    - "_ROSTER_EIDOLONS edits (eidolons-context-kernel stays T3/quarantined by design)"
+
+criteria_sha256: "62ce0fd819eb4bb1b42dc13aaa9508ff24374365a26cd181593790813cfcbd8c"
+criteria_file: .spectra/changes/ecm-context-kernel/spec-crystalium-1.8.criteria.md
+criteria_count: 19
+
+# Drift fence — repo-relative paths in the crystalium repo. Any diff outside is DRIFT.
+files_allowed:
+  - mcp-server/src/crystalium/__main__.py          # new ingest verb + docstring line (anchor: commit verb :388-571, export :579)
+  - mcp-server/tests/test_ingest_cli.py            # NEW (model: test_commit_cli.py)
+  - mcp-server/pyproject.toml                      # :8 version SSOT -> 1.8.0
+  - mcp-server/src/crystalium/__init__.py          # :8 _FALLBACK_VERSION -> 1.8.0
+  - install.sh                                     # :75 fallback literal -> 1.8.0
+  - CHANGELOG.md                                   # [1.8.0] entry + consolidate re-deferral
+
+verb_contract:
+  name: ingest
+  flags:
+    - {flag: --envelope, required: true, type: json-string, note: "ECL envelope v1.x/v2.x; json.loads; parse failure = exit 1"}
+    - {flag: --payload, required: true, type: string, note: "G7: raw utf-8 bytes must hash to artifact.sha256 when declared"}
+    - {flag: --payload-encoding, required: false, default: utf8, choices: [utf8, base64, json]}
+    - {flag: --format, required: false, default: json, choices: [json, text]}
+    - {flag: --config, required: false, note: "Config.from_yaml if exists else Config.from_env"}
+  env:
+    CRYSTALIUM_CALLER_TIER: "NOT READ — tier is envelope-derived via resolve_caller_tier MIN-trust (AC-116)"
+  parity_source: "_handle_ingest(args, episodic, semantic, procedural, execution, config, recall_cache=None) — server.py:1141, reused verbatim"
+  construction: "light one-shot stack (commit-verb precedent): None vector/graph stores; ExecutionLayer(aetheryte=None) default-safe (execution.py:91,119)"
+  summary_gate: "none (MCP-ingest parity; commit CLI's hard reject does NOT apply — server-composed summary, D-3)"
+  scope: "canonicalized via normalize_write_scope (v1.6; server.py:1209-1213) — NOTE FINDING-107: CLI commit stores scope verbatim; asymmetry documented, not fixed"
+  nexus_caller_compat: "lib_context.sh:161 emitted shape works AS-IS — no nexus change for the verb call"
+
+acceptance_checks:
+  - {id: AC-101, verify: "pytest test_ingest_cli.py::test_ingest_happy_path_single_json_doc"}
+  - {id: AC-102, verify: "pytest test_ingest_cli.py::test_session_handoff_roundtrip_recall_by_kind_and_token"}
+  - {id: AC-103, verify: "pytest test_ingest_cli.py::test_tool_origin_envelope_lands_t3_quarantined"}
+  - {id: AC-104, verify: "pytest test_ingest_cli.py::test_quarantined_session_handoff_still_surfaces_on_recall"}
+  - {id: AC-105, verify: "pytest test_ingest_cli.py::test_payload_hash_mismatch_exits_1"}
+  - {id: AC-106, verify: "pytest test_ingest_cli.py::test_missing_envelope_field_exits_1"}
+  - {id: AC-107, verify: "pytest test_ingest_cli.py::test_unsupported_envelope_version_exits_1"}
+  - {id: AC-108, verify: "pytest test_ingest_cli.py::test_envelope_parse_error_exits_1"}
+  - {id: AC-109, verify: "pytest test_ingest_cli.py::test_nexus_envelope_shape_extra_fields_tolerated"}
+  - {id: AC-110, verify: "pytest test_ingest_cli.py::test_scope_normalized_to_canonical_key"}
+  - {id: AC-111, verify: "pytest test_ingest_cli.py::test_thread_id_preserved_in_project_raw"}
+  - {id: AC-112, verify: "pytest test_ingest_cli.py::test_format_text_prints_only_id"}
+  - {id: AC-113, verify: "pytest test_ingest_cli.py::test_no_summary_gate_on_ingest_path"}
+  - {id: AC-114, verify: "pytest test_ingest_cli.py::test_ingest_help_no_heavy_imports"}
+  - {id: AC-115, verify: "pytest test_ingest_cli.py::test_mcp_tool_surface_unchanged_9_tools"}
+  - {id: AC-116, verify: "pytest test_ingest_cli.py::test_caller_tier_env_ignored_tier_is_envelope_derived"}
+  - {id: AC-117, verify: "grep -m1 '^version' mcp-server/pyproject.toml | grep -q '\"1.8.0\"'"}
+  - {id: AC-118, verify: "grep -q '_FALLBACK_VERSION = \"1.8.0\"' mcp-server/src/crystalium/__init__.py && grep -q 'CRYSTALIUM_VERSION=\"1.8.0\"' install.sh"}
+  - {id: AC-119, verify: "grep -q '^## \\[1.8.0\\]' CHANGELOG.md && grep -qi 'consolidate' CHANGELOG.md"}
+
+cross_repo_flags:
+  - id: GAP-NEXUS-OBJECTIVE
+    severity: blocking-for-canary
+    where: "nexus context_handoff.sh:215 (ecm-context-kernel fence, NOT this spec's fence)"
+    what: >-
+      Envelope objective is static; the canary token lives only in the brief body
+      (encoding_context.native_artifact — not FTS-indexed; FTS = summary only,
+      relational.py:75; _fts5_query implicit-AND, relational.py:186-202). The
+      canary --context-handoff recall leg cannot token-match until the nexus folds
+      the --task-state head into the envelope objective.
+  - id: NOTE-QUARANTINE-BOTH-LEGS
+    severity: informational
+    what: >-
+      from.eidolon 'eidolons-context-kernel' resolves T3 (not in _ROSTER_EIDOLONS)
+      with trace.tier 'standard' non-tier token — BOTH canary legs land quarantined;
+      AC-103/AC-104 lock that they land quarantined AND still surface on recall.
+  - id: NOTE-MCPS-YAML-LIST
+    severity: cosmetic
+    what: "nexus roster/mcps.yaml exposes_tools.list enumerates 8 of 9 tools (graph_export missing; glob covers it) — nexus-side, out of fence."
+
+rollback:
+  strategy: "repin nexus roster/mcps.yaml to 1.7.0 digest sha256:b6978817f06706c23a7b9134bb235a57ccc2f5c0bdafd318b2a6b41fc6719b07"
+  data_migration: none
+  note: "1.8.0-ingested crystals are ordinary episodic crystals, readable by 1.7.0; nexus fails open to file floor against a 1.7.0 image"

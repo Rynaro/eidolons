@@ -1,0 +1,152 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "ecm-context-kernel-p1",
+  "created_at": "2026-07-07T00:17:31Z",
+  "tier": "full",
+  "phase": "A",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "A"
+  ],
+  "rightsize": {
+    "score": 6,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 15,
+      "new_dep": false,
+      "public_api": true,
+      "migration": false,
+      "security": false,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 9,
+      "dims": {
+        "scope": 3,
+        "ambiguity": 1,
+        "dependencies": 3,
+        "risk": 2
+      },
+      "verdict": "extended",
+      "at": "2026-07-07T02:59:12Z",
+      "label": "ecm-p1-scope"
+    },
+    {
+      "rubric": "explore",
+      "total": 83,
+      "dims": {
+        "alignment": 9,
+        "correctness": 8,
+        "maintainability": 9,
+        "performance": 9,
+        "simplicity": 7,
+        "risk": 8,
+        "innovation": 5
+      },
+      "verdict": "solid",
+      "at": "2026-07-07T03:00:05Z",
+      "label": "verb-family-parallel"
+    },
+    {
+      "rubric": "explore",
+      "total": 69,
+      "dims": {
+        "alignment": 7,
+        "correctness": 7,
+        "maintainability": 7,
+        "performance": 6,
+        "simplicity": 6,
+        "risk": 9,
+        "innovation": 6
+      },
+      "verdict": "weak",
+      "at": "2026-07-07T03:00:05Z",
+      "label": "canary-first"
+    },
+    {
+      "rubric": "explore",
+      "total": 69,
+      "dims": {
+        "alignment": 7,
+        "correctness": 8,
+        "maintainability": 7,
+        "performance": 5,
+        "simplicity": 8,
+        "risk": 8,
+        "innovation": 3
+      },
+      "verdict": "weak",
+      "at": "2026-07-07T03:00:05Z",
+      "label": "dependency-serial"
+    },
+    {
+      "rubric": "explore",
+      "total": 63,
+      "dims": {
+        "alignment": 7,
+        "correctness": 7,
+        "maintainability": 6,
+        "performance": 5,
+        "simplicity": 5,
+        "risk": 6,
+        "innovation": 8
+      },
+      "verdict": "weak",
+      "at": "2026-07-07T03:00:05Z",
+      "label": "capability-sliced"
+    },
+    {
+      "rubric": "confidence",
+      "total": 87.75,
+      "dims": {
+        "pattern_match": 88,
+        "requirement_clarity": 90,
+        "decomposition_stability": 85,
+        "constraint_compliance": 88
+      },
+      "verdict": "AUTO_PROCEED",
+      "at": "2026-07-07T03:04:54Z",
+      "label": "ecm-p1-assemble"
+    }
+  ],
+  "amendments": [],
+  "declared_scope": [
+    "cli/eidolons",
+    "cli/src/context.sh",
+    "cli/src/context_status.sh",
+    "cli/src/context_policy.sh",
+    "cli/src/context_externalize.sh",
+    "cli/src/context_handoff.sh",
+    "cli/src/lib_context.sh",
+    "cli/src/harness_install.sh",
+    "cli/src/harness_hook.sh",
+    "cli/src/run.sh",
+    "cli/src/canary.sh",
+    "roster/context-policy.yaml",
+    "roster/pins.yaml",
+    "schemas/eidolons.lock.schema.json",
+    "schemas/eidolons.yaml.schema.json",
+    "cli/tests/context.bats",
+    ".github/workflows/ci.yml",
+    "CHANGELOG.md"
+  ],
+  "criteria_sha256": "6e0b9b102c3164281052b937c5fa58c09886f138162e4dd65fa7bf035c306015",
+  "critic": {
+    "author": "ramza:parallel-generators",
+    "checker": "ramza:evaluator-optimizer",
+    "at": "2026-07-07T03:04:46Z"
+  },
+  "scope_declared_at": "2026-07-07T03:05:02Z",
+  "criteria_frozen_at": "2026-07-07T03:05:02Z"
+}
