@@ -1946,3 +1946,383 @@ _esl_md5()   { md5sum "$1" 2>/dev/null | cut -d' ' -f1 || md5 -q "$1"; }
   [ "$status" -eq 0 ] || return 1
   [ -z "$output" ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ECM P2 — Host-Adapter Recipes (.spectra/changes/ecm-p2-host-adapters,
+# acceptance-criteria.md SHA 629b0f10…). Tracks A–G. Track H is RETIRED.
+#
+# This file owns the "harness install/remove WIRING" style ACs — hooks.json
+# shape, marker-block files, config.toml, removal, lock schema keys — mirroring
+# the existing per-host convention already in this file (copilot suite, codex
+# hooks.json, cursor mdc, strict tier). The "run --hook <host>" behavioral/
+# envelope-content ACs (AC-CDX-3/4/5, AC-FO-2, AC-LK-3) live in context.bats.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# seed_manifest_ecm_hosts HOSTS_CSV — eidolons.yaml with 'context: enabled: true'
+# and the given hosts.wire list. Local per FINDING-031 (distinct from
+# context.bats's seed_manifest_ecm_on — bats test files share no functions).
+seed_manifest_ecm_hosts() {
+  local hosts_csv="${1:-claude-code}"
+  local hosts_yaml=""
+  local first=true
+  for _h in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
+    if [[ "$first" == "true" ]]; then hosts_yaml="$_h"; first=false; else hosts_yaml="$hosts_yaml, $_h"; fi
+  done
+  cat > eidolons.yaml <<EOF
+version: 1
+hosts:
+  wire: [$hosts_yaml]
+context:
+  enabled: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+}
+
+# yaml_to_json_local FILE — local yq wrapper (context.bats has its own
+# identically-named, identically-implemented copy; bats test files do not
+# share functions, per FINDING-031).
+yaml_to_json_local() {
+  yq -o=json eval '.' "$1" 2>/dev/null || yq . "$1"
+}
+
+# ─── Track A remainder: AC-CDX-1, AC-CDX-2, AC-CDX-6, AC-CDX-7 ─────────────
+
+@test "AC-CDX-1: codex PostToolUse shim invokes run --hook codex --post-tool-use" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/codex-PostToolUse.sh" ]
+  run grep -q 'run --hook codex --post-tool-use' .eidolons/harness/hooks/codex-PostToolUse.sh
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CDX-2: .codex/hooks.json PostToolUse array carries the codex shim command" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.PostToolUse[].command | select(endswith("codex-PostToolUse.sh"))' .codex/hooks.json
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CDX-6: absent model_auto_compact_token_limit is written to .codex/config.toml" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run grep -q '^model_auto_compact_token_limit' .codex/config.toml
+  [ "$status" -eq 0 ]
+  run jq -e '.context.codex_autocompact_managed == true' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CDX-6b: model_auto_compact_token_limit managed=true survives a re-install (idempotent, not re-flagged foreign)" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run jq -e '.context.codex_autocompact_managed == true' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CDX-7: a foreign model_auto_compact_token_limit value is left byte-unchanged" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  mkdir -p .codex
+  printf 'model_auto_compact_token_limit = 999999\nother_key = "x"\n' > .codex/config.toml
+  before_sum="$(sha256sum .codex/config.toml 2>/dev/null || shasum -a 256 .codex/config.toml)"
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  after_sum="$(sha256sum .codex/config.toml 2>/dev/null || shasum -a 256 .codex/config.toml)"
+  [ "$before_sum" = "$after_sum" ]
+  run jq -e '.context.codex_autocompact_managed == false' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Track B: AC-OC-1..4 + broadened install trigger ───────────────────────
+
+@test "AC-OC-1: opencode plugin registers experimental.chat.system.transform" {
+  seed_manifest_ecm_hosts opencode
+  seed_lock
+  run eidolons harness install --hosts opencode
+  [ "$status" -eq 0 ]
+  [ -f ".opencode/plugins/eidolons.js" ]
+  run grep -q 'experimental' .opencode/plugins/eidolons.js
+  [ "$status" -eq 0 ]
+  run grep -q "chat.system.transform" .opencode/plugins/eidolons.js
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-OC-2: opencode transform appends a live zone= meter line to output.system (node smoke-run)" {
+  command -v node >/dev/null 2>&1 || skip "node not on PATH"
+  seed_manifest_ecm_hosts opencode
+  seed_lock
+  run eidolons harness install --hosts opencode
+  [ "$status" -eq 0 ]
+  run grep -q 'output.system' .opencode/plugins/eidolons.js
+  [ "$status" -eq 0 ]
+
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter.json <<'EOF'
+{"ecm_version":"0.1","zone":"amber","utilization":0.63}
+EOF
+  cp .opencode/plugins/eidolons.js "$BATS_TEST_TMPDIR/oc-smoke.mjs"
+  run node -e "
+    import('$BATS_TEST_TMPDIR/oc-smoke.mjs').then(async (mod) => {
+      const output = { system: [] };
+      await mod.default.hooks['experimental.chat.system.transform']({ output });
+      console.log(JSON.stringify(output.system));
+    }).catch((e) => { console.error('ERR', e); process.exit(1); });
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"zone="* ]]
+}
+
+@test "AC-OC-3: opencode plugin registers experimental.session.compacting" {
+  seed_manifest_ecm_hosts opencode
+  seed_lock
+  run eidolons harness install --hosts opencode
+  [ "$status" -eq 0 ]
+  run grep -q 'session.compacting' .opencode/plugins/eidolons.js
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-OC-4: opencode ECM plugin makes no PostToolUse / per-tool inject claim" {
+  seed_manifest_ecm_hosts opencode
+  seed_lock
+  run eidolons harness install --hosts opencode
+  [ "$status" -eq 0 ]
+  run grep -qi 'PostToolUse\|per-tool inject' .opencode/plugins/eidolons.js
+  [ "$status" -ne 0 ]
+}
+
+@test "harness: opencode ECM plugin copies WITHOUT --strict when 'context:' alone is on" {
+  seed_manifest_ecm_hosts opencode
+  seed_lock
+  run eidolons harness install --hosts opencode
+  [ "$status" -eq 0 ]
+  [ -f ".opencode/plugins/eidolons.js" ]
+}
+
+# ─── Track C: AC-CP-1..4 ────────────────────────────────────────────────────
+
+@test "AC-CP-1: copilot ECM marker block upserted into copilot-instructions.md" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  run grep -qF '<!-- eidolon:ecm-context start -->' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CP-2: copilot ECM block carries the pin digest plus the handoff digest" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  run grep -q 'Pins:' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+  run grep -q 'Prior session handoff' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CP-3: copilot ECM block makes no live-refresh claim" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  run grep -qi 'live meter\|per-prompt refresh\|updated each turn' .github/copilot-instructions.md
+  [ "$status" -ne 0 ]
+}
+
+@test "AC-CP-4: copilot ECM block is byte-identical on a second install" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  _first="$(cat .github/copilot-instructions.md)"
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  _second="$(cat .github/copilot-instructions.md)"
+  [ "$_first" = "$_second" ]
+}
+
+# ─── Track D: AC-CR-1..4 ────────────────────────────────────────────────────
+
+@test "AC-CR-1: cursor ECM floor written to .cursor/rules/eidolons-context.mdc" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/rules/eidolons-context.mdc" ]
+  run grep -qF '<!-- eidolon:ecm-context start -->' .cursor/rules/eidolons-context.mdc
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CR-2: cursor ECM floor documents its static-only limitation" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  run grep -qi 'static' .cursor/rules/eidolons-context.mdc
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-CR-3: cursor ECM floor makes no live-injection claim" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  run grep -qi 'meter refresh\|per-prompt\|live inject' .cursor/rules/eidolons-context.mdc
+  [ "$status" -ne 0 ]
+}
+
+@test "AC-CR-4: cursor ECM floor is byte-identical on a second install" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  _first="$(cat .cursor/rules/eidolons-context.mdc)"
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  _second="$(cat .cursor/rules/eidolons-context.mdc)"
+  [ "$_first" = "$_second" ]
+}
+
+# ─── Track E: AC-RM-1..6 (removal parity) ──────────────────────────────────
+
+@test "AC-RM-1: harness remove strips compactThreshold from .claude/settings.json" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  run jq -e 'has("compactThreshold")' .claude/settings.json
+  [ "$status" -eq 0 ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run jq -e 'has("compactThreshold") | not' .claude/settings.json
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-RM-2: harness remove strips the context: key from eidolons.lock" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  run grep -q '^context:' eidolons.lock
+  [ "$status" -eq 0 ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run grep -q '^context:' eidolons.lock
+  [ "$status" -ne 0 ]
+}
+
+@test "AC-RM-3: harness remove strips the managed model_auto_compact_token_limit line" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run grep -q '^model_auto_compact_token_limit' .codex/config.toml
+  [ "$status" -eq 0 ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run grep -q '^model_auto_compact_token_limit' .codex/config.toml
+  [ "$status" -ne 0 ]
+}
+
+@test "AC-RM-4: harness remove strips the copilot ECM block; sibling content survives" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  printf '\nSIBLING CONTENT MARKER\n' >> .github/copilot-instructions.md
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run grep -qF '<!-- eidolon:ecm-context start -->' .github/copilot-instructions.md
+  [ "$status" -ne 0 ]
+  run grep -qF 'SIBLING CONTENT MARKER' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-RM-5: harness remove deletes the cursor ECM .mdc floor" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/rules/eidolons-context.mdc" ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ ! -f ".cursor/rules/eidolons-context.mdc" ]
+}
+
+@test "AC-RM-6: install -> remove -> install is byte-identical for .claude/settings.json" {
+  seed_manifest_ecm_hosts "claude-code,codex,copilot,cursor,opencode"
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex,copilot,cursor,opencode
+  [ "$status" -eq 0 ]
+  _first="$(jq -cS . .claude/settings.json)"
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run eidolons harness install --hosts claude-code,codex,copilot,cursor,opencode
+  [ "$status" -eq 0 ]
+  _second="$(jq -cS . .claude/settings.json)"
+  [ "$_first" = "$_second" ]
+}
+
+# ─── Track F: AC-FO-1, AC-FO-3 (AC-FO-2 lives in context.bats) ─────────────
+
+@test "AC-FO-1: cursor-only install exits 0 and writes the documentary floor" {
+  seed_manifest_ecm_hosts cursor
+  seed_lock
+  run eidolons harness install --hosts cursor
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/rules/eidolons-context.mdc" ]
+}
+
+@test "AC-FO-3: unwritable codex config warns and exits 0; claude-code shim still written" {
+  [ "$(id -u)" -eq 0 ] && skip "running as root — chmod 0444 is not meaningful"
+  seed_manifest_ecm_hosts "claude-code,codex"
+  seed_lock
+  mkdir -p .codex
+  printf 'unrelated_key = 1\n' > .codex/config.toml
+  chmod 0444 .codex/config.toml
+  run eidolons harness install --hosts claude-code,codex
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh" ]
+  chmod 0644 .codex/config.toml
+}
+
+# ─── Track G: AC-LK-1, AC-LK-2 (AC-LK-3 lives in context.bats) ─────────────
+
+@test "AC-LK-1: eidolons.lock context.per_host records each wired host's effective tier" {
+  seed_manifest_ecm_hosts "claude-code,codex,opencode,copilot,cursor"
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex,opencode,copilot,cursor
+  [ "$status" -eq 0 ]
+  lock_json="$(yaml_to_json_local eidolons.lock)"
+  run jq -e '.context.per_host.codex.tier == "T3"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+  run jq -e '.context.per_host."claude-code".tier == "T3"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+  run jq -e '.context.per_host.opencode.tier == "T1"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+  run jq -e '.context.per_host.copilot.tier == "T2"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+  run jq -e '.context.per_host.cursor.tier == "T2"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-LK-2: eidolons.lock context.codex_autocompact_managed is recorded as a boolean" {
+  seed_manifest_ecm_hosts codex
+  seed_lock
+  run eidolons harness install --hosts codex
+  [ "$status" -eq 0 ]
+  run jq -e '.context.codex_autocompact_managed | type == "boolean"' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}

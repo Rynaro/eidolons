@@ -403,3 +403,167 @@ EOF
     printf '%s\n' "$schema_keys" | grep -qx "$k" || { echo "undeclared key: $k"; return 1; }
   done
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# ECM P2 — Host-Adapter Recipes (.spectra/changes/ecm-p2-host-adapters,
+# acceptance-criteria.md SHA 629b0f10…). Tracks A–G only; Track H is RETIRED.
+#
+# This file keeps the "run --hook <host>" / kernel-behavior style ACs (the
+# SAME style as AC-12's UPS parity test above). Host-install-WIRING ACs
+# (hooks.json shape, marker-block files, removal, lock schema keys) live in
+# harness.bats, matching that file's existing host-adapter convention.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# seed_cortex_min — minimal cortex EIDOLONS.md (local per FINDING-031; harness.bats
+# has its own identical 'seed_cortex' helper that bats does not let us share).
+seed_cortex_min() {
+  mkdir -p .eidolons/cortex
+  cat > .eidolons/cortex/EIDOLONS.md <<'EOF'
+# Eidolons Routing Cortex
+
+## Roster Index (always-loaded)
+
+| Eidolon | Role |
+|---------|------|
+| ATLAS   | scout |
+
+## Dispatch Protocol (always-loaded)
+
+Route all non-trivial work through the Eidolons pipeline.
+EOF
+}
+
+# ─── AC-CDX-3: codex PostToolUse envelope shape parity with claude-code ─────
+
+@test "AC-CDX-3: codex post-tool-use emits the same hookSpecificOutput PostToolUse envelope" {
+  seed_manifest_ecm_on
+  setup_fake_eidolons_bin
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter.json <<'EOF'
+{"ecm_version":"0.1","zone":"green","compaction_count":0,"tool_result_share_est":0,"budget":{"ceiling_tokens":null,"spent_tokens_est":0}}
+EOF
+  # A used_percentage of 60 crosses green -> amber (amber threshold 0.50),
+  # a genuine zone transition (harness_hook.sh only injects on transition).
+  stdin_json="$(jq -n '{context_window:{used_percentage:60}}')"
+  run bash -c "printf '%s' '$stdin_json' | '$EIDOLONS_ROOT/cli/eidolons' run --hook codex --post-tool-use"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  ev="$(jq -r '.hookSpecificOutput.hookEventName' <<< "$output")"
+  [ "$ev" = "PostToolUse" ]
+  ctx="$(jq -r '.hookSpecificOutput.additionalContext' <<< "$output")"
+  [[ "$ctx" == *"zone changed"* ]]
+}
+
+# ─── AC-CDX-4: codex UserPromptSubmit meter/policy line parity ──────────────
+
+@test "AC-CDX-4: codex UserPromptSubmit carries the Context: zone= meter/policy line" {
+  seed_manifest_ecm_on
+  setup_fake_eidolons_bin
+  dd if=/dev/zero of=transcript.jsonl bs=1 count=400000 2>/dev/null
+  stdin_json="$(jq -n --arg p "implement the authentication flow" --arg tp "$PWD/transcript.jsonl" '{prompt:$p, transcript_path:$tp}')"
+  run bash -c "printf '%s' '$stdin_json' | '$EIDOLONS_ROOT/cli/eidolons' run --hook codex --stdin"
+  [ "$status" -eq 0 ]
+  if [[ -n "$output" ]]; then
+    ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+    [[ "$ctx" == *"Context: zone="* ]] || return 1
+  fi
+}
+
+# ─── AC-CDX-5: codex SessionStart carries the "## Context policy" pins block ─
+
+@test "AC-CDX-5: codex session-start carries the Context policy pins-and-handoff block" {
+  seed_manifest_ecm_on
+  seed_cortex_min
+  run bash "$EIDOLONS_ROOT/cli/eidolons" run --hook codex --session-start
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  ctx="$(jq -r '.hookSpecificOutput.additionalContext' <<< "$output")"
+  [[ "$ctx" == *"Pins (must survive"* ]]
+}
+
+# ─── AC-FO-2: zone=unknown resolves to policy=continue for ANY host ────────
+# (policy has no host parameter at all — this is a HOST-AGNOSTIC guarantee,
+# proven once here explicitly; AC-7 above already exercises the same code
+# path incidentally).
+
+@test "AC-FO-2: unknown zone resolves to continue regardless of which host asks" {
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter.json <<'EOF'
+{"ecm_version":"0.1","zone":"unknown","compaction_count":0,"tool_result_share_est":0,"budget":{"ceiling_tokens":null,"spent_tokens_est":0}}
+EOF
+  run eidolons context policy --json
+  [ "$status" -eq 0 ]
+  op="$(jq -r '.operation' <<< "$output")"
+  [ "$op" = "continue" ]
+}
+
+# ─── AC-LK-3: schema validates both a P1 lock and a P2-augmented lock ──────
+
+@test "AC-LK-3: eidolons.lock.schema.json validates a P1 lock and a P2 lock" {
+  run jq empty "$EIDOLONS_ROOT/schemas/eidolons.lock.schema.json"
+  [ "$status" -eq 0 ]
+
+  # P1 lock fixture (context: present, no per_host / codex_autocompact_managed).
+  seed_lock_with_context
+  p1_keys="$(yaml_to_json_local eidolons.lock | jq -r '.context | keys[]' | sort)"
+  schema_keys="$(jq -r '.properties.context.properties | keys[]' "$EIDOLONS_ROOT/schemas/eidolons.lock.schema.json" | sort)"
+  for k in $p1_keys; do
+    printf '%s\n' "$schema_keys" | grep -qx "$k" || { echo "P1 lock: undeclared key $k"; return 1; }
+  done
+
+  # P2 lock fixture (adds per_host + codex_autocompact_managed via a live install).
+  seed_manifest_ecm_on
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code, codex]
+context:
+  enabled: true
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex
+  [ "$status" -eq 0 ]
+  p2_keys="$(yaml_to_json_local eidolons.lock | jq -r '.context | keys[]' | sort)"
+  for k in $p2_keys; do
+    printf '%s\n' "$schema_keys" | grep -qx "$k" || { echo "P2 lock: undeclared key $k"; return 1; }
+  done
+  lock_json="$(yaml_to_json_local eidolons.lock)"
+  run jq -e '.context.per_host.codex.tier == "T3"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+  run jq -e '.context.codex_autocompact_managed | type == "boolean"' <<< "$lock_json"
+  [ "$status" -eq 0 ]
+}
+
+# ─── Drift-fence guard: a claude-code-only install is unaffected by P2 ─────
+# (spec.md drift fence: "a harness install --hosts claude-code run must
+# produce BYTE-IDENTICAL output before and after your change"). This asserts
+# the STRUCTURAL half of that guarantee — no P2 host artifact leaks into a
+# claude-code-only project — while AC-5's existing idempotency test above
+# (harness_install_idempotent, unmodified by this change) proves the P1
+# claude-code shape itself did not shift.
+
+@test "AC-DRIFT-1: claude-code-only ECM install writes no codex/opencode/copilot/cursor artifacts" {
+  seed_manifest_ecm_on
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+
+  [ ! -d ".codex" ]
+  [ ! -d ".opencode" ]
+  [ ! -f ".github/copilot-instructions.md" ]
+  [ ! -d ".cursor" ]
+
+  # .claude/settings.json keeps exactly its P1 hooks shape (no stray keys).
+  run jq -r '.hooks | keys | sort | join(",")' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "PostToolUse,SessionStart,UserPromptSubmit" ]
+
+  # per_host in the lock has ONLY claude-code — no phantom hosts.
+  run jq -r '.context.per_host | keys | join(",")' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+  [ "$output" = "claude-code" ]
+}

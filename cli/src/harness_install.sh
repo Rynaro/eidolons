@@ -530,6 +530,70 @@ _write_compact_threshold() {
   fi
 }
 
+# _write_codex_autocompact_config CONFIG_TOML — [A-CODEX-CFG] ECM P2 Track A
+# piece 4: append 'model_auto_compact_token_limit' to .codex/config.toml with
+# don't-clobber semantics (AC-CDX-6/AC-CDX-7), mirroring _write_compact_threshold's
+# design one function up. TOML has no jq-equivalent tooling in this repo, so this
+# is a grep-guarded line append, not a structured merge — bash 3.2 safe.
+# [A-CODEX-CFG]: the codex config file path / key spelling / units are UNVERIFIED
+# (mirrors [ASSUMPTION A1] at :908) — flagged loudly so a live-verify pass can
+# correct the key without hunting for it. Fail-open (AC-FO-3): an unwritable or
+# missing-parent config file warns and returns "false" (no abort, no exit != 0).
+# Echoes "true" (we wrote/own it) or "false" (left untouched — foreign value,
+# or the write itself could not be performed) on stdout.
+_write_codex_autocompact_config() {
+  local config_file="$1"
+  local target_value=150000  # tokens; UNVERIFIED units/default — [A-CODEX-CFG]
+
+  warn "[A-CODEX-CFG] .codex/config.toml 'model_auto_compact_token_limit' key spelling/units are unverified — treat as advisory until confirmed (see 'eidolons doctor')."
+
+  if [[ ! -f "$config_file" ]]; then
+    if ! { printf 'model_auto_compact_token_limit = %s\n' "$target_value" > "$config_file"; } 2>/dev/null; then
+      warn "could not write $config_file — skipping codex auto-compact config (fail-open, AC-FO-3)"
+      echo "false"
+      return 0
+    fi
+    ok "Wrote $config_file with model_auto_compact_token_limit = $target_value"
+    echo "true"
+    return 0
+  fi
+
+  if [[ ! -w "$config_file" ]]; then
+    warn "$config_file is not writable — skipping codex auto-compact config (fail-open, AC-FO-3)"
+    echo "false"
+    return 0
+  fi
+
+  if grep -q '^model_auto_compact_token_limit' "$config_file" 2>/dev/null; then
+    # Distinguish "already exactly our value" (idempotent no-op, still
+    # managed=true) from "some OTHER value" (foreign, don't-clobber,
+    # managed=false) — mirrors _write_compact_threshold's existing/target
+    # comparison one function up. Without this split, a second install run
+    # would wrongly flip managed:true -> managed:false on its OWN prior write.
+    local _existing_value
+    _existing_value="$(grep '^model_auto_compact_token_limit' "$config_file" 2>/dev/null \
+      | head -1 \
+      | sed -E 's/^model_auto_compact_token_limit[[:space:]]*=[[:space:]]*//' \
+      | sed -E 's/[[:space:]]+$//')"
+    if [[ "$_existing_value" == "$target_value" ]]; then
+      info "$config_file already has model_auto_compact_token_limit = $target_value (no-op, managed=true)"
+      echo "true"
+    else
+      warn "$config_file already sets model_auto_compact_token_limit=$_existing_value (!= $target_value) — leaving untouched (don't-clobber, AC-CDX-7); recording managed=false"
+      echo "false"
+    fi
+    return 0
+  fi
+
+  if ! { printf 'model_auto_compact_token_limit = %s\n' "$target_value" >> "$config_file"; } 2>/dev/null; then
+    warn "could not append to $config_file — skipping codex auto-compact config (fail-open, AC-FO-3)"
+    echo "false"
+    return 0
+  fi
+  ok "Appended model_auto_compact_token_limit = $target_value to $config_file (managed=true, AC-CDX-6)"
+  echo "true"
+}
+
 # _heal_session_start_matcher SETTINGS_JSON SHIM_CMD
 # Seamless self-heal: if SETTINGS_JSON has OUR SessionStart entry (command ==
 # SHIM_CMD), force its matcher to the canonical $_SS_MATCHER (upsert: heal-in-place
@@ -673,6 +737,19 @@ if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | gre
   _shim_paths="${_shim_paths:+${_shim_paths},}${_ecm_ptu_path}"
 fi
 
+# ── ECM P2 Track A: PostToolUse meter-refresh shim for codex (AC-CDX-1) ────
+# Added ALONGSIDE the literal-claude-code gate above (untouched) — codex gets
+# its OWN independent gate so a claude-code-only install stays byte-identical
+# (drift fence: this block is a no-op unless codex is actually wired).
+# _write_posttooluse_meter_shim's body is already HOST-parameterized (scout
+# seam 2) — no new writer, just a second call site.
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
+  _write_posttooluse_meter_shim "codex"
+  info "  wrote codex-PostToolUse.sh (ECM: meter refresh, inject on zone change only)"
+  _ecm_ptu_path_codex="$HARNESS_SHIM_DIR/codex-PostToolUse.sh"
+  _shim_paths="${_shim_paths:+${_shim_paths},}${_ecm_ptu_path_codex}"
+fi
+
 # ── Strict tier: PreToolUse shims + advisory plugin (R18/R19/R20) ────────
 # Only written when --strict is set. Sound strict hosts: claude-code (block),
 # codex (protected-globs only). Advisory: opencode. Refused: cursor.
@@ -734,6 +811,30 @@ if [[ "$STRICT" == "true" ]]; then
         ;;
     esac
   done
+fi
+
+# ── ECM P2 Track B: opencode plugin (system-prompt meter + compaction) ───
+# Opt-in: 'context:' on AND opencode wired. Broadens the plugin's copy
+# trigger BEYOND --strict (today's copy above is --strict-gated only) — the
+# SAME template file now also carries the ECM chat.system.transform +
+# session.compacting hooks, so a project that wires opencode with ECM on but
+# without --strict still gets them. Idempotent: cmp-guarded, write-on-change
+# only (avoids a redundant overwrite when --strict already copied it above).
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",opencode,"; then
+  _oc_plugin_dir=".opencode/plugins"
+  _oc_plugin_file="${_oc_plugin_dir}/eidolons.js"
+  _oc_plugin_tmpl="${SELF_DIR}/../templates/harness/opencode-eidolons.js"
+  mkdir -p "$_oc_plugin_dir"
+  if [ -f "$_oc_plugin_tmpl" ]; then
+    if [[ ! -f "$_oc_plugin_file" ]] || ! cmp -s "$_oc_plugin_tmpl" "$_oc_plugin_file" 2>/dev/null; then
+      cp "$_oc_plugin_tmpl" "$_oc_plugin_file"
+      ok "  wrote ${_oc_plugin_file} (ECM: system-prompt meter + compaction externalize)"
+    else
+      info "  ${_oc_plugin_file} already up-to-date (no-op)"
+    fi
+  else
+    warn "  opencode-eidolons.js template not found at ${_oc_plugin_tmpl} — skipping plugin write"
+  fi
 fi
 
 # ── Wire claude-code settings.json ────────────────────────────────────────
@@ -899,7 +1000,70 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",copilot,"; then
   fi
 fi
 
+# ── ECM P2 Track C: copilot static floor (.github/copilot-instructions.md) ──
+# Opt-in: 'context:' on AND copilot wired. Copilot's ONLY confirmed channel is
+# start-only and static (re-read each request, not per-prompt/per-tool) — this
+# block makes NO live-meter / per-prompt-refresh claim (AC-CP-3, honesty
+# posture). Marker-bounded via upsert_marker_block (never hand-rolled awk);
+# fully static content -> byte-identical on every re-run (AC-CP-4).
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",copilot,"; then
+  _cp_pins_file="$(context_pins_file 2>/dev/null || true)"
+  _cp_pins_csv=""
+  if [[ -n "$_cp_pins_file" && -f "$_cp_pins_file" ]]; then
+    _cp_pins_csv="$(yaml_to_json "$_cp_pins_file" 2>/dev/null | jq -r '(.pins // []) | map(.id) | join(", ")' 2>/dev/null || echo "")"
+  fi
+  [[ -z "$_cp_pins_csv" ]] && _cp_pins_csv="(pin set unavailable)"
+  _cp_body="## Context policy (ECM — static floor, start-of-session only)
+
+This project runs Eidolons Context Management (ECM). Copilot's channel is
+start-only and static — this block refreshes ONLY when 'eidolons harness
+install' runs (upstream copilot-cli issues #1139/#2142 block a per-request
+channel). Treat the values below as an install-time snapshot.
+
+Pins: ${_cp_pins_csv}
+Prior session handoff: recorded via 'eidolons context handoff' at session end (not available here — refresh via 'eidolons harness install')."
+  upsert_marker_block ".github/copilot-instructions.md" "ecm-context" "$_cp_body"
+  ok "Wrote ECM static floor into .github/copilot-instructions.md (copilot: start-only, no live refresh)"
+fi
+
+# ── ECM P2 Track D: cursor static documentary floor ──────────────────────
+# Opt-in: 'context:' on AND cursor wired. Cursor exposes NO confirmed runtime
+# hook/injection channel at all (scout §2a/§6) — a dedicated file (NOT the
+# sync-owned .cursor/rules/eidolons-cortex.mdc) keeps removal a clean rm -f
+# and states the static-only limitation EXPLICITLY (AC-CR-2/AC-CR-3).
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",cursor,"; then
+  _cr_pins_file="$(context_pins_file 2>/dev/null || true)"
+  _cr_pins_csv=""
+  if [[ -n "$_cr_pins_file" && -f "$_cr_pins_file" ]]; then
+    _cr_pins_csv="$(yaml_to_json "$_cr_pins_file" 2>/dev/null | jq -r '(.pins // []) | map(.id) | join(", ")' 2>/dev/null || echo "")"
+  fi
+  [[ -z "$_cr_pins_csv" ]] && _cr_pins_csv="(pin set unavailable)"
+  _cr_mdc_file=".cursor/rules/eidolons-context.mdc"
+  mkdir -p ".cursor/rules"
+  if [[ ! -f "$_cr_mdc_file" ]]; then
+    {
+      printf -- '---\n'
+      printf 'description: Eidolons context policy — static floor, refreshed at install time only.\n'
+      printf 'alwaysApply: true\n'
+      printf -- '---\n'
+      printf '\n'
+    } > "$_cr_mdc_file"
+  fi
+  _cr_body="## Context policy (ECM — static documentary floor)
+
+This project runs Eidolons Context Management (ECM). Cursor has no
+confirmed runtime hook channel today — this file is a STATIC floor,
+refreshed only when 'eidolons harness install' runs. There is no live
+meter here, no turn-by-turn update, and no tool-triggered update for
+Cursor.
+
+Pins: ${_cr_pins_csv}"
+  upsert_marker_block "$_cr_mdc_file" "ecm-context" "$_cr_body"
+  ok "Wrote ECM static floor into .cursor/rules/eidolons-context.mdc (cursor: static-only, no live injection)"
+fi
+
 # ── Wire codex hooks.json ──────────────────────────────────────────────────
+_ecm_codex_autocompact_managed=false
 if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
   mkdir -p .codex
   CODEX_HOOKS=".codex/hooks.json"
@@ -924,6 +1088,15 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
       '{"hooks": {"UserPromptSubmit": [{"command": $ups}], "SessionStart": [{"command": $ss}]}}')"
   fi
 
+  # ECM P2 Track A (AC-CDX-2): fold the codex PostToolUse meter shim into the
+  # SAME wholesale jq build — an additive merge step, not a second write path
+  # (scout: "codex PostToolUse folds into the existing wholesale build at
+  # :915-925, not a second write"). Opt-in on 'context:' (AC-15).
+  if [[ "$_ecm_enabled" == "true" ]]; then
+    _codex_ecm_ptu_cmd="$HARNESS_SHIM_DIR/codex-PostToolUse.sh"
+    _codex_json="$(printf '%s' "$_codex_json" | jq --arg ptu "$_codex_ecm_ptu_cmd" '.hooks.PostToolUse = [{"command": $ptu}]')"
+  fi
+
   if [[ ! -f "$CODEX_HOOKS" ]]; then
     printf '%s\n' "$_codex_json" > "$CODEX_HOOKS"
     ok "Wrote .codex/hooks.json"
@@ -936,6 +1109,12 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",codex,"; then
     else
       info ".codex/hooks.json already up-to-date (no-op)"
     fi
+  fi
+
+  # ECM P2 Track A piece 4 (AC-CDX-6/AC-CDX-7/AC-FO-3): don't-clobber write of
+  # model_auto_compact_token_limit into .codex/config.toml. [A-CODEX-CFG].
+  if [[ "$_ecm_enabled" == "true" ]]; then
+    _ecm_codex_autocompact_managed="$(_write_codex_autocompact_config ".codex/config.toml")"
   fi
 fi
 
@@ -1022,20 +1201,31 @@ if [[ "$_ecm_enabled" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
   _ecm_version="$(yaml_to_json "$(context_policy_file)" 2>/dev/null | jq -r '.ecm_version // "0.1"' 2>/dev/null || echo "0.1")"
 
   # Effective host tier: the highest tier among wired hosts (spec §5 ladder).
+  # ECM P2 Track G (AC-LK-1): the SAME loop also builds per_host: — each
+  # wired host's own {tier, channel, ecm_features[]}, additive to the
+  # existing max-tier host_tier field (AC-LK-1 retains it verbatim).
   _effective_ecm_tier="T0"
+  _per_host_yaml=""
   for _eh in $(printf '%s' "$_hosts_wired_sorted" | tr ',' ' '); do
     [[ -z "$_eh" ]] && continue
     case "$_eh" in
-      claude-code|codex) _et="T3" ;;
-      copilot|cursor)    _et="T2" ;;
-      opencode)          _et="T1" ;;
-      *)                 _et="T0" ;;
+      claude-code) _et="T3"; _ech="full";          _efeat='["session_start","user_prompt_submit","post_tool_use","compact_threshold"]' ;;
+      codex)       _et="T3"; _ech="full";          _efeat='["session_start","user_prompt_submit","post_tool_use","auto_compact_config"]' ;;
+      copilot)     _et="T2"; _ech="static";        _efeat='["session_start_static"]' ;;
+      cursor)      _et="T2"; _ech="static";        _efeat='["static_floor"]' ;;
+      opencode)    _et="T1"; _ech="system_prompt"; _efeat='["chat_system_transform","session_compacting"]' ;;
+      *)           _et="T0"; _ech="none";          _efeat='[]' ;;
     esac
     case "$_et" in
       T3) _effective_ecm_tier="T3" ;;
       T2) [[ "$_effective_ecm_tier" != "T3" ]] && _effective_ecm_tier="T2" ;;
       T1) [[ "$_effective_ecm_tier" == "T0" ]] && _effective_ecm_tier="T1" ;;
     esac
+    _per_host_yaml="${_per_host_yaml}    ${_eh}:
+      tier: \"${_et}\"
+      channel: \"${_ech}\"
+      ecm_features: ${_efeat}
+"
   done
 
   # Resolved thresholds: eidolons.yaml context.thresholds overrides the
@@ -1051,8 +1241,8 @@ if [[ "$_ecm_enabled" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
   _red="$(printf '%s' "$_zones_effective_json" | jq -r '.red // 0.75')"
   _critical="$(printf '%s' "$_zones_effective_json" | jq -r '.critical // 0.90')"
 
-  _new_context_block="$(printf 'context:\n  schema_version: 1\n  ecm_version: "%s"\n  host_tier: "%s"\n  thresholds:\n    amber: %s\n    red: %s\n    critical: %s\n  compactthreshold_managed: %s' \
-    "$_ecm_version" "$_effective_ecm_tier" "$_amber" "$_red" "$_critical" "$_ecm_compactthreshold_managed")"
+  _new_context_block="$(printf 'context:\n  schema_version: 1\n  ecm_version: "%s"\n  host_tier: "%s"\n  thresholds:\n    amber: %s\n    red: %s\n    critical: %s\n  compactthreshold_managed: %s\n  codex_autocompact_managed: %s\n  per_host:\n%s' \
+    "$_ecm_version" "$_effective_ecm_tier" "$_amber" "$_red" "$_critical" "$_ecm_compactthreshold_managed" "$_ecm_codex_autocompact_managed" "$_per_host_yaml")"
 
   _lock_no_context="$(awk '
     /^context:/ { skip=1; next }
