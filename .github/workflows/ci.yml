@@ -184,6 +184,16 @@ jobs:
       - name: Run bats suite (parallel across files, serial within files)
         run: bats --jobs 4 --no-parallelize-within-files cli/tests/
 
+      - name: ECM P1 context-handoff canary (smoke-gated; SKIPs when crystalium is not gated in)
+        run: |
+          # eidolons canary --context-handoff (AC-4/AC-9) self-SKIPs (exit 0)
+          # whenever crystalium is not declared in .mcp.json + eidolons.mcp.lock
+          # — a bare CI checkout has neither committed, so this is a free
+          # plumbing canary here (mirrors canary --memory / live-eval.yml's
+          # smoke-gated pattern); it only exercises the real round trip when
+          # a live crystalium container is wired in.
+          bash cli/eidolons canary --context-handoff
+
   upgrade-self-roundtrip:
     name: upgrade self — round-trip (install → upgrade self --check)
     runs-on: ${{ matrix.os }}

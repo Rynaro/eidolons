@@ -17,10 +17,22 @@
 
 set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Capture whether the CALLER explicitly set ECM_MEMORY_TIMEOUT_S before
+# lib_context.sh forces its own 1.5s hook-path default (":=" below never
+# fires once a value is set) — bash 3.2: "${VAR+x}" set-check, not "-v".
+if [ -z "${ECM_MEMORY_TIMEOUT_S+x}" ]; then
+  _CANARY_TIMEOUT_CALLER_SET=false
+else
+  _CANARY_TIMEOUT_CALLER_SET=true
+fi
+
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_memory_probe.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_context.sh"
 
 # ─── Usage ────────────────────────────────────────────────────────────────────
 usage() {
@@ -33,6 +45,7 @@ Usage:
   eidolons canary <name> --validate <file>     Validate saved LLM output
   eidolons canary --list                       List Eidolons with/without missions
   eidolons canary --memory                     Crystalium memory liveness probe
+  eidolons canary --context-handoff            ECM P1 session-handoff round-trip probe
   eidolons canary --host <h>                   Harness lock⇄reality PASS/FAIL/SKIP for host h
   eidolons canary --all-hosts                  Same, iterated over all known hosts
 
@@ -44,6 +57,12 @@ Options:
                         forget (SKIP when crystalium is not gated in .mcp.json
                         + eidolons.mcp.lock; liveness-only fallback when the
                         installed crystalium predates 1.7's `commit` verb)
+  --context-handoff    ECM P1 (AC-4/AC-9): compose a session_handoff brief via
+                        'eidolons context handoff', crystalium_ingest it, then
+                        recall it back via 'eidolons memory preflight' — once
+                        plain, once flagged contains_tool_origin=true (the D5
+                        quarantine-vs-recall regression). SKIP when crystalium
+                        is not gated in.
   --host <h>           Harness canary for one host (claude-code, codex, copilot,
                         cursor, opencode) — see 'What --host/--all-hosts check' below
   --all-hosts          Harness canary for every known host
@@ -52,8 +71,10 @@ Options:
 
 Exit codes:
   0   Prompt printed / validation PASS (or INCONCLUSIVE only) / list printed /
-      --memory SKIP or PASS or INCONCLUSIVE / --host,--all-hosts all PASS or SKIP
-  1   Validation had ≥1 FAIL criterion / --memory FAIL / --host,--all-hosts any FAIL
+      --memory SKIP or PASS or INCONCLUSIVE / --context-handoff SKIP or PASS /
+      --host,--all-hosts all PASS or SKIP
+  1   Validation had ≥1 FAIL criterion / --memory FAIL / --context-handoff FAIL /
+      --host,--all-hosts any FAIL
   2   Misuse: unknown name, missing file, unknown flag, unknown host
 
 What it does:
@@ -106,6 +127,7 @@ NAME=""
 VALIDATE_FILE=""
 LIST_MODE=false
 MEMORY_MODE=false
+CONTEXT_HANDOFF_MODE=false
 HOST_NAME=""
 ALL_HOSTS_MODE=false
 MISSION_ID=""
@@ -119,6 +141,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --memory)
       MEMORY_MODE=true
+      shift
+      ;;
+    --context-handoff)
+      CONTEXT_HANDOFF_MODE=true
       shift
       ;;
     --host)
@@ -795,6 +821,133 @@ _memory_mode_cleanup() {
   return 0
 }
 
+# ─── MODE: context-handoff (ECM P1, AC-4/AC-9) ────────────────────────────────
+#
+# Reuses the '--memory' round-trip machinery (capability-probe + docker-
+# transform via lib_memory_probe.sh): write a session_handoff brief in
+# "session N" via 'eidolons context handoff' (crystalium_ingest canonical
+# persist path, context_handoff.sh), recall it back in "session N+1" via
+# 'eidolons memory preflight' (the SAME reuse the SessionStart harness recipe
+# uses, FINDING-015) — matched by a unique per-run token embedded in the
+# brief's task-state.
+#
+# Runs the check TWICE: once plain (AC-4), once with --contains-tool-origin
+# set (AC-9 — the D5 quarantine-vs-recall regression: a flagged brief MUST
+# still surface on default recall; if quarantine excludes it, the round-trip
+# breaks whenever a session touched tool output — nearly always). A failure
+# here means the remedy is a SCOPED recall flag for session_handoff records,
+# NOT a reversal to a commit-based persist path (D5 reversal-condition).
+#
+#   crystalium not gated in / docker absent -> SKIP (exit 0)
+#   both round trips found                  -> PASS (exit 0)
+#   either round trip not found             -> FAIL (exit 1)
+run_context_handoff_mode() {
+  local project_root; project_root="$(pwd)"
+
+  # A cold `docker run` container boot alone can exceed the 1.5s hook-path
+  # default (lib_context.sh, CC2 fail-open by design — NOT changed here);
+  # bump to a canary-appropriate 60s for these two legs' ingest/recall
+  # one-shots, but only when the caller hasn't explicitly set the env var.
+  if [ "$_CANARY_TIMEOUT_CALLER_SET" = "false" ]; then
+    ECM_MEMORY_TIMEOUT_S=60
+    export ECM_MEMORY_TIMEOUT_S
+  fi
+
+  printf '═══════════════════════════════════════════════════════════════\n'
+  printf 'canary --context-handoff — ECM P1 session-handoff round-trip probe\n'
+  printf '═══════════════════════════════════════════════════════════════\n'
+  printf '\n'
+  printf 'What this checks:\n'
+  printf '  - AC-4: a session_handoff brief composed + crystalium_ingest-ed in\n'
+  printf '    "session N" is recalled via eidolons memory preflight in "session\n'
+  printf '    N+1", matched by a unique per-run token.\n'
+  printf '  - AC-9 (D5 regression): a brief flagged contains_tool_origin=true\n'
+  printf '    MUST still surface on default recall (quarantine-vs-recall).\n'
+  printf '\n'
+
+  if ! memory_probe_gated_in "$project_root"; then
+    printf 'SKIP — crystalium not gated in (.mcp.json + eidolons.mcp.lock)\n'
+    exit 0
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    printf 'SKIP — docker not on PATH\n'
+    exit 0
+  fi
+
+  local overall=true
+
+  if _canary_context_handoff_round_trip "$project_root" false "AC-4 (plain round-trip)"; then
+    printf 'PASS — AC-4 plain round-trip: brief recalled by token\n'
+  else
+    printf 'FAIL — AC-4 plain round-trip: brief NOT recalled by token\n'
+    overall=false
+  fi
+
+  if _canary_context_handoff_round_trip "$project_root" true "AC-9 (contains_tool_origin regression)"; then
+    printf 'PASS — AC-9 tool-origin brief recalled (quarantine did not exclude it)\n'
+  else
+    printf 'FAIL — AC-9 REGRESSION: contains_tool_origin=true brief NOT recalled —\n'
+    printf '  quarantine is excluding session_handoff records from default recall.\n'
+    printf '  Remedy: a scoped recall flag for session_handoff, NOT a switch to\n'
+    printf '  a commit-based persist path (D5 reversal-condition).\n'
+    overall=false
+  fi
+
+  if [[ "$overall" == "true" ]]; then
+    printf '\nPASS — context-handoff round-trip verified (AC-4 + AC-9)\n'
+    exit 0
+  fi
+  printf '\nFAIL — context-handoff round-trip broken (see above)\n'
+  exit 1
+}
+
+# _canary_context_handoff_round_trip PROJECT_ROOT TOOL_ORIGIN(true|false) LABEL
+# Composes a session_handoff brief (via context_handoff.sh, uniquely tokened),
+# then recalls it via memory.sh preflight with a query built from the token.
+# Returns 0 iff the token is found in the recalled digest.
+_canary_context_handoff_round_trip() {
+  local project_root="$1" tool_origin="$2" label="$3"
+  local epoch token
+  epoch="$(date +%s 2>/dev/null || echo 0)"
+  token="ecmcanary${epoch}$$"
+
+  printf '\n[%s] token=%s\n' "$label" "$token"
+
+  local handoff_out handoff_exit=0
+  if [[ "$tool_origin" == "true" ]]; then
+    handoff_out="$(cd "$project_root" && bash "$SELF_DIR/context_handoff.sh" \
+      --task-state "eidolons canary --context-handoff probe: ${token}" \
+      --contains-tool-origin --json 2>/dev/null)" || handoff_exit=$?
+  else
+    handoff_out="$(cd "$project_root" && bash "$SELF_DIR/context_handoff.sh" \
+      --task-state "eidolons canary --context-handoff probe: ${token}" \
+      --json 2>/dev/null)" || handoff_exit=$?
+  fi
+
+  if [[ "$handoff_exit" -ne 0 ]] || [[ -z "$handoff_out" ]]; then
+    warn "canary --context-handoff [$label]: 'context handoff' produced no output (exit $handoff_exit)"
+    return 1
+  fi
+
+  local ingest_ok
+  ingest_ok="$(printf '%s' "$handoff_out" | jq -r '.ingest_ok // false' 2>/dev/null || echo false)"
+  if [[ "$ingest_ok" != "true" ]]; then
+    warn "canary --context-handoff [$label]: crystalium_ingest did not succeed — cannot verify recall"
+    return 1
+  fi
+
+  # "session N+1": recall via the SAME memory.sh preflight path the
+  # SessionStart harness recipe uses (FINDING-015), queried by the token.
+  local digest
+  digest="$(cd "$project_root" && bash "$SELF_DIR/memory.sh" preflight \
+    --query "session_handoff ${token}" --no-cache 2>/dev/null || true)"
+
+  if [[ "$digest" == *"$token"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
 # ─── MODE: host / all-hosts ───────────────────────────────────────────────────
 #
 # Compares the EFFECTIVE on-disk harness state against eidolons.lock's
@@ -1307,6 +1460,10 @@ fi
 
 if [[ "$MEMORY_MODE" == "true" ]]; then
   run_memory_mode
+fi
+
+if [[ "$CONTEXT_HANDOFF_MODE" == "true" ]]; then
+  run_context_handoff_mode
 fi
 
 if [[ "$ALL_HOSTS_MODE" == "true" ]]; then

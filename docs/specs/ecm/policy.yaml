@@ -1,0 +1,81 @@
+# ECM v0.1 — machine-readable context policy.
+# Companion to spec.md §3–§4. This file is the draft of what ships as
+# roster/context-policy.yaml at P1: the kernel (`eidolons context policy`)
+# evaluates it deterministically — table-driven, non-LLM, bash 3.2 + jq.
+# First matching rule wins. Signals come from .eidolons/.context/meter.json.
+ecm_version: "0.1"
+
+zones:
+  # utilization bands; estimate tolerance ±10% cannot mis-zone by more than one band
+  amber: 0.50      # survey F1: degradation onset (Wang et al. 2601.15300; EMNLP'25)
+  red: 0.75        # mechanical compact trigger (Claude Code aggressive range 60–75%)
+  critical: 0.90   # handoff-fresh floor; never wait for host 95% emergency compact
+
+limits:
+  compaction_depth_cap: 2          # survey Gap G4 posture: no summary-of-summary beyond 2
+  tool_result_share_prune: 0.40    # amber-zone prune trigger
+  prompt_path_ms: 300              # kernel budget per hook firing (DOSSIER-HARNESS rule)
+  memory_timeout_ms: 1500          # crystalium calls: timeout -> skip, never block
+  handoff_brief_target_tokens: 1500  # D4: ADVISORY composition target — composer never truncates
+  handoff_digest_max_tokens: 200     # D4: hard bound on the SessionStart-injected digest only
+  injected_artifact_max_tokens: 200  # cache-discipline C-4 (per-prompt volatile tail)
+
+rules:
+  - id: P1
+    when: { budget_ceiling_set: true, budget_spent_gte_ceiling: true }
+    operation: wrap_up             # externalize -> handoff brief -> graceful stop
+  - id: P2
+    when: { zone: critical }
+    operation: handoff_fresh       # emergency externalize first (minimal manifest allowed)
+  - id: P3
+    when: { zone: red, compaction_count_lt: 2 }
+    operation: compact             # externalize -> host compact -> pin re-inject
+  - id: P4
+    when: { zone: red, compaction_count_gte: 2 }
+    operation: handoff_fresh       # depth cap reached
+  - id: P5
+    when: { zone: amber, tool_result_share_gte: 0.40 }
+    operation: prune_tool_results  # host-supported clearing + externalize
+  - id: P6
+    when: { zone: amber }
+    operation: externalize         # checkpoint while cheap, then continue
+  - id: P7
+    when: { zone: [green, unknown] }
+    operation: continue            # fail-open: unknown telemetry never escalates
+
+operations:
+  continue: {}
+  externalize:
+    steps: [plan_checkpoint, commit_identifier_manifest, ingest_envelope_if_present]
+    crystalium_absent: file_floor_warn   # .eidolons/.context/externalized-<ts>.json
+  prune_tool_results:
+    steps: [externalize, host_clear_tool_results]
+  compact:
+    steps: [externalize, host_compact, pin_reinject, pin_verify_repair]
+  handoff_fresh:
+    steps: [externalize, compose_handoff_brief, ecl_envelope, crystalium_ingest_session_handoff, crystalium_session_end]
+  wrap_up:
+    steps: [externalize, compose_handoff_brief, ecl_envelope, crystalium_ingest_session_handoff, crystalium_session_end, emit_wrap_up_notice]
+
+pins:
+  # Default pin set — consumer projects may append (pins_extra), never shrink.
+  # Pins never include T3-origin content (Gap G3 posture).
+  - cortex_routing_digest
+  - active_eidolon_refusal_table
+  - esl_enforcement_mode
+  - crystalium_trust_tier_map
+  - active_plan_step_and_criteria_sha256
+  - session_budget_and_compaction_count
+
+audit:
+  policy_log: ".eidolons/.context/policy-log.jsonl"   # signal snapshot + rule fired + operation
+  meter: ".eidolons/.context/meter.json"
+  handoff_glob: ".eidolons/.context/handoff-*.md"
+  budget_ledger: ".eidolons/.context/budget-ledger.jsonl"  # D3: shared append-only; ceiling evaluated orchestrator-only
+
+subagents:
+  # D3: each subagent session gets its OWN meter; all sessions append to the
+  # shared budget ledger; handoff_fresh/wrap_up remap to finish_and_return.
+  meter: own
+  budget: shared_ledger
+  operation_remap: { handoff_fresh: finish_and_return, wrap_up: finish_and_return }

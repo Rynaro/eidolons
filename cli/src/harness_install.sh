@@ -18,6 +18,8 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_context.sh"
 
 HARNESS_SHIM_DIR=".eidolons/harness/hooks"
 
@@ -86,6 +88,18 @@ while [[ $# -gt 0 ]]; do
 done
 
 manifest_exists || die "No eidolons.yaml found. Run 'eidolons init' first."
+
+# ── ECM P1 opt-in gate (AC-15) ─────────────────────────────────────────────
+# Absent 'context:' block in eidolons.yaml => ECM stays off (opt-in, additive,
+# same class as the pre-existing 'hosts:' block). Read unconditionally here
+# (independent of the --hosts branch below, which may skip MANIFEST_JSON).
+MANIFEST_JSON_FOR_ECM="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null || echo '{}')"
+_ecm_block="$(printf '%s' "$MANIFEST_JSON_FOR_ECM" | jq -c '.context // empty' 2>/dev/null || echo "")"
+_ecm_enabled=false
+if [[ -n "$_ecm_block" && "$_ecm_block" != "null" ]]; then
+  _ecm_enabled_raw="$(printf '%s' "$_ecm_block" | jq -r 'if has("enabled") then (.enabled | tostring) else "true" end' 2>/dev/null || echo true)"
+  [[ "$_ecm_enabled_raw" == "true" ]] && _ecm_enabled=true
+fi
 
 # ── Resolve hosts to wire ──────────────────────────────────────────────────
 if [[ -n "$HOSTS_ARG" ]]; then
@@ -398,6 +412,124 @@ _register_stop_in_settings() {
   fi
 }
 
+# ── ECM P1 (context-lifecycle kernel) recipes ─────────────────────────────
+
+# _write_posttooluse_meter_shim HOST
+# Writes the zero-decision ECM meter-refresh shim for HOST (claude-code only
+# at P1). Mirrors the Stop shim's zero-logic pattern: cat stdin -> exec
+# 'run --hook <host> --post-tool-use'. Injection (only on a zone transition)
+# is decided inside harness_hook.sh, not this shim.
+_write_posttooluse_meter_shim() {
+  local host="$1"
+  local shim_path="$HARNESS_SHIM_DIR/${host}-PostToolUse.sh"
+
+  cat > "$shim_path" <<'SHIM'
+#!/usr/bin/env bash
+# Eidolons ECM shim — POSTTOOLUSE_HOST PostToolUse (meter refresh only)
+# FAIL-OPEN: any error -> exit 0. Injects additionalContext ONLY on a zone
+# transition (evidence C6) — most firings are silent, cheap sidecar refreshes.
+set -euo pipefail
+
+_eidolons_bin() {
+  if command -v eidolons >/dev/null 2>&1; then
+    echo "eidolons"
+  elif [[ -x "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons" ]]; then
+    echo "${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+  else
+    return 1
+  fi
+}
+
+_bin="$(_eidolons_bin 2>/dev/null)" || exit 0
+_input="$(cat 2>/dev/null)" || exit 0
+[[ -n "$_input" ]] || exit 0
+"$_bin" run --hook POSTTOOLUSE_HOST --post-tool-use <<< "$_input" 2>/dev/null || exit 0
+SHIM
+  sed -i '' "s/POSTTOOLUSE_HOST/${host}/g" "$shim_path" 2>/dev/null \
+    || sed -i "s/POSTTOOLUSE_HOST/${host}/g" "$shim_path"
+  chmod +x "$shim_path"
+}
+
+# _register_posttooluse_in_settings SHIM_CMD SETTINGS_JSON
+# Idempotent surgical-append of an UNMATCHED (all-tools) PostToolUse hook
+# entry — mirrors _register_stop_in_settings's shape exactly.
+_register_posttooluse_in_settings() {
+  local ptu_cmd="$1"
+  local settings_file="$2"
+
+  if [[ ! -f "$settings_file" ]]; then
+    jq -n \
+      --arg ptu "$ptu_cmd" \
+      '{"hooks": {
+          "PostToolUse": [{"hooks": [{"type": "command", "command": $ptu}]}]
+       }}' > "$settings_file"
+    ok "Wrote $settings_file with PostToolUse hook (ECM meter refresh)"
+    return
+  fi
+  if ! jq empty "$settings_file" 2>/dev/null; then
+    warn "$settings_file is not valid JSON — skipping PostToolUse hook merge"
+    return
+  fi
+  local _existing_canonical _merged _merged_canonical
+  _existing_canonical="$(jq -cS . "$settings_file" 2>/dev/null || echo "")"
+  _merged="$(jq \
+    --arg ptu "$ptu_cmd" \
+    '
+    .hooks.PostToolUse = (
+      (.hooks.PostToolUse // []) as $arr |
+      if ($arr | map(.hooks[]?.command? // "") | any(. == $ptu)) then $arr
+      else $arr + [{"hooks": [{"type": "command", "command": $ptu}]}]
+      end
+    )
+    ' "$settings_file")"
+  _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
+  if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
+    printf '%s\n' "$_merged" > "$settings_file"
+    ok "Merged PostToolUse hook entry into $settings_file (ECM meter refresh)"
+  else
+    info "$settings_file already has PostToolUse hook entry (no-op)"
+  fi
+}
+
+# _write_compact_threshold SETTINGS_JSON — D6: write compactThreshold: 75 (the
+# RED boundary) with don't-clobber semantics (AC-10/AC-11). [GAP-D6-key]: the
+# exact settings.json key spelling/location is evidence C5 PARTIAL (env var
+# CLAUDE_AUTOCOMPACT_PCT_OVERRIDE confirmed; the settings-key form is inferred
+# from spec.md's literal "writes compactThreshold: 75" verdict text) — a P1
+# live-verify precondition; the don't-clobber design is spelling-invariant.
+# Echoes "true" (managed) or "false" (left untouched, foreign value) on stdout.
+_write_compact_threshold() {
+  local settings_file="$1"
+  local target=75
+
+  if [[ ! -f "$settings_file" ]]; then
+    jq -n --argjson v "$target" '{compactThreshold: $v}' > "$settings_file"
+    ok "Wrote $settings_file with compactThreshold: $target"
+    echo "true"
+    return
+  fi
+  if ! jq empty "$settings_file" 2>/dev/null; then
+    warn "$settings_file is not valid JSON — skipping compactThreshold write"
+    echo "false"
+    return
+  fi
+  local _existing
+  _existing="$(jq -r 'if has("compactThreshold") then (.compactThreshold | tostring) else "absent" end' "$settings_file" 2>/dev/null || echo absent)"
+  if [[ "$_existing" == "absent" ]]; then
+    local _merged
+    _merged="$(jq --argjson v "$target" '. + {compactThreshold: $v}' "$settings_file")"
+    printf '%s\n' "$_merged" > "$settings_file"
+    ok "Wrote compactThreshold: $target into $settings_file (managed=true, AC-11)"
+    echo "true"
+  elif [[ "$_existing" == "$target" ]]; then
+    info "$settings_file already has compactThreshold: $target (no-op, managed=true)"
+    echo "true"
+  else
+    warn "$settings_file already sets compactThreshold=$_existing (!= $target) — leaving untouched (don't-clobber, D6/AC-10); recording managed=false"
+    echo "false"
+  fi
+}
+
 # _heal_session_start_matcher SETTINGS_JSON SHIM_CMD
 # Seamless self-heal: if SETTINGS_JSON has OUR SessionStart entry (command ==
 # SHIM_CMD), force its matcher to the canonical $_SS_MATCHER (upsert: heal-in-place
@@ -443,6 +575,8 @@ if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
   _lock_hosts="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
     | jq -r '(.harness.hosts_wired // []) | join(",")' 2>/dev/null || echo "")"
   [[ -n "$_lock_hosts" ]] || exit 0
+  _lock_has_context="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+    | jq -r 'has("context")' 2>/dev/null || echo "false")"
 
   mkdir -p "$HARNESS_SHIM_DIR"
   for _host in $(printf '%s' "$_lock_hosts" | tr ',' ' '); do
@@ -460,6 +594,12 @@ if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
     # in .claude/settings.json (claude-code only). Opt out with --no-heal.
     if [[ "$_host" == "claude-code" ]] && [[ "$NO_HEAL" != "true" ]]; then
       _heal_session_start_matcher ".claude/settings.json" "$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
+    fi
+    # ECM P1: re-render the meter-refresh shim only when the lock already
+    # claims 'context:' — no lock/settings changes here (content-only refresh).
+    if [[ "$_host" == "claude-code" ]] && [[ "$_lock_has_context" == "true" ]]; then
+      _write_posttooluse_meter_shim "claude-code"
+      info "  refreshed PostToolUse shim for claude-code (ECM)"
     fi
   done
   ok "Harness shims refreshed"
@@ -523,6 +663,15 @@ for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
     _hosts_wired_sorted="$_hosts_wired_sorted,$_host"
   fi
 done
+
+# ── ECM P1: PostToolUse meter-refresh shim (claude-code only at P1) ───────
+# Opt-in: only when eidolons.yaml declares a 'context:' block (AC-15).
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
+  _write_posttooluse_meter_shim "claude-code"
+  info "  wrote claude-code-PostToolUse.sh (ECM: meter refresh, inject on zone change only)"
+  _ecm_ptu_path="$HARNESS_SHIM_DIR/claude-code-PostToolUse.sh"
+  _shim_paths="${_shim_paths:+${_shim_paths},}${_ecm_ptu_path}"
+fi
 
 # ── Strict tier: PreToolUse shims + advisory plugin (R18/R19/R20) ────────
 # Only written when --strict is set. Sound strict hosts: claude-code (block),
@@ -701,6 +850,19 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   fi
 fi
 
+# ── ECM P1: PostToolUse registration + compactThreshold (D6/AC-10/AC-11) ──
+# Opt-in: only when eidolons.yaml declares a 'context:' block (AC-15). Runs
+# AFTER the base claude-code hooks wiring above so .claude/settings.json
+# already exists (or is created fresh here if claude-code was wired without
+# any other hook needing to touch the file — defensive, mirrors telemetry's
+# own independent gate below).
+_ecm_compactthreshold_managed=false
+if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
+  mkdir -p .claude
+  _register_posttooluse_in_settings "$HARNESS_SHIM_DIR/claude-code-PostToolUse.sh" ".claude/settings.json"
+  _ecm_compactthreshold_managed="$(_write_compact_threshold ".claude/settings.json")"
+fi
+
 # ── Wire telemetry Stop shim (--with-telemetry opt-in) ───────────────────
 # Only written when --with-telemetry is explicitly passed. Does NOT alter
 # the existing UPS/SessionStart/PreToolUse behavior when flag is absent.
@@ -850,6 +1012,70 @@ EOF
   fi
 else
   warn "eidolons.lock not found — harness: key not written. Run 'eidolons sync' first."
+fi
+
+# ── Update eidolons.lock context: key (ECM P1, GAP-003) ───────────────────
+# Opt-in: only when eidolons.yaml declares a 'context:' block (AC-15). Same
+# awk-strip-and-regenerate idiom as harness: above (FINDING-019/020), keyed
+# on /^context:/. Idempotent: second run byte-identical (AC-5).
+if [[ "$_ecm_enabled" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
+  _ecm_version="$(yaml_to_json "$(context_policy_file)" 2>/dev/null | jq -r '.ecm_version // "0.1"' 2>/dev/null || echo "0.1")"
+
+  # Effective host tier: the highest tier among wired hosts (spec §5 ladder).
+  _effective_ecm_tier="T0"
+  for _eh in $(printf '%s' "$_hosts_wired_sorted" | tr ',' ' '); do
+    [[ -z "$_eh" ]] && continue
+    case "$_eh" in
+      claude-code|codex) _et="T3" ;;
+      copilot|cursor)    _et="T2" ;;
+      opencode)          _et="T1" ;;
+      *)                 _et="T0" ;;
+    esac
+    case "$_et" in
+      T3) _effective_ecm_tier="T3" ;;
+      T2) [[ "$_effective_ecm_tier" != "T3" ]] && _effective_ecm_tier="T2" ;;
+      T1) [[ "$_effective_ecm_tier" == "T0" ]] && _effective_ecm_tier="T1" ;;
+    esac
+  done
+
+  # Resolved thresholds: eidolons.yaml context.thresholds overrides the
+  # nexus-shipped roster/context-policy.yaml zones defaults (spec §7:
+  # "override down, not up past host limits" — down-only is advisory here,
+  # not mechanically enforced at P1).
+  _zones_default_json="$(yaml_to_json "$(context_policy_file)" 2>/dev/null \
+    | jq -c '.zones // {amber:0.50,red:0.75,critical:0.90}' 2>/dev/null \
+    || echo '{"amber":0.50,"red":0.75,"critical":0.90}')"
+  _zones_override_json="$(printf '%s' "$MANIFEST_JSON_FOR_ECM" | jq -c '.context.thresholds // {}' 2>/dev/null || echo '{}')"
+  _zones_effective_json="$(jq -n --argjson d "$_zones_default_json" --argjson o "$_zones_override_json" '$d * $o' 2>/dev/null || echo "$_zones_default_json")"
+  _amber="$(printf '%s' "$_zones_effective_json" | jq -r '.amber // 0.50')"
+  _red="$(printf '%s' "$_zones_effective_json" | jq -r '.red // 0.75')"
+  _critical="$(printf '%s' "$_zones_effective_json" | jq -r '.critical // 0.90')"
+
+  _new_context_block="$(printf 'context:\n  schema_version: 1\n  ecm_version: "%s"\n  host_tier: "%s"\n  thresholds:\n    amber: %s\n    red: %s\n    critical: %s\n  compactthreshold_managed: %s' \
+    "$_ecm_version" "$_effective_ecm_tier" "$_amber" "$_red" "$_critical" "$_ecm_compactthreshold_managed")"
+
+  _lock_no_context="$(awk '
+    /^context:/ { skip=1; next }
+    skip && /^[^[:space:]]/ { skip=0 }
+    !skip { print }
+  ' "$PROJECT_LOCK" | sed -e 's/[[:space:]]*$//' | awk 'NR==1{p=$0; next} /^$/{if(p!="") print p; p=""; next} {if(p!="") print p; p=$0} END{if(p!="") print p}')"
+
+  _existing_context_block="$(awk '
+    /^context:/ { skip=1; print; next }
+    skip && /^[^[:space:]]/ { skip=0 }
+    skip { print }
+  ' "$PROJECT_LOCK")"
+
+  if [[ "$_existing_context_block" = "$_new_context_block" ]]; then
+    info "eidolons.lock context: block unchanged (no-op)"
+  else
+    {
+      printf '%s\n' "$_lock_no_context"
+      printf '%s\n' "$_new_context_block"
+    } > "${PROJECT_LOCK}.context.tmp"
+    mv "${PROJECT_LOCK}.context.tmp" "$PROJECT_LOCK"
+    ok "Updated eidolons.lock with context: key (ECM P1)"
+  fi
 fi
 
 ok "Harness installed for hosts: $_hosts_wired_sorted"

@@ -69,6 +69,31 @@
       "enum": ["thinking", "standard"],
       "description": "Declarative host capability tier. 'thinking' enables loop-native coders (e.g. Vivi) as the default for their class; 'standard' (or absent) falls back to the conservative coder (APIVR-Δ). NOT auto-detected; set explicitly by the project owner."
     },
+    "context": {
+      "type": "object",
+      "description": "ECM P1 context-lifecycle kernel configuration (spec §7). Optional; absent means ECM is off (opt-in, additive — same class as the existing 'hosts' block).",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "thresholds": {
+          "type": "object",
+          "description": "Override amber/red/critical zone boundaries down, not up past host limits.",
+          "additionalProperties": false,
+          "properties": {
+            "amber": { "type": "number", "minimum": 0, "maximum": 1 },
+            "red": { "type": "number", "minimum": 0, "maximum": 1 },
+            "critical": { "type": "number", "minimum": 0, "maximum": 1 }
+          }
+        },
+        "compaction_depth_cap": { "type": "integer", "minimum": 0 },
+        "budget_tokens": { "type": ["integer", "null"] },
+        "pins_extra": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Project pins appended to the nexus defaults (roster/pins.yaml). Never shrinks the default set."
+        }
+      }
+    },
     "composition": {
       "type": "object",
       "description": "Documentation of intended pipeline. Not enforced by the CLI.",

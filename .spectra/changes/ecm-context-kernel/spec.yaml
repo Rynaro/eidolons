@@ -1,0 +1,201 @@
+# ECM P1 — machine-readable implementation spec (RAMZA specify hop)
+# change: ecm-context-kernel | esl_status: deliberated | tier: full
+eidolon: RAMZA
+kind: spec
+version: 0.1.0
+created_at: 2026-07-07T00:00:00Z
+change_id: ecm-context-kernel
+esl_status: deliberated
+tier: full
+maker: vivi
+checker: kupo
+
+criteria_sha256: 6e0b9b102c3164281052b937c5fa58c09886f138162e4dd65fa7bf035c306015
+criteria_file: acceptance-criteria.md
+
+produced_via:
+  mode: ramza-parallel-spec
+  trance_gate: G3
+  candidates: 4
+  winner: verb-family-parallel
+  winner_score: 83
+  scores: { verb-family-parallel: 83, canary-first: 69, dependency-serial: 69, capability-sliced: 63 }
+  bias_mitigations: [identity-strip, order-rotate, length-normalize, deterministic-anchor]
+  iterations: 1
+  terminated_on: confidence>=85
+  evaluator_confidence: 87.75
+
+tracks:
+  - id: T-A
+    title: Dispatch scaffold + shared lib
+    files: [cli/eidolons, cli/src/context.sh, cli/src/lib_context.sh]
+    depends_on: []
+    parallel: false
+    sequence: phase-1-blocking
+  - id: T-G1
+    title: Config promotion (policy + pins + schemas)
+    files: [roster/context-policy.yaml, roster/pins.yaml, schemas/eidolons.lock.schema.json, schemas/eidolons.yaml.schema.json]
+    depends_on: []
+    parallel: true
+    sequence: phase-1
+  - id: T-B
+    title: context status — meter writer (D1 3-rung ladder)
+    files: [cli/src/context_status.sh]
+    depends_on: [T-A]
+    parallel: true
+    sequence: phase-2
+  - id: T-C
+    title: context policy — evaluator (run.sh jq-heredoc shape)
+    files: [cli/src/context_policy.sh]
+    depends_on: [T-A, T-G1]
+    parallel: true
+    sequence: phase-2
+  - id: T-D
+    title: context externalize — crystalium contract + file floor (D5)
+    files: [cli/src/context_externalize.sh]
+    depends_on: [T-A]
+    parallel: true
+    sequence: phase-2
+  - id: T-E
+    title: context handoff — composer (D4 advisory target + digest)
+    files: [cli/src/context_handoff.sh]
+    depends_on: [T-A]
+    parallel: true
+    sequence: phase-2
+  - id: T-F
+    title: Harness recipes + lock recording (D6 compactThreshold)
+    files: [cli/src/harness_install.sh, cli/src/harness_hook.sh, cli/src/run.sh]
+    depends_on: [T-B, T-C, T-D, T-E]
+    parallel: false
+    sequence: phase-3-shared-files
+  - id: T-H
+    title: Tests + canary (D5 quarantine-vs-recall regression)
+    files: [cli/tests/context.bats, cli/src/canary.sh, .github/workflows/ci.yml]
+    depends_on: [T-A, T-B, T-C, T-D, T-E, T-F]
+    parallel: false
+    sequence: phase-4-start-early-finalize-last
+
+files_allowed:
+  - cli/eidolons
+  - cli/src/context.sh
+  - cli/src/context_status.sh
+  - cli/src/context_policy.sh
+  - cli/src/context_externalize.sh
+  - cli/src/context_handoff.sh
+  - cli/src/lib_context.sh
+  - cli/src/harness_install.sh
+  - cli/src/harness_hook.sh
+  - cli/src/run.sh
+  - cli/src/canary.sh
+  - roster/context-policy.yaml
+  - roster/pins.yaml
+  - schemas/eidolons.lock.schema.json
+  - schemas/eidolons.yaml.schema.json
+  - cli/tests/context.bats
+  - .github/workflows/ci.yml
+  - CHANGELOG.md
+
+files_forbidden:
+  - cli/tests/helpers.bash          # use a LOCAL seed helper (FINDING-031)
+  - docs/specs/ecm/spec.md          # §9 settled; D2/D4 edits are a separate docs change
+  - EIDOLONS.md                     # cortex prose is P-out
+  - .gitignore                      # no change needed (FINDING-027)
+  - cli/src/memory.sh               # read as precedent, never edited
+  - cli/src/mcp.sh                  # read as precedent, never edited
+
+acceptance_checks:
+  - id: AC-1
+    track: T-B
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#status_writes_meter_and_zone"
+    statement: "eidolons context status writes .eidolons/.context/meter.json with a zone field, exit 0, bash 3.2"
+  - id: AC-2
+    track: T-C
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#policy_is_deterministic"
+    statement: "eidolons context policy --json is deterministic: same meter.json in, same operation out (P1-P7)"
+  - id: AC-3
+    track: T-D
+    form: unwanted-behavior
+    verify_method: "bats: cli/tests/context.bats#externalize_file_floor_when_crystalium_absent"
+    statement: "externalize writes file-floor manifest when crystalium absent; never blocks (timeout path covered)"
+  - id: AC-4
+    track: T-H
+    form: event-driven
+    verify_method: "canary: eidolons canary --context-handoff round-trip"
+    statement: "handoff brief written in session N is recalled by envelope SHA-256 in session N+1 pre-flight"
+  - id: AC-5
+    track: T-F
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#harness_install_idempotent"
+    statement: "harness install writes SessionStart(compact)+UserPromptSubmit ECM recipes idempotently; second run byte-identical"
+  - id: AC-6
+    track: T-B
+    form: state-driven
+    verify_method: "bats: cli/tests/context.bats#meter_prefers_host_telemetry"
+    statement: "D1 rung-1: host telemetry (Claude Code used_percentage) => estimate_source=host, no bytes/4"
+  - id: AC-7
+    track: T-B
+    form: unwanted-behavior
+    verify_method: "bats: cli/tests/context.bats#meter_fail_open_unknown"
+    statement: "D1 rung-3: no telemetry and no transcript => zone unknown => policy continue (fail-open floor)"
+  - id: AC-8
+    track: T-E
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#brief_advisory_target_never_truncates"
+    statement: "D4: brief over 1500-token advisory target is logged, never truncated"
+  - id: AC-9
+    track: T-H
+    form: unwanted-behavior
+    verify_method: "canary: eidolons canary --context-handoff tool-origin"
+    statement: "D5 REGRESSION: a contains_tool_origin=true brief still surfaces on default recall (quarantine-vs-recall)"
+  - id: AC-10
+    track: T-F
+    form: unwanted-behavior
+    verify_method: "bats: cli/tests/context.bats#compactthreshold_dont_clobber"
+    statement: "D6: existing compactThreshold != 75 is preserved, recorded managed=false"
+  - id: AC-11
+    track: T-F
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#compactthreshold_written_when_absent"
+    statement: "D6: absent compactThreshold => write 75, record managed=true in lock context block"
+  - id: AC-12
+    track: T-F
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#ups_inject_within_200_tokens"
+    statement: "C-4: UserPromptSubmit injected artifact <= 200 tokens"
+  - id: AC-13
+    track: T-C
+    form: state-driven
+    verify_method: "bats: cli/tests/context.bats#subagent_remaps_handoff_fresh"
+    statement: "D3: subagent session remaps handoff_fresh verdict to finish_and_return"
+  - id: AC-14
+    track: T-D
+    form: state-driven
+    verify_method: "bats: cli/tests/context.bats#budget_ledger_is_append_only"
+    statement: "D3: budget-ledger is append-only JSONL, never rewritten in place (fan-out-5 safe)"
+  - id: AC-15
+    track: T-G1
+    form: optional-feature
+    verify_method: "bats: cli/tests/context.bats#ecm_opt_in_absent_block"
+    statement: "opt-in: eidolons.yaml with no context block => ECM off, no schema error"
+  - id: AC-16
+    track: T-E
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#handoff_ingest_is_canonical"
+    statement: "D5: crystalium_ingest of the ECL envelope is canonical persist path, no commit fallback branch"
+  - id: AC-17
+    track: T-G1
+    form: event-driven
+    verify_method: "bats: cli/tests/context.bats#lock_schema_covers_context"
+    statement: "GAP-003: eidolons.lock context block passes make schema validation"
+
+gaps:
+  - id: GAP-D6-key
+    text: "exact compactThreshold settings-key spelling/semantics (evidence C5 PARTIAL) — P1 live-verify precondition"
+  - id: GAP-D5-ingest
+    text: "one-shot out-of-MCP crystalium_ingest buildability (D5 ASSUMPTION); file floor bounds downside"
+  - id: GAP-D3-subagent
+    text: "subagent hook-firing/token-visibility per host (D3) — P1 probe; fail-open floor bounds it"
+
+disputed: []

@@ -19,6 +19,24 @@
         "pointer_targets": { "type": "array", "items": { "type": "string" } }
       }
     },
+    "context": {
+      "type": "object",
+      "description": "ECM P1 context-lifecycle kernel state, written by 'eidolons harness install' (GAP-003 resolved). Optional; absent means ECM is off for this project.",
+      "properties": {
+        "schema_version": { "type": "integer" },
+        "ecm_version": { "type": "string" },
+        "host_tier": { "type": "string" },
+        "thresholds": {
+          "type": "object",
+          "properties": {
+            "amber": { "type": "number" },
+            "red": { "type": "number" },
+            "critical": { "type": "number" }
+          }
+        },
+        "compactthreshold_managed": { "type": "boolean" }
+      }
+    },
     "members": {
       "type": "array",
       "items": {

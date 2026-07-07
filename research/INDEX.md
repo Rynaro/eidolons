@@ -13,6 +13,7 @@ Every design decision in every Eidolon traces back to something in this library.
 | [`references.bib`](references.bib) | BibTeX file — every paper we cite, properly formatted |
 | [`production-patterns.md`](production-patterns.md) | Non-paper evidence — documented patterns from Claude Code, Cursor, Aider, DocAgent, SWE-Agent, etc. |
 | [`papers/`](papers/) | One Markdown summary per paper — what it says, what we took from it, which Eidolon uses it |
+| [`context-lifecycle-survey-2026-07.md`](context-lifecycle-survey-2026-07.md) | Tri-cycle survey ingest (session caching, KV compression, compaction, session lifecycle, autonomous policies) — the evidence base for ECM (`docs/specs/ecm/spec.md`) |
 
 ---
 
@@ -74,6 +75,11 @@ Applied to: **IDG** (four markers), **ATLAS** (`[FINDING-NNN]`), all Eidolons vi
 
 Research: SWE-Agent tool design + DocAgent citation enforcement.
 Applied to: **ATLAS** (`path:line`), **IDG** (source artifact refs), **SPECTRA** (pattern + rejected alternatives).
+
+### Context lifecycle (rot, compaction, caching, handoff)
+
+Research: [`context-lifecycle-survey-2026-07.md`](context-lifecycle-survey-2026-07.md) — context rot thresholds (arXiv:2601.15300, EMNLP'25), lossy-compression instruction loss (ACL 2026 pitfalls), prefix-cache economics (LMCache, provider caching APIs), server-side compaction convergence, Mem0-class harness-injected memory.
+Applied to: **ECM** (`docs/specs/ecm/spec.md`) — zone ladder, pin set, externalize-before-compact, handoff brief, mechanical decision table. Touches **all Eidolons** via the harness kernel; CRYSTALIUM via the `session_handoff` convention.
 
 ---
 

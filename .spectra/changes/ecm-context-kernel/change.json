@@ -1,0 +1,96 @@
+{
+  "esl_version": "1.1",
+  "change_id": "ecm-context-kernel",
+  "status": "verified",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "kupo",
+  "has_code": true,
+  "memory_preflight": {
+    "ran": true,
+    "records": 0
+  },
+  "right_size": {
+    "signals": {
+      "files_touched": 15,
+      "rubric_score": 9,
+      "tradeoff_present": true
+    },
+    "route": "0->1->2->3->4",
+    "deterministic": true,
+    "classified_by": "tonberry@0.5.0 dry_run (container write blocked by SELinux; manifest scribed host-side)"
+  },
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "verify_method": "bats: cli/tests/context.bats#status_writes_meter_and_zone"
+    },
+    {
+      "id": "AC-2",
+      "verify_method": "bats: cli/tests/context.bats#policy_is_deterministic"
+    },
+    {
+      "id": "AC-3",
+      "verify_method": "bats: cli/tests/context.bats#externalize_file_floor_when_crystalium_absent"
+    },
+    {
+      "id": "AC-4",
+      "verify_method": "canary: eidolons canary --context-handoff round-trip"
+    },
+    {
+      "id": "AC-5",
+      "verify_method": "bats: cli/tests/context.bats#harness_install_idempotent"
+    },
+    {
+      "id": "AC-6",
+      "verify_method": "bats: cli/tests/context.bats#meter_prefers_host_telemetry"
+    },
+    {
+      "id": "AC-7",
+      "verify_method": "bats: cli/tests/context.bats#meter_fail_open_unknown"
+    },
+    {
+      "id": "AC-8",
+      "verify_method": "bats: cli/tests/context.bats#brief_advisory_target_never_truncates"
+    },
+    {
+      "id": "AC-9",
+      "verify_method": "canary: eidolons canary --context-handoff tool-origin"
+    },
+    {
+      "id": "AC-10",
+      "verify_method": "bats: cli/tests/context.bats#compactthreshold_dont_clobber"
+    },
+    {
+      "id": "AC-11",
+      "verify_method": "bats: cli/tests/context.bats#compactthreshold_written_when_absent"
+    },
+    {
+      "id": "AC-12",
+      "verify_method": "bats: cli/tests/context.bats#ups_inject_within_200_tokens"
+    },
+    {
+      "id": "AC-13",
+      "verify_method": "bats: cli/tests/context.bats#subagent_remaps_handoff_fresh"
+    },
+    {
+      "id": "AC-14",
+      "verify_method": "bats: cli/tests/context.bats#budget_ledger_is_append_only"
+    },
+    {
+      "id": "AC-15",
+      "verify_method": "bats: cli/tests/context.bats#ecm_opt_in_absent_block"
+    },
+    {
+      "id": "AC-16",
+      "verify_method": "bats: cli/tests/context.bats#handoff_ingest_is_canonical"
+    },
+    {
+      "id": "AC-17",
+      "verify_method": "bats: cli/tests/context.bats#lock_schema_covers_context"
+    }
+  ],
+  "spec_ref": "docs/specs/ecm/spec.md",
+  "created_at": "2026-07-06T00:00:00Z",
+  "drift_checked": true
+}
