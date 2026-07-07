@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-07-07 — ECM P1: the context economy ships
+
 ### Changed
 
 - **crystalium pinned to v1.8.0** (`roster/mcps.yaml` `latest` + `pins.stable` + release digest). 1.8.0 ships the one-shot `ingest` CLI verb — the third verb of the out-of-session pairing (recall 1.4.0 → commit 1.7.0 → ingest 1.8.0), MCP-parity via the shared `_handle_ingest` core — unblocking the ECM session-handoff canary end-to-end (`eidolons canary --context-handoff`, AC-4 + AC-9). ESL change `ecm-context-kernel` reached `archived` (verified + drift-clean, zero mismatches) and moved to `.spectra/changes/archive/2026-07-07-ecm-context-kernel/`.
