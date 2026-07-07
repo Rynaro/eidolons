@@ -1,0 +1,17 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "kupo"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(verify): change \"roster-atomos-mcp\" PASS — maker(vivi)!=checker(kupo); atomos entry strictly schema-clean (0 errors), 5 MCPs, make schema + skew OK, digest attested, template :z-fenced.",
+  "context_delta": {
+    "maker": "vivi",
+    "checker": "kupo",
+    "verdict": "pass",
+    "evidence": "yq 5 MCPs incl atomos; eidolons mcp list atomos@0.1.0; jsonschema mcps[4] 0 errors; make schema pass; check_roster_mcp_skew OK; digest=release-manifest manifest_sha256 (attested); template jq-valid + :/workspace:z + --cap-drop ALL"
+  }
+}

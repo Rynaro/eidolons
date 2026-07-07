@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **atomos rostered as the 5th MCP** (`roster/mcps.yaml` + new `cli/templates/mcp/atomos.mcp.json.tmpl`). atomos v0.1.0 (`ghcr.io/rynaro/atomos@sha256:ff2449e92cae030e8cb25796c2b9e06ad4814e59ac6db8fc19beffc5606d8a73`, multi-arch INDEX, github-attested; commit `5c10193`) is the **ECM compose/verify executor MCP** — the tonberry-analog for the context lifecycle. It exposes the closed 3-tool set `mcp__atomos__{compose_handoff,verify_envelope,verify_pins}` at **byte-parity with the `eidolons context` kernel** (an alternate surface, never the sole path; T1 brief + T2 envelope byte-exact, CI drift-guarded against the kernel oracle). Rostered `wiring_mode: transport` (orchestrator/host-facing, like junction — the kernel verbs remain what Eidolons use). The template mirrors tonberry's workspace-mounting executor shape (`:/workspace:z` SELinux default, `--cap-drop ALL`, `--security-opt no-new-privileges` — matching atomos's capability-starvation fence); `eidolons mcp install atomos` wires it via the generic oci-image driver. Build spec + repo: [`Rynaro/atomos`](https://github.com/Rynaro/atomos); GO decision: `docs/specs/ecm/decisions/atomos-go-no-go.md`.
+
 ## [2.2.0] — 2026-07-07 — ECM P1: the context economy ships
 
 ### Changed
