@@ -18,15 +18,24 @@
 <img src="https://img.shields.io/badge/integrity-strict-success" alt="Integrity: strict">
 </p>
 
+<p align="center">
+<a href="#try-it-in-60-seconds">Try it</a> ·
+<a href="#meet-the-team">Meet the team</a> ·
+<a href="#see-it-route">See it route</a> ·
+<a href="#does-it-actually-work">Proof</a> ·
+<a href="#install">Install</a> ·
+<a href="#when-eidolons-is-the-wrong-tool">When not to use it</a>
+</p>
+
 ---
 
-Most AI coding tools ship a **single generalist** that plans, scouts, builds, and documents all at once — and hits a ceiling fast. Eidolons is a different shape: **nine independently-versioned specialists across seven roles**, one CLI, dropped into any project. You get sharp boundaries instead of one confused generalist — the right specialist for each phase, over a shared memory that carries context between them.
+Most AI coding tools hand you one generalist: a single assistant that scouts, plans, builds, debugs, and documents — all at once, in one context window. It works, until the task gets big. Then the plan bleeds into the code, the code bleeds into the docs, and the assistant forgets why any of it happened.
 
-And the routing is **mechanical, not hopeful.** Most multi-agent setups are a paragraph in `CLAUDE.md` the model is free to ignore — so it does, until you name an agent yourself. Eidolons installs real per-host hooks: at session start a deterministic, non-LLM kernel computes the routing decision and injects it — plus recalled memory — into context, **on its own, every time.** The team travels across Claude Code, Codex, GitHub Copilot, Cursor, and OpenCode, and degrades gracefully to documentary routing wherever a host's hooks aren't sound.
+Eidolons is a different shape. It's a **team**: nine named specialists across seven roles — scout, planner, coder, scriber, reasoner, debugger, executor — over a shared memory, each with sharp boundaries, installed into any project by one CLI.
 
-The v2.0 line adds a deliberate design bet: **push the difficulty into the system so cheaper models win more often.** Routing carries a per-step model tier into every prompt; weak-host behavior is declared roster *data* (fanout shapes, conservative fallbacks, escalation contracts), not prose; the sandbox runs a run-cheap → verify → **escalate-on-verifier-failure** tier cascade with a default-on anti-tamper ratchet (a candidate that edits an existing test is rejected, mechanically); and every handoff envelope now carries a typed trust grade — `validated` is only emittable behind a real external verifier, and the implementer of a change is never its checker. The bet has its first measured number: on the initial cohort, **a light-tier model inside the system matched a standard-tier model bare — 12/12 vs 12/12 at pass³** — the tier drop was free. Details, and the caveats that keep that sentence honest, below.
+And you don't have to remember to summon the right one. **The routing is mechanical, not hopeful.** On every prompt, a deterministic kernel — no LLM, no mood — reads what you asked and dispatches the right specialist, at the right model tier, into Claude Code, Codex, GitHub Copilot, Cursor, or OpenCode. That claim is measured, not asserted; the numbers (and their honest caveats) are [below](#does-it-actually-work).
 
-The v2.1 line carries the bet into planning itself: **RAMZA** — a planner whose gates are *mechanized* (rubric arithmetic, EARS lint, SHA-256 criteria freeze, plan-vs-diff drift, maker≠checker), not a prose checklist the model may skip — takes the default planner seat from SPECTRA. It earned the seat through a pre-registered A/B measured **non-inferior to its prose predecessor at ~half the ceremony** (question 4 below); SPECTRA is retained as the conservative opt-in fallback.
+*(And yes — they're named after Final Fantasy summons. You call; they arrive already knowing the job.)*
 
 ## Try it in 60 seconds
 
@@ -40,79 +49,48 @@ eidolons init --preset minimal --non-interactive
 
 Explore, then `rm -rf /tmp/eidolons-demo` and walk away. Full flow in [Install](#install).
 
-## Does it actually work?
-
-Four questions, each measured — no hand-waving. The first three pit the system against a **bare host** running the same model (or a stronger one); the fourth is the pre-registered A/B that promoted RAMZA to the default planner seat.
-
-**1. Does wiring in the team change what the host actually does?** `eidolons eval compliance` runs one prompt suite through a headless host twice — once with the harness wired, once with only the prose cortex (≈ a bare host) — and scores how it routes. July 2026 measurement, with the per-prompt injection mechanism **certified live in-stream** (`--driver claude-headless-ups` records hook events; a $0 dead-endpoint probe independently confirmed the injection fires):
-
-| Routing &nbsp;<sub>(Claude Code · sonnet · k=2 · 56 sessions)</sub> | Prose only | With Eidolons |
-|---|:---:|:---:|
-| Ever delegates to a specialist | **0%** | **41.7%** |
-| Delegates to the *correct* specialist | 0% | **41.7%** |
-| False delegation on control prompts | 0% | 0% |
-
-The bare arm **never delegated once** across 24 routed sessions: whatever routing a prose file suggests, the model ignores it until an Eidolon is named by hand — the entire effect is the mechanical injection. Two honest caveats, recorded in the committed scorecard ([`evals/results/`](evals/results/)): 41.7% is a *floor* (120-second session timeout and a 3-turn cap — sessions killed mid-flight score as failures), and it **fails** the 80% gate that decides advisory-vs-blocking — which is precisely the evidence the v2.1 escalation (advisory → blocking default) will be argued from. The June SessionStart-only measurement this supersedes is kept for the record: [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).
-
-**2. Does the specialist shape beat one generalist pass?** On an adversarial-hard coding suite (budget-matched, k=2) — measured in [Vivi's own repo](https://github.com/Rynaro/Vivi) — **Vivi's** parallel-candidate shape lands every fix where a single pass lands two-thirds:
-
-| Hard-task fix quality &nbsp;<sub>(pass², resolved on both runs)</sub> | Single pass | Vivi (fanout) |
-|---|:---:|:---:|
-| Adversarial-hard suite | 0.67 | **1.00** |
-
-Zero reward-hacks in 63 holdout-gated runs. And **Kupo**, the executor the team delegates micro-tasks to, earned its roster seat on a behavioral additive-proof — **36/36 tasks, pass³ 1.00**.
-
-**Don't trust our numbers — reproduce the floor yourself.** The behavioral evals above are billed and model-dependent, but the *routing decision* underneath them is a deterministic, non-LLM kernel — so we ship it as a benchmark anyone can run cold, with **no API key, no billing, and ~0 tokens**:
-
-```bash
-eidolons eval routing --suite public      # 15 labelled tasks across 12 routing categories
-```
-
-It grades the kernel's output against Eidolons-authored ground truth ([`evals/routing-suite.yaml`](evals/routing-suite.yaml)); because the kernel is deterministic, `pass^k == pass^1` and you'll get the exact same result we do. (`--validate-suite` self-tests the suite; `--json` for machine output.) This is the reproducible floor the billed evals build on — verify it, then weigh the rest.
-
-**3. Does the system make cheaper models win?** v2.0's headline question — and it now has its first measured answer. The comparison is pinned as data in [`evals/arms/h-win.json`](evals/arms/h-win.json) and deliberately cross-tier: a light-tier model wrapped in the system's discipline vs a **stronger** standard-tier model with a bare prompt.
-
-| H-WIN &nbsp;<sub>(12 real fix-the-bug tasks · k=3 · sandboxed, verifier-gated)</sub> | resolved | pass³ |
-|---|:---:|:---:|
-| **haiku** + system discipline (`keep-system.sh`) | 12/12 | **1.00** |
-| **sonnet** + bare prompt (`keep-bare.sh`, control) | 12/12 | **1.00** |
-
-An exact tie, at roughly **⅓ the per-token price** for the system arm: on this cohort the tier drop was free — that is **non-inferiority**, demonstrated. What this cohort *cannot* show is superiority: both arms saturated it (ceiling effect), so "cheaper models win *more*" remains open until a harder cohort exists. Every scorecard, the pairwise flip table, and the full methodology disclosure — including the **four instrument bugs we caught adversarially before accepting any number** (a fake-green verifier path among them) — are committed in [`evals/results/`](evals/results/); `eidolons eval baseline` tracks regressions from here (exit 5 on any). Hook prompts are versioned artifacts; smoke scorecards are plumbing-validation only and marked as such in the data.
-
-**4. Does mechanizing the planner's gates cost quality?** No — and it roughly halves the ceremony. When **RAMZA** took the default planner seat from SPECTRA, the flip was gated on a **pre-registered** A/B (protocol and holdout frozen at a commit *before* any run): 6 planner tasks (2 held out), k=2, the same Sonnet executor on both arms and blind to the rubrics, graded mechanically. Data pinned in [`.spectra/research/ramza-stage2/ramza-planner-ab.json`](.spectra/research/ramza-stage2/ramza-planner-ab.json):
-
-| Planner A/B &nbsp;<sub>(pass² · 6 tasks incl. 2 holdout · sonnet · mechanical grading)</sub> | tasks pass² | mean words / spec |
-|---|:---:|:---:|
-| **RAMZA** (mechanized gates) | **6/6** | **5,059** |
-| SPECTRA (prose methodology, control) | 6/6 | 9,897 |
-
-Both arms cleared every task on both runs with **0 MUST failures across all 24 runs** — RAMZA is **non-inferior** (holdout consistent) at **~51% of SPECTRA's verbosity**, and every RAMZA spec ships a machine-verifiable gate audit trail (right-size → rubric scores → EARS lint → SHA-256 criteria freeze → verify-emit) where SPECTRA self-reports its cycle. The honest caveat, recorded in the [adjudication](.spectra/research/ramza-stage2/AC-003-ADJUDICATION.md): both arms *saturated* the suite (ceiling), so this is non-inferiority, not superiority — "mechanized planning wins *more*" needs a harder cohort. One holdout run's own maker≠checker critic caught and closed a real criteria-desync (an audit-enumeration gap) at cycle-2, with an independent cycle-3 PASS — the methodology catching its flagship failure class live, before the plan was called done.
-
-These are early, small-N signals, framed honestly in the research digests and [`CHANGELOG.md`](CHANGELOG.md) — not marketing.
-
 ## Meet the team
 
-| Eidolon | What it does | Reach for it when… | Latest |
+| Eidolon | Class | In one line | Latest |
 |---|---|---|:---:|
-| **[ATLAS](https://github.com/Rynaro/ATLAS)** <sub>scout</sub> | Maps an unfamiliar codebase without writing a line. Evidence-anchored, read-only by construction. | Auditing a new repo, onboarding, before any change. | ![](https://img.shields.io/github/v/release/Rynaro/ATLAS?sort=semver&label=&color=blue) |
-| **[RAMZA](https://github.com/Rynaro/Ramza)** <sub>planner · default</sub> | **The default planner.** Turns a rough idea or scout report into a decision-ready spec, with the gates *mechanized* — right-sizing, rubric arithmetic, EARS lint, SHA-256 criteria freeze, plan-vs-diff drift, maker≠checker critique — enforced by code, not prose. | Planning a feature before you build it. | ![](https://img.shields.io/github/v/release/Rynaro/Ramza?sort=semver&label=&color=blue) |
-| **[SPECTRA](https://github.com/Rynaro/SPECTRA)** <sub>planner · fallback</sub> | RAMZA's prose-methodology predecessor — decision-ready specs with rubrics, gates, GIVEN/WHEN/THEN. Same discipline, unmechanized posture — add with `eidolons add spectra`. | Preferring the narrative planning cycle, or a conservative fallback. | ![](https://img.shields.io/github/v/release/Rynaro/SPECTRA?sort=semver&label=&color=blue) |
-| **[Vivi](https://github.com/Rynaro/Vivi)** <sub>coder · default</sub> | **The default coder.** Brownfield, pattern-first, test-anchored — drives a closed edit-run-test loop and gates on `pass^k` instead of one green run. | Shipping the change RAMZA planned, on a loop-capable host. | ![](https://img.shields.io/github/v/release/Rynaro/Vivi?sort=semver&label=&color=blue) |
-| **[APIVR-Δ](https://github.com/Rynaro/APIVR-Delta)** <sub>coder · fallback</sub> | Vivi's conservative predecessor, for hosts without the closed loop. Same discipline, non-loop posture — add with `eidolons add apivr`. | A loop-incompetent host, or a cautious builder. | ![](https://img.shields.io/github/v/release/Rynaro/APIVR-Delta?sort=semver&label=&color=blue) |
-| **[IDG](https://github.com/Rynaro/IDG)** <sub>scriber</sub> | Synthesizes docs from sessions, specs, and deltas — provenance-first, with `[GAP]`/`[DISPUTED]` markers. | Chronicling what you just built. | ![](https://img.shields.io/github/v/release/Rynaro/IDG?sort=semver&label=&color=blue) |
-| **[FORGE](https://github.com/Rynaro/FORGE)** <sub>reasoner</sub> | Deliberates on ambiguous trade-offs. Names alternatives, surfaces assumptions, returns a verdict + confidence. | Two patterns apply and the choice isn't obvious. | ![](https://img.shields.io/github/v/release/Rynaro/FORGE?sort=semver&label=&color=blue) |
-| **[VIGIL](https://github.com/Rynaro/VIGIL)** <sub>debugger</sub> | Forensic debugger for failures that resist normal repair. Reproduction-gated, counterfactual-verified. | A flaky test, heisenbug, or unexplained regression. | ![](https://img.shields.io/github/v/release/Rynaro/VIGIL?sort=semver&label=&color=blue) |
-| **[Kupo](https://github.com/Rynaro/Kupo)** <sub>executor</sub> | Low-effort delegate target. Patches an ephemeral sandbox, proves it with a real verifier, and *proposes* the patch back — never writes the real tree. | Offloading trivial localized edits to keep a session lean. | ![](https://img.shields.io/github/v/release/Rynaro/Kupo?sort=semver&label=&color=blue) |
-| **[CRYSTALIUM](https://github.com/Rynaro/crystalium)** <sub>memory</sub> | The shared four-layer memory substrate every member writes to and recalls from — tier-gated writes, hybrid recall, Dream consolidation, principled forgetting. | Carrying context and learned patterns across sessions and members. | ![](https://img.shields.io/github/v/release/Rynaro/crystalium?sort=semver&label=&color=blue) |
+| **[ATLAS](https://github.com/Rynaro/ATLAS)** | scout | Maps unfamiliar codebases, evidence-anchored, read-only by construction. | ![](https://img.shields.io/github/v/release/Rynaro/ATLAS?sort=semver&label=&color=blue) |
+| **[RAMZA](https://github.com/Rynaro/Ramza)** | planner · default | Decision-ready specs whose gates are enforced by code — rubric arithmetic, criteria freeze, plan-vs-diff drift, maker≠checker. | ![](https://img.shields.io/github/v/release/Rynaro/Ramza?sort=semver&label=&color=blue) |
+| **[SPECTRA](https://github.com/Rynaro/SPECTRA)** | planner · fallback | RAMZA's prose-methodology predecessor; conservative, opt-in (`eidolons add spectra`). | ![](https://img.shields.io/github/v/release/Rynaro/SPECTRA?sort=semver&label=&color=blue) |
+| **[Vivi](https://github.com/Rynaro/Vivi)** | coder · default | Loop-native builder — drives a closed edit-run-test loop and ships only what survives `pass^k`. | ![](https://img.shields.io/github/v/release/Rynaro/Vivi?sort=semver&label=&color=blue) |
+| **[APIVR-Δ](https://github.com/Rynaro/APIVR-Delta)** | coder · fallback | Vivi's non-loop predecessor for loop-incompetent hosts; opt-in (`eidolons add apivr`). | ![](https://img.shields.io/github/v/release/Rynaro/APIVR-Delta?sort=semver&label=&color=blue) |
+| **[IDG](https://github.com/Rynaro/IDG)** | scriber | Provenance-first documentation, with `[GAP]`/`[DISPUTED]` markers instead of confident guesses. | ![](https://img.shields.io/github/v/release/Rynaro/IDG?sort=semver&label=&color=blue) |
+| **[FORGE](https://github.com/Rynaro/FORGE)** | reasoner | Deliberates ambiguous trade-offs; returns a verdict with named alternatives and a confidence tier. | ![](https://img.shields.io/github/v/release/Rynaro/FORGE?sort=semver&label=&color=blue) |
+| **[VIGIL](https://github.com/Rynaro/VIGIL)** | debugger | Forensic root cause for failures that resist repair — reproduction-gated, counterfactual-verified. | ![](https://img.shields.io/github/v/release/Rynaro/VIGIL?sort=semver&label=&color=blue) |
+| **[Kupo](https://github.com/Rynaro/Kupo)** | executor | Micro-task delegate — proves patches in an ephemeral sandbox and *proposes* them; never writes your tree. | ![](https://img.shields.io/github/v/release/Rynaro/Kupo?sort=semver&label=&color=blue) |
+| **[CRYSTALIUM](https://github.com/Rynaro/crystalium)** | memory | The shared four-layer memory substrate every member writes to and recalls from. | ![](https://img.shields.io/github/v/release/Rynaro/crystalium?sort=semver&label=&color=blue) |
 
-> Nine shipped specialists across seven capability classes — **scout, planner, coder, scriber, reasoner, debugger, executor** — plus **CRYSTALIUM**, the `memory` substrate underneath them all. Versions and handoff contracts live in [`roster/index.yaml`](roster/index.yaml), the machine-readable source of truth.
+Each Eidolon is its own repo, independently versioned and installable; the roster's machine-readable source of truth is [`roster/index.yaml`](roster/index.yaml). Partial teams are first-class — bring only ATLAS to an audit, or the whole pipeline to a greenfield.
 
-## How they compose
+## See it route
 
-The team has a default shape: **ATLAS** scouts, **RAMZA** plans, **Vivi** builds, **IDG** chronicles. **FORGE** and **VIGIL** are lateral specialists — consultable at any stage. **CRYSTALIUM** sits underneath all of them, the shared memory every member writes handoffs into and recalls from. Partial teams are first-class: bring just ATLAS to an audit, or the full pipeline to a greenfield.
+The routing kernel is a real program, not a prompt. Ask it something and it answers in JSON — which specialists, in what order, at what model tier:
 
-<details>
-<summary>Canonical pipeline</summary>
+```console
+$ eidolons run "plan and build a rate limiter for the public API" --json
+{
+  "decision": "chain",
+  "selected": ["ramza", "vivi"],
+  "chain": [
+    { "eidolon": "ramza", "role": "planner", "template": "ship-fast" },
+    { "eidolon": "vivi",  "role": "coder",   "template": "ship-fast" }
+  ],
+  "model_tier_per_step": ["deep", "standard"],
+  "degraded_mode_per_step": [null, "fanout"],
+  "confidence": 0.8,
+  "tier": "standard"
+}
+```
+
+<sup>Output lightly trimmed. The kernel is deterministic — run the same prompt and you get byte-identical routing, with zero tokens billed.</sup>
+
+With the [harness](#mechanical-routing--the-harness) installed, this happens on its own: a host hook fires on every prompt, the kernel computes the route, and the decision — plus recalled project memory — is injected into context before the model starts thinking. A debugging prompt lands on VIGIL at deep tier; a rename lands on Kupo; a vague one gets a clarification request instead of a wrong guess.
+
+## How the team composes
 
 ```
 ATLAS ───▶  RAMZA  ───▶  Vivi  ───▶ IDG
@@ -129,38 +107,128 @@ ATLAS ───▶  RAMZA  ───▶  Vivi  ───▶ IDG
    artifacts and recalls them (bidirectional)
 ```
 
+Handoffs are structured artifacts on disk, not vibes in a context window. Every one carries an [ECL 2.1](https://github.com/Rynaro/eidolons-ecl) envelope with a SHA-256 integrity tag and a typed **trust grade**: `validated` can only be emitted behind a real external verifier — everything self-reviewed says so, and downstream members read the difference from a field, not from prose. And since v2.0, **maker ≠ checker holds across every shipped member**: the implementer of a change never verifies it; a distinct checker does, in a fresh context. Contract tables and the partial-team matrix live in [`methodology/composition.md`](methodology/composition.md).
+
+## Does it actually work?
+
+Start with the part you can verify without trusting us — or paying anyone. The routing decision is deterministic, so it ships as a benchmark that runs cold, with **no API key and ~0 tokens**:
+
+```bash
+eidolons eval routing --suite public   # 15 labelled tasks across 12 routing categories
+```
+
+It grades the kernel against committed ground truth ([`evals/routing-suite.yaml`](evals/routing-suite.yaml)); because nothing is random, you get the exact result we do. That's the floor. Above it sit four billed, model-dependent measurements — each with its data committed in-repo:
+
+| Question | Headline result | The catch |
+|---|---|---|
+| Does wiring the team in change what the host does? | Bare host: **0%** delegation, ever. Wired: **41.7%** correct-specialist, zero false dispatch. | That's a floor (timed-out sessions score as failures) — and it fails our own 80% gate, the committed evidence the advisory→blocking escalation gets argued from. |
+| Does the specialist shape beat one generalist pass? | Vivi's fanout: **pass² 1.00 vs 0.67** on adversarial-hard fixes; Kupo: **36/36 runs** (12 tasks · k=3), **pass³ 1.00** on its additive-proof. | Small suites; zero reward-hacks observed across 63 holdout-gated runs. |
+| Do cheaper models win inside the system? | **haiku + system 12/12 = sonnet + bare 12/12** (pass³ 1.00) — a tie at ~⅓ the per-token price. | Both arms saturated the cohort: that demonstrates non-inferiority, not superiority. |
+| Does mechanizing the planner's gates cost quality? | RAMZA **6/6 = SPECTRA 6/6** (pre-registered A/B, 0 MUST fails in 24 runs) at **~51% of the words**. | Saturated again — the tie is the claim, "wins more" isn't. |
+
+These are early, small-N signals, and the committed scorecards say so in the data — that's deliberate. Full methodology, per-question tables, and the instrument bugs we caught before accepting any number:
+
+<details>
+<summary><strong>1 · Routing compliance — mechanical injection vs prose</strong> (Claude Code · sonnet · k=2 · 56 sessions)</summary>
+
+`eidolons eval compliance` runs one prompt suite through a headless host twice — once with the harness wired, once with only the prose cortex — and scores how it routes. July 2026 measurement, with the per-prompt injection **certified live in-stream** (`--driver claude-headless-ups` records hook events; a $0 dead-endpoint probe independently confirmed the injection fires):
+
+| Routing | Prose only | With Eidolons |
+|---|:---:|:---:|
+| Ever delegates to a specialist | **0%** | **41.7%** |
+| Delegates to the *correct* specialist | 0% | **41.7%** |
+| False delegation on control prompts | 0% | 0% |
+
+The bare arm **never delegated once** across 24 routed sessions — whatever routing a prose file suggests, the model ignores it until you name an Eidolon by hand. The entire effect is the mechanical injection. Scorecard: [`evals/results/`](evals/results/); the superseded June SessionStart-only measurement is kept at [`.spectra/research/compliance-eval-2026-06-12.md`](.spectra/research/compliance-eval-2026-06-12.md).
+
 </details>
 
-Handoffs are structured artifacts written to disk, not free-form messages — every one carries an [ECL 2.1](https://github.com/Rynaro/eidolons-ecl) sidecar envelope with a SHA-256 integrity tag and a typed **trust grade**: `validated` is only emittable when a real external verifier passed (Vivi's pass^k gate, Kupo's named verifier, VIGIL's counterfactual flip); everything self-reviewed says so (`self-attested`), and a downstream member can read the difference from a field instead of judging it from prose. Since v2.0, **maker ≠ checker holds across every shipped member** — the implementer of a change never advances it to `verified`; a distinct checker does, in a fresh context ([ESL 1.1 C8](https://github.com/Rynaro/eidolons-esl)). RAMZA takes this furthest: the distinct-checker critique is one of its mechanized gates, and one holdout A/B run's critic caught a real defect before the plan shipped (question 4). See [`methodology/composition.md`](methodology/composition.md) for the contract table and partial-team matrix.
+<details>
+<summary><strong>2 · Specialist shape vs one generalist pass</strong> (budget-matched · k=2)</summary>
+
+On an adversarial-hard coding suite measured in [Vivi's own repo](https://github.com/Rynaro/Vivi), Vivi's parallel-candidate shape landed every fix where a single pass landed two-thirds:
+
+| Hard-task fix quality (pass², resolved on both runs) | Single pass | Vivi (fanout) |
+|---|:---:|:---:|
+| Adversarial-hard suite | 0.67 | **1.00** |
+
+Kupo, the executor the team delegates micro-tasks to, earned its roster seat on a behavioral additive-proof — 12 tasks at k=3, 36/36 runs resolved, pass³ 1.00.
+
+</details>
+
+<details>
+<summary><strong>3 · H-WIN — a light model inside the system vs a stronger model bare</strong> (12 fix-the-bug tasks · k=3 · sandboxed, verifier-gated)</summary>
+
+v2.0's headline bet: **push the difficulty into the system so cheaper models win more often**. The comparison is pinned as data in [`evals/arms/h-win.json`](evals/arms/h-win.json) and deliberately cross-tier:
+
+| Arm | resolved | pass³ |
+|---|:---:|:---:|
+| **haiku** + system discipline (`keep-system.sh`) | 12/12 | **1.00** |
+| **sonnet** + bare prompt (`keep-bare.sh`, control) | 12/12 | **1.00** |
+
+An exact tie at roughly ⅓ the per-token price for the system arm — the tier drop was free on this cohort. Every scorecard, the pairwise flip table, and the full disclosure — including the **four instrument bugs caught adversarially before accepting any number** (a fake-green verifier path among them) — are committed in [`evals/results/`](evals/results/). `eidolons eval baseline` tracks regressions from here (exit 5 on any).
+
+</details>
+
+<details>
+<summary><strong>4 · RAMZA vs SPECTRA — the pre-registered planner A/B</strong> (6 tasks incl. 2 holdout · k=2 · mechanical grading)</summary>
+
+The flip that made RAMZA the default planner was gated on an A/B whose protocol and holdout were frozen at a commit *before* any run — same Sonnet executor on both arms, blind to the rubrics. Data: [`.spectra/research/ramza-stage2/ramza-planner-ab.json`](.spectra/research/ramza-stage2/ramza-planner-ab.json):
+
+| Planner A/B (pass²) | tasks pass² | mean words / spec |
+|---|:---:|:---:|
+| **RAMZA** (mechanized gates) | **6/6** | **5,059** |
+| SPECTRA (prose methodology, control) | 6/6 | 9,897 |
+
+Every RAMZA spec ships a machine-verifiable gate audit trail where SPECTRA self-reports its cycle. One holdout run's own maker≠checker critic caught and closed a real criteria-desync live, before the plan was called done — the methodology catching its flagship failure class in the act. Adjudication: [`AC-003-ADJUDICATION.md`](.spectra/research/ramza-stage2/AC-003-ADJUDICATION.md).
+
+</details>
 
 ## Mechanical routing — the harness
 
-A descriptor table in a prose file can only *suggest* delegation; the host decides whether to listen, and usually it doesn't until you name an Eidolon yourself. The decision to build a mechanical harness wasn't a hunch — it's backed by a research synthesis of **112 adversarially-verified capability rows across 18 agents** ([`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md)). The **harness** closes that gap with three pieces:
+A descriptor table in a prose file can only *suggest* delegation; the host decides whether to listen, and measurably it doesn't (question 1 above). The harness closes that gap — a decision backed by a research synthesis of **112 adversarially-verified capability rows across 18 agents** ([`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md)):
 
-- **A deterministic routing kernel.** `eidolons run "<prompt>" --json` classifies a prompt against [`roster/routing.yaml`](roster/routing.yaml) — no LLM, fully reproducible — and emits which Eidolon(s) handle it, at what tier, in what chain.
-- **Per-host hook adapters.** `eidolons harness install` wires that kernel into each host's own lifecycle hooks. At session start the routing artifact and a memory digest are injected as context — **the host doesn't have to remember to delegate; the routing arrives on its own.**
-- **Graceful degradation.** Routing is injected by default (advisory-mechanical). Where a host's hooks are absent or buggy, it silently falls back to documentary routing — never worse than prose.
+- **A deterministic routing kernel.** `eidolons run "<prompt>" --json` classifies against [`roster/routing.yaml`](roster/routing.yaml) — no LLM, fully reproducible — and emits who handles it, at what tier, in what chain.
+- **Per-host hook adapters.** `eidolons harness install` wires the kernel into each host's own lifecycle hooks; the route and a memory digest arrive in context on their own, every prompt — including per-step model tiers (`model tiers: atlas=standard → ramza=deep → …`) so cheap models land on cheap steps.
+- **Graceful degradation.** Advisory-mechanical by default; where a host's hooks are absent or buggy, it silently falls back to documentary routing — never worse than prose.
 
 ```bash
 eidolons harness install            # wire routing + memory injection into detected hosts
-eidolons harness install --strict   # opt-in: add tool-boundary delegate-or-deny where sound
+eidolons harness install --strict   # opt-in: block main-loop edits; only delegated subagents write
 eidolons harness status             # per-host effective enforcement tier
 ```
 
-For a hard backstop, `--strict` adds a `PreToolUse` **delegate-or-deny** tier that mechanically blocks direct main-loop edits (only delegated subagents may write), with soundness graded per host. Per-prompt injection also carries the kernel's **model tiers** (`model tiers: atlas=standard → spectra=deep → …`) so the host can put cheap models on cheap steps. When CRYSTALIUM is installed, the session-start hook also runs `eidolons memory preflight` — a one-shot recall that injects prior project memory (including `[skill/…]`-tagged verified procedures a weak orchestrator can invoke instead of re-deriving), fail-open and bounded; `--explain` diagnoses a silent-empty store, and `eidolons canary --all-hosts` verifies the effective tier per host against the lockfile. The full per-host capability matrix is in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
+<details>
+<summary>Operational details — memory preflight, canaries, per-host soundness</summary>
 
-## Spec-Driven lifecycle — ESL
+With CRYSTALIUM installed, the session-start hook also runs `eidolons memory preflight` — a one-shot, fail-open recall that injects prior project memory, including `[skill/…]`-tagged verified procedures a weak orchestrator can invoke instead of re-deriving; `--explain` diagnoses a silent-empty store. `eidolons canary --all-hosts` verifies each host's effective tier against the lockfile, and `--strict`'s delegate-or-deny soundness is graded per host in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
 
-Routing decides *who* works. **ESL** — the Eidolons Spec Lifecycle — decides *how a change moves*, so non-trivial work runs through a right-sized, auditable lifecycle instead of a one-shot prompt. It isn't a second framework bolted on: the specialists you already have **are** the lifecycle — RAMZA specifies, FORGE deliberates, Vivi implements, Kupo/VIGIL verify, IDG archives — and ESL is the thin grammar that sequences them, change by change, on disk under `.spectra/changes/`. Each Eidolon ships its own lifecycle hop; the cortex orchestrates the rest.
+</details>
 
-It's built deliberately against [the documented failure modes of spec-driven development](https://github.com/Rynaro/eidolons-esl/blob/main/docs/rationale.md) — over-specification, instruction bloat, spec-as-waterfall, "spec" as a throwaway prompt:
+## The lifecycle and the context economy
 
-- **A mechanical right-sizing gate** classifies every change by observable signals — `trivial` → Kupo direct (no ceremony), `lite` → one-page spec, `full` → the whole lifecycle. You can't over-specify a one-line fix.
-- **maker ≠ checker, enforced** — the implementer and the verifier are mechanically distinct identities, checked on the hand-off envelope. A change cannot self-verify.
-- **Drift-check before archive** re-derives the change against its living spec, catching implementation that outran the intent.
-- **Opt-in, then mechanically forced** — advisory by default (`SHOULD` open a change first); escalates to *blocking* (`MUST`) once the project crosses mechanical size thresholds (change-count / repo-LOC / full-spec ratio), recorded auditably in the lock. With tonberry installed, the harness **injects an ESL reminder at every session start and on every non-trivial routed prompt** — not left to memory. Trivial work is always exempt; install auto-assesses (skip with `EIDOLONS_SKIP_AUTO_ASSESS=1`).
+Routing decides *who* works. Two younger contracts govern *how the work moves* and *how the session spends its attention* — both opt-in, both mechanical rather than discretionary.
 
-The official implementation is **[tonberry](https://github.com/Rynaro/tonberry)** — a thin (~13 MB, distroless) Go MCP whose `verify` is **byte-identical** to a zero-dependency `bash 3.2` conformance checker, so the rich runtime and the minimal reference can never drift. Install it with `eidolons mcp install tonberry`; the contract it implements is **[`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl)**. ESL is opt-in — absent the MCP, the Eidolons route and build exactly as before. Once installed, the surfacing is **mechanical** — injected at session start every time, not (yet) a hard edit-time block.
+**ESL — the spec lifecycle.** Non-trivial changes run through a right-sized, auditable lifecycle instead of a one-shot prompt: a mechanical gate classifies every change by observable signals (`trivial` → Kupo direct, no ceremony · `lite` → one-page spec · `full` → the whole cycle), maker≠checker is enforced on the hand-off envelope, and a drift-check re-derives the change against its living spec before archive. Advisory by default, it escalates to a blocking `MUST` once a project crosses mechanical size thresholds, recorded auditably in the lock. The specialists you already have *are* the lifecycle — RAMZA specifies, Vivi implements, VIGIL owns the failure path, IDG archives. The official runtime is **[tonberry](https://github.com/Rynaro/tonberry)**, a ~13 MB distroless Go MCP whose `verify` is byte-identical to a zero-dependency bash 3.2 checker, so the rich runtime and the minimal reference can never drift.
+
+**ECM — the context economy** *(new in the v2.2–v2.3 line)*. Long sessions die of context exhaustion, usually at the worst moment. ECM gives the session a deterministic meter and a zone ladder (amber 0.50 / red 0.75 / critical 0.90) with a table-driven policy — first-match rules, never model discretion — that fires context operations autonomously: externalize to memory, prune, compact, or hand off to a fresh session with a structured brief that travels as an ECL envelope. A pin set survives every lossy operation, externalize-before-compact rides CRYSTALIUM, and everything fails open. Kernel verbs: `eidolons context status|policy|externalize|handoff`; deep table: [`methodology/cortex/context-protocol.md`](methodology/cortex/context-protocol.md).
+
+Four sibling contracts, one seam each — every Eidolon satisfies the first, and the rest are opt-in:
+
+| Contract | Governs | Spec |
+|---|---|---|
+| **EIIS** | how a member installs | [`Rynaro/eidolons-eiis`](https://github.com/Rynaro/eidolons-eiis) |
+| **ECL** | how members talk — envelopes, integrity tags, trust grades | [`Rynaro/eidolons-ecl`](https://github.com/Rynaro/eidolons-ecl) |
+| **ESL** | how a change moves — right-sized lifecycle, maker≠checker | [`Rynaro/eidolons-esl`](https://github.com/Rynaro/eidolons-esl) |
+| **ECM** | how a session spends context — meter, zones, handoff briefs | [`Rynaro/eidolons-ecm`](https://github.com/Rynaro/eidolons-ecm) |
+
+The MCP servers behind them — CRYSTALIUM memory, the tonberry ESL runtime, the atomos ECM executor, and friends — are one catalogue away:
+
+```bash
+eidolons mcp list               # the full catalogue (5 servers)
+eidolons mcp install tonberry   # ESL lifecycle runtime
+eidolons mcp install atomos     # ECM compose/verify executor
+```
 
 ## Install
 
@@ -172,34 +240,44 @@ curl -sSL https://raw.githubusercontent.com/Rynaro/eidolons/main/cli/install.sh 
 
 This installs the `eidolons` CLI to `~/.local/bin/eidolons` and caches the nexus at `~/.eidolons/nexus`.
 
-Per project — empty folders or running projects:
+Per project — empty folders or running codebases:
 
 ```bash
 cd <any-project>
 eidolons init                # interactive — choose members and preset (offers CRYSTALIUM memory)
-eidolons add forge           # add a single member later
-eidolons sync                # reconcile installed members to eidolons.yaml
 eidolons harness install     # wire mechanical routing + memory injection into your hosts
+eidolons sync                # reconcile installed members to eidolons.yaml
 eidolons verify              # re-check installed Eidolons against the roster's signed metadata
 ```
 
-Keep the nexus current with `eidolons upgrade self` (atomic, integrity-verified, with `--check` and `--rollback`); upgrade installed Eidolons with `eidolons upgrade`. MCP servers — CRYSTALIUM memory and the tonberry ESL runtime — are a separate catalogue managed through `eidolons mcp {list,install,upgrade,…}`. Commit `eidolons.lock` alongside `eidolons.yaml` for reproducible, tamper-evident installs. Full walkthrough: [`docs/getting-started.md`](docs/getting-started.md).
+Keep the nexus current with `eidolons upgrade self` (atomic, integrity-verified, with `--check` and `--rollback`). Commit `eidolons.lock` alongside `eidolons.yaml` for reproducible, tamper-evident installs. Full walkthrough: [`docs/getting-started.md`](docs/getting-started.md); end-to-end verification: [`docs/smoke-test.md`](docs/smoke-test.md); every command: [`docs/cli-reference.md`](docs/cli-reference.md).
+
+## When Eidolons is the wrong tool
+
+Honest scoping beats a benchmark. Skip Eidolons when:
+
+- **You want one assistant and zero ceremony.** A bare host is genuinely good at small, single-phase tasks; the team's edge shows up when work spans phases and sessions.
+- **Your workflow requires npm/pip/brew packaging.** The `curl | bash` + git flow is a deliberate design choice ([why](docs/architecture.md)) — if that's a dealbreaker, it won't stop being one.
+- **Your host exposes no hook surface and you need enforcement.** Without hooks, routing degrades to documentary — honest, but only as good as the model's obedience.
+- **The project is a throwaway script.** The right-sizing gate would route everything to Kupo anyway; the roster is overhead there.
 
 ## Verified releases
 
-Every shipped Eidolon publishes attestation-backed releases through one canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)) hosted here. Each release records its commit, tree, and archive SHA-256 into `roster/index.yaml` via [Roster Intake](.github/workflows/roster-intake.yml). Under the default `integrity.enforcement: strict` posture, `eidolons sync` and `eidolons verify` abort with exit 1 if any installed Eidolon's checksum drifts from the signed metadata — the same gate `Roster Health` runs nightly. Nexus releases use the same model. Read the trust model at [`docs/release-integrity.md`](docs/release-integrity.md). Contract-version bumps (ECL 2.0 → 2.1, EIIS 1.4 → 1.5) are additive and opt-in — [`MIGRATION.md`](MIGRATION.md) covers who has to act (consumers: nobody) and how.
+Every shipped Eidolon publishes attestation-backed releases through one canonical workflow ([`eidolon-release-template.yml`](.github/workflows/eidolon-release-template.yml)); each release records its commit, tree, and archive SHA-256 into [`roster/index.yaml`](roster/index.yaml). Under the default `integrity.enforcement: strict` posture, `eidolons sync` and `eidolons verify` abort if any installed member's checksum drifts from the signed metadata — the same gate `Roster Health` runs nightly. Trust model: [`docs/release-integrity.md`](docs/release-integrity.md); contract-version bumps are additive and opt-in, covered in [`MIGRATION.md`](MIGRATION.md).
 
 ## What's in this repo
 
 | Area | What it contains |
 |------|------------------|
 | [`roster/`](roster/) | Machine-readable registry of every Eidolon — versions, repos, handoffs; the routing table ([`routing.yaml`](roster/routing.yaml)) and MCP catalogue ([`mcps.yaml`](roster/mcps.yaml)) |
-| [`methodology/`](methodology/) | [Design principles](methodology/prime-directives.md), [composition contracts](methodology/composition.md), the routing [cortex](methodology/cortex/), vocabulary |
-| [`research/`](research/) | Papers, citations, production patterns, scientific backing |
+| [`methodology/`](methodology/) | [Design principles](methodology/prime-directives.md), [composition contracts](methodology/composition.md), the routing [cortex](methodology/cortex/) |
+| [`research/`](research/) | Papers, citations, production patterns — the evidence base ([index](research/INDEX.md)) |
+| [`evals/`](evals/) | Suites, arms, hooks, and committed scorecards ([`results/`](evals/results/)) |
 | [`cli/`](cli/) | The `eidolons` command-line tool — installs, wires, and orchestrates the team |
 | [`schemas/`](schemas/) | JSON Schemas for `eidolons.yaml`, `eidolons.lock`, roster entries, eval suites |
-| [`docs/`](docs/) | Getting started, architecture, CLI reference, MCP store, model management, release integrity |
+| [`docs/`](docs/) | Getting started, architecture, CLI reference, MCP store, release integrity, ADRs |
 | [`examples/`](examples/) | Worked examples: greenfield, brownfield, solo-member, partial-team |
+| [`MANIFESTO.md`](MANIFESTO.md) | Why the project exists — the four commitments, and what we refuse to build |
 
 <details>
 <summary><strong>Why a nexus, when each Eidolon is independently installable?</strong></summary>
@@ -209,7 +287,7 @@ Each Eidolon is its own first-class repo, independently versioned — that's a h
 1. **Discovery** — without a roster, nobody knows which Eidolons exist or how they relate.
 2. **Composition** — handoff contracts, pipeline conventions, the routing kernel, and partial-team patterns are shared assets.
 3. **Research** — the scientific backing for the whole program lives in one place instead of drifting across repos.
-4. **Wiring** — one `eidolons add atlas,spectra,vivi` beats fifty lines of clone-and-install docs, and `eidolons harness install` reaches hosts no individual Eidolon could.
+4. **Wiring** — one `eidolons add atlas,ramza,vivi` beats fifty lines of clone-and-install docs, and `eidolons harness install` reaches hosts no individual Eidolon could.
 5. **Supply-chain integrity** — one canonical signing workflow, one ingestion path, one consumer-side gate. Independent signing schemes would defeat the trust model.
 
 The four-layer architecture (install standard → Eidolon repos → this nexus → consumer project) is documented in [`docs/architecture.md`](docs/architecture.md). The install contract every Eidolon satisfies is the **Eidolons Individual Install Standard** ([`Rynaro/eidolons-eiis`](https://github.com/Rynaro/eidolons-eiis)) — versioned independently; the CLI refuses to install non-conformant members.
@@ -223,3 +301,7 @@ Per-Eidolon bugs and features belong in that Eidolon's repo (an ATLAS finding �
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).
+
+---
+
+<p align="center"><em>When the question is hard and the context is big, you don't want one confused assistant. You want a team.</em><br>— <a href="MANIFESTO.md">the Manifesto</a></p>

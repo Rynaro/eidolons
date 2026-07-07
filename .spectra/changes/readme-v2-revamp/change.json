@@ -1,0 +1,26 @@
+{
+  "esl_version": "1.1",
+  "change_id": "readme-v2-revamp",
+  "status": "verified",
+  "tier": "lite",
+  "maker": "fable-orchestrator",
+  "checker": "opus-fresh-read",
+  "has_code": false,
+  "spec_ref": "spec.md",
+  "criteria_ref": "spec.md#acceptance-checks",
+  "rightsize": {
+    "tier": "lite",
+    "signals": "single-file docs change (README.md); no code paths touched; high blast radius on first impressions only",
+    "note": "tonberry MCP unavailable in this session — change recorded fail-open per ESL opt-in; right-sizing applied from observable signals (1 file, docs-only, no schema/roster/CLI surface)"
+  },
+  "acceptance_checks": [
+    { "id": "AC-RM-1", "verify_method": "spec.md#acceptance-checks — every relative link in the new README resolves to an existing file/dir (mechanical check)" },
+    { "id": "AC-RM-2", "verify_method": "spec.md#acceptance-checks — every quantitative claim traceable to CHANGELOG.md, roster/index.yaml, evals/, or .spectra/research/ (mechanical cross-check)" },
+    { "id": "AC-RM-3", "verify_method": "spec.md#acceptance-checks — independent cold-read (distinct checker, fresh context): beginner can state what-it-is + first command after 60s; expert names >=1 hook that made them curious" },
+    { "id": "AC-RM-4", "verify_method": "spec.md#acceptance-checks — no dynamic version badge replaced by a hardcoded number; DYNAMIC badge comment preserved" }
+  ],
+  "amendments": [],
+  "verification_ref": "verification.md",
+  "drift_checked": true,
+  "archive_path": null
+}
