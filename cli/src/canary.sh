@@ -17,6 +17,16 @@
 
 set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Capture whether the CALLER explicitly set ECM_MEMORY_TIMEOUT_S before
+# lib_context.sh forces its own 1.5s hook-path default (":=" below never
+# fires once a value is set) — bash 3.2: "${VAR+x}" set-check, not "-v".
+if [ -z "${ECM_MEMORY_TIMEOUT_S+x}" ]; then
+  _CANARY_TIMEOUT_CALLER_SET=false
+else
+  _CANARY_TIMEOUT_CALLER_SET=true
+fi
+
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
@@ -833,6 +843,15 @@ _memory_mode_cleanup() {
 #   either round trip not found             -> FAIL (exit 1)
 run_context_handoff_mode() {
   local project_root; project_root="$(pwd)"
+
+  # A cold `docker run` container boot alone can exceed the 1.5s hook-path
+  # default (lib_context.sh, CC2 fail-open by design — NOT changed here);
+  # bump to a canary-appropriate 60s for these two legs' ingest/recall
+  # one-shots, but only when the caller hasn't explicitly set the env var.
+  if [ "$_CANARY_TIMEOUT_CALLER_SET" = "false" ]; then
+    ECM_MEMORY_TIMEOUT_S=60
+    export ECM_MEMORY_TIMEOUT_S
+  fi
 
   printf '═══════════════════════════════════════════════════════════════\n'
   printf 'canary --context-handoff — ECM P1 session-handoff round-trip probe\n'
