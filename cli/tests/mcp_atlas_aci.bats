@@ -214,16 +214,21 @@ file_md5() {
   # .atlas/memex/.gitkeep must exist.
   [ -f "$project/.atlas/memex/.gitkeep" ]
 
-  # The --name entry in the args array must equal "atlas-aci-<slug>".
+  # No static --name (it would collide with the running serve container on host
+  # reconnect). Per-project identity lives in the --label instead.
+  run bash -c "jq -e 'any(.mcpServers.\"atlas-aci\".args[]; . == \"--name\") | not' '$project/.mcp.json'"
+  [ "$status" -eq 0 ]
+
+  # The --label entry must equal "eidolons.project=<slug>".
   # Slug of "fresh-project" is "fresh-project".
-  local name_val
-  name_val="$(jq -r '
+  local label_val
+  label_val="$(jq -r '
     .mcpServers."atlas-aci".args as $a |
-    ($a | indices("--name"))[0] as $i |
+    ($a | indices("--label"))[0] as $i |
     $a[$i + 1]
   ' "$project/.mcp.json")"
 
-  [ "$name_val" = "atlas-aci-fresh-project" ]
+  [ "$label_val" = "eidolons.project=fresh-project" ]
 
   # Security hardening flags (H1): --cap-drop ALL and --security-opt no-new-privileges
   # must be present in the args array (defense-in-depth on top of the UID 10001 Dockerfile).
@@ -324,8 +329,8 @@ file_md5() {
   [ "$db_hash_before" = "$db_hash_after" ]
 }
 
-# ─── Test 4: two distinct project roots → distinct --name and bind paths ───
-@test "mcp atlas-aci: two distinct roots produce distinct --name values and bind-mount paths" {
+# ─── Test 4: two distinct project roots → distinct --label and bind paths ───
+@test "mcp atlas-aci: two distinct roots produce distinct --label values and bind-mount paths" {
   local project_a="$BATS_TEST_TMPDIR/project-alpha"
   local project_b="$BATS_TEST_TMPDIR/project-beta"
   mkdir -p "$project_a" "$project_b"
@@ -335,25 +340,25 @@ file_md5() {
   run_generator --project-root "$project_b"
   [ "$status" -eq 0 ]
 
-  # Extract --name values from each generated .mcp.json.
-  local name_a name_b
-  name_a="$(jq -r '
+  # Extract --label values from each generated .mcp.json.
+  local label_a label_b
+  label_a="$(jq -r '
     .mcpServers."atlas-aci".args as $a |
-    ($a | indices("--name"))[0] as $i |
+    ($a | indices("--label"))[0] as $i |
     $a[$i + 1]
   ' "$project_a/.mcp.json")"
-  name_b="$(jq -r '
+  label_b="$(jq -r '
     .mcpServers."atlas-aci".args as $a |
-    ($a | indices("--name"))[0] as $i |
+    ($a | indices("--label"))[0] as $i |
     $a[$i + 1]
   ' "$project_b/.mcp.json")"
 
-  # Names must differ.
-  [ "$name_a" != "$name_b" ]
+  # Labels must differ.
+  [ "$label_a" != "$label_b" ]
 
-  # Each --name must reference its own slug.
-  [ "$name_a" = "atlas-aci-project-alpha" ]
-  [ "$name_b" = "atlas-aci-project-beta" ]
+  # Each --label must reference its own slug.
+  [ "$label_a" = "eidolons.project=project-alpha" ]
+  [ "$label_b" = "eidolons.project=project-beta" ]
 
   # The bind-mount source for /memex must be distinct in each file.
   # Extract the string that precedes ":/memex" from the args array.
@@ -389,20 +394,20 @@ file_md5() {
   run bash -c "jq empty '$project/.mcp.json'"
   [ "$status" -eq 0 ]
 
-  # Extract the slug from the --name arg.
-  local name_val
-  name_val="$(jq -r '
+  # Extract the slug from the --label arg.
+  local label_val
+  label_val="$(jq -r '
     .mcpServers."atlas-aci".args as $a |
-    ($a | indices("--name"))[0] as $i |
+    ($a | indices("--label"))[0] as $i |
     $a[$i + 1]
   ' "$project/.mcp.json")"
 
-  # Expected: "atlas-aci-my-project-dir"
-  [ "$name_val" = "atlas-aci-my-project-dir" ]
+  # Expected: "eidolons.project=my-project-dir"
+  [ "$label_val" = "eidolons.project=my-project-dir" ]
 
-  # The slug portion (strip leading "atlas-aci-") must match
+  # The slug portion (strip leading "eidolons.project=") must match
   # the pattern: only lowercase letters, digits, and dashes.
-  local slug="${name_val#atlas-aci-}"
+  local slug="${label_val#eidolons.project=}"
   run bash -c "printf '%s' '$slug' | grep -Eq '^[a-z0-9-]+$'"
   [ "$status" -eq 0 ]
 

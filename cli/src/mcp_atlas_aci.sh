@@ -80,7 +80,9 @@ What it does:
   4. Renders the Atlas-ACI MCP template into <project-root>/.mcp.json.
 
 The generated .mcp.json wires Atlas-ACI as a Docker-based MCP server with:
-  - A per-project container name (atlas-aci-<slug>) for parallel-project isolation.
+  - A per-project label (eidolons.project=<slug>) for identification/filtering.
+    No static --name — it would collide with the running serve container when the
+    host re-spawns on reconnect (docker: "container name already in use").
   - Distinct bind mounts so each project's codegraph.db is independent.
   - The pinned image digest (no tag drift).
 
@@ -296,7 +298,7 @@ fi
 
 # ─── Summary ──────────────────────────────────────────────────────────────
 info "Atlas-ACI MCP scaffold complete."
-info "  Container name : atlas-aci-${PROJECT_SLUG}"
+info "  Project label  : eidolons.project=${PROJECT_SLUG}"
 info "  Bind mount     : ${MEMEX_DIR} → /memex (inside container)"
 info "  Image digest   : ${IMAGE_DIGEST}"
 info ""
