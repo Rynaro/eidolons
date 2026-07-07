@@ -196,6 +196,16 @@ fi
 _sha="$(context_sha256_file "$BRIEF_PATH")"
 ENVELOPE_PATH="$SIDECAR_DIR/handoff-${_ts}.envelope.json"
 
+# GAP-NEXUS-OBJECTIVE (D4/spec-crystalium-1.8.md): the memory backend's FTS
+# indexes summary = "kind: objective" ONLY — the brief body
+# (encoding_context.native_artifact) is never indexed. A fixed objective
+# string can never surface a run's distinctive task-state content on recall,
+# so fold in the task-state head (its first meaningful line) here; the
+# "Session handoff" phrase is kept so the reserved topic_key:session_handoff
+# token still phrase-matches.
+_task_state_head="$(printf '%s\n' "$TASK_STATE" | sed -n '/[^[:space:]]/{p;q;}')"
+[ -n "$_task_state_head" ] || _task_state_head="$TASK_STATE"
+
 ENVELOPE_JSON="$(jq -n \
   --arg message_id "msg-context-handoff-${_ts}" \
   --arg thread_id "$THREAD_ID" \
@@ -204,6 +214,7 @@ ENVELOPE_JSON="$(jq -n \
   --arg sha "$_sha" \
   --argjson size_bytes "$_brief_bytes" \
   --arg ts "$_iso" \
+  --arg task_state_head "$_task_state_head" \
   --argjson contains_tool_origin "$CONTAINS_TOOL_ORIGIN" \
   '{
     envelope_version: "1.0",
@@ -212,7 +223,7 @@ ENVELOPE_JSON="$(jq -n \
     parent_id: null,
     from: {eidolon: "eidolons-context-kernel", version: $from_version},
     to: {eidolon: "session_successor", version: "n/a"},
-    objective: "Session handoff brief for context-lifecycle succession (ECM P1).",
+    objective: ("Session handoff brief for context-lifecycle succession (ECM P1): " + $task_state_head),
     performative: "INFORM",
     artifact: {kind: "ecm/handoff-brief@0.1", schema_version: "0.1", path: $artifact_path, sha256: $sha, size_bytes: $size_bytes},
     integrity: {method: "sha256", value: $sha},
