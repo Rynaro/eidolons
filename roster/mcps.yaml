@@ -141,10 +141,18 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.7.0"
+      latest: "1.8.0"
       pins:
-        stable: "1.7.0"
+        stable: "1.8.0"
       releases:
+        "1.8.0":
+          # One-shot `ingest` CLI verb (third verb of the out-of-session CLI
+          # pairing: recall 1.4.0 -> commit 1.7.0 -> ingest 1.8.0) — parity with
+          # the MCP crystalium_ingest tool via the shared _handle_ingest core.
+          # Unblocks the nexus ECM session-handoff canary (AC-4/AC-9).
+          # `consolidate` re-deferred to 1.9. 9 tools (MCP surface unchanged).
+          digest: "sha256:a83469675b21ea74db68f8ea143841073667d1cf75a67df25039fa66f244e8e9"
+          released_at: "2026-07-07T00:00:00Z"
         "1.7.0":
           # One-shot `commit` CLI verb (write half of the out-of-session CLI
           # pairing; unblocks the nexus round-trip memory canary) + install.sh
