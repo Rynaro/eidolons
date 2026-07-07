@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **README revamped for the v2 line — research-grounded recomposition, not a polish pass.** Grounded in a 16-repo study of celebrated OSS READMEs plus peer-reviewed attention/reading research (F-pattern scanning, curiosity-gap theory, serial-position effects, processing fluency, the blemishing effect), produced with deliberate model tiering (haiku fact audit / sonnet research / opus cold-read checker / Fable composition). New: a **"See it route"** demo showing real, reproducible `eidolons run --json` kernel output; a **"When Eidolons is the wrong tool"** honest-scoping section; the ESL + **ECM** "lifecycle and the context economy" section (four sibling-contract table, 5-MCP catalogue incl. atomos); a linked MANIFESTO (previously orphaned) closing in the recency slot; and one deadpan acknowledgment of the Final Fantasy naming. Restructured: benefit-first intro (the ~90-word 11-concept sentence is gone), team-before-proof ordering, the free zero-token routing benchmark now *leads* "Does it actually work?" with the four billed measurements compressed to one summary table + `<details>`. Verified maker≠checker under ESL change `.spectra/changes/readme-v2-revamp/` (30/30 links, every number traced to committed scorecards, dynamic badges intact, dual-audience cold-read PASS).
+
 ## [2.3.0] — 2026-07-07 — ECM P2/P3: host adapters + the atomos MCP
 
 ### Added
