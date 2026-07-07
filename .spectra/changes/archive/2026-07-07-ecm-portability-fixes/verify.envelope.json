@@ -1,0 +1,17 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "kupo"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(verify): change \"ecm-portability-fixes\" PASS — maker(vivi)!=checker(kupo); AC-1 grep-confirmed, AC-2 bats 22/22 with shasum absent + sha256sum present.",
+  "context_delta": {
+    "maker": "vivi",
+    "checker": "kupo",
+    "verdict": "pass",
+    "evidence": "cli/tests/trace_reader.bats + verify_envelope.bats 22/22 (shasum ABSENT, sha256sum PRESENT); tonberry.mcp.json.tmpl :/workspace:z"
+  }
+}

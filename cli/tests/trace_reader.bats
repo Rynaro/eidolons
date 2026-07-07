@@ -13,7 +13,7 @@ _mkhop() {
   local payload="$dir/${kind}.md"
   printf 'payload %s->%s\n' "$from" "$to" > "$payload"
   local sha size
-  sha="$(shasum -a 256 "$payload" | awk '{print $1}')"
+  sha="$( { shasum -a 256 "$payload" 2>/dev/null || sha256sum "$payload"; } | awk '{print $1}')"
   size="$(wc -c < "$payload" | tr -d '[:space:]')"
   cat > "$dir/${kind}.md.envelope.json" <<EOF
 {

@@ -1,0 +1,22 @@
+{
+  "esl_version": "1.1",
+  "change_id": "ecm-portability-fixes",
+  "status": "archived",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "has_code": true,
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "verify_method": "grep: rendered cli/templates/mcp/tonberry.mcp.json.tmpl carries __PROJECT_ROOT__:/workspace:z; :z is inert on non-SELinux Docker daemons (no-op relabel)"
+    },
+    {
+      "id": "AC-2",
+      "verify_method": "bats: cli/tests/trace_reader.bats + cli/tests/verify_envelope.bats green (22/22) on a host with sha256sum present and shasum ABSENT"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-07-ecm-portability-fixes"
+}
