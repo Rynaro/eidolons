@@ -1,0 +1,30 @@
+{
+  "esl_version": "1.1",
+  "change_id": "roster-atomos-mcp",
+  "status": "archived",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "has_code": true,
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "verify_method": "yq: roster/mcps.yaml lists 5 MCPs incl. atomos; `eidolons mcp list` shows atomos @ stable 0.1.0"
+    },
+    {
+      "id": "AC-2",
+      "verify_method": "jsonschema (Draft7): the atomos entry (mcps[4]) is strictly schema-clean — 0 errors; `make schema` passes; crystalium skew guard unaffected (OK)"
+    },
+    {
+      "id": "AC-3",
+      "verify_method": "digest sha256:ff2449e9… is the v0.1.0 multi-arch INDEX from Rynaro/atomos release-manifest.json (commit 5c10193, github_attestation:true)"
+    },
+    {
+      "id": "AC-4",
+      "verify_method": "jq: cli/templates/mcp/atomos.mcp.json.tmpl is valid JSON; mounts __PROJECT_ROOT__:/workspace:z (SELinux default) with --cap-drop ALL + no-new-privileges (capability starvation matches the atomos fence)"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-07-roster-atomos-mcp"
+}

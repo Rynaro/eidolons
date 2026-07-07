@@ -1,0 +1,18 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "idg"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(promotion): archived change \"roster-atomos-mcp\" ready for CRYSTALIUM Semantic promotion.",
+  "context_delta": {
+    "archive_path": "archive/2026-07-07-roster-atomos-mcp",
+    "change_id": "roster-atomos-mcp",
+    "intent": "promotion",
+    "spec_ref": "spec.md",
+    "summary": "atomos rostered as the 5th MCP (catalogue entry + template) pinned to the v0.1.0 INDEX digest. Route to mcp__crystalium__ingest (Semantic layer)."
+  }
+}

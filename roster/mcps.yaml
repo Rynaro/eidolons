@@ -277,3 +277,52 @@ mcps:
         - docker_daemon
         - image_local
         - registry_reachable
+
+  - name: atomos
+    display_name: "atomos"
+    scope: system
+    kind: oci-image
+    description: "ECM (Eidolons Context Management) compose/verify executor — composes the session-handoff brief + ECL envelope and verifies envelope integrity / pin survival, byte-identical to the canonical `eidolons context` bash kernel. An alternate surface, never the sole path."
+    use_cases:
+      - "Compose a session-handoff brief + ECL INFORM / ecm/handoff-brief envelope at byte/SHA parity with the kernel."
+      - "Verify ECL envelope integrity (the full SHA-256 verdict matrix) at a receiver gate."
+      - "Probe pin-set survival after a lossy context operation."
+    related_eidolons: []
+    grants_to_eidolons: []
+    wiring_mode: transport
+    exposes_tools:
+      # Orchestrator/host-facing (transport) — the kernel verbs (`eidolons context`)
+      # remain what Eidolons use; atomos is the MCP-surface alternate for hosts that
+      # prefer a tool call. Tool namespace derives from the .mcp.json key "atomos".
+      glob: "mcp__atomos__*"
+      list:
+        - mcp__atomos__compose_handoff
+        - mcp__atomos__verify_envelope
+        - mcp__atomos__verify_pins
+    source:
+      type: ghcr
+      image: "ghcr.io/rynaro/atomos"
+    versions:
+      latest: "0.1.0"
+      pins:
+        stable: "0.1.0"
+      releases:
+        "0.1.0":
+          # MVP: 3 compose/verify tools at byte-parity with the eidolons kernel
+          # (T1 brief + T2 envelope byte-exact); closed-registry + source deny-list
+          # fence; distroless multi-arch INDEX digest. ATOMOS_VERSION 0.1.0; commit 5c10193.
+          digest: "sha256:ff2449e92cae030e8cb25796c2b9e06ad4814e59ac6db8fc19beffc5606d8a73"
+          released_at: "2026-07-07T00:00:00Z"
+    install:
+      hosts_wired:
+        - ".mcp.json"
+        - ".cursor/mcp.json"
+        - ".github/agents/*"
+        - ".codex/config.toml"
+      template: "cli/templates/mcp/atomos.mcp.json.tmpl"
+    health:
+      probes:
+        - docker_cli
+        - docker_daemon
+        - image_local
+        - registry_reachable

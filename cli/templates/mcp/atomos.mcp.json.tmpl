@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "atomos": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--name",
+        "atomos-__PROJECT_SLUG__",
+        "--label",
+        "eidolons.project=__PROJECT_SLUG__",
+        "-v",
+        "__PROJECT_ROOT__:/workspace:z",
+        "-w",
+        "/workspace",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/atomos@__IMAGE_DIGEST__",
+        "serve"
+      ]
+    }
+  }
+}
