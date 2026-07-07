@@ -8,6 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **tonberry MCP template defaults to a `:z` SELinux relabel** (`cli/templates/mcp/tonberry.mcp.json.tmpl`). The workspace bind mount is now `__PROJECT_ROOT__:/workspace:z` so tonberry's container *writes* — the `.spectra/changes/` ESL lifecycle — succeed on SELinux-enforcing hosts, where an unlabeled bind mount of a `user_home_t` tree lets a `container_t` process *read* the tree but silently fails every *write* with `EACCES` (a diagnostically nasty asymmetry that reads as a tonberry bug). `:z` (shared relabel) is deliberate over `:Z` (private): the same tree is bind-mounted read-only by atlas-aci, so a private MCS label would lock that peer out. Inert on non-SELinux Docker daemons — safe as a default for every consumer. Reported upstream as Rynaro/tonberry#3. The crystalium template is untouched — its dedicated `$HOME/.crystalium/` data-dir mount is a different label class and is proven working.
+
+### Fixed
+
+- **`sha256sum`-only hosts no longer fail the ECL trace/envelope tests** (`cli/tests/trace_reader.bats`, `cli/tests/verify_envelope.bats`). The `_mkhop`/`_mkenv` helpers called bare `shasum -a 256`; on a host that ships `sha256sum` but not `shasum` (the CI/dev sandbox) that produced an empty SHA and cascaded into spurious ECL integrity-mismatch failures across both suites. Both helpers now use the portable `{ shasum -a 256 … 2>/dev/null || sha256sum …; }` fallback already used throughout `cli/src/`. Verified 22/22 with `shasum` absent.
+
 ## [2.2.0] — 2026-07-07 — ECM P1: the context economy ships
 
 ### Changed

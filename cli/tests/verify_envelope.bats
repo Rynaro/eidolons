@@ -14,7 +14,7 @@ _mkenv() {
   mkdir -p "$dir"
   printf '%s' "$content" > "$dir/spec.md"
   local sha size
-  sha="$(shasum -a 256 "$dir/spec.md" | awk '{print $1}')"
+  sha="$( { shasum -a 256 "$dir/spec.md" 2>/dev/null || sha256sum "$dir/spec.md"; } | awk '{print $1}')"
   size="$(wc -c < "$dir/spec.md" | tr -d '[:space:]')"
   cat > "$dir/spec.md.envelope.json" <<EOF
 {
