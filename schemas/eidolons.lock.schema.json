@@ -34,7 +34,24 @@
             "critical": { "type": "number" }
           }
         },
-        "compactthreshold_managed": { "type": "boolean" }
+        "compactthreshold_managed": { "type": "boolean" },
+        "codex_autocompact_managed": {
+          "type": "boolean",
+          "description": "ECM P2 Track A/G: whether 'eidolons harness install' wrote (and owns) codex's model_auto_compact_token_limit config knob. false when codex is unwired, ECM is off, or a foreign value was left don't-clobbered (AC-CDX-7)."
+        },
+        "per_host": {
+          "type": "object",
+          "description": "ECM P2 Track G (AC-LK-1): per-host effective ECM tier/channel/features, one entry per wired host. Additive to host_tier (the pre-existing max-across-hosts field, retained unchanged).",
+          "additionalProperties": {
+            "type": "object",
+            "required": ["tier", "channel"],
+            "properties": {
+              "tier": { "type": "string", "enum": ["T0", "T1", "T2", "T3"] },
+              "channel": { "type": "string" },
+              "ecm_features": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        }
       }
     },
     "members": {
