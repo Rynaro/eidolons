@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.3.0] — 2026-07-07 — ECM P2/P3: host adapters + the atomos MCP
+
 ### Added
 
 - **ECM P2 — context-management host adapters** (`cli/src/harness_install.sh`, `cli/src/harness_remove.sh`, `cli/templates/harness/opencode-eidolons.js`, `schemas/eidolons.lock.schema.json`). Extends the ECM context recipes from Claude Code to the other detected hosts, each wired **only to the injection channel it actually exposes**: **codex** full ladder (`.codex/hooks.json` `additionalContext` + `model_auto_compact_token_limit`), **opencode** system-prompt meter + `experimental.session.compacting` externalize, **copilot** start-only static `.github/copilot-instructions.md` block, **cursor** static `.mdc` documentary floor. Fail-open everywhere; the Claude-Code recipe stays byte-identical; removal parity fixes the P1 `compactThreshold` + `context:` lock-block gaps; `eidolons.lock` gains additive `context.per_host` + `codex_autocompact_managed`. Frozen criteria `629b0f10…`, 145/0 bats. See `.spectra/changes/ecm-p2-host-adapters/`.
