@@ -325,9 +325,11 @@ context:
 - **P2 (verification + Codex):** pin-set verification probe; `doctor --deep`
   context probes; Codex adapter; `eidolons.lock` + schema additions; bats suites.
 - **P3 (externalization):** cut `Rynaro/eidolons-ecm` (spec + bash conformance
-  checker, ESL-style); optional **atomos** MCP (compose/verify executor,
-  tonberry-analog — only if hosts prove to need in-session composition; the
-  kernel-verb path stays canonical per survey F6); T2/T1 hosts; CLAUDE.md +
+  checker, ESL-style); **atomos** MCP — a **committed build** (maintainer GO
+  2026-07-07): a compose/verify executor (tonberry-analog) fenced to brief
+  composition + pin/envelope verification, **additive** to the canonical
+  kernel-verb path (which stays always-available; atomos does not solve host
+  injection — see `decisions/atomos-go-no-go.md`); T2/T1 hosts; CLAUDE.md +
   cortex §ECM shipped blocks.
 
 ## 9. Open questions — RESOLVED 2026-07-06
@@ -343,3 +345,10 @@ D1–D4 at N=3 blind traces, 3/3 structural agreement; D5–D6 standard depth):
 | OQ-E4 (D4) | **1,500 tokens is an advisory composition target — the composer never truncates** (survey F2: truncation drops exactly what briefs exist to preserve). The *hard* bound applies only to the injected digest. C-4 tension resolved: two injection classes — per-prompt volatile tail (≤ 200) vs one-time SessionStart handoff digest; the full brief is recalled on demand, not injected. | 86% |
 | GAP-004 (D5) | **`crystalium_ingest` of the ECL envelope is the canonical persist path** (no `commit` branch; file floor is the only fallback). `contains_tool_origin` survives both paths but only ingest *enforces* it. ⚠ P1 canary MUST cover the quarantine-vs-recall interaction: if flagged briefs are episodic-quarantined and default recall skips quarantined records, round-trip breaks whenever a session touched tool output. | 81% |
 | GAP-002 (D6) | **`harness install` writes `compactThreshold: 75`** (RED boundary) into `.claude/settings.json` via the existing jq-merge — don't-clobber a user value, record in `eidolons.lock`. The env var stays a user-side override, never written by us. | 80% |
+
+> **Update 2026-07-07 — OQ-E2 (D2) OVERRIDDEN:** the maintainer elected **GO** on
+> atomos — a committed P3 build, fenced to a compose/verify executor MCP. D2's
+> anti-scope fence (compose/verify only, never meter/policy/trigger/injection) is
+> **retained** as atomos's scope constraint; its P2-exit kill criterion is
+> **retired** (atomos builds in parallel, informed by P2 evidence, not gated by it).
+> Full override rationale: `decisions/atomos-go-no-go.md` §0.
