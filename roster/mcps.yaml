@@ -238,10 +238,28 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/tonberry"
     versions:
-      latest: "0.5.0"
+      latest: "0.5.2"
       pins:
-        stable: "0.5.0"
+        stable: "0.5.2"
       releases:
+        "0.5.2":
+          # Container-UID write-failure diagnostic (tonberry#4). New internal/fsdiag
+          # ownership detector: when the process euid (distroless-nonroot UID 65532)
+          # differs from the bind-mount owner (host UID, e.g. 1000), a bare EACCES on
+          # propose/transition/archive/compose_* now names both UIDs and suggests
+          # --user "$(id -u):$(id -g)". DAC/UID cause, distinct from #3's SELinux/MAC.
+          # 11 tools; ESL_VERSION 1.1 (diagnostic-only, no tool/parity change).
+          digest: "sha256:55dd2fed08070461e1f3b92c303128a0ae1f3c1b62165fd07d0c327e7b1f94f9"
+          released_at: "2026-07-08T00:25:04Z"
+        "0.5.1":
+          # SELinux-label write-failure diagnostic (tonberry#3). New internal/fsdiag
+          # SELinux detector (fires only when /sys/fs/selinux/enforce == "1"): turns
+          # the silent read-ok/write-EACCES asymmetry of an unlabeled `user_home_t`
+          # bind mount into an actionable hint (add ":z" to the -v flag, or
+          # --security-opt label=disable). Complements the nexus template's :z default
+          # (shipped 2.3.0). 11 tools; ESL_VERSION 1.1 (diagnostic-only).
+          digest: "sha256:d2b6f426bc3363cab43e72cad1bd587680ed0a58eb5c54ed9adaf8c5075f51dc"
+          released_at: "2026-07-08T00:20:57Z"
         "0.5.0":
           # ESL 1.1 re-vendor (closes the eidolons-esl#2 parity drift): C8 fresh-
           # context attestation at byte-parity, memory_preflight accepted end-to-end.
