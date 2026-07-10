@@ -2380,6 +2380,9 @@ JSON
 #   FAKE_DOCKER_ARGV_LOG      — path appended with one line per `docker run` argv.
 #   FAKE_DOCKER_RUNNING_NAME  — when `docker ps` is called, echoed back verbatim
 #                               (simulates an already-running sync container).
+#   FAKE_DOCKER_PS_SLEEP      — seconds `docker ps` sleeps BEFORE responding
+#                               (simulates a daemon that is up but wedged, for
+#                               the with_timeout wall-clock proof — F-1).
 setup_fake_docker_autosync() {
   local fake_bin="$BATS_TEST_TMPDIR/fake-docker-bin"
   mkdir -p "$fake_bin"
@@ -2387,8 +2390,18 @@ setup_fake_docker_autosync() {
 #!/usr/bin/env bash
 ARGV_LOG="${FAKE_DOCKER_ARGV_LOG:-}"
 RUNNING_NAME="${FAKE_DOCKER_RUNNING_NAME:-}"
+PS_SLEEP="${FAKE_DOCKER_PS_SLEEP:-0}"
 case "${1:-}" in
   ps)
+    # exec (not a plain `sleep` subprocess): the real docker CLI is a single
+    # process that blocks on its OWN syscall when a daemon is wedged — it
+    # never forks a child that could outlive a `kill -9` on the parent and
+    # keep a command-substitution pipe open. `exec` replaces THIS process's
+    # image with `sleep` (same PID, no descendant), matching that shape so
+    # with_timeout's `kill -9 "$pid"` genuinely terminates the "hang".
+    if [ "$PS_SLEEP" != "0" ]; then
+      exec sleep "$PS_SLEEP"
+    fi
     [ -n "$RUNNING_NAME" ] && printf '%s\n' "$RUNNING_NAME"
     exit 0
     ;;
@@ -2578,6 +2591,45 @@ EOF
     bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
   [ "$status" -eq 0 ]
   [ -s "$argv_log" ]
+}
+
+# ─── F-1 (checker finding): a wedged-but-up daemon must not hang the turn ────
+# Mechanical proof that with_timeout actually bounds the dedup probe — not
+# just that a flag/helper name is present in the source. The fake `docker ps`
+# sleeps far LONGER than the configured bound; the hook must still return
+# within roughly the bound (wall-clock), never the full sleep duration.
+
+@test "atlas-aci autosync F-1: wedged 'docker ps' is bounded by with_timeout (wall-clock proof)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  export FAKE_DOCKER_PS_SLEEP=8            # sleeps far longer than the bound below
+  export EIDOLONS_ATLAS_SYNC_TIMEOUT_S=2   # short bound to keep the test fast
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  local start_s end_s elapsed
+  start_s="$(date +%s)"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  end_s="$(date +%s)"
+  elapsed=$(( end_s - start_s ))
+  [ "$status" -eq 0 ]
+  # Must return well BEFORE the full 8s sleep would have elapsed (~2s bound +
+  # slack for with_timeout's own housekeeping + the follow-on spawn call) —
+  # proves the wedged probe was actually killed, not merely flagged.
+  [ "$elapsed" -lt 6 ]
+  # The killed (empty) dedup probe must fall through to a (also-bounded)
+  # spawn attempt — proving the fail-open composition, not a silent stall.
+  [ -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync F-1: with_timeout is the ONLY timeout idiom used (no hand-rolled duplicate)" {
+  # Guards against re-introducing a second bash-3.2 timeout idiom for this
+  # call — the checker's explicit instruction was one idiom repo-wide.
+  run grep -c "with_timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 2 ]   # the ps dedup probe + the run spawn
+  ! grep -q "GNU timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
 }
 
 # ─── AC-5: fail-open — docker absent -> exit 0, silent; never blocks ─────────

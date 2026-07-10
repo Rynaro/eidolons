@@ -192,6 +192,25 @@ _ecm_handoff_digest() {
 # image IS already local, because `serve` runs from the same digest the user
 # is already using — so --pull=never never removes real functionality, it
 # only removes the possibility of a foreground pull blocking a turn.
+# Both docker calls (the `ps` dedup probe and the `run` spawn) are wrapped in
+# `with_timeout` (lib.sh:616, already in scope — this file sources lib.sh at
+# the top) rather than a hand-rolled timeout(1)-or-background-watcher idiom:
+# with_timeout is the ONE bash-3.2-safe timeout idiom this repo already uses
+# repo-wide (lib_context.sh's per-turn meter refresh, memory.sh's preflight,
+# canary, doctor, release) and its FD-hygiene fix (lib.sh:607-615) is exactly
+# what keeps a `$(with_timeout ...)` capture from blocking on an orphaned
+# timer. `docker ps` failing fast on a DOWN daemon (~10-15ms, verified
+# empirically) does not cover a daemon that is UP but wedged (Docker Desktop
+# stalled, storage stall, overloaded host) — an unbounded synchronous call
+# there can hang the turn indefinitely, which is exactly what a fixed
+# wall-clock bound closes. Bound: 1.5s, matching lib_context.sh's
+# ECM_MEMORY_TIMEOUT_S — this call fires on EVERY UserPromptSubmit (the same
+# hot-path class as ECM's PostToolUse meter refresh), not a once-per-session
+# SessionStart-only budget like memory.sh's 8s. On timeout, with_timeout
+# returns 124 -> `|| true` -> fail-open (an empty dedup probe result falls
+# through to a spawn attempt; a killed spawn just means no container this
+# turn — both are backstopped by --name uniqueness / the single-writer lock,
+# never a wedged turn).
 # cwd bound (documented, not fixed here): the mount root is the hook's cwd,
 # which every wired host (claude-code/codex/copilot) sets to the project
 # root before invoking the shim — see the SPEC/README note on the one known
@@ -230,18 +249,24 @@ _atlas_autosync() {
 
   local cname="atlas-aci-sync-${slug}"
 
+  # Per-turn call budget (s) — see header note (with_timeout, 1.5s, mirrors
+  # lib_context.sh's ECM_MEMORY_TIMEOUT_S hot-path bound). Overridable for
+  # tests / unusually slow hosts.
+  local _atlas_sync_timeout="${EIDOLONS_ATLAS_SYNC_TIMEOUT_S:-1.5}"
+
   # Dedup (AC-4): skip the spawn if a container by this name already exists.
-  # Daemon-down latency (fail-open, verified empirically): a `docker ps`
-  # against an unreachable daemon fails the client-side connect in ~10-15ms
-  # (measured against a dead unix socket), not a hang — same connection
-  # layer `docker run` below uses, so neither call risks blocking a turn.
+  # Bounded via with_timeout (lib.sh) — a wedged-but-up daemon must not hang
+  # the turn; on timeout (rc=124) `running` is empty and we fall through to
+  # the (also-bounded) spawn attempt below, backstopped by --name uniqueness.
   local running
-  running="$(docker ps -a --filter "name=^/${cname}\$" --format '{{.Names}}' 2>/dev/null || true)"
+  running="$(with_timeout "$_atlas_sync_timeout" docker ps -a --filter "name=^/${cname}\$" --format '{{.Names}}' 2>/dev/null || true)"
   printf '%s\n' "$running" | grep -qx "$cname" && return 0
 
   # Spawn detached (AC-3/AC-5). --pull=never: never block a turn on a pull;
-  # rely on the already-local serve image (see header note above).
-  docker run --rm -d --pull=never \
+  # rely on the already-local serve image (see header note above). Also
+  # wrapped in with_timeout — cheap and consistent even though -d + --pull=
+  # never already bound this to container-creation time in the common case.
+  with_timeout "$_atlas_sync_timeout" docker run --rm -d --pull=never \
     --name "$cname" \
     --label "eidolons.project=${slug}" \
     -v "${root}:/repo" \
