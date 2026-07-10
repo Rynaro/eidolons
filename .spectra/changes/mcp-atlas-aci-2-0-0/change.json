@@ -1,0 +1,48 @@
+{
+  "esl_version": "1.1",
+  "change_id": "mcp-atlas-aci-2-0-0",
+  "status": "in_progress",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "then": "roster/mcps.yaml versions.latest and versions.pins.stable for atlas-aci SHALL both equal 2.0.0",
+      "verify_method": "cmd: python3 -c yaml read; latest==stable==2.0.0"
+    },
+    {
+      "id": "AC-2",
+      "then": "every digest recorded under atlas-aci versions.releases SHALL resolve to that tag on ghcr",
+      "verify_method": "cmd: docker buildx imagetools inspect ghcr.io/rynaro/atlas-aci:\u003cver\u003e --format {{.Manifest.Digest}} equals the recorded digest, for all 6 releases"
+    },
+    {
+      "id": "AC-3",
+      "then": "cli/tests/mcp_images.bats S8-guard SHALL derive the expected digest from roster/mcps.yaml and fail when the fixture is stale",
+      "verify_method": "test: bats cli/tests/mcp_images.bats; teeth proven by reverting ATLAS_ACI_PINNED to the 0.2.3 digest and observing S8-guard and S8 both fail"
+    },
+    {
+      "id": "AC-4",
+      "then": "the full bats suite SHALL pass except the pre-existing doctor_deep DD-7 failure",
+      "verify_method": "test: bats cli/tests/ -\u003e 1500 ok, 1 not ok (DD-7), and DD-7 also fails on a clean tree"
+    },
+    {
+      "id": "AC-5",
+      "then": "CHANGELOG.md SHALL record the bump, the three backfilled releases, and the breaking re-index requirement",
+      "verify_method": "grep: CHANGELOG.md Unreleased section names 0.3.0/0.3.1/0.4.0 and the SCHEMA_EPOCH re-index"
+    },
+    {
+      "id": "AC-6",
+      "then": "the atlas-aci exposes_tools list SHALL remain exactly the seven MCP tools upstream registers (export/import are CLI-only)",
+      "verify_method": "cmd: compare roster exposes_tools.list against upstream enforcement.READ_ONLY_TOOLS"
+    },
+    {
+      "id": "AC-7",
+      "then": "make schema SHALL pass",
+      "verify_method": "cmd: make schema"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "created_at": "2026-07-10T12:27:25Z",
+  "has_code": true
+}

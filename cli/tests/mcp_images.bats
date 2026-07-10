@@ -110,10 +110,28 @@ teardown() {
   cd "$EIDOLONS_ROOT"
 }
 
-# Pinned digest for atlas-aci stable (0.2.3).
-ATLAS_ACI_PINNED="sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
+# Pinned digest for atlas-aci stable (2.0.0). Must track roster/mcps.yaml's
+# versions.pins.stable digest — S8 asserts "present at the stable digest ⇒ no drift",
+# so a stale value here makes the drift check pass vacuously.
+ATLAS_ACI_PINNED="sha256:e2542ef8d569882c560065f0bcaed9ef2a7398e7e61765e25b142a3c93ec7cf7"
 # Pinned digest for crystalium stable.
 CRYSTALIUM_PINNED="sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc876630cdb3e5"
+
+# ─── Guard: the fixture pin must track the catalogue ──────────────────────
+
+@test "S8-guard: ATLAS_ACI_PINNED tracks roster/mcps.yaml versions.pins.stable" {
+  # A hardcoded digest is a proxy for "the catalogue's stable digest". If a version
+  # bump edits roster/mcps.yaml but forgets this file, S8 keeps passing — it would be
+  # asserting "present at the stable digest ⇒ no drift" against a digest nothing pins
+  # any more. Derive it instead of trusting the constant. Pure awk: bash 3.2 safe.
+  local blk stable digest
+  blk="$(awk '/^  - name: atlas-aci$/,/^  - name: junction$/' "$EIDOLONS_ROOT/roster/mcps.yaml")"
+  stable="$(printf '%s\n' "$blk" | awk '/^      pins:/{f=1;next} f&&/stable:/{gsub(/"/,"");print $2;exit}')"
+  digest="$(printf '%s\n' "$blk" | awk -v v="\"$stable\":" '$1==v{f=1;next} f&&/digest:/{gsub(/"/,"");print $2;exit}')"
+  [ -n "$stable" ]
+  [ -n "$digest" ]
+  [ "$digest" = "$ATLAS_ACI_PINNED" ]
+}
 
 # ─── Basic invocation ─────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@
 #   wiring_mode: transport — MCP registered in .mcp.json only; never injected
 #   into agent tools: allowlists (e.g. junction, a project-level bus).
 catalogue_version: "1.2"
-updated_at: "2026-06-02T00:00:00Z"
+updated_at: "2026-07-10"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -42,9 +42,9 @@ mcps:
         context: "mcp-server"
         default_ref: "main"
     versions:
-      latest: "0.2.3"
+      latest: "2.0.0"
       pins:
-        stable: "0.2.3"
+        stable: "2.0.0"
       releases:
         "0.2.2":
           digest: "sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
@@ -52,6 +52,21 @@ mcps:
         "0.2.3":
           digest: "sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
           released_at: "2026-06-02T00:00:00Z"
+        # 0.3.0 / 0.3.1 / 0.4.0 shipped upstream but were never recorded here — the
+        # catalogue sat on 0.2.3 for three releases. Backfilled with the digests
+        # resolved from ghcr at the 2.0.0 bump so `mcp use <ver>` can reach them.
+        "0.3.0":
+          digest: "sha256:8a76ba166c517c47562c742bd977084b2b7b163a0fd7e244f6bceb3b27610d09"
+          released_at: "2026-06-20T22:26:41Z"
+        "0.3.1":
+          digest: "sha256:13e5ace5d89611e51eea4cb90b357a94fdcd93a71e6a81ea31901dad53f3ce49"
+          released_at: "2026-06-20T22:43:27Z"
+        "0.4.0":
+          digest: "sha256:fc27c54a87ac6a4fac27712778ee5a7d8582799915bca67863c60e2d91c845dc"
+          released_at: "2026-07-08T01:39:20Z"
+        "2.0.0":
+          digest: "sha256:e2542ef8d569882c560065f0bcaed9ef2a7398e7e61765e25b142a3c93ec7cf7"
+          released_at: "2026-07-10T12:22:33Z"
     install:
       hosts_wired:
         - ".mcp.json"
