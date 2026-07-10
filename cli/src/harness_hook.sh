@@ -180,9 +180,23 @@ _ecm_handoff_digest() {
 # (memory_probe_project_slug / project_slug are for OTHER surfaces and can
 # disagree with the mcp-install slug baked into .mcp.json).
 # Dedups by container name atlas-aci-sync-<slug>: skips the spawn if one
-# already exists (AC-4). Spawns `docker run --rm -d` (detached, returns
-# immediately — AC-5) with /repo mounted READ-WRITE (the inverse of serve's
-# `:ro` — index writes .atlas/graph.<epoch>.db).
+# already exists (AC-4). Spawns `docker run --rm -d --pull=never` (detached,
+# returns immediately — AC-5) with /repo mounted READ-WRITE (the inverse of
+# serve's `:ro` — index writes .atlas/graph.<epoch>.db).
+# --pull=never is load-bearing for AC-5, not cosmetic: `-d` only defers the
+# CONTAINER's lifetime, not image ACQUISITION — a plain `docker run -d` on a
+# not-yet-local image pulls synchronously in the foreground before ever
+# detaching, blocking the prompt path on a multi-hundred-MB pull. With
+# --pull=never, an absent-locally image makes `docker run` fail FAST instead
+# (`|| true` -> silent no-op) rather than pulling. In normal operation the
+# image IS already local, because `serve` runs from the same digest the user
+# is already using — so --pull=never never removes real functionality, it
+# only removes the possibility of a foreground pull blocking a turn.
+# cwd bound (documented, not fixed here): the mount root is the hook's cwd,
+# which every wired host (claude-code/codex/copilot) sets to the project
+# root before invoking the shim — see the SPEC/README note on the one known
+# nested-workspace edge (a different, also-atlas-aci-wired project root as
+# cwd would reindex THAT tree instead; not solved by this change).
 _atlas_autosync() {
   local root="${1:-$(pwd)}"
   local mcp="$root/.mcp.json"
@@ -217,12 +231,17 @@ _atlas_autosync() {
   local cname="atlas-aci-sync-${slug}"
 
   # Dedup (AC-4): skip the spawn if a container by this name already exists.
+  # Daemon-down latency (fail-open, verified empirically): a `docker ps`
+  # against an unreachable daemon fails the client-side connect in ~10-15ms
+  # (measured against a dead unix socket), not a hang — same connection
+  # layer `docker run` below uses, so neither call risks blocking a turn.
   local running
   running="$(docker ps -a --filter "name=^/${cname}\$" --format '{{.Names}}' 2>/dev/null || true)"
   printf '%s\n' "$running" | grep -qx "$cname" && return 0
 
-  # Spawn detached (AC-3/AC-5).
-  docker run --rm -d \
+  # Spawn detached (AC-3/AC-5). --pull=never: never block a turn on a pull;
+  # rely on the already-local serve image (see header note above).
+  docker run --rm -d --pull=never \
     --name "$cname" \
     --label "eidolons.project=${slug}" \
     -v "${root}:/repo" \

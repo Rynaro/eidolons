@@ -2493,7 +2493,7 @@ EOF
 
 # ─── AC-3: exact argv — digest, -d, rw /repo mount, index --since ────────────
 
-@test "atlas-aci autosync AC-3: spawns docker run -d with the EXACT .mcp.json digest, rw /repo, index --since" {
+@test "atlas-aci autosync AC-3: spawns docker run -d --pull=never with the EXACT .mcp.json digest, rw /repo, index --since" {
   seed_manifest
   seed_mcp_with_atlas_aci
   setup_fake_docker_autosync
@@ -2509,6 +2509,11 @@ EOF
   [[ "$argv" == *"$ATLAS_ACI_DIGEST"* ]]
   # Detached.
   [[ "$argv" == *" -d "* || "$argv" == *" -d" ]]
+  # --pull=never: mechanical proof of "never block a turn on an image pull"
+  # (AC-5) — -d alone only defers the CONTAINER's lifetime, not image
+  # acquisition; a real `docker run` without this flag would pull a
+  # not-yet-local image synchronously in the foreground before detaching.
+  [[ "$argv" == *"--pull=never"* ]]
   # rw /repo mount — NOT :ro (the inverse of serve's read-only mount).
   [[ "$argv" == *"-v $PWD:/repo "* ]] || [[ "$argv" == *"-v $PWD:/repo" ]]
   [[ "$argv" != *":/repo:ro"* ]]
