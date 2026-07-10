@@ -1,0 +1,42 @@
+schema: eidolons/change-spec.v1
+change_id: atlas-aci-autosync
+tier: full
+maker: vivi
+checker: vigil
+target: nexus v2.5.0 (harness auto-sync for atlas-aci)
+
+problem: >
+  atlas-aci serve reads a pre-built epoch-namespaced index over a read-only mount and never
+  re-indexes; the graph goes stale until a human re-runs `atlas-aci index`, silently answering
+  mid-session queries against an out-of-date graph.
+
+decision:
+  cadence: per-turn-background
+  rejected:
+    - session-start-only: leaves mid-session staleness (the stated pain)
+    - blocking-per-turn: violates the ECM <=300ms prompt-path budget
+  default: on
+  optout: eidolons.yaml .harness.atlas_sync.enabled = false
+  safety: >
+    atlas-aci index writes a temp file + atomic-rename under a single-writer lock (AC-H-17);
+    serve opens mode=ro; concurrent reindex cannot corrupt the reader.
+  precedent: >
+    same docker-in-hook shape as the existing `eidolons memory preflight` step (bounded, fail-open).
+
+invariants:
+  - reuse-exact-mcp-json-digest   # different digest => different SCHEMA_EPOCH => serve INDEX_UNAVAILABLE
+  - detached-nonblocking          # docker run -d; hook returns immediately
+  - dedup-by-container-name       # atlas-aci-sync-<slug>; skip if already running
+  - gate-atlas-wired-and-enabled  # no-op unless .mcpServers["atlas-aci"] present AND not disabled
+  - fail-open                     # docker absent / any error => silent no-op
+  - bash-3.2-clean
+
+files:
+  - cli/src/harness_hook.sh
+  - roster/mcps.yaml
+  - README.md
+  - cli/tests/harness.bats
+
+verify_items:
+  - fake-docker-shim asserts the exact spawned argv (image digest, -d, rw /repo mount, index --since)
+  - opt-out honored; atlas-absent no-op; dedup skip; fail-open on docker-absent

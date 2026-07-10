@@ -1,0 +1,54 @@
+{
+  "esl_version": "1.1",
+  "change_id": "atlas-aci-autosync",
+  "status": "verified",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "vigil",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "then": "the hook SHALL be a silent no-op when .mcpServers[\"atlas-aci\"] is absent from ./.mcp.json",
+      "verify_method": "bats: no atlas-aci in .mcp.json -\u003e zero docker invocations, exit 0, no stderr"
+    },
+    {
+      "id": "AC-2",
+      "then": "the hook SHALL be a silent no-op when eidolons.yaml .harness.atlas_sync.enabled is false",
+      "verify_method": "bats: enabled:false -\u003e zero docker invocations; absent block -\u003e fires (default on)"
+    },
+    {
+      "id": "AC-3",
+      "then": "when wired+enabled+docker-present the hook SHALL spawn `docker run -d` with the EXACT image digest read from .mcp.json and a read-write /repo mount running `index --since`",
+      "verify_method": "bats: fake docker shim records argv; assert @sha256 matches .mcp.json, -d present, -v \u003croot\u003e:/repo (no :ro), subcommand `index`, `--since` present"
+    },
+    {
+      "id": "AC-4",
+      "then": "the hook SHALL skip the spawn when a container named atlas-aci-sync-\u003cslug\u003e is already running",
+      "verify_method": "bats: docker shim reports the name as running -\u003e zero new `run` invocations"
+    },
+    {
+      "id": "AC-5",
+      "then": "the hook SHALL never block, never exit non-zero, and SHALL fail open when docker is absent",
+      "verify_method": "bats: docker absent on PATH -\u003e exit 0, silent; spawn is detached (-d) so returns immediately"
+    },
+    {
+      "id": "AC-6",
+      "then": "the auto-sync step SHALL run on BOTH SessionStart and UserPromptSubmit",
+      "verify_method": "bats: both HOOK_EVENT_NAME values trigger the step"
+    },
+    {
+      "id": "AC-7",
+      "then": "harness_hook.sh SHALL remain bash 3.2 clean and shellcheck -x -S error clean",
+      "verify_method": "cmd: shellcheck -x -S error cli/src/harness_hook.sh; no bash4 constructs"
+    },
+    {
+      "id": "AC-8",
+      "then": "README SHALL document auto-sync as on-by-default with the harness.atlas_sync.enabled:false opt-out",
+      "verify_method": "grep: README names atlas_sync.enabled and 'default'/'on by default'"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "created_at": "2026-07-10T19:01:02Z",
+  "drift_checked": true,
+  "has_code": true
+}
