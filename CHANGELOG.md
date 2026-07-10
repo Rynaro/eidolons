@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.5.0] — 2026-07-10 — atlas-aci auto-sync + the `release-nexus` skill
+
+### Added
+
+- **atlas-aci auto-sync — the code-graph stays fresh on its own** (`cli/src/harness_hook.sh`). atlas-aci's `serve` reads a pre-built, epoch-namespaced index over a read-only mount and never re-indexes; until now the graph sat stale until a human remembered to run `atlas-aci index`, silently answering mid-session `callers_of`/`search_symbol` against a tree that had moved on. The harness now fires a **detached, deduplicated, incremental `atlas-aci index --since`** on SessionStart and every UserPromptSubmit, so the graph converges on the working tree within ~one turn of any edit. **On by default** for any project with atlas-aci wired; opt-out with `harness.atlas_sync.enabled: false` in `eidolons.yaml`.
+
+  It never disrupts a turn — that was the design bar. The reindex reuses the **exact pinned digest and project slug from `.mcp.json`** (so the index epoch always matches the `serve` container reading it — a different digest would write a different-`SCHEMA_EPOCH` DB that `serve` then rejects). It runs `docker run -d --pull=never` so an absent-locally image fails fast instead of blocking the prompt path on a foreground pull, and both synchronous docker calls (the `docker ps` dedup and the spawn) are wrapped in the repo's `with_timeout` helper at a 1.5 s bound (`EIDOLONS_ATLAS_SYNC_TIMEOUT_S`), so a wedged-but-alive docker daemon can't hang a session either. Concurrent reindex-while-serving is safe: atlas-aci's `index` writes a temp file and atomically renames under a single-writer lock, and `serve` opens the DB `mode=ro`. Only the three hosts that execute the bash hook path — claude-code, codex, copilot — are affected; cursor/opencode wire differently and are untouched. Documented bound: the hook mounts its cwd (which every wired host sets to the project root); a nested workspace whose *different* root is cwd and also has atlas-aci wired would reindex that one. Planned and verified under [ESL](https://github.com/Rynaro/eidolons-esl) as change `atlas-aci-autosync` (tier `full`), maker≠checker — the checker reproduced the "never block" invariant as a wall-clock test (8.0 s → 2.0 s against the fix).
+
+- **`release-nexus` skill** (`.claude/skills/release-nexus/`) — completes the release-skill trio (`add-eidolon` for Eidolons, `bump-mcp` for MCP servers, `release-nexus` for the nexus itself). Every claim in it was verified while cutting v2.4.0. Two would otherwise cost an afternoon: the release workflow's integrity-metadata PR **gets no CI** (workflows don't run on `GITHUB_TOKEN`-authored PRs — the run sits at `action_required`, `gh pr checks` returns empty, and `gh api …/approve` 403s as "not a fork PR"), so it must be verified by hand; and the recorded `archive_sha256` is the sha256 of the **raw uncompressed tar**, not the published `.tar.gz` asset — hashing the asset gives a false mismatch that looks exactly like a broken release.
+
 ## [2.4.0] — 2026-07-10 — atlas-aci v2.0.0 pin + the `bump-mcp` skill
 
 ### Added
