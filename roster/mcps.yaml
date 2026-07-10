@@ -13,6 +13,12 @@ mcps:
     display_name: "Atlas-ACI"
     scope: system
     kind: oci-image
+    # Auto-sync: when wired, the nexus harness hook (cli/src/harness_hook.sh)
+    # fires a detached, deduplicated, incremental `atlas-aci index --since`
+    # reindex on SessionStart + every UserPromptSubmit, reusing the exact
+    # pinned digest from .mcp.json below — on by default, opt-out only via
+    # eidolons.yaml `.harness.atlas_sync.enabled: false`. No field here
+    # controls it; this is a doc pointer, not a behavioral catalogue entry.
     description: "Stdio MCP server exposing structural codebase intelligence (graph + symbol index)."
     use_cases:
       - "Cross-language symbol search inside an MCP-capable host."

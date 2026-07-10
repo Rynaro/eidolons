@@ -2326,3 +2326,404 @@ EOF
   run jq -e '.context.codex_autocompact_managed | type == "boolean"' <<< "$(yaml_to_json_local eidolons.lock)"
   [ "$status" -eq 0 ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# atlas-aci auto-sync (.spectra/changes/atlas-aci-autosync) — AC-1..AC-8.
+#
+# A fake `docker` shim on PATH is REQUIRED for every positive-path test in
+# this section: this test box has a REAL docker binary on PATH, so without
+# the shim a passing gate would spawn (or attempt to pull) a real container.
+# The shim records the exact argv of every `docker run` invocation to a log
+# file so tests assert on argv content, not merely "docker was invoked".
+# ═══════════════════════════════════════════════════════════════════════════
+
+# The real atlas-aci image digest + slug baked into this repo's own .mcp.json
+# (verified against .mcp.json at spec time) — used as the default fixture
+# value so tests assert against a real-shaped, non-placeholder digest.
+ATLAS_ACI_DIGEST="ghcr.io/rynaro/atlas-aci@sha256:86f82c454d21378ba99ce7ef92494c34ad533e82bc76e6ea7affa4a8056326b3"
+
+# seed_mcp_with_atlas_aci [DIGEST] [SLUG]
+# Writes a .mcp.json whose atlas-aci entry mirrors the real `serve` wiring
+# shape (read-only /repo mount, --label eidolons.project=<slug>, pinned
+# @sha256 digest). SLUG defaults to "test-project"; pass "" to omit the
+# --label pair entirely (older-wiring / no-slug fixture for AC-3's fail-open
+# fallback case).
+seed_mcp_with_atlas_aci() {
+  local digest="${1:-$ATLAS_ACI_DIGEST}"
+  local slug="${2-test-project}"
+  local label_args=""
+  if [[ -n "$slug" ]]; then
+    label_args='"--label", "eidolons.project='"$slug"'",'
+  fi
+  cat > .mcp.json <<JSON
+{
+  "mcpServers": {
+    "atlas-aci": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i", "--read-only",
+        $label_args
+        "-v", "$PWD:/repo:ro",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "$digest",
+        "serve", "--repo", "/repo"
+      ]
+    }
+  }
+}
+JSON
+}
+
+# setup_fake_docker_autosync
+# Installs a fake `docker` on PATH (prepended, shadowing the real binary).
+# Controlled by:
+#   FAKE_DOCKER_ARGV_LOG      — path appended with one line per `docker run` argv.
+#   FAKE_DOCKER_RUNNING_NAME  — when `docker ps` is called, echoed back verbatim
+#                               (simulates an already-running sync container).
+#   FAKE_DOCKER_PS_SLEEP      — seconds `docker ps` sleeps BEFORE responding
+#                               (simulates a daemon that is up but wedged, for
+#                               the with_timeout wall-clock proof — F-1).
+setup_fake_docker_autosync() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-docker-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/docker" <<'DSHIM'
+#!/usr/bin/env bash
+ARGV_LOG="${FAKE_DOCKER_ARGV_LOG:-}"
+RUNNING_NAME="${FAKE_DOCKER_RUNNING_NAME:-}"
+PS_SLEEP="${FAKE_DOCKER_PS_SLEEP:-0}"
+case "${1:-}" in
+  ps)
+    # exec (not a plain `sleep` subprocess): the real docker CLI is a single
+    # process that blocks on its OWN syscall when a daemon is wedged — it
+    # never forks a child that could outlive a `kill -9` on the parent and
+    # keep a command-substitution pipe open. `exec` replaces THIS process's
+    # image with `sleep` (same PID, no descendant), matching that shape so
+    # with_timeout's `kill -9 "$pid"` genuinely terminates the "hang".
+    if [ "$PS_SLEEP" != "0" ]; then
+      exec sleep "$PS_SLEEP"
+    fi
+    [ -n "$RUNNING_NAME" ] && printf '%s\n' "$RUNNING_NAME"
+    exit 0
+    ;;
+  run)
+    [ -n "$ARGV_LOG" ] && printf '%s\n' "$*" >> "$ARGV_LOG"
+    exit 0
+    ;;
+esac
+exit 0
+DSHIM
+  chmod +x "$fake_bin/docker"
+  export PATH="$fake_bin:$PATH"
+}
+
+# ─── AC-1: atlas-aci absent from .mcp.json → zero docker `run` invocations ───
+
+@test "atlas-aci autosync AC-1: atlas-aci absent from .mcp.json -> zero docker run calls" {
+  seed_manifest
+  # .mcp.json exists but has no atlas-aci entry.
+  printf '{"mcpServers":{"junction":{"command":"junction","args":[]}}}\n' > .mcp.json
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync AC-1: no .mcp.json at all -> zero docker run calls, exit 0" {
+  seed_manifest
+  # No .mcp.json file whatsoever.
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON='{"decision":"clarify"}' PROMPT="thanks" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+# ─── AC-2: opt-out — enabled:false silences it; absent block fires (default on) ───
+
+@test "atlas-aci autosync AC-2: harness.atlas_sync.enabled:false -> zero docker run calls" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+harness:
+  atlas_sync:
+    enabled: false
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync AC-2: absent harness block -> fires (default on)" {
+  seed_manifest   # no 'harness:' block at all
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+  grep -q -- "--rm" "$argv_log"
+}
+
+@test "atlas-aci autosync AC-2: harness.atlas_sync present with no 'enabled' key -> fires (default on)" {
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [claude-code]
+harness:
+  atlas_sync: {}
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+}
+
+# ─── AC-3: exact argv — digest, -d, rw /repo mount, index --since ────────────
+
+@test "atlas-aci autosync AC-3: spawns docker run -d --pull=never with the EXACT .mcp.json digest, rw /repo, index --since" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+  local argv
+  argv="$(cat "$argv_log")"
+  # Exact digest reused verbatim from .mcp.json (AC-3's load-bearing invariant).
+  [[ "$argv" == *"$ATLAS_ACI_DIGEST"* ]]
+  # Detached.
+  [[ "$argv" == *" -d "* || "$argv" == *" -d" ]]
+  # --pull=never: mechanical proof of "never block a turn on an image pull"
+  # (AC-5) — -d alone only defers the CONTAINER's lifetime, not image
+  # acquisition; a real `docker run` without this flag would pull a
+  # not-yet-local image synchronously in the foreground before detaching.
+  [[ "$argv" == *"--pull=never"* ]]
+  # rw /repo mount — NOT :ro (the inverse of serve's read-only mount).
+  [[ "$argv" == *"-v $PWD:/repo "* ]] || [[ "$argv" == *"-v $PWD:/repo" ]]
+  [[ "$argv" != *":/repo:ro"* ]]
+  # Subcommand + incremental flag.
+  [[ "$argv" == *" index "* ]] || [[ "$argv" == *" index"* ]]
+  [[ "$argv" == *"--since"* ]]
+  # Reused eidolons.project label (same slug source as the digest).
+  [[ "$argv" == *"eidolons.project=test-project"* ]]
+  # --name follows the atlas-aci-sync-<slug> convention (AC-4's dedup key).
+  [[ "$argv" == *"atlas-aci-sync-test-project"* ]]
+}
+
+@test "atlas-aci autosync AC-3: fires identically on UserPromptSubmit (not just SessionStart)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON='{"decision":"clarify"}' PROMPT="thanks" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+  grep -q -- "$ATLAS_ACI_DIGEST" "$argv_log"
+}
+
+@test "atlas-aci autosync AC-3: no eidolons.project label in .mcp.json -> fail-open no-op (never guesses a slug)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci "$ATLAS_ACI_DIGEST" ""   # no --label pair at all
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+# ─── AC-4: dedup — a same-named container already running skips the spawn ───
+
+@test "atlas-aci autosync AC-4: container already running -> zero NEW docker run calls" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  export FAKE_DOCKER_RUNNING_NAME="atlas-aci-sync-test-project"
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync AC-4: a DIFFERENTLY-named running container does NOT block the spawn" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  export FAKE_DOCKER_RUNNING_NAME="atlas-aci-sync-some-other-project"
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+}
+
+# ─── F-1 (checker finding): a wedged-but-up daemon must not hang the turn ────
+# Mechanical proof that with_timeout actually bounds the dedup probe — not
+# just that a flag/helper name is present in the source. The fake `docker ps`
+# sleeps far LONGER than the configured bound; the hook must still return
+# within roughly the bound (wall-clock), never the full sleep duration.
+
+@test "atlas-aci autosync F-1: wedged 'docker ps' is bounded by with_timeout (wall-clock proof)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  export FAKE_DOCKER_PS_SLEEP=8            # sleeps far longer than the bound below
+  export EIDOLONS_ATLAS_SYNC_TIMEOUT_S=2   # short bound to keep the test fast
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  local start_s end_s elapsed
+  start_s="$(date +%s)"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  end_s="$(date +%s)"
+  elapsed=$(( end_s - start_s ))
+  [ "$status" -eq 0 ]
+  # Must return well BEFORE the full 8s sleep would have elapsed (~2s bound +
+  # slack for with_timeout's own housekeeping + the follow-on spawn call) —
+  # proves the wedged probe was actually killed, not merely flagged.
+  [ "$elapsed" -lt 6 ]
+  # The killed (empty) dedup probe must fall through to a (also-bounded)
+  # spawn attempt — proving the fail-open composition, not a silent stall.
+  [ -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync F-1: with_timeout is the ONLY timeout idiom used (no hand-rolled duplicate)" {
+  # Guards against re-introducing a second bash-3.2 timeout idiom for this
+  # call — the checker's explicit instruction was one idiom repo-wide.
+  run grep -c "with_timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 2 ]   # the ps dedup probe + the run spawn
+  ! grep -q "GNU timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+}
+
+# ─── AC-5: fail-open — docker absent -> exit 0, silent; never blocks ─────────
+
+@test "atlas-aci autosync AC-5: docker absent from PATH -> exit 0, silent, hook still emits its normal payload" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  seed_cortex
+  # Shadow docker with a non-executable placeholder (command -v skips it),
+  # mirroring memory.bats's AC-R27-2 pattern.
+  local shadow_bin="$BATS_TEST_TMPDIR/shadow-bin"
+  mkdir -p "$shadow_bin"
+  printf '#!/usr/bin/env bash\n' > "$shadow_bin/docker"
+  run env PATH="$shadow_bin:$PATH" HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  # The hook's OWN normal SessionStart payload (cortex digest) must still
+  # emit — auto-sync's fail-open must never suppress unrelated hook output.
+  [ -n "$output" ]
+  run jq -r '.hookSpecificOutput.hookEventName' <<< "$output"
+  [ "$status" -eq 0 ]
+  [ "$output" = "SessionStart" ]
+}
+
+@test "atlas-aci autosync AC-5: real docker binary present but atlas-aci absent -> never invoked (no hang, no network)" {
+  seed_manifest
+  # No atlas-aci in .mcp.json — this test deliberately does NOT shadow the
+  # real system docker, proving gate 1 short-circuits before any docker
+  # invocation (real docker run would attempt a network pull otherwise).
+  printf '{"mcpServers":{}}\n' > .mcp.json
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+}
+
+# ─── AC-6: fires on BOTH SessionStart and UserPromptSubmit ───────────────────
+
+@test "atlas-aci autosync AC-6: HOOK_EVENT_NAME=SessionStart triggers the spawn" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+}
+
+@test "atlas-aci autosync AC-6: HOOK_EVENT_NAME=UserPromptSubmit triggers the spawn (trivial route too)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  # A trivial/clarify decision (empty stdout) must STILL fire the sync —
+  # the reindex is independent of whether a route occurs.
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON='{"decision":"clarify"}' PROMPT="thanks, that looks good" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]           # trivial route still yields empty stdout (unrelated contract)
+  [ -s "$argv_log" ]         # ...but the sync still fired underneath it
+}
+
+@test "atlas-aci autosync AC-6: PostToolUse does NOT trigger the spawn (only the two named events)" {
+  seed_manifest_ecm_hosts claude-code
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=post_tool_use HOOK_EVENT_NAME=PostToolUse \
+    HOOK_STDIN_INPUT='{}' \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ ! -s "$argv_log" ]
+}
+
+# ─── AC-7: bash 3.2 clean (structural check; shellcheck run separately in CI) ─
+
+@test "atlas-aci autosync AC-7: harness_hook.sh has no bash4-only constructs (comments excluded)" {
+  # Exclude comment-only lines first — the file's own header comment names
+  # these constructs as prose ("Bash 3.2 safe: no declare -A, ...").
+  local code
+  code="$(grep -vE '^[[:space:]]*#' "$EIDOLONS_ROOT/cli/src/harness_hook.sh")"
+  ! printf '%s\n' "$code" | grep -qE 'declare -A|readarray|mapfile|&>>'
+  ! printf '%s\n' "$code" | grep -qE '\$\{[a-zA-Z_][a-zA-Z0-9_]*,,\}|\$\{[a-zA-Z_][a-zA-Z0-9_]*\^\^\}'
+}
+
+# ─── AC-8: README documents on-by-default + the opt-out knob ─────────────────
+
+@test "atlas-aci autosync AC-8: README names harness.atlas_sync.enabled and 'default'/'on by default'" {
+  run grep -n "atlas_sync.enabled" "$EIDOLONS_ROOT/README.md"
+  [ "$status" -eq 0 ]
+  run grep -Ein "on by default|default: on|default is on|enabled by default" "$EIDOLONS_ROOT/README.md"
+  [ "$status" -eq 0 ]
+}
