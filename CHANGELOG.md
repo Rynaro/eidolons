@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.4.0] — 2026-07-10 — atlas-aci v2.0.0 pin + the `bump-mcp` skill
+
+### Added
+
+- **`bump-mcp` skill** (`.claude/skills/bump-mcp/`) — the MCP counterpart to `add-eidolon`, which only ever covered Eidolons in `roster/index.yaml`. Nothing covered MCP servers in `roster/mcps.yaml`, and the consequence was measurable: the atlas-aci pin sat on `0.2.3` for **four upstream releases** while every consumer installed a stale image. The skill codifies digest capture and verification against the registry (never copied from a release note), backfilling skipped releases, the `cli/tests/mcp_images.bats` fixture coupling, the CHANGELOG and ESL steps, and the verification gates — plus the traps that cost real time: `imagetools inspect ghcr.io/x:v2.0.0` silently returns nothing because the git tag is `v`-prefixed and the image tag is not, and `blob/main` links into an upstream `.spectra/changes/<id>/` rot the moment the ESL lifecycle archives that folder.
+
 ### Changed
 
 - **atlas-aci MCP pinned to v2.0.0 — the harden-first major lands, and three skipped releases are backfilled** (`roster/mcps.yaml`). Rolls the catalogue pin `0.2.3 → 2.0.0` (`ghcr.io/rynaro/atlas-aci@sha256:e2542ef8…`, OCI image index, 4 platforms, cosign-signed with SBOM + build-provenance attestations; commit `91e060f`, tag `v2.0.0`). **The catalogue had sat on `0.2.3` since 2026-06-02 while upstream shipped `0.3.0`, `0.3.1` and `0.4.0`** — all three are now recorded with digests resolved from ghcr, so `eidolons mcp use atlas-aci@<ver>` can reach them and `verify` has signed metadata for each.
