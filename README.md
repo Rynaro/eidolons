@@ -203,6 +203,8 @@ eidolons harness status             # per-host effective enforcement tier
 
 With CRYSTALIUM installed, the session-start hook also runs `eidolons memory preflight` — a one-shot, fail-open recall that injects prior project memory, including `[skill/…]`-tagged verified procedures a weak orchestrator can invoke instead of re-deriving; `--explain` diagnoses a silent-empty store. `eidolons canary --all-hosts` verifies each host's effective tier against the lockfile, and `--strict`'s delegate-or-deny soundness is graded per host in [`DOSSIER-HARNESS-2026-06.md`](DOSSIER-HARNESS-2026-06.md) and [`docs/architecture.md`](docs/architecture.md) § "Harness Layer".
 
+With atlas-aci wired, the harness also keeps its code-graph fresh on its own: every SessionStart and UserPromptSubmit fires a detached, deduplicated, incremental `atlas-aci index --since` reindex against the exact image digest pinned in `.mcp.json`, so mid-session edits are visible to `callers_of` / `search_symbol` within about one turn — **on by default**, at the cost of one cheap detached container spin per turn (deduped to at most one in flight per project); disable it with `harness.atlas_sync.enabled: false` in `eidolons.yaml`.
+
 </details>
 
 ## The lifecycle and the context economy

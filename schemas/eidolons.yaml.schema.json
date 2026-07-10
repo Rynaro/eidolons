@@ -94,6 +94,21 @@
         }
       }
     },
+    "harness": {
+      "type": "object",
+      "description": "Harness hook configuration (cli/src/harness_hook.sh). Optional.",
+      "additionalProperties": false,
+      "properties": {
+        "atlas_sync": {
+          "type": "object",
+          "description": "atlas-aci auto-sync opt-out. Absent means the per-turn detached incremental reindex is ON (opt-out, unlike ECM's 'context' opt-in). Set enabled:false to disable it.",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" }
+          }
+        }
+      }
+    },
     "composition": {
       "type": "object",
       "description": "Documentation of intended pipeline. Not enforced by the CLI.",

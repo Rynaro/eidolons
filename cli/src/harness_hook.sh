@@ -155,6 +155,84 @@ _ecm_handoff_digest() {
   "$_bin" memory preflight --query "session_handoff recent context" 2>/dev/null || true
 }
 
+# ── atlas-aci auto-sync (harness step) ─────────────────────────────────────
+# Pure reads + one bounded `docker run -d` spawn. Fires on BOTH SessionStart
+# and UserPromptSubmit (spec §"Behaviour") so the code-graph converges on the
+# working tree within ~one turn of any edit. On by default; opt-out only.
+# Never touches stdout (the caller redirects this call to /dev/null) and
+# never raises — every gate failure is a silent `return 0`, on top of the
+# outer `_main 2>/dev/null || true` fail-open wrapper.
+
+# _atlas_autosync [ROOT] — silent no-op unless ALL hold:
+#   1. atlas-aci is wired: .mcpServers["atlas-aci"] in ROOT/.mcp.json (AC-1).
+#   2. Not disabled: ROOT/eidolons.yaml .harness.atlas_sync.enabled != false.
+#      Absent block/key/file => enabled (opt-out, the inverse of ECM's
+#      opt-in _ecm_project_enabled above) (AC-2).
+#   3. docker is on PATH (AC-5).
+# When all hold, reuses the EXACT pinned image digest AND the EXACT
+# eidolons.project slug from atlas-aci's OWN `serve` args in .mcp.json —
+# never resolves/recomputes either independently (AC-3). A different digest
+# can produce a different SCHEMA_EPOCH DB that `serve` then rejects with
+# INDEX_UNAVAILABLE; a different slug would diverge the sync container's
+# eidolons.project label from the serve container's, breaking
+# `docker ps --filter label=...` grouping. Absent label (older wiring) is a
+# fail-open no-op rather than guessing a slug from a different helper
+# (memory_probe_project_slug / project_slug are for OTHER surfaces and can
+# disagree with the mcp-install slug baked into .mcp.json).
+# Dedups by container name atlas-aci-sync-<slug>: skips the spawn if one
+# already exists (AC-4). Spawns `docker run --rm -d` (detached, returns
+# immediately — AC-5) with /repo mounted READ-WRITE (the inverse of serve's
+# `:ro` — index writes .atlas/graph.<epoch>.db).
+_atlas_autosync() {
+  local root="${1:-$(pwd)}"
+  local mcp="$root/.mcp.json"
+
+  # Gate 1 (AC-1): atlas-aci must be wired.
+  [ -f "$mcp" ] || return 0
+  jq -e '.mcpServers["atlas-aci"]' "$mcp" >/dev/null 2>&1 || return 0
+
+  # Gate 2 (AC-2): opt-out. Absent block/key/file => enabled. Mirrors the
+  # has("enabled") idiom (not `// true`, which would also fire on an
+  # explicit `false` — jq's `//` treats `false` as substitutable).
+  if [ -f "$root/eidolons.yaml" ]; then
+    local _atlas_sync_enabled
+    _atlas_sync_enabled="$(yaml_to_json "$root/eidolons.yaml" 2>/dev/null \
+      | jq -r '(.harness.atlas_sync // {}) | if has("enabled") then (.enabled | tostring) else "true" end' 2>/dev/null || echo true)"
+    [ "$_atlas_sync_enabled" = "false" ] && return 0
+  fi
+
+  # Gate 3 (AC-5): docker must be on PATH — fail open otherwise.
+  command -v docker >/dev/null 2>&1 || return 0
+
+  # Reuse the exact pinned digest + eidolons.project slug (see header note).
+  local image_ref slug
+  image_ref="$(jq -r '(.mcpServers["atlas-aci"].args // [])[]
+    | select(startswith("ghcr.io/") and contains("@sha256:"))' "$mcp" 2>/dev/null | head -1)"
+  [ -n "$image_ref" ] || return 0
+  slug="$(jq -r '(.mcpServers["atlas-aci"].args // [])[]
+    | select(startswith("eidolons.project="))' "$mcp" 2>/dev/null | head -1)"
+  slug="${slug#eidolons.project=}"
+  [ -n "$slug" ] || return 0
+
+  local cname="atlas-aci-sync-${slug}"
+
+  # Dedup (AC-4): skip the spawn if a container by this name already exists.
+  local running
+  running="$(docker ps -a --filter "name=^/${cname}\$" --format '{{.Names}}' 2>/dev/null || true)"
+  printf '%s\n' "$running" | grep -qx "$cname" && return 0
+
+  # Spawn detached (AC-3/AC-5).
+  docker run --rm -d \
+    --name "$cname" \
+    --label "eidolons.project=${slug}" \
+    -v "${root}:/repo" \
+    --cap-drop ALL --security-opt no-new-privileges \
+    "$image_ref" \
+    index --repo /repo --since auto >/dev/null 2>&1 || true
+
+  return 0
+}
+
 # ── Fail-open wrapper: any unhandled error → empty stdout, exit 0 ──────────
 # We use a subshell pattern so errors inside _main don't reach the caller.
 _main() {
@@ -167,6 +245,15 @@ _main() {
 
   if [[ -z "$hook_host" ]]; then
     return 0  # misconfigured — fail-open
+  fi
+
+  # ── atlas-aci auto-sync (AC-6): fires on BOTH SessionStart and
+  # UserPromptSubmit, independent of routing decision/mode — the whole point
+  # is a per-turn background reindex regardless of whether a route occurs.
+  # Output-silent (redirected) and error-silent (`|| true`) on top of its own
+  # internal fail-open gates.
+  if [[ "$event_name" == "SessionStart" || "$event_name" == "UserPromptSubmit" ]]; then
+    _atlas_autosync >/dev/null 2>&1 || true
   fi
 
   # ── SessionStart mode: emit cortex digest ────────────────────────────────
