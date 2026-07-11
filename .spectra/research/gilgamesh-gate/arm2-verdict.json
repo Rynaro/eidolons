@@ -1,0 +1,10 @@
+{
+  "gilgamesh_fires_total": 0,
+  "over_capture_strongly_matched": 0,
+  "MUST_bar": 0,
+  "near_threshold_capture": 0,
+  "near_threshold_denominator": 20,
+  "near_capture_rate_pct": 0.0,
+  "bound_pct": 5.0,
+  "arm2_verdict": "PASS"
+}

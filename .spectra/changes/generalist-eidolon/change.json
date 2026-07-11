@@ -296,12 +296,26 @@
         "AC-F05"
       ],
       "authority": "orchestrator under maintainer GO (P3), 2026-07-11"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "P4 margins frozen BEFORE any gate measurement exists (anti-p-hacking; user delegated OQ-1/OQ-3 via blanket GO-to-release). OQ-1: Arm-1 minimum cohort K=12 (actual N=15, stratified 5/5/5 easy/medium/hard); verified-completion floor X=80% per run, required on each of 3 independent runs (pass^3, Kupo precedent). Arm-2: hard MUST=0 over-capture on the strongly-matched (>=tau) subset (already frozen); near-threshold band [tau-0.15, tau) non-inferiority bound = capture of labeled-specialist-owned prompts <= 5% of the near-threshold denominator. OQ-3: host-GP-slot export is DOCUMENTATION-ONLY for v0.1 (GAP-002 \u2014 no host exposes an override mechanism; REVERSAL-4 consciously accepted: the member stands on S-internal + worker-archetype grounds). ALSO: pre-gate kernel gap found and fixed \u2014 AC-C01 requires the ROUTER to emit selected:[gilgamesh]; P1 had implemented the Step-2(a) branch only at the fixture/extractor layer, cli/src/run.sh had no fallthrough dispatch; wired in during P4 prep by the implementation maker.",
+      "affects": [
+        "OQ-1",
+        "OQ-3",
+        "AC-G01",
+        "AC-G02",
+        "AC-G04",
+        "AC-C01"
+      ],
+      "authority": "orchestrator under maintainer GO-to-release, 2026-07-11"
     }
   ],
   "open_questions_human": [
     {
       "id": "OQ-1",
-      "text": "Arm-2 non-inferiority margin (hard MUST=0 over-capture on strongly-matched; numeric soft margin for near-threshold band)"
+      "text": "Arm-2 non-inferiority margin (hard MUST=0 over-capture on strongly-matched; numeric soft margin for near-threshold band)",
+      "resolved": "X=80% per run x3 (pass^3), K=12/N=15; near-threshold bound <=5% (2026-07-11, delegated)"
     },
     {
       "id": "OQ-2",
@@ -310,7 +324,8 @@
     },
     {
       "id": "OQ-3",
-      "text": "Host-GP-slot wiring feasibility vs documentation-only (GAP-002 / REVERSAL-4)"
+      "text": "Host-GP-slot wiring feasibility vs documentation-only (GAP-002 / REVERSAL-4)",
+      "resolved": "documentation-only for v0.1; REVERSAL-4 accepted (2026-07-11, delegated)"
     }
   ],
   "drift_checked": false,

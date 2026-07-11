@@ -1,0 +1,76 @@
+{"id": "sm-vigil-03", "ground_truth_owner": "vigil", "rubric_rule": "Regression after deploy, root cause"}
+{"id": "sm-forge-03", "ground_truth_owner": "forge", "rubric_rule": "Weigh trade-off, ambiguous"}
+{"id": "sm-idg-02", "ground_truth_owner": "idg", "rubric_rule": "Chronicle, ADR"}
+{"id": "pp-vivi-02", "ground_truth_owner": "vivi", "rubric_rule": "Build, wire up, tests"}
+{"id": "nt-forge-01", "ground_truth_owner": "forge", "rubric_rule": "Named mention, forge class"}
+{"id": "p-class-P8", "ground_truth_owner": "vivi", "rubric_rule": "Configure, implement"}
+{"id": "pp-idg-02", "ground_truth_owner": "idg", "rubric_rule": "Lasting record, document"}
+{"id": "pp-idg-01", "ground_truth_owner": "idg", "rubric_rule": "Write up, document"}
+{"id": "sm-ramza-01", "ground_truth_owner": "ramza", "rubric_rule": "Decision-ready spec"}
+{"id": "sm-spectra-03", "ground_truth_owner": "ramza", "rubric_rule": "Clarify requirements, SPECTRA"}
+{"id": "pp-ramza-02", "ground_truth_owner": "ramza", "rubric_rule": "Break down work"}
+{"id": "sm-spectra-01", "ground_truth_owner": "ramza", "rubric_rule": "Spec, SPECTRA→ramza"}
+{"id": "nt-ramza-01", "ground_truth_owner": "ramza", "rubric_rule": "Named mention, ramza"}
+{"id": "sm-kupo-02", "ground_truth_owner": "kupo", "rubric_rule": "Rename, search-replace"}
+{"id": "sm-atlas-01", "ground_truth_owner": "atlas", "rubric_rule": "Map call graph"}
+{"id": "pp-vigil-01", "ground_truth_owner": "vigil", "rubric_rule": "Intermittent, heisenbug"}
+{"id": "sm-vivi-04", "ground_truth_owner": "vivi", "rubric_rule": "Add flag, tests"}
+{"id": "pp-atlas-01", "ground_truth_owner": "atlas", "rubric_rule": "Sketch dependency graph"}
+{"id": "pp-kupo-02", "ground_truth_owner": "kupo", "rubric_rule": "Swap occurrences"}
+{"id": "nt-ramza-02", "ground_truth_owner": "ramza", "rubric_rule": "Named mention, ramza"}
+{"id": "nt-atlas-02", "ground_truth_owner": "atlas", "rubric_rule": "Named mention, atlas"}
+{"id": "pp-kupo-01", "ground_truth_owner": "kupo", "rubric_rule": "One-line import fix"}
+{"id": "pp-spectra-01", "ground_truth_owner": "ramza", "rubric_rule": "Plan, SPECTRA→ramza"}
+{"id": "nt-forge-02", "ground_truth_owner": "forge", "rubric_rule": "Named mention, forge"}
+{"id": "pp-atlas-02", "ground_truth_owner": "atlas", "rubric_rule": "Locate, audit"}
+{"id": "sm-forge-01", "ground_truth_owner": "forge", "rubric_rule": "Should we trade-off"}
+{"id": "sm-atlas-03", "ground_truth_owner": "atlas", "rubric_rule": "Audit, trace"}
+{"id": "nt-vigil-02", "ground_truth_owner": "vigil", "rubric_rule": "Named mention, vigil"}
+{"id": "p-class-P10", "ground_truth_owner": "clarify", "rubric_rule": "Non-English, rule 4"}
+{"id": "sm-kupo-03", "ground_truth_owner": "kupo", "rubric_rule": "Lockfile bump"}
+{"id": "sm-vigil-02", "ground_truth_owner": "vigil", "rubric_rule": "Intermittent, post-mortem"}
+{"id": "sm-ramza-04", "ground_truth_owner": "ramza", "rubric_rule": "Scope work"}
+{"id": "pp-ramza-01", "ground_truth_owner": "ramza", "rubric_rule": "Plan, blueprint"}
+{"id": "sm-ramza-02", "ground_truth_owner": "ramza", "rubric_rule": "Plan, decompose"}
+{"id": "sm-atlas-02", "ground_truth_owner": "atlas", "rubric_rule": "Find, locate"}
+{"id": "nt-kupo-02", "ground_truth_owner": "kupo", "rubric_rule": "Named mention, kupo"}
+{"id": "nt-idg-01", "ground_truth_owner": "idg", "rubric_rule": "Named mention, idg"}
+{"id": "p-class-P5", "ground_truth_owner": "clarify", "rubric_rule": "Generic pathless ask"}
+{"id": "p-class-P1", "ground_truth_owner": "clarify", "rubric_rule": "Generic pathless ask"}
+{"id": "nt-atlas-01", "ground_truth_owner": "atlas", "rubric_rule": "Named mention, atlas"}
+{"id": "nt-kupo-01", "ground_truth_owner": "kupo", "rubric_rule": "Named mention, kupo"}
+{"id": "p-class-P2", "ground_truth_owner": "clarify", "rubric_rule": "Generic pathless ask"}
+{"id": "sm-spectra-02", "ground_truth_owner": "ramza", "rubric_rule": "Plan, SPECTRA→ramza"}
+{"id": "p-class-P3", "ground_truth_owner": "vivi", "rubric_rule": "Cross-cutting refactor"}
+{"id": "nt-apivr-02", "ground_truth_owner": "vivi", "rubric_rule": "Named mention, APIVR→vivi"}
+{"id": "sm-vivi-01", "ground_truth_owner": "vivi", "rubric_rule": "Implement, tests"}
+{"id": "sm-ramza-03", "ground_truth_owner": "ramza", "rubric_rule": "Clarify requirements"}
+{"id": "p-class-P4", "ground_truth_owner": "vigil", "rubric_rule": "Flaky test"}
+{"id": "sm-forge-02", "ground_truth_owner": "forge", "rubric_rule": "Which approach"}
+{"id": "nt-vivi-01", "ground_truth_owner": "vivi", "rubric_rule": "Named mention, vivi"}
+{"id": "sm-vigil-01", "ground_truth_owner": "vigil", "rubric_rule": "Root cause, heisenbug"}
+{"id": "nt-spectra-02", "ground_truth_owner": "ramza", "rubric_rule": "Named mention, SPECTRA→ramza"}
+{"id": "sm-apivr-02", "ground_truth_owner": "vivi", "rubric_rule": "Fix, extend, APIVR→vivi"}
+{"id": "sm-idg-01", "ground_truth_owner": "idg", "rubric_rule": "Document, write"}
+{"id": "p-class-P11", "ground_truth_owner": "kupo", "rubric_rule": "Lockfile bump"}
+{"id": "p-class-P9", "ground_truth_owner": "vivi", "rubric_rule": "Cross-cutting refactor"}
+{"id": "nt-spectra-01", "ground_truth_owner": "ramza", "rubric_rule": "Named mention, SPECTRA→ramza"}
+{"id": "pp-vivi-01", "ground_truth_owner": "vivi", "rubric_rule": "Wire, implement"}
+{"id": "pp-apivr-01", "ground_truth_owner": "vivi", "rubric_rule": "Fix, extend, APIVR→vivi"}
+{"id": "p-class-P7", "ground_truth_owner": "idg", "rubric_rule": "Explain, synthesize"}
+{"id": "p-class-P6", "ground_truth_owner": "forge", "rubric_rule": "Chain-spanning decide-then-build"}
+{"id": "nt-apivr-01", "ground_truth_owner": "vivi", "rubric_rule": "Named mention, APIVR→vivi"}
+{"id": "sm-apivr-03", "ground_truth_owner": "vivi", "rubric_rule": "Build, implement, APIVR→vivi"}
+{"id": "sm-kupo-01", "ground_truth_owner": "kupo", "rubric_rule": "One-line fix"}
+{"id": "pp-vivi-03", "ground_truth_owner": "vivi", "rubric_rule": "Patch, extend"}
+{"id": "sm-vivi-03", "ground_truth_owner": "vivi", "rubric_rule": "Fix, extend"}
+{"id": "sm-apivr-01", "ground_truth_owner": "vivi", "rubric_rule": "Implement, APIVR→vivi"}
+{"id": "nt-ramza-03", "ground_truth_owner": "ramza", "rubric_rule": "Named mention, ramza"}
+{"id": "sm-idg-03", "ground_truth_owner": "idg", "rubric_rule": "Synthesize, changelog"}
+{"id": "nt-vivi-03", "ground_truth_owner": "vivi", "rubric_rule": "Named mention, vivi"}
+{"id": "nt-vivi-02", "ground_truth_owner": "vivi", "rubric_rule": "Named mention, vivi"}
+{"id": "nt-idg-02", "ground_truth_owner": "idg", "rubric_rule": "Named mention, idg"}
+{"id": "sm-vivi-02", "ground_truth_owner": "vivi", "rubric_rule": "Build, wire, tests"}
+{"id": "sm-kupo-04", "ground_truth_owner": "kupo", "rubric_rule": "Lint autofix"}
+{"id": "pp-forge-01", "ground_truth_owner": "forge", "rubric_rule": "Weigh, decide"}
+{"id": "nt-vigil-01", "ground_truth_owner": "vigil", "rubric_rule": "Named mention, vigil"}

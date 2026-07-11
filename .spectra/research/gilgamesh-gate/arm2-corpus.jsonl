@@ -1,0 +1,76 @@
+{"id": "sm-atlas-01", "stratum": "strongly-matched", "prompt": "Map the call graph for roster_get in cli/src/lib.sh.", "kernel_top_eidolon": "atlas", "kernel_top_score": 0.9}
+{"id": "sm-atlas-02", "stratum": "strongly-matched", "prompt": "Find where fetch_eidolon is called across cli/src and list entrypoints.", "kernel_top_eidolon": "atlas", "kernel_top_score": 0.97}
+{"id": "sm-atlas-03", "stratum": "strongly-matched", "prompt": "Audit the dispatch flow read-only, tracing who calls dispatch_eidolon.sh.", "kernel_top_eidolon": "atlas", "kernel_top_score": 0.9}
+{"id": "sm-ramza-01", "stratum": "strongly-matched", "prompt": "Write a decision-ready spec for adding a new preset to roster/index.yaml.", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.9}
+{"id": "sm-ramza-02", "stratum": "strongly-matched", "prompt": "Plan and decompose the work needed to add a health-check command.", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.9}
+{"id": "sm-ramza-03", "stratum": "strongly-matched", "prompt": "Clarify requirements for the new sandbox loop feature before anyone builds it.", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.9}
+{"id": "sm-ramza-04", "stratum": "strongly-matched", "prompt": "Scope the work for migrating mcp catalogue entries, given/when/then.", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.9}
+{"id": "sm-spectra-01", "stratum": "strongly-matched", "prompt": "SPECTRA, write a decision-ready spec for the new health-check command.", "kernel_top_eidolon": "spectra", "kernel_top_score": 1.0}
+{"id": "sm-spectra-02", "stratum": "strongly-matched", "prompt": "Spectra, plan and decompose the sandbox loop feature requirements.", "kernel_top_eidolon": "spectra", "kernel_top_score": 1.0}
+{"id": "sm-spectra-03", "stratum": "strongly-matched", "prompt": "Ask Spectra to clarify requirements for the mcp catalogue migration.", "kernel_top_eidolon": "spectra", "kernel_top_score": 1.0}
+{"id": "sm-vivi-01", "stratum": "strongly-matched", "prompt": "Implement a --json flag for cli/src/status.sh and make the tests pass.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.8}
+{"id": "sm-vivi-02", "stratum": "strongly-matched", "prompt": "Build the new health-check subcommand and wire up its tests.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.9}
+{"id": "sm-vivi-03", "stratum": "strongly-matched", "prompt": "Fix the broken sandbox loop and extend its retry handling.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.9}
+{"id": "sm-vivi-04", "stratum": "strongly-matched", "prompt": "Add the missing flag to cli/src/mcp_list.sh and make tests pass.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.9}
+{"id": "sm-apivr-01", "stratum": "strongly-matched", "prompt": "APIVR-Δ, implement the missing flag in cli/src/mcp_list.sh.", "kernel_top_eidolon": "apivr", "kernel_top_score": 1.0}
+{"id": "sm-apivr-02", "stratum": "strongly-matched", "prompt": "Ask APIVR-Δ to fix the broken retry logic and extend the tests.", "kernel_top_eidolon": "apivr", "kernel_top_score": 1.0}
+{"id": "sm-apivr-03", "stratum": "strongly-matched", "prompt": "apivr, build the health-check subcommand and wire up its tests.", "kernel_top_eidolon": "apivr", "kernel_top_score": 1.0}
+{"id": "sm-idg-01", "stratum": "strongly-matched", "prompt": "Document the new sandbox loop feature and write the docs for it.", "kernel_top_eidolon": "idg", "kernel_top_score": 0.9}
+{"id": "sm-idg-02", "stratum": "strongly-matched", "prompt": "Chronicle the recent roster decisions in an ADR.", "kernel_top_eidolon": "idg", "kernel_top_score": 0.9}
+{"id": "sm-idg-03", "stratum": "strongly-matched", "prompt": "Synthesize a changelog narrative for the last three releases.", "kernel_top_eidolon": "idg", "kernel_top_score": 0.9}
+{"id": "sm-forge-01", "stratum": "strongly-matched", "prompt": "Should we use REST or gRPC for the new health-check endpoint — deliberate the trade-off.", "kernel_top_eidolon": "forge", "kernel_top_score": 0.97}
+{"id": "sm-forge-02", "stratum": "strongly-matched", "prompt": "Which approach is better between polling and webhooks — decide between them.", "kernel_top_eidolon": "forge", "kernel_top_score": 0.9}
+{"id": "sm-forge-03", "stratum": "strongly-matched", "prompt": "Weigh the ambiguous trade-off between caching locally or remotely, counterfactual included.", "kernel_top_eidolon": "forge", "kernel_top_score": 0.97}
+{"id": "sm-vigil-01", "stratum": "strongly-matched", "prompt": "Find the root cause of the flaky checkout test — it's a heisenbug.", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.97}
+{"id": "sm-vigil-02", "stratum": "strongly-matched", "prompt": "Why does this fail intermittently after the last release — post-mortem it.", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.9}
+{"id": "sm-vigil-03", "stratum": "strongly-matched", "prompt": "We saw a regression after the last deploy — investigate why it fails.", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.8}
+{"id": "sm-kupo-01", "stratum": "strongly-matched", "prompt": "Fix the import in cli/src/roster.sh — it's a one-line fix.", "kernel_top_eidolon": "kupo", "kernel_top_score": 1.0}
+{"id": "sm-kupo-02", "stratum": "strongly-matched", "prompt": "Rename symbol getUserData to fetchUserProfile — a search-replace across two files.", "kernel_top_eidolon": "kupo", "kernel_top_score": 1.0}
+{"id": "sm-kupo-03", "stratum": "strongly-matched", "prompt": "Bump the lockfile and pin the version for the dependency.", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.9500000000000001}
+{"id": "sm-kupo-04", "stratum": "strongly-matched", "prompt": "Autofix lint and format fix cli/src/lib.sh.", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.9}
+{"id": "nt-atlas-01", "stratum": "near-threshold", "prompt": "Atlas, what do you make of this?", "kernel_top_eidolon": "atlas", "kernel_top_score": 0.5}
+{"id": "nt-atlas-02", "stratum": "near-threshold", "prompt": "Hey Atlas, any thoughts here?", "kernel_top_eidolon": "atlas", "kernel_top_score": 0.5}
+{"id": "nt-ramza-01", "stratum": "near-threshold", "prompt": "Ramza, what do you think?", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.5}
+{"id": "nt-ramza-02", "stratum": "near-threshold", "prompt": "Ramza, any comments on the overall shape of this?", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.5}
+{"id": "nt-spectra-01", "stratum": "near-threshold", "prompt": "Spectra, any thoughts on this?", "kernel_top_eidolon": "spectra", "kernel_top_score": 0.5}
+{"id": "nt-spectra-02", "stratum": "near-threshold", "prompt": "Spectra, what's your take on it?", "kernel_top_eidolon": "spectra", "kernel_top_score": 0.5}
+{"id": "nt-vivi-01", "stratum": "near-threshold", "prompt": "Vivi, any comments here?", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.5}
+{"id": "nt-vivi-02", "stratum": "near-threshold", "prompt": "Vivi, thoughts on this general area?", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.5}
+{"id": "nt-apivr-01", "stratum": "near-threshold", "prompt": "APIVR-Δ, any thoughts?", "kernel_top_eidolon": "apivr", "kernel_top_score": 0.5}
+{"id": "nt-apivr-02", "stratum": "near-threshold", "prompt": "apivr, what's your take on this?", "kernel_top_eidolon": "apivr", "kernel_top_score": 0.5}
+{"id": "nt-idg-01", "stratum": "near-threshold", "prompt": "IDG, any comments?", "kernel_top_eidolon": "idg", "kernel_top_score": 0.5}
+{"id": "nt-idg-02", "stratum": "near-threshold", "prompt": "IDG, what do you think of this?", "kernel_top_eidolon": "idg", "kernel_top_score": 0.5}
+{"id": "nt-forge-01", "stratum": "near-threshold", "prompt": "FORGE, any thoughts here?", "kernel_top_eidolon": "forge", "kernel_top_score": 0.5}
+{"id": "nt-forge-02", "stratum": "near-threshold", "prompt": "Forge, what's your take?", "kernel_top_eidolon": "forge", "kernel_top_score": 0.5}
+{"id": "nt-vigil-01", "stratum": "near-threshold", "prompt": "VIGIL, any comments?", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.5}
+{"id": "nt-vigil-02", "stratum": "near-threshold", "prompt": "Vigil, what do you think?", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.5}
+{"id": "nt-kupo-01", "stratum": "near-threshold", "prompt": "Kupo, any thoughts on this?", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.5}
+{"id": "nt-kupo-02", "stratum": "near-threshold", "prompt": "Kupo, what's your take?", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.5}
+{"id": "nt-ramza-03", "stratum": "near-threshold", "prompt": "Ramza, any reaction to this?", "kernel_top_eidolon": "ramza", "kernel_top_score": 0.5}
+{"id": "nt-vivi-03", "stratum": "near-threshold", "prompt": "Vivi, any reaction to this?", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.5}
+{"id": "pp-atlas-01", "stratum": "paraphrase", "prompt": "Sketch the dependency graph for roster_get in cli/src/lib.sh.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-atlas-02", "stratum": "paraphrase", "prompt": "Locate every caller of fetch_eidolon and list the surface's starting points.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-ramza-01", "stratum": "paraphrase", "prompt": "Put together a build-ready blueprint for adding a new preset to roster/index.yaml.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.8}
+{"id": "pp-ramza-02", "stratum": "paraphrase", "prompt": "Break the work for a health-check command into ordered pieces first.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-vivi-01", "stratum": "paraphrase", "prompt": "Wire a --json switch into cli/src/status.sh and get the new case to succeed.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-vivi-02", "stratum": "paraphrase", "prompt": "Stand up the health-check subcommand and hook its tests together.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-idg-01", "stratum": "paraphrase", "prompt": "Write up the sandbox loop feature so newcomers understand it.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-idg-02", "stratum": "paraphrase", "prompt": "Put the recent roster decisions into a lasting record.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-forge-01", "stratum": "paraphrase", "prompt": "REST or gRPC for the health-check endpoint — weigh the two and tell us which wins.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-vigil-01", "stratum": "paraphrase", "prompt": "Get to the bottom of why the checkout test only sometimes fails.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-kupo-01", "stratum": "paraphrase", "prompt": "The import path in cli/src/roster.sh is wrong — correct that single line.", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.15}
+{"id": "pp-kupo-02", "stratum": "paraphrase", "prompt": "Swap every occurrence of getUserData for fetchUserProfile in two files.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "pp-spectra-01", "stratum": "paraphrase", "prompt": "Spectra, put together a build-ready blueprint for the health-check command.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.8}
+{"id": "pp-apivr-01", "stratum": "paraphrase", "prompt": "apivr, correct the broken retry logic and broaden its tests.", "kernel_top_eidolon": "apivr", "kernel_top_score": 0.5}
+{"id": "pp-vivi-03", "stratum": "paraphrase", "prompt": "Patch the sandbox loop's retry handling and broaden it a little.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.8}
+{"id": "p-class-P1", "stratum": "p-class", "prompt": "Make the project better.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P2", "stratum": "p-class", "prompt": "Improve performance somewhere in the codebase.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P3", "stratum": "p-class", "prompt": "Rename `getUserData` to `fetchUserProfile` everywhere it appears and update all call sites and the docs.", "kernel_top_eidolon": "kupo", "kernel_top_score": 0.15}
+{"id": "p-class-P4", "stratum": "p-class", "prompt": "Look into the flaky checkout test and figure out what's going on.", "kernel_top_eidolon": "vigil", "kernel_top_score": 0.8}
+{"id": "p-class-P5", "stratum": "p-class", "prompt": "Set up CI for the project.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P6", "stratum": "p-class", "prompt": "Weigh whether we should use REST or gRPC for the new service and set it up.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P7", "stratum": "p-class", "prompt": "In `services/auth/Login.ts`, explain what the recent patch does and why the update matters, until it's clear to me.", "kernel_top_eidolon": "vivi", "kernel_top_score": 0.8}
+{"id": "p-class-P8", "stratum": "p-class", "prompt": "Configure the timeout to 30.5s until the healthcheck returns healthy.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P9", "stratum": "p-class", "prompt": "Refactor `src/legacy/` across the entire codebase to remove deprecated calls, until the test suite is green.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P10", "stratum": "p-class", "prompt": "Crea el archivo `src/app.py` y anade la funcion `login` para que el test pase.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
+{"id": "p-class-P11", "stratum": "p-class", "prompt": "Bump the dependency to 2.5.0.", "kernel_top_eidolon": null, "kernel_top_score": 0.0}
