@@ -33,6 +33,9 @@
 | **FORGE** | reasoner | trade-off, which approach, ambiguous, deliberate | implement, retrieve, synthesize prose | (lateral) |
 | **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X | build new feature, plan from scratch | (lateral) |
 | **Kupo** | executor | rename, import/path fix, lockfile bump, lint autofix, one-line edit, search-replace | design, plan, cross-cutting refactor | (orchestrator-dispatched) |
+| **Gilgamesh** | generalist (fallback-only) |  | design, plan, deploy, migrate, route, spawn, underspecified | (orchestrator-dispatched; PROPOSEs upward) |
+
+> Gilgamesh carries **zero** positive trigger verbs — dispatched only via Step-2(a) fallthrough, never Step 1.
 
 ---
 
@@ -45,7 +48,10 @@
 **Step 2 — Gate.**
 - Score ≥ 0.8 for one Eidolon, ≤ 1 verb class: dispatch that Eidolon, standard tier.
 - Score ≥ 0.6 for ≥ 2 Eidolons OR prompt spans ≥ 2 classes: build a chain (see Chain Templates).
-- No Eidolon scores ≥ 0.6: emit `clarification_request` with 1–3 targeted questions. Do not dispatch.
+- No Eidolon scores ≥ 0.6 — split (predicate detail: `methodology/cortex/dispatch-predicate.md`):
+  - **(a) actionable**: dispatch **Gilgamesh**, standard tier, bounded-authority fallthrough worker.
+  - **(b) underspecified**: emit `clarification_request` (1–3 questions). Do not dispatch.
+  - Invariant: Gilgamesh never enters Step 1 and never outranks a specialist scoring ≥ τ.
 
 **Step 3 — Refusal check.** If the top-scored Eidolon would refuse the prompt's intent, reroute to the capable peer and emit `[DECISION]` explaining the override.
 

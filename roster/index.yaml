@@ -1553,6 +1553,47 @@ eidolons:
       persists: []
     references:
       - "research/kupo-build-dossier.md"
+  - name: gilgamesh
+    display_name: Gilgamesh
+    capability_class: generalist
+    status: in_construction # ESL change generalist-eidolon P1 — in-repo foothold only; P3 external repo + P4 two-arm gate precede a shipped flip
+    methodology:
+      name: GILGAMESH
+      version: "0.1"
+      cycle: "propose-upward loop (full cycle TBD — Track E, external repo Rynaro/Gilgamesh, not yet authored)"
+      summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first, PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream: [] — worker, never router)."
+    source:
+      type: github
+      repo: Rynaro/Gilgamesh
+      default_ref: main
+    versions:
+      latest: "0.1.0"
+      pins:
+        stable: "0.1.0"
+      # No releases: block yet — Rynaro/Gilgamesh does not exist until Story 3
+      # (P3, external repo). roster-health.yml's in_construction skip covers
+      # this (AC-B09); nexus_verify_release()-style consumers treat a missing
+      # releases entry as the bootstrap-window sentinel.
+    install:
+      target_default: "./.eidolons/gilgamesh"
+      standalone: true
+    handoffs:
+      upstream: [orchestrator] # inbound typed mission-contract only (R-006)
+      downstream: [] # worker-never-router — delegation is PROPOSEd upward, never dispatched (HC8, R-007)
+      lateral: [forge]
+    comm:
+      envelope_version: "2.0"
+    working_set_tokens:
+      entry: 900
+      target: 3000
+    security:
+      reads_repo: true # gathers via atlas-aci
+      reads_network: false # MCP access is not a network read (universal ACI invariant)
+      writes_repo: false # NEVER the real tree — PROPOSE-only; the parent applies & commits (R-009)
+      persists: []
+    references:
+      - ".spectra/changes/generalist-eidolon/spec.md"
+      - ".spectra/changes/generalist-eidolon/acceptance-criteria.md"
 # ─── Nexus ─────────────────────────────────────────────────────────────────────
 # Self-describing metadata for the nexus CLI. Not an Eidolon — not listed in
 # eidolons[] and not subject to roster-intake. The release workflow
@@ -1962,8 +2003,8 @@ presets:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [ramza, vivi]
   full:
-    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL) and the Kupo executor. Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
-    members: [atlas, ramza, vivi, idg, forge, vigil, kupo]
+    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL), the Kupo executor, and the Gilgamesh fallthrough generalist (in_construction). Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
+    members: [atlas, ramza, vivi, idg, forge, vigil, kupo, gilgamesh]
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
     members: [atlas, idg]

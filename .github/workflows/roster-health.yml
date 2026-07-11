@@ -207,7 +207,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        eidolon: [atlas, spectra, ramza, apivr, vivi, idg, forge, vigil, kupo]
+        eidolon: [atlas, spectra, ramza, apivr, vivi, idg, forge, vigil, kupo, gilgamesh]
     steps:
       - uses: actions/checkout@v4
 

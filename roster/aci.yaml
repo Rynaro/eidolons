@@ -62,6 +62,12 @@ classes:
     read_only: true            # emits verified-patch.diff, never auto-applies
     reads_repo: true
     rationale: "Forensic; read-only authority by default — write is never inferred."
+  generalist:
+    read_only: true            # never writes the REAL tree — PROPOSE-only across the authority line (R-009)
+    reads_repo: true
+    requires_edit_gate: true   # the PROPOSE is gated by externalized verification before hand-off (Track E, digest§4 — never self-report)
+    rationale: "Bounded-authority, specialist-preferring fallthrough worker (Gilgamesh); sandbox-first, dispatched only via Dispatch Protocol Step-2(a). Real-tree authority is read-only — write is never inferred, mirroring the executor class's PROPOSE-only posture."
+    bounded_primitives: ["sandbox-scoped edits (eidolons sandbox)", "externalized-verifier-gated PROPOSE", "paginated view / match-only search via atlas-aci"]
   memory:
     exempt: true               # MCP-mediated substrate; access is enforced server-side, not via roster repo-tool security
     rationale: "Tier-gated MCP chokepoint; not a repo-tool-surface class."

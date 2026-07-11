@@ -1,0 +1,18 @@
+id	prompt	S1	S2	S3	S4	S5	S6	S7	route
+P1	Make the project better.	0	0	0	0	0	1	1	clarification_request
+P2	Improve performance somewhere in the codebase.	0	0	0	0	0	1	1	clarification_request
+P3	Rename `getUserData` to `fetchUserProfile` everywhere it appears and update all call sites and the docs.	1	1	1	0	0	1	1	clarification_request
+P4	Look into the flaky checkout test and figure out what's going on.	0	1	0	0	1	1	1	clarification_request
+P5	Set up CI for the project.	1	1	0	0	0	1	1	clarification_request
+P6	Weigh whether we should use REST or gRPC for the new service and set it up.	0	0	0	0	1	1	0	chain
+P7	In `services/auth/Login.ts`, explain what the recent patch does and why the update matters, until it's clear to me.	0	1	1	1	1	1	1	clarification_request
+P8	Configure the timeout to 30.5s until the healthcheck returns healthy.	1	0	0	1	1	1	1	clarification_request
+P9	Refactor `src/legacy/` across the entire codebase to remove deprecated calls, until the test suite is green.	1	1	1	1	0	1	1	clarification_request
+P10	Crea el archivo `src/app.py` y anade la funcion `login` para que el test pase.	0	1	1	0	1	1	1	clarification_request
+P11	Bump the dependency to 2.5.0.	1	0	0	0	1	1	1	clarification_request
+C1	Add a `--json` flag to `cli/src/status.sh` and update `cli/tests/status.bats` so the new case passes.	1	1	1	1	1	1	1	generalist
+C2	Refactor the auth layer.	1	0	0	0	1	1	1	clarification_request
+C3	Create `scripts/backup.sh` that dumps the DB to `./backups/` and exits 0 on success.	1	1	1	1	1	1	1	generalist
+C4	Update everything.	1	0	0	0	0	1	1	clarification_request
+C5	Append a `retry` field to `config/http.yaml` so requests retry 3 times.	1	1	1	1	1	1	1	generalist
+C6	Replace the deprecated call across `src/auth/` only, until the auth tests pass.	1	1	1	1	1	1	1	generalist

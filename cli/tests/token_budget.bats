@@ -81,6 +81,11 @@ FIXTURES="$EIDOLONS_ROOT/cli/tests/fixtures/token-budget"
   awk '/<!-- always-loaded:end -->/{f=1} f && /## TRANCE Activation Gates/{found=1} END{exit !found}' "$EIDOLONS_ROOT/EIDOLONS.md"
 }
 
+@test "token-budget: AC-D04 — dispatch-predicate.md deep table (full lexicons/fixtures) lives outside the markers" {
+  [ -f "$EIDOLONS_ROOT/methodology/cortex/dispatch-predicate.md" ]
+  ! grep -q '<!-- always-loaded:start -->' "$EIDOLONS_ROOT/methodology/cortex/dispatch-predicate.md"
+}
+
 # ─── AC-D06 — chars/4 proxy within +/-15% of a recorded BPE reference ──────
 
 @test "token-budget: AC-D06 — chars/4 proxy is within +/-15% of the recorded cl100k_base reference" {
