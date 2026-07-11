@@ -1,1 +1,0 @@
-harness-v2: claude -p "<prompt>" --agent gilgamesh --allowedTools "Read,Grep,Glob,Bash(eidolons sandbox:*),Bash(make:*),Bash(bats:*),Bash(rspec:*),Bash(jest:*),Bash(pytest:*),Bash(go test:*),Bash(shellcheck:*),Bash(shasum:*),Bash(wc:*),mcp__atlas-aci__*,mcp__crystalium__*,mcp__tonberry__*"
