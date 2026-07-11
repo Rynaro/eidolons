@@ -55,15 +55,22 @@ kinds, with this context-budget ceiling, at this trust level".
 | `atlas` | `vivi` | PROPOSE, INFORM, REFUSE | scout-report | 4000 | `standard` | `roster` |
 | `forge` | `apivr` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `atlas` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
+| `forge` | `gilgamesh` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `idg` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | reasoning-report | 4000 | `standard` | `roster` |
 | `forge` | `ramza` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `spectra` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `vigil` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
 | `forge` | `vivi` | PROPOSE, INFORM, CRITIQUE | reasoning-report | 3000 | `standard` | `roster` |
+| `gilgamesh` | `atlas` | PROPOSE, INFORM, ESCALATE | handoff-request | 3000 | `standard` | `emitted-request` |
+| `gilgamesh` | `forge` | PROPOSE, INFORM, ESCALATE | handoff-request | 3000 | `standard` | `emitted-request` |
+| `gilgamesh` | `idg` | PROPOSE, INFORM, ESCALATE | handoff-request | 3000 | `standard` | `emitted-request` |
+| `gilgamesh` | `kupo` | PROPOSE, INFORM, ESCALATE | handoff-request | 3000 | `standard` | `emitted-request` |
+| `gilgamesh` | `vigil` | PROPOSE, INFORM, ESCALATE | handoff-request | 3000 | `standard` | `emitted-request` |
 | `human` | `apivr` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `atlas` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `forge` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
+| `human` | `gilgamesh` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | mission-contract | 3000 | `standard` | `implicit` |
 | `human` | `idg` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
 | `human` | `kupo` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `implicit` |
 | `human` | `ramza` | REQUEST, INFORM, CRITIQUE, REFUSE, ACKNOWLEDGE, ESCALATE | prompt | 4000 | `standard` | `roster` |
@@ -78,6 +85,7 @@ kinds, with this context-budget ceiling, at this trust level".
 | `kupo` | `spectra` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `vigil` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
 | `kupo` | `vivi` | PROPOSE, INFORM, ESCALATE, REFUSE, ACKNOWLEDGE, RESUME | edit-proposal | 4000 | `standard` | `roster` |
+| `orchestrator` | `gilgamesh` | REQUEST, INFORM, ACKNOWLEDGE | mission-contract | 3000 | `standard` | `roster` |
 | `ramza` | `apivr` | PROPOSE, INFORM, REFUSE | spec | 6000 | `standard` | `roster` |
 | `ramza` | `forge` | REQUEST, CRITIQUE | reasoning-request | 3000 | `standard` | `roster` |
 | `ramza` | `kupo` | DELEGATE, INFORM, ACKNOWLEDGE | spec | 4000 | `standard` | `roster` |
@@ -180,6 +188,10 @@ FORGE returns the reasoning report to the requesting Eidolon. Listed in roster: 
 
 FORGE returns a reasoning report to ATLAS in response to atlas→forge consultation. Listed in roster: forge.handoffs.lateral contains atlas. CRITIQUE is reserved for the REFORGE case where FORGE reframes the question rather than answering it (e.g. when the structural choice ATLAS surfaced cannot be decided without a missing hand-off target).
 
+### `forge → gilgamesh`
+
+FORGE returns a reasoning report directly to the running Gilgamesh mission in response to the orchestrator-routed gilgamesh-to-forge sub-decision request. Listed in roster: gilgamesh.handoffs.lateral contains forge; this is the lateral half of the pair (the reverse edge, gilgamesh-to-forge.yaml, is the PROPOSE-upward request half, edge_origin: emitted-request). Mirrors the shape of forge-to-apivr.yaml / forge-to-vigil.yaml: same artifact kind, schema, and required_sections. CRITIQUE is reserved for the REFORGE case where FORGE deliberately reframes the question rather than answering it — e.g. when Gilgamesh's sub-decision request itself looks specialist-shaped enough that FORGE judges the orchestrator should have routed elsewhere.
+
 ### `forge → idg`
 
 FORGE returns a reasoning report to IDG in response to idg→forge consultation. Listed in roster: forge.handoffs.lateral contains idg. CRITIQUE is reserved for the REFORGE case where FORGE declines to adjudicate (e.g. because the conflicting sources require a fresh observation rather than reasoning) and returns the question reframed.
@@ -204,6 +216,26 @@ FORGE returns a reasoning report to VIGIL in response to vigil→forge consultat
 
 FORGE returns the reasoning report to Vivi, which consulted it during the Plan phase when ambiguity or trade-offs surfaced. Listed in roster: vivi.handoffs.lateral contains forge. CRITIQUE is reserved for the case where FORGE deliberately reframes the question rather than answering it (REFORGE pass). This edge mirrors forge-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat. Inbound fixture at templates/inbound/reasoning-report.envelope.fixture.json.
 
+### `gilgamesh → atlas`
+
+Gilgamesh PROPOSEs a read-expansion request upward, suggested_specialist: atlas, when a mission needs codebase intelligence (structural mapping, evidence-anchored findings) beyond Gilgamesh's own bounded, sandbox-first authority. This is a request the orchestrator routes, not a dispatch — Gilgamesh has no downstream handoffs of its own (roster: gilgamesh.handoffs.downstream: [], R-007/HC8). edge_origin: emitted-request (not `roster`) reconciles that empty downstream array with this outbound contract's existence (R-050/AC-F05; CRIT-009). ESCALATE covers the case where evidence_of_boundary names a hard authority-table denial rather than a routine specialist-shaped signal.
+
+### `gilgamesh → forge`
+
+Gilgamesh PROPOSEs a sub-decision request upward, suggested_specialist: forge, when ambiguity or a trade-off surfaces mid-mission that exceeds a deliberately-boring worker's remit. Unlike FORGE's usual peer-level reasoning-request lateral consults (e.g. apivr-to-forge.yaml), Gilgamesh cannot consult FORGE directly — it is worker-never-router and has no downstream/lateral dispatch authority of its own outbound side (roster: gilgamesh.handoffs.downstream: [], R-007/HC8) — so this, too, is a handoff-request the orchestrator routes, not a REQUEST/CRITIQUE lateral consult. edge_origin: emitted-request (not `roster`) reconciles the empty downstream array with this outbound contract's existence, and is explicitly named in AC-F05's `{atlas,kupo,vigil,idg,forge}` set (R-050; CRIT-009). Once routed, FORGE's actual verdict returns directly and laterally to the running Gilgamesh mission via the reverse edge, forge-to-gilgamesh.yaml (roster: gilgamesh.handoffs.lateral: [forge]) — the asymmetry is intentional: the *request* is PROPOSE-upward, the *verdict* is a normal lateral reply.
+
+### `gilgamesh → idg`
+
+Gilgamesh PROPOSEs a documentation request upward, suggested_specialist: idg, when a completed or in-flight mission needs a chronicle, ADR, runbook, or change-narrative that exceeds Gilgamesh's own no-permanent-memory, deliberately-boring-worker posture (HC8). This is a request the orchestrator routes, not a dispatch — Gilgamesh has no downstream handoffs of its own (roster: gilgamesh.handoffs.downstream: [], R-007/HC8). edge_origin: emitted-request (not `roster`) reconciles that empty downstream array with this outbound contract's existence (R-050/AC-F05; CRIT-009).
+
+### `gilgamesh → kupo`
+
+Gilgamesh PROPOSEs a verifier-backed micro-patch request upward, suggested_specialist: kupo, when a subtask is localized (<= 2 files), named-verifier-backed work that fits Kupo's KEEP profile better than Gilgamesh's own general-purpose loop. This is a request the orchestrator routes, not a dispatch — Gilgamesh has no downstream handoffs of its own (roster: gilgamesh.handoffs.downstream: [], R-007/HC8). edge_origin: emitted-request (not `roster`) reconciles that empty downstream array with this outbound contract's existence (R-050/AC-F05; CRIT-009). ESCALATE covers the case where evidence_of_boundary names a hard authority-table denial (e.g. `write` beyond Gilgamesh's own sandbox grant) rather than a routine specialist-shaped signal.
+
+### `gilgamesh → vigil`
+
+Gilgamesh PROPOSEs a forensic debug request upward, suggested_specialist: vigil, when a failure resists Gilgamesh's own bounded stopping policy (digest§4 `recover`) or needs root-cause attribution beyond a deliberately-boring worker's remit. This is a request the orchestrator routes, not a dispatch — Gilgamesh has no downstream handoffs of its own (roster: gilgamesh.handoffs.downstream: [], R-007/HC8). edge_origin: emitted-request (not `roster`) reconciles that empty downstream array with this outbound contract's existence (R-050/AC-F05; CRIT-009). ESCALATE is the expected common case here: evidence_of_boundary typically names the stopping-policy `escalate` state (digest§4) that triggered the handoff.
+
 ### `human → apivr`
 
 Human-origin edge into APIVR-Δ. The originator may REQUEST APIVR-Δ to implement a feature or run the A→P→I→V→Δ cycle on a spec, INFORM it with additional context (a test case to anchor against, a constraint surfaced after planning), CRITIQUE a prior implementation report or a proposed plan during the Plan phase, REFUSE a proposed artefact, ACKNOWLEDGE a completion report to close a pause-on gate, or ESCALATE a blocker (e.g. "this should route to VIGIL"). Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
@@ -215,6 +247,10 @@ Human-origin edge into ATLAS. The originator may REQUEST ATLAS to map a surface 
 ### `human → forge`
 
 Human-origin edge into FORGE. The originator may REQUEST FORGE to perform a quality gate, RFC review, or arbitrate a trade-off, INFORM it with additional context (a counterfactual, an external constraint not surfaced in the originating chain), CRITIQUE a prior reasoning report, REFUSE a proposed decision (FORGE re-runs with the human's REFUSE recorded in the trace), ACKNOWLEDGE a reasoning report, or ESCALATE a blocker. Note that FORGE is itself the evaluator role emitting DECIDE — the human's role here is to feed inputs and accept or reject outputs, never to short-circuit FORGE's own DECIDE. Human originators MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME — see human-to-atlas.yaml for per-performative rationale (Junction spec §5.7). Authored to support Junction's F-HUMAN-EDGE; additive to ECL v1.0 with no spec-version bump.
+
+### `human → gilgamesh`
+
+Human-origin edge into Gilgamesh (the bounded-authority, specialist-preferring fallthrough generalist; ESL change generalist-eidolon, roster status in_construction). The originator may REQUEST a bounded mission, INFORM additional context, CRITIQUE a prior proposal for revision, REFUSE a target/framing, ACKNOWLEDGE to close a gate, or ESCALATE a blocker. Humans MUST NOT emit PROPOSE, DECIDE, DELEGATE, or RESUME (PROPOSE collapses to REQUEST; DECIDE is reserved for an evaluator Eidolon; DELEGATE is reserved for Eidolon-origin task binding; RESUME is harness-emitted). edge_origin: implicit — Gilgamesh's roster row declares `handoffs.upstream: [orchestrator]` only (worker dispatched via Dispatch Protocol Step-2(a), R-006); a human MAY still invoke it directly, outside that roster-declared chain, mirroring the human-to-kupo precedent (Kupo is likewise orchestrator-dispatched-only in its own roster row, and its human edge is `implicit` for the same reason).
 
 ### `human → idg`
 
@@ -271,6 +307,10 @@ Kupo returns a verified edit-proposal to vigil (the parent that DELEGATEd): sear
 ### `kupo → vivi`
 
 Kupo returns a verified edit-proposal to Vivi (the parent that DELEGATEd): search/replace or whole-file edits proven GREEN by a NAMED external verifier in an ephemeral sandbox. The PARENT (Vivi) applies the patch to the real tree and commits — Kupo never writes the real tree (PROPOSE-only) and never routes work onward (worker, never router). On out-of-scope or budget exhaustion, Kupo ESCALATEs or REFUSEs. Reverse of vivi-to-kupo.yaml. Closes the deferred vivi↔kupo item noted in the v2.1.0 Kupo-executor release (contracts/README.md §Kupo edges). Mirrors kupo-to-apivr.yaml — Vivi succeeds APIVR-Δ as the default coder seat.
+
+### `orchestrator → gilgamesh`
+
+The orchestrator's initial mission dispatch to Gilgamesh, taken only via Dispatch Protocol Step-2(a) — no specialist scored >= tau and the mechanical presence-based predicate found the prompt actionable (methodology/cortex/ dispatch-predicate.md). REQUEST is the ECL performative reserved for "orchestrator -> Eidolon: initial mission dispatch" (spec/ecl-2.1.md §2); INFORM covers supplementary mid-mission context; ACKNOWLEDGE covers a lightweight reply to an ESCALATE Gilgamesh raised on one of its own outbound handoff-request edges. Listed in roster: gilgamesh.handoffs.upstream contains orchestrator (R-006). `orchestrator` is a first-class reserved identity for `from`/`to`, not a closed-enum value — ECL v2.1 §1.1.3 (MUST), the handoff-contract.v1.json field description ("Sender Eidolon slug, or 'orchestrator', 'human'"), and conformance gate E-5 all admit it explicitly. This is the first `orchestrator-to-*` contract in the corpus; every other shipped Eidolon's initial dispatch is presently undocumented as a discrete contract file and is implied by `handoffs.upstream` alone — Gilgamesh is the first member whose spec (R-006, R-034) requires it enumerated.
 
 ### `ramza → apivr`
 

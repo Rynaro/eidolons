@@ -1,0 +1,3 @@
+{"id": "p-class-P3", "prompt": "Rename `getUserData` to `fetchUserProfile` everywhere it appears and update all call sites and the docs.", "candidate_1": "vivi", "candidate_2": "generalist-fallthrough"}
+{"id": "p-class-P5", "prompt": "Set up CI for the project.", "candidate_1": "vivi", "candidate_2": "clarify"}
+{"id": "p-class-P7", "prompt": "In `services/auth/Login.ts`, explain what the recent patch does and why the update matters, until it's clear to me.", "candidate_1": "idg", "candidate_2": "generalist-fallthrough"}

@@ -136,6 +136,26 @@ eidolons:
     trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "pin the version", "autofix lint", "format fix", "one-line fix", "single-line edit", "update fixture", "update snapshot", "grep-replace", "search-replace", "config key edit", "fix the typo", "fix the path"]
     refuse_verbs: ["design", "cross-cutting refactor", "refactor across", "plan", "novel architecture", "greenfield", "open-ended", "loop-native campaign", "implement feature"]
     downstream: []
+  gilgamesh:
+    capability_class: generalist
+    suggested_tier: standard
+    # ESL change generalist-eidolon (R-004/R-005/R-019): NO positive
+    # trigger_verbs by design — a fallthrough-only worker that MUST never
+    # enter Step-1 classification or outrank a specialist scoring >= tau.
+    # It is dispatched solely via Dispatch Protocol Step-2(a) (S6=no
+    # specialist >= tau, S7=no chain, then the presence-based S1..S5
+    # predicate over closed lexicons — methodology/cortex/dispatch-predicate.md).
+    # Even a NAMED mention ("Gilgamesh, ...") only earns the +0.5 name bonus
+    # on a raw=0 base (score 0.5 < tau_standard 0.6), so it still cannot
+    # win Step-1 through this kernel — a second, independent guarantee of
+    # R-019 beyond the empty trigger_verbs array.
+    trigger_verbs: []
+    # refuse_verbs tile the specialist space (one representative phrase per
+    # routed capability class) + deploy/migrate (irreversible-without-checker,
+    # R-009 sandbox-first/PROPOSE-only) + routing/spawning (HC8 — worker,
+    # never router) + underspecified/ambiguous scope (R-020 — still clarify).
+    refuse_verbs: ["design", "design from scratch", "novel architecture", "spec", "plan", "decompose", "map the codebase", "trace calls", "audit read-only", "document", "runbook", "chronicle", "trade-off", "which approach", "deliberate", "root cause", "flaky", "heisenbug", "rename symbol", "lockfile bump", "deploy", "migrate", "route to another eidolon", "spawn subagents", "underspecified", "ambiguous scope"]
+    downstream: []
 
 # ─── Confidence signals (Dispatch Protocol §"Confidence Signals") ───────────────
 # Applied additively to the matched Eidolon's score. `stakes: true` marks a

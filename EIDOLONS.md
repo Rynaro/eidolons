@@ -9,91 +9,88 @@
 > model per tier is set by the active profile in `roster/model-profiles.yaml`;
 > use `eidolons model` to inspect or change it. See §DEEP for extended
 > tables loaded on demand.
+>
+> The `<!-- always-loaded:start/end -->` pair below marks the byte range a
+> mechanical CI check counts against the I-C4 ≤900-token budget (proxy
+> `ceil(chars/4)`, CI fails > 850 to leave headroom — see
+> `.github/workflows/ci.yml` "cortex-token-budget" and
+> `scripts/token-budget-check.sh`). Everything outside the markers is
+> on-demand and does not count.
 
 ---
 
-## Roster Index (always-loaded)
+<!-- always-loaded:start -->
+## Roster Index
 
 | Name | Capability class | Trigger verbs | Refuses | Hands off to |
 |------|-----------------|---------------|---------|--------------|
-| **ATLAS** | scout | map, trace, find where, who calls, build call graph, list entrypoints, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
-| **RAMZA** | planner (default) | spec, plan, decompose, clarify requirements, GIVEN/WHEN/THEN, decision-ready — mechanized gates: right-size · rubric arithmetic · EARS lint · SHA-256 criteria freeze · plan-vs-diff drift · maker≠checker | implement code, modify files | Vivi, IDG |
-| **SPECTRA** | planner (opt-in fallback) | named dispatch only ("SPECTRA, …"); conservative prose-methodology posture (`eidolons add spectra`) | implement code, modify files | Vivi, IDG |
-| **Vivi** | coder (default) | implement, build, fix, extend, wire up, make tests pass — loop-native: drives `eidolons sandbox loop`, host-adaptive (iterate/fanout) | design from scratch, novel architecture | IDG |
-| **APIVR-Δ** | coder (opt-in fallback) | named dispatch only ("APIVR-Δ, …"); conservative non-loop posture (`eidolons add apivr`) | design from scratch, novel architecture | IDG |
-| **IDG** | scriber | document, ADR, runbook, chronicle, synthesize, record decisions | explore repo, find calls, retrieve | (terminal) |
-| **FORGE** | reasoner | trade-off, which approach, ambiguous, counterfactual, deliberate | implement, retrieve, synthesize prose | (lateral consultant) |
-| **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X, post-mortem, why does this fail | build new feature, plan from scratch | (lateral specialist) |
-| **Kupo** | executor | rename, import/path/typo fix, lockfile bump, dep pin, lint/format autofix, one-line/single-line edit, grep/search-replace, fixture/snapshot update (localized ≤2-file verifier-backed micro-tasks) | design, plan, cross-cutting refactor (>2 files), loop-native campaign | (orchestrator-dispatched; replies to orchestrator) |
+| **ATLAS** | scout | map, trace, find where, who calls, call graph, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
+| **RAMZA** | planner (default) | spec, plan, decompose, clarify requirements, decision-ready | implement code, modify files | Vivi, IDG |
+| **SPECTRA** | planner (opt-in) | named dispatch only | implement code, modify files | Vivi, IDG |
+| **Vivi** | coder (default) | implement, build, fix, extend, wire up, make tests pass | design from scratch, novel architecture | IDG |
+| **APIVR-Δ** | coder (opt-in) | named dispatch only | design from scratch, novel architecture | IDG |
+| **IDG** | scriber | document, ADR, runbook, chronicle, synthesize | explore repo, find calls, retrieve | (terminal) |
+| **FORGE** | reasoner | trade-off, which approach, ambiguous, deliberate | implement, retrieve, synthesize prose | (lateral) |
+| **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X | build new feature, plan from scratch | (lateral) |
+| **Kupo** | executor | rename, import/path fix, lockfile bump, lint autofix, one-line edit, search-replace | design, plan, cross-cutting refactor | (orchestrator-dispatched) |
+| **Gilgamesh** | generalist (fallback-only) |  | design, plan, deploy, migrate, route, spawn, underspecified | (orchestrator-dispatched; PROPOSEs upward) |
 
-> **Orchestrator-dispatched executor.** The **orchestrator** routes a localized (≤2-file), verifier-backed micro-task to **Kupo** — the only runtime dispatcher (subagents cannot spawn subagents). An Eidolon may *flag* such a task in its report; the orchestrator then dispatches Kupo. Kupo patches an ephemeral sandbox, proves it with an external verifier, and PROPOSEs a verified patch for the orchestrator to apply — it never commits and never routes work onward (worker, never router).
+> Gilgamesh carries **zero** positive trigger verbs — dispatched only via Step-2(a) fallthrough, never Step 1.
 
 ---
 
-## Dispatch Protocol (always-loaded)
+## Dispatch Protocol
 
-**Default operating mode — delegate by default.** When this cortex is wired into a host, routing through the Eidolons pipeline is the **default**, not an opt-in. Every non-trivial request runs through Steps 1–5 below; the orchestrator delegates to the Eidolon role(s) and does **not** implement, spec, or scout directly. Answer directly **only** when the prompt is trivial, purely conversational, or a single-fact lookup. This makes *delegation* the default — the **tier** default is still `standard`; TRANCE remains gated (see Step 4), never automatic.
+**Delegate by default.** Routing through the Eidolons pipeline is the default when this cortex is wired into a host; the orchestrator delegates rather than implementing, speccing, or scouting directly. Answer directly only for trivial/conversational/single-fact prompts. Tier default is `standard`; TRANCE is gated (Step 4), never automatic.
 
 **Step 1 — Classify.** Extract verbs from the prompt. Match against trigger columns above. Score each Eidolon 0–1.
 
 **Step 2 — Gate.**
-- Score ≥ 0.8 for one Eidolon and ≤ 1 verb class: dispatch that Eidolon, standard tier.
-- Score ≥ 0.6 for ≥ 2 Eidolons OR prompt spans ≥ 2 capability classes: build a chain (see Chain Templates below).
-- No Eidolon scores ≥ 0.6: emit `clarification_request` with 1–3 targeted questions. Do not dispatch.
+- Score ≥ 0.8 for one Eidolon, ≤ 1 verb class: dispatch that Eidolon, standard tier.
+- Score ≥ 0.6 for ≥ 2 Eidolons OR prompt spans ≥ 2 classes: build a chain (see Chain Templates).
+- No Eidolon scores ≥ 0.6 — split (predicate detail: `methodology/cortex/dispatch-predicate.md`):
+  - **(a) actionable**: dispatch **Gilgamesh**, standard tier, bounded-authority fallthrough worker.
+  - **(b) underspecified**: emit `clarification_request` (1–3 questions). Do not dispatch.
+  - Invariant: Gilgamesh never enters Step 1 and never outranks a specialist scoring ≥ τ.
 
-**Step 3 — Refusal check.** If the top-scored Eidolon would refuse the prompt's intent (see Refuses column), set `refusal_rerouting: true`, select the capable peer, emit `[DECISION]` explaining the override.
+**Step 3 — Refusal check.** If the top-scored Eidolon would refuse the prompt's intent, reroute to the capable peer and emit `[DECISION]` explaining the override.
 
-**Step 4 — Tier.** Default is `standard`. Escalate to `trance` only when **both** hold: (a) complexity flags fire AND (b) user supplies explicit `TRANCE` token or upstream Eidolon flags high-stakes. See TRANCE Activation Gates below.
+**Step 4 — Tier.** Default `standard`. Escalate to `trance` only when a complexity flag AND a stakes flag both hold (see TRANCE Activation Gates).
 
 **Step 5 — Emit routing artifact.**
 ```
 selected: [<eidolon>, ...]
 tier: standard | trance
 chain: [{eidolon, role, hand_off_artifact_path, edge_origin}, ...]
-model_tier_per_step: [light | standard | deep, ...]   # suggested tier per step
+model_tier_per_step: [light | standard | deep, ...]
 confidence: 0..1
-assumptions: [...]       # [GAP]/[DISPUTED] when routing is ambiguous
+assumptions: [...]
 clarification_request: <string?>
 refusal_rerouting: <bool>
 ```
+<!-- always-loaded:end -->
 
 ---
 
-## Chain Templates (always-loaded)
+## Chain Templates
 
-| Template | Steps | When |
-|----------|-------|------|
-| **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
-| **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
-| **ship-fast** | RAMZA → Vivi | Known terrain, scoped feature |
-| **direct-implementation-bypass** | ATLAS → Vivi (skip RAMZA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
-| **decide-then-implement** | FORGE → RAMZA → Vivi | "Should we use X or Y, then build it" |
-| **forensic-then-fix** | VIGIL → Vivi | Bug with reproduction + verified patch suggestion |
-| **failed-attempt-recovery** | (prior coder failure) → VIGIL → Vivi | Conversation shows prior coder Reflect-exhaustion |
-| **decision-only** | FORGE | No code touching; deliberation emitting verdict + assumptions |
+Eight templates route a prompt spanning ≥2 co-triggering capability classes
+to a scripted step sequence. Full table (steps + trigger condition) relocated
+on demand: `methodology/cortex/chain-templates.md`.
 
 ---
 
-## TRANCE Activation Gates (always-loaded)
+## TRANCE Activation Gates
 
-TRANCE grants: parallel fan-out (max 5 branches), worktree isolation per branch, verifier-cascade wrapping, evaluator-optimizer loop (cap 3 iterations), model-tier upgrade (lead = deep, workers = light).
-
-TRANCE is **never** the default. Auto-trigger requires **both** a complexity flag AND a stakes flag. Cost warning emitted at ≥ 5× standard-tier budget.
-
-| Gate | Eidolon | Condition |
-|------|---------|-----------|
-| G1 — Discovery scatter | ATLAS | Surface > 25 files OR > 5 modules → scatter sub-agents per module, aggregate via Abstract phase |
-| G2 — Hard-decision consistency | FORGE | ≥ 3 plausible alternatives AND (high-stakes flag OR explicit TRANCE token) → N=3 reasoning traces, majority-vote |
-| G3 — Spec evaluator-optimizer | RAMZA | Complexity ≥ 7/12 AND (high-stakes OR ambiguous reqs) → generator + evaluator, max 3 iterations |
-| G4 — Parallel implementation | Vivi | RAMZA emitted > 1 independent story AND budget bounded → one Vivi per track, worktree isolation |
-| G5 — Doc parallel synthesis | IDG | Large source artifact set AND topological order allows parallelism → per-section parallel, CHT per section, one-revision cap preserved |
-| G6 — Forensic counterfactuals | VIGIL | ≥ 2 plausible root-cause hypotheses AND bisect surface allows independent testing → parallel hypothesis tests on isolated bisects |
-
-**TRANCE refusals (immutable):** A refused capability does not become available at TRANCE. ATLAS still does not write. RAMZA still does not implement. IDG still does not retrieve. FORGE still does not tool-call. VIGIL still does not auto-apply patches. Per-Eidolon retry budgets remain enforced inside TRANCE.
+TRANCE grants parallel fan-out, worktree isolation, verifier-cascade
+wrapping, an evaluator-optimizer loop, and a model-tier upgrade — never the
+default; auto-trigger requires both a complexity flag AND a stakes flag.
+Full gate table (G1–G6) + refusal invariants relocated on demand:
+`methodology/cortex/trance-matrix.md` §"Activation Gates".
 
 ---
 
-## Confidence Signals (always-loaded)
+## Confidence Signals
 
 | Signal | Effect | Target |
 |--------|--------|--------|
@@ -107,7 +104,7 @@ TRANCE is **never** the default. Auto-trigger requires **both** a complexity fla
 
 ---
 
-## Memory protocol — CRYSTALIUM MCP (always-loaded)
+## Memory protocol — CRYSTALIUM MCP
 
 When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eidolon runs a mandatory pre-flight + post-flight against the harness. Direct file writes to crystalium's data dir are forbidden; **all reads and writes funnel through MCP tool calls** so the chokepoint can enforce tier × layer × operation.
 
@@ -144,7 +141,7 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 - **I-C1** — Marker-bounded sections when embedding into shared host files (`<!-- eidolon:cortex start/end -->`).
 - **I-C2** — No `eval` of routing rules; descriptor table is data, dispatch is interpretive.
 - **I-C3** — Capability classes + vendor-neutral tiers only (`light < standard < deep`). Never vendor model names.
-- **I-C4** — Always-loaded section ≤ 900 tokens; deep tables in `methodology/cortex/`.
+- **I-C4** — Always-loaded section (`<!-- always-loaded:start/end -->`) ≤ 900 tokens; deep tables in `methodology/cortex/`. CI enforces a conservative `chars/4 ≤ 850` proxy ceiling on the marker-bounded bytes.
 - **I-C5** — Refusals are immutable; cortex must never request a refused capability of a target Eidolon.
 - **I-C6** — Same prompt + same context + same roster ⇒ same routing decision.
 - **I-C7** — `roster/index.yaml` is the source of truth; new Eidolons auto-appear, removed Eidolons disappear. `roster/mcps.yaml` is the closed MCP catalogue; `eidolons mcp list|show|install|refresh|uninstall|upgrade|sync|health|run` is the unified verb set (v1.3+).
@@ -161,6 +158,6 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 
 **ECM — Context Lifecycle.** Long-running and autonomous sessions manage their own context economy via the **Eidolons Context Management (ECM v0.1)** protocol — a deterministic, table-driven meter + zone ladder (amber 0.50 / red 0.75 / critical 0.90) that fires context operations (externalize · prune · compact · handoff-fresh · wrap-up) with **no human in the loop and no LLM discretion**: first-match-wins rules P1–P7 over a `.eidolons/.context/meter.json` sidecar. A pin set survives every lossy op; externalize-before-compact checkpoints through CRYSTALIUM; session succession emits an ECL `INFORM` handoff brief; compaction depth caps at 2. Opt-in via `eidolons.yaml`'s `context:` block; **fail-open** when telemetry is absent. Kernel verbs `eidolons context status|policy|externalize|handoff` + host-hook recipes (each host wired to whatever injection channel it exposes — Claude Code full at P1; Codex full, OpenCode start+per-prompt, Copilot/Cursor static-floor at P2). Spec: [`Rynaro/eidolons-ecm`](https://github.com/Rynaro/eidolons-ecm). Deep table: `methodology/cortex/context-protocol.md`.
 
-*Deep tables (TRANCE matrix, hand-off graph, disambiguation table, validation gates, ESL protocol, tier execution dial, context protocol, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
+*Deep tables (chain templates, TRANCE matrix, hand-off graph, disambiguation table, validation gates, ESL protocol, tier execution dial, context protocol, dispatch predicate, open questions) load on demand from `methodology/cortex/`. See `methodology/cortex/README.md`.*
 
 <!-- eidolon:cortex end -->

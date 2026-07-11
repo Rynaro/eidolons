@@ -1,0 +1,331 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "generalist-eidolon",
+  "created_at": "2026-07-11T02:02:39Z",
+  "tier": "full",
+  "phase": "A",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "R",
+    "T",
+    "R",
+    "T",
+    "A"
+  ],
+  "rightsize": {
+    "score": 7,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 12,
+      "new_dep": false,
+      "public_api": true,
+      "migration": false,
+      "security": true,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 2,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 10,
+      "dims": {
+        "scope": 3,
+        "ambiguity": 2,
+        "dependencies": 3,
+        "risk": 2
+      },
+      "verdict": "human_loop",
+      "at": "2026-07-11T02:02:58Z",
+      "label": "generalist-change-complexity"
+    },
+    {
+      "rubric": "explore",
+      "total": 82,
+      "dims": {
+        "alignment": 9,
+        "correctness": 9,
+        "maintainability": 9,
+        "performance": 8,
+        "simplicity": 6,
+        "risk": 8,
+        "innovation": 4
+      },
+      "verdict": "solid",
+      "at": "2026-07-11T02:03:47Z",
+      "label": "H-B-staged-kupo-precedent"
+    },
+    {
+      "rubric": "explore",
+      "total": 54,
+      "dims": {
+        "alignment": 4,
+        "correctness": 5,
+        "maintainability": 6,
+        "performance": 6,
+        "simplicity": 7,
+        "risk": 6,
+        "innovation": 6
+      },
+      "verdict": "weak",
+      "at": "2026-07-11T02:03:47Z",
+      "label": "H-D-routing-only-defer"
+    },
+    {
+      "rubric": "explore",
+      "total": 46,
+      "dims": {
+        "alignment": 5,
+        "correctness": 4,
+        "maintainability": 5,
+        "performance": 5,
+        "simplicity": 4,
+        "risk": 4,
+        "innovation": 5
+      },
+      "verdict": "weak",
+      "at": "2026-07-11T02:03:47Z",
+      "label": "H-C-external-repos-first"
+    },
+    {
+      "rubric": "explore",
+      "total": 39,
+      "dims": {
+        "alignment": 4,
+        "correctness": 3,
+        "maintainability": 3,
+        "performance": 5,
+        "simplicity": 8,
+        "risk": 2,
+        "innovation": 2
+      },
+      "verdict": "weak",
+      "at": "2026-07-11T02:03:47Z",
+      "label": "H-A-single-mega-PR"
+    },
+    {
+      "rubric": "confidence",
+      "total": 83.25,
+      "dims": {
+        "pattern_match": 85,
+        "requirement_clarity": 80,
+        "decomposition_stability": 80,
+        "constraint_compliance": 88
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-07-11T02:10:45Z",
+      "label": "generalist-assemble-confidence"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 1,
+      "total": 3.2,
+      "min": 2,
+      "dims": {
+        "clarity": 4,
+        "completeness": 3,
+        "actionability": 3,
+        "efficiency": 4,
+        "testability": 2
+      },
+      "verdict": "fail",
+      "at": "2026-07-11T02:20:12Z",
+      "label": "critic-ramza-critic-fresh"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 2,
+      "total": 4.4,
+      "min": 4,
+      "dims": {
+        "clarity": 5,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 5
+      },
+      "verdict": "pass",
+      "at": "2026-07-11T02:33:46Z",
+      "label": "refine-cycle2-post-revision"
+    },
+    {
+      "rubric": "confidence",
+      "total": 84.25,
+      "dims": {
+        "pattern_match": 85,
+        "requirement_clarity": 82,
+        "decomposition_stability": 82,
+        "constraint_compliance": 88
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-07-11T02:34:50Z",
+      "label": "confidence-post-revision-rev2"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 2,
+      "total": 4,
+      "min": 3,
+      "dims": {
+        "clarity": 5,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 3
+      },
+      "verdict": "fail",
+      "at": "2026-07-11T02:45:31Z",
+      "label": "critic-cycle2-ramza-critic-fresh"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 3,
+      "total": 4.8,
+      "min": 4,
+      "dims": {
+        "clarity": 5,
+        "completeness": 5,
+        "actionability": 5,
+        "efficiency": 4,
+        "testability": 5
+      },
+      "verdict": "pass",
+      "at": "2026-07-11T02:56:15Z",
+      "label": "refine-cycle3-post-crit2"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 3,
+      "total": 4.4,
+      "min": 4,
+      "dims": {
+        "clarity": 5,
+        "completeness": 4,
+        "actionability": 5,
+        "efficiency": 4,
+        "testability": 4
+      },
+      "verdict": "pass",
+      "at": "2026-07-11T03:06:41Z",
+      "label": "critic-cycle3-APPROVE-ramza-critic-fresh"
+    },
+    {
+      "rubric": "confidence",
+      "total": 84.25,
+      "dims": {
+        "pattern_match": 86,
+        "requirement_clarity": 84,
+        "decomposition_stability": 83,
+        "constraint_compliance": 84
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-07-11T03:08:42Z",
+      "label": "confidence-final-assemble"
+    }
+  ],
+  "amendments": [],
+  "declared_scope": [],
+  "criteria_sha256": "d088c0cc58b72330bea3f61fc376c1f7c5e1086496c1d3297793d1cf3f9ff8d8",
+  "critic": {
+    "author": "ramza",
+    "checker": "ramza-critic-fresh",
+    "at": "2026-07-11T03:06:41Z"
+  },
+  "maker": "ramza",
+  "checker": "kupo (per change.json) — critic pass is independent; DO NOT self-approve",
+  "critic_status": "APPROVED (cycle-3)",
+  "phase_note": "held at T: Assemble/freeze/scope-declare deferred to post-critic (maker!=checker; ramza-gate advance --to A would DENY without a critic record, honored)",
+  "explore_selection": "H-B-staged-kupo-precedent (ramza-score explore=82, solid); alts H-D 54 / H-C 46 / H-A 39",
+  "path_verdict": "H-E @ 77% (FORGE deliberation.md); RAMZA specs sequencing + mechanical predicate/gate",
+  "lint": {
+    "structural": "pass (tier=full, rev3)",
+    "ears": "57 criteria pass",
+    "tier": "full"
+  },
+  "criteria_sha256_computed": "d088c0cc58b72330bea3f61fc376c1f7c5e1086496c1d3297793d1cf3f9ff8d8",
+  "criteria_sha256_note": "REV3 PRE-FREEZE audit value (sha256sum). Supersedes rev2 51368260... Tool-owned .criteria_sha256 stays null until Assemble post critic re-check.",
+  "requirements_count": 54,
+  "acceptance_checks_count": 57,
+  "gate_tools": {
+    "available": true,
+    "dir": ".eidolons/ramza/bin",
+    "ran": [
+      "ramza-rightsize",
+      "ramza-gate",
+      "ramza-score",
+      "ramza-lint",
+      "ramza-ears-lint"
+    ],
+    "role_played": false
+  },
+  "session_notes": "tonberry MCP unavailable this session (container UID 65532 vs workspace UID 1000); scaffolded fail-open per change.json/readme-v2 precedent. ramza-* gate tools ARE present in this checkout and were RUN (not role-played). shasum absent -> sha256sum used.",
+  "deliverables": [
+    "spec.md",
+    "spec.yaml",
+    "acceptance-criteria.md",
+    "plan-state.json"
+  ],
+  "updated_at": "2026-07-11T03:09:01Z",
+  "revision": 3,
+  "revision_note": "rev3 dispositions CRIT-013..CRIT-021 (5 MAJOR + 4 MINOR) from critique.md Cycle 2. Refine cycle-2 (critic) fail (testability=3) -> ramza-gate refine -> rebuilt a deterministic reference extractor, corrected S1/S3/S5 rules, MACHINE-DERIVED the 17-fixture table (self-check: frozen==extractor, 0 mismatches, routes consistent), guarded Arm-2 labeling -> refine cycle-3 PASS (min 4) -> R->T. Held at T for critic re-check; NOT self-approved.",
+  "crit_dispositions": {
+    "CRIT-001": "presence-based S1..S7 lexicons + tie-break-to-clarify; P1 make-project-better -> clarification (R-017/R-018, AC-C05/06/07)",
+    "CRIT-002": "extractor-determinism gate on 10 frozen fixtures (R-049, AC-C06)",
+    "CRIT-003": "Arm-2 corpus: near-threshold [tau-0.15,tau) + paraphrase + P1..P6; labeled-owner over-capture (R-041/042, AC-G03/04)",
+    "CRIT-004": "Arm-1 stratified SHA-frozen holdout + rate-floor + pass^3 (R-039/040, AC-G01/02)",
+    "CRIT-005": "token-budget ceil(chars/4) of marker-bounded region, fail>850 + BPE-tolerance fixture (R-022/023, AC-D02/04/06)",
+    "CRIT-006": "dropped I-C2 cite; grounded on I-C6 (R-017)",
+    "CRIT-007": "REVERSAL-3 = Arm-1 coverage-rate below floor, evaluable (R-047, AC-H04)",
+    "CRIT-008": "S5 blast-radius guard -> unbounded acts clarify (R-048, AC-C08)",
+    "CRIT-009": "edge_origin: emitted-request on 5 outbound edges (R-050, AC-F05)",
+    "CRIT-010": "AC-A02 split into A02a superset + A02b length==9",
+    "CRIT-011": "R-010 trace -> deliberation Step-2; standard-tier rationale documented",
+    "CRIT-012": "two-checker topology RAMZA-critic + ESL-kupo (R-045)"
+  },
+  "criteria_sha256_rev1_superseded": "43280da4f651e03c2f5f0de2dc7e72cdb9b19355670463df08bc8389f9be18a8",
+  "corrections": [
+    {
+      "at": "2026-07-11T02:35:21Z",
+      "action": "restored phase T->A->T",
+      "reason": "A verification probe (ramza-gate advance --to A, intended to confirm a DENY) SUCCEEDED because ramza-gate checks only for a critic RECORD present, not its verdict; the stale cycle-1 record was a REVISE (not an approval). Coordinator instruction is to HOLD at T for the independent critic RE-CHECK of rev2. Restored to T; not self-approved. Observation (not in scope to fix here): ramza-gate `advance --to A` gate does not distinguish a REVISE critic record from an approval."
+    }
+  ],
+  "crit_dispositions_cycle2": {
+    "CRIT-013": "fixture table machine-derived by reference extractor; self-check frozen S1..S5 == extractor output, 0 mismatches (R-049/R-054, AC-C06/C11)",
+    "CRIT-014": "S1 imperative-position + DET_BLOCKLIST noun guard; P7 the-recent-patch/the-update -> S1=0 (R-018, AC-C09)",
+    "CRIT-015": "PATH_OR_ID tightened (path-sep/closed FILE_EXT/fenced-id); 30.5s,2.5.0,e.g. excluded; P8/P11 S3=0 (R-018, AC-C10)",
+    "CRIT-016": "S5 requires LIMITER+PATH_OR_ID to bound generic scope; bare co-path no longer neutralizes; P9 S5=0 (R-048, AC-C08)",
+    "CRIT-017": "Arm-2 labeler independence: !=maker/!=builder, blind, SHA-frozen pre-replay, 2nd-blind adjudication (R-052, AC-G07)",
+    "CRIT-018": "ACT_VERBS broadened (append/insert/enable/...); out-of-lexicon->S1=0->clarify + versioning policy (R-018)",
+    "CRIT-019": "predicate scoped English; non-English/emoji-only->clarify by design; P10 S1=0 (R-053, AC-C12)",
+    "CRIT-020": "OUT-OF-SCOPE (tooling): ramza-gate advance --to A is verdict-blind; recorded for RAMZA tooling owner",
+    "CRIT-021": "OUT-OF-SCOPE (audit): T->A->T revert survives as corrections[]; provenance explicit"
+  },
+  "derivability_selfcheck": "PASS — 17/17 fixtures: frozen S1..S5 == reference-extractor output (0 mismatches); route consistency PASS (extractor: /tmp/ramza_extractor.py)",
+  "criteria_sha256_rev2_superseded": "51368260e8fd1ee81adab44207adc98ed52f96e09c59af779090936c5485b258",
+  "criteria_frozen_at": "2026-07-11T03:08:42Z",
+  "assemble_complete": true,
+  "critic_chain": [
+    "cycle-1: REVISE (5 MAJOR/7 MINOR)",
+    "cycle-2: REVISE (5 MAJOR/4 MINOR)",
+    "cycle-3: APPROVE (0 BLOCKING/0 MAJOR/4 MINOR recorded-not-blocking)"
+  ],
+  "refine_cycles_final": 2,
+  "confidence_final": "84.25 VALIDATE",
+  "criteria_frozen": true,
+  "cycle3_minors_recorded_for_implementation": {
+    "CRIT-022": "add a rule-2 (bare filename+ext) fixture; PATH_OR_ID rule 2 currently uncovered",
+    "CRIT-023": "tighten S5 LIMITER-rescue to require same-clause binding; add N8 to Arm-2 corpus",
+    "CRIT-024": "add an interrogative guard (verb-first question -> clarify)",
+    "CRIT-025": "backtick-fence trust acceptable by design; note only",
+    "note": "recorded-not-blocking; dispositioned as amendments during implementation, NOT pre-freeze edits (critic approved this exact frozen text)"
+  },
+  "ecl_envelope": "not emitted — ECL_VERSION unset in env (methodology emits only when ECL_VERSION present; ramza-verify-emit tool IS present). Fail-open no-op, not a failure."
+}

@@ -1,0 +1,3 @@
+{"id": "p-class-P3", "ground_truth_owner": "vivi", "reasoning": "Rename+refactor across codebase matches vivi coding trigger, exceeds kupo scope limit"}
+{"id": "p-class-P5", "ground_truth_owner": "clarify", "reasoning": "CI system unspecified, acceptance condition vague; rule 5: generic, pathless ask"}
+{"id": "p-class-P7", "ground_truth_owner": "generalist-fallthrough", "reasoning": "Bounded, concrete, but idg refuses exploration; no specialist owns exploration+synthesis"}

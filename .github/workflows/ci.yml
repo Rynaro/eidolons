@@ -2,6 +2,10 @@ name: CI
 
 # Validates the eidolons CLI on every push and PR:
 #   - lint: shellcheck + schema validation
+#   - cortex-token-budget: EIDOLONS.md always-loaded region stays <= 850
+#                  chars/4 proxy tokens (ESL generalist-eidolon Track D,
+#                  R-023/AC-D01/AC-D02) — a BLOCKING precondition that must
+#                  land green at/before any roster-row growth (AC-D05)
 #   - install-e2e: curl-pipe install against the checkout on Ubuntu + macOS,
 #                  with and without a pre-existing yq, to guarantee the
 #                  bootstrap works on a bare box (the ModuleNotFoundError
@@ -37,6 +41,7 @@ jobs:
           # once the existing warnings are cleaned up.
           find cli -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
           shellcheck -x -S error cli/eidolons
+          find scripts -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
 
       - name: Validate JSON schemas parse
         run: |
@@ -59,6 +64,24 @@ jobs:
 
       - name: Check roster/mcps.yaml and roster/index.yaml crystalium version parity
         run: bash cli/src/check_roster_mcp_skew.sh
+
+  cortex-token-budget:
+    name: Cortex always-loaded token budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: EIDOLONS.md always-loaded region <= 850 chars/4 proxy tokens
+        run: bash scripts/token-budget-check.sh EIDOLONS.md --ceiling 850
+
+      - name: Over-budget fixture is correctly rejected (script self-check)
+        run: |
+          set -euo pipefail
+          if bash scripts/token-budget-check.sh cli/tests/fixtures/token-budget/over-budget.md --ceiling 850; then
+            echo "::error::token-budget-check.sh did not fail on the over-budget fixture"
+            exit 1
+          fi
+          echo "over-budget fixture correctly rejected (exit 1)"
 
   install-e2e:
     name: Install — ${{ matrix.os }} / yq=${{ matrix.yq }}

@@ -1,0 +1,74 @@
+{
+  "attempt": 3,
+  "agent_version": "0.1.1",
+  "grader": "v4",
+  "floor_pct": 80,
+  "runs": {
+    "run1": {
+      "verified": 8,
+      "n": 15,
+      "rate_pct": 53.3
+    },
+    "run2": {
+      "verified": 9,
+      "n": 15,
+      "rate_pct": 60.0
+    },
+    "run3": {
+      "verified": 8,
+      "n": 15,
+      "rate_pct": 53.3
+    }
+  },
+  "per_difficulty": {
+    "easy": "11/15",
+    "medium": "6/15",
+    "hard": "8/15"
+  },
+  "pass_cubed": false,
+  "failing_cells": {
+    "arm1-05": [
+      1,
+      3
+    ],
+    "arm1-06": [
+      1
+    ],
+    "arm1-07": [
+      1,
+      2,
+      3
+    ],
+    "arm1-08": [
+      1,
+      2,
+      3
+    ],
+    "arm1-09": [
+      1,
+      3
+    ],
+    "arm1-14": [
+      1,
+      3
+    ],
+    "arm1-15": [
+      1,
+      2,
+      3
+    ],
+    "arm1-02": [
+      2
+    ],
+    "arm1-03": [
+      2
+    ],
+    "arm1-13": [
+      2
+    ],
+    "arm1-11": [
+      3
+    ]
+  },
+  "arm1_verdict": "FAIL"
+}

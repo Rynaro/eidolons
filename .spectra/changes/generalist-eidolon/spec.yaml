@@ -1,0 +1,192 @@
+# Machine-readable summary — ESL change generalist-eidolon (rev 2, post-critique)
+# Companion to spec.md / acceptance-criteria.md. Frozen doc = acceptance-criteria.md.
+change_id: generalist-eidolon
+esl_version: "1.1"
+tier: full
+revision: 3
+maker: ramza
+checker: pending            # RAMZA critic re-check + ESL kupo + human go/no-go (requires_checker=true)
+verdict: H-E                # FORGE deliberation, 77%
+explore_selected: H-B-staged-kupo-precedent   # ramza-score explore = 82 (solid)
+complexity: { total: 10, verdict: human_loop }
+critique: { cycle1: {verdict: REVISE, major: 5, minor: 7}, cycle2: {verdict: REVISE, major: 5, minor: 4}, ref: critique.md }
+
+preconditions:
+  - { id: PRE-1, text: "Cortex always-loaded region re-fit to chars/4 <= 850 before the row ships (HC9)", source: [FINDING-019, GAP-003, HC9, CRIT-005] }
+  - { id: PRE-2, text: "Human resolves TBD_NAME + go/no-go before the shipped flip (requires_checker 1,5)", source: [checker-handoff] }
+  - { id: PRE-3, text: "Two-arm gate passes (maker != checker) before in_construction -> shipped", source: [HC10, A14] }
+  - { id: PRE-4, text: "Two pre-flip checker gates: RAMZA maker!=checker critic AND ESL kupo change-checker", source: [CRIT-012] }
+
+requirements:
+  - { id: R-001, track: A, text: "Add 'generalist' to capability_class.enum (backward-compatible)", trace: [FINDING-001, FINDING-004, A1] }
+  - { id: R-002, track: A, text: "routing.schema.json stays open string; classes.default covers class", trace: [FINDING-002] }
+  - { id: R-003, track: B, text: "TBD_NAME roster row: generalist, in_construction", trace: [FINDING-003, FINDING-005, FINDING-013] }
+  - { id: R-004, track: B, text: "No positive trigger verbs (fallthrough-only)", trace: [RISK-over-capture] }
+  - { id: R-005, track: B, text: "refuse_verbs tile specialist space + deploy + routing/spawn + underspecified", trace: [FINDING-006, HC8] }
+  - { id: R-006, track: B, text: "handoffs.upstream=[orchestrator]; typed mission-contract", trace: [scope-boundary, digest-5] }
+  - { id: R-007, track: B, text: "handoffs.downstream=[]; delegation PROPOSEd upward, never dispatched", trace: [HC8, FINDING-007] }
+  - { id: R-008, track: B, text: "lateral=[forge]", trace: [scope-boundary] }
+  - { id: R-009, track: B, text: "writes_repo=false; capability/authority table default+escalation; sandbox-first; PROPOSE-only", trace: [digest-7] }
+  - { id: R-010, track: B, text: "working_set_tokens declared; model tier=standard (cost + Arm-1-caught)", trace: [deliberation-step2, CRIT-011] }
+  - { id: R-011, track: B, text: "Add TBD_NAME to full preset", trace: [A7] }
+  - { id: R-012, track: B, text: "Add name to roster-health.yml matrix; in_construction skips EIIS conformance", trace: [FINDING-015, A4] }
+  - { id: R-013, track: B, text: "README + MANIFESTO rows", trace: [A8] }
+  - { id: R-014, track: B, text: "CHANGELOG entry", trace: [A9] }
+  - { id: R-015, track: B, text: ".claude/agents/<name>.md: standard tier, scoped allowlist, no generic Bash(*)", trace: [A13, FINDING-008, digest-7] }
+  - { id: R-016, track: C, text: "Replace Step-2 no-match branch with (a) actionable / (b) underspecified", trace: [FINDING-010, task-3] }
+  - { id: R-017, track: C, text: "Predicate is mechanical (presence-based over closed lexicons); I-C2 NOT cited", trace: [I-C6, CRIT-006] }
+  - { id: R-018, track: C, text: "Define S1..S5 reference-extractor rules (imperative-pos S1 + DET_BLOCKLIST; tightened PATH_OR_ID; S5 LIMITER bounding) + tie-break + lexicon versioning", trace: [task-3, CRIT-001, CRIT-013, CRIT-014, CRIT-015, CRIT-016, CRIT-018] }
+  - { id: R-019, track: C, text: "Generalist never in Step-1; never outranks specialist >= tau", trace: [RISK-over-capture, I-C6] }
+  - { id: R-020, track: C, text: "Underspecified still emits clarification_request", trace: [FINDING-010] }
+  - { id: R-048, track: C, text: "S5 blast-radius guard: GENERIC_SCOPE forces clarify unless LIMITER co-occurs with PATH_OR_ID (a bare co-path never neutralizes)", trace: [CRIT-008, CRIT-016] }
+  - { id: R-049, track: C, text: "Deterministic no-LLM reference extractor reproduces the 17 frozen fixture vectors exactly (machine-derived, zero hand-set cells)", trace: [CRIT-002, CRIT-013] }
+  - { id: R-053, track: C, text: "Predicate input scoped to English; non-English/emoji-only -> clarification by design", trace: [CRIT-019] }
+  - { id: R-054, track: C, text: "Fixture-table derivability self-check: frozen S1..S5 == extractor output, zero hand-edits, before freeze", trace: [CRIT-013] }
+  - { id: R-021, track: D, text: "Re-fit always-loaded region before row ships", trace: [FINDING-019, GAP-003, HC9] }
+  - { id: R-022, track: D, text: "Bound region with always-loaded:start/end markers; relocate deep tables out", trace: [FINDING-019, task-4a] }
+  - { id: R-023, track: D, text: "bash-3.2 token-budget CI: ceil(chars/4) of region, fail if > 850", trace: [GAP-003, HC7, CRIT-005] }
+  - { id: R-024, track: D, text: "New EIDOLONS.md row keeps region <= 850-proxy", trace: [FINDING-019, A5] }
+  - { id: R-025, track: E, text: "New external repo Rynaro/TBD_NAME, EIIS-1.0", trace: [A10, HC1, HC4] }
+  - { id: R-026, track: E, text: "Structured TaskState schema", trace: [digest-3] }
+  - { id: R-027, track: E, text: "Typed delegation contract {objective,scope,deliverables,evidence_required,stop_conditions}", trace: [digest-5] }
+  - { id: R-028, track: E, text: "Capability-authority table default+escalation", trace: [digest-7] }
+  - { id: R-029, track: E, text: "Externalized verification; never self-report", trace: [digest-4] }
+  - { id: R-030, track: E, text: "Stopping policy {continue,recover,escalate,terminate}", trace: [digest-4, task-5] }
+  - { id: R-031, track: E, text: "Bounded loop budget (time/turns/tokens)", trace: [digest-3, task-5] }
+  - { id: R-032, track: E, text: "Deliberately-boring-worker posture: no memory/deploy/cross-task policy", trace: [digest-refdesign, HC8] }
+  - { id: R-033, track: E, text: "Nexus MUST NOT contain member methodology prose", trace: [HC1] }
+  - { id: R-034, track: F, text: "Upstream eidolons-ecl: one directed-edge YAML per TBD_NAME edge", trace: [FINDING-020, FINDING-021, A11] }
+  - { id: R-035, track: F, text: "Per new artifact kind, schema_ref under schemas/per-eidolon/", trace: [FINDING-020] }
+  - { id: R-036, track: F, text: "Regenerate composition.md via compose-gen; never hand-edit", trace: [FINDING-021, A6] }
+  - { id: R-037, track: F, text: "composition-drift.yml passes post-regen", trace: [FINDING-021] }
+  - { id: R-038, track: F, text: "Edge contracts use only the closed 10 performatives", trace: [HC2] }
+  - { id: R-050, track: F, text: "Five outbound edges set edge_origin: emitted-request (PROPOSE-upward)", trace: [CRIT-009] }
+  - { id: R-039, track: G, text: "Arm 1: SHA-frozen stratified holdout drawn by a non-cherry-pickable rule", trace: [verdict-arm1, HC10, A14, CRIT-004] }
+  - { id: R-040, track: G, text: "Arm 1 pass = verified-completion RATE >= floor X% across 3 runs (pass^3)", trace: [verdict-arm1, CRIT-004] }
+  - { id: R-041, track: G, text: "Arm 2 corpus: strong + near-threshold [tau-0.15,tau) + paraphrase + P1..P11; over-capture vs blind-frozen labeled owner", trace: [verdict-arm2, CRIT-003] }
+  - { id: R-042, track: G, text: "Margins: hard MUST=0 over-capture on strong subset; non-inferiority bound on near-threshold denom (numeric OQ-1)", trace: [task-7, CRIT-003] }
+  - { id: R-051, track: G, text: "Both arms pass before shipped; maker != checker on gate", trace: [HC10, checker-handoff] }
+  - { id: R-052, track: G, text: "Arm-2 owner-labels: independent labeler (!=maker,!=builder), blind, SHA-frozen pre-replay, 2nd-blind adjudication", trace: [CRIT-017] }
+  - { id: R-043, track: H, text: "Phase order P1->P5", trace: [task-8, FINDING-013] }
+  - { id: R-044, track: H, text: "Cortex-trim precondition (P2) at/before row growth", trace: [HC9, REVERSAL-5] }
+  - { id: R-045, track: H, text: "requires_checker: two pre-flip gates (RAMZA critic + ESL kupo) + human naming/go-no-go", trace: [checker-handoff, CRIT-012] }
+  - { id: R-046, track: H, text: "Shipped flip gated on BOTH two-arm gate AND human go/no-go", trace: [checker-handoff, REVERSAL-1, REVERSAL-2] }
+  - { id: R-047, track: H, text: "Five reversal-conditions are pre-flip stop gates, each mechanically evaluable (freq-null = Arm-1 rate below floor)", trace: [REVERSAL-1, REVERSAL-2, REVERSAL-3, REVERSAL-4, REVERSAL-5, CRIT-007] }
+
+acceptance_checks:
+  - { id: AC-A01, verify_method: "jq enum index non-null" }
+  - { id: AC-A02a, verify_method: "jq: all 8 original values present (superset)" }
+  - { id: AC-A02b, verify_method: "jq enum length == 9" }
+  - { id: AC-A03, verify_method: "jq routing.schema capability_class type == string" }
+  - { id: AC-B01, verify_method: "make schema exit 0" }
+  - { id: AC-B02, verify_method: "yq status == in_construction" }
+  - { id: AC-B03, verify_method: "grep empty trigger cell; router excludes from Step-1" }
+  - { id: AC-B04, verify_method: "refuse-set checklist maps each specialist class" }
+  - { id: AC-B05, verify_method: "yq handoffs.downstream == []" }
+  - { id: AC-B06, verify_method: "yq handoffs.upstream == [orchestrator]" }
+  - { id: AC-B07, verify_method: "yq security.writes_repo == false" }
+  - { id: AC-B08, verify_method: "grep roster-health matrix contains name" }
+  - { id: AC-B09, verify_method: "workflow conditional gates conformance on status != in_construction" }
+  - { id: AC-B10, verify_method: "grep -c 'Bash(*)' == 0" }
+  - { id: AC-C01, verify_method: "routing fixture C1 -> selected:[TBD_NAME]" }
+  - { id: AC-C02, verify_method: "fixtures P1,P2,P3,P4,P5,C2,C4 -> clarification_request" }
+  - { id: AC-C03, verify_method: "over-capture count == 0 vs labeled-owner key (Arm-2)" }
+  - { id: AC-C04, verify_method: "router unit: excluded from Step-1 candidate set" }
+  - { id: AC-C05, verify_method: "no-LLM reference extractor emits deterministic vectors for 17 fixtures" }
+  - { id: AC-C06, verify_method: "extractor S1..S5 == frozen fixture columns, exact match row-for-row" }
+  - { id: AC-C07, verify_method: "fixture P1 'Make the project better' -> clarification_request" }
+  - { id: AC-C08, verify_method: "P3,P9,C4 yield S5=0; C6 (LIMITER+path) yields S5=1" }
+  - { id: AC-C09, verify_method: "fixture P7 (the recent patch/the update) yields S1=0 (noun guard)" }
+  - { id: AC-C10, verify_method: "fixtures P8,P11 (30.5s,2.5.0) yield S3=0 (PATH_OR_ID excludes versions)" }
+  - { id: AC-C11, verify_method: "self-check re-derives table; == frozen columns, zero hand-edits, exit 0" }
+  - { id: AC-C12, verify_method: "fixture P10 (Spanish) yields S1=0 -> clarification_request" }
+  - { id: AC-D01, verify_method: "token-budget script exit 1 on over-budget fixture" }
+  - { id: AC-D02, verify_method: "ceil(chars/4) of always-loaded region <= 850" }
+  - { id: AC-D03, verify_method: "shellcheck -x -S error clean; no bash4 constructs" }
+  - { id: AC-D04, verify_method: "relocated tables sit outside the always-loaded markers" }
+  - { id: AC-D05, verify_method: "rollout gate: token CI green at/before the row commit" }
+  - { id: AC-D06, verify_method: "chars/4 proxy within +/-15% of a BPE reference on a fixture" }
+  - { id: AC-E01, verify_method: "EIIS conformance checker exit 0" }
+  - { id: AC-E02, verify_method: "TaskState schema artifact present" }
+  - { id: AC-E03, verify_method: "delegation-contract field-presence check" }
+  - { id: AC-E04, verify_method: "capability-authority table row check" }
+  - { id: AC-E05, verify_method: "methodology names externalized verification gate" }
+  - { id: AC-E06, verify_method: "stopping-policy enumerates 4 states" }
+  - { id: AC-E07, verify_method: "budget fields present in TaskState" }
+  - { id: AC-E08, verify_method: "grep nexus finds no methodology prose (HC1)" }
+  - { id: AC-E09, verify_method: "methodology cross-checks downstream=[]; no spawn primitive" }
+  - { id: AC-F01, verify_method: "composition-drift.yml exit 0 post-regen" }
+  - { id: AC-F02, verify_method: "ECL conformance checker rejects out-of-set performative" }
+  - { id: AC-F03, verify_method: "one contracts/*.yaml per declared edge" }
+  - { id: AC-F04, verify_method: "each artifact kind resolves to schemas/per-eidolon file" }
+  - { id: AC-F05, verify_method: "each outbound edge edge_origin == emitted-request (PROPOSE-upward)" }
+  - { id: AC-G01, verify_method: "Arm-1 verified-completion rate >= frozen floor X% over stratified holdout" }
+  - { id: AC-G02, verify_method: "rate >= floor on 3/3 independent runs (pass^3)" }
+  - { id: AC-G03, verify_method: "over-capture == 0 on strongly-matched subset vs blind-frozen label key (hard MUST)" }
+  - { id: AC-G04, verify_method: "capture on near-threshold [tau-0.15,tau) subset <= frozen bound" }
+  - { id: AC-G05, verify_method: "maker != checker attestation on gate record" }
+  - { id: AC-G06, verify_method: "rollout gate holds status until both arms pass" }
+  - { id: AC-G07, verify_method: "labeler != maker/!=builder; labels SHA-frozen pre-replay; 2nd-blind adjudication" }
+  - { id: AC-H01, verify_method: "requires_checker true + human go/no-go attestation" }
+  - { id: AC-H02, verify_method: "grep -R TBD_NAME roster/ EIDOLONS.md == no matches at ship" }
+  - { id: AC-H03, verify_method: "commit/PR ordering: enum+row precedes shipped-flip" }
+  - { id: AC-H04, verify_method: "each reversal item -> mechanically-evaluable signal (freq-null = Arm-1 rate below floor)" }
+
+touchpoints:
+  in_repo:
+    - { path: "schemas/roster-entry.schema.json", note: "enum +generalist (R-001)" }
+    - { path: "roster/index.yaml", note: "TBD_NAME row + full preset (R-003..R-011)" }
+    - { path: "roster/routing.yaml", note: "eidolons.<name> block; NO schema change (R-002)" }
+    - { path: ".github/workflows/roster-health.yml", note: "matrix add name (R-012)" }
+    - { path: "EIDOLONS.md", note: "Step-2(a)/(b) split + row + always-loaded markers + trim (R-016..R-024)" }
+    - { path: "methodology/cortex/", note: "relocated on-demand deep tables outside markers (R-022)" }
+    - { path: ".github/workflows/<token-budget>.yml", note: "NEW bash-3.2 token-budget CI, chars/4 <= 850 (R-023)" }
+    - { path: "methodology/composition.md", note: "regen-only, never hand-edit (R-036)" }
+    - { path: ".github/workflows/composition-drift.yml", note: "must pass post-regen (R-037)" }
+    - { path: ".claude/agents/<name>.md", note: "scoped host frontmatter (R-015)" }
+    - { path: "README.md", note: "roster table row (R-013)" }
+    - { path: "MANIFESTO.md", note: "team table + pipeline phrase (R-013)" }
+    - { path: "CHANGELOG.md", note: "unreleased entry (R-014)" }
+  external:
+    - { repo: "Rynaro/TBD_NAME", note: "EIIS-1.0 member repo + NAMED methodology artifacts (R-025..R-033)" }
+    - { repo: "Rynaro/eidolons-ecl", note: "directed-edge contracts + per-eidolon schemas + edge_origin (R-034/R-035/R-038/R-050)" }
+    - { repo: "Rynaro/eidolons-eiis", note: "only if install-contract shape must change (unlikely, A12)" }
+
+rollout_phases:
+  - { phase: P1, name: "in-repo in_construction foothold", human_gated: false, story: 1 }
+  - { phase: P2, name: "cortex precondition + tokenizer-pinned token-budget CI (BLOCKING)", human_gated: false, story: 2 }
+  - { phase: P3, name: "external member repo + ECL edges + composition regen", human_gated: false, story: 3 }
+  - { phase: P4, name: "two-arm measurement gate (maker != checker)", human_gated: false, story: 4 }
+  - { phase: P5, name: "shipped flip + nexus release (RAMZA critic + ESL kupo + human)", human_gated: true, story: 5 }
+
+open_questions:
+  - { id: OQ-1, owner: human, text: "Numeric: Arm-1 floor X% + N/K; Arm-2 near-threshold bound (denominators/measurement now specified)" }
+  - { id: OQ-2, owner: human, text: "TBD_NAME persona name (requires_checker)" }
+  - { id: OQ-3, owner: atlas_human, text: "Host-GP-slot wiring feasible, or documentation-only? (GAP-002/REVERSAL-4)" }
+  - { id: OQ-4, owner: maintainer, text: "Confirm five outbound edges + edge_origin: emitted-request" }
+  - { id: OQ-5, owner: critic, text: "DISPOSITIONED standard tier (cost + Arm-1-caught); flag if deep wanted" }
+  - { id: OQ-6, owner: recorded, text: "DISPOSITIONED: in_construction mint on structural grounds; REVERSAL-3 kept evaluable" }
+  - { id: OQ-7, owner: critic, text: "Primary risk addressed via presence-based lexicons + frozen fixtures + extractor test; re-check lexicon completeness" }
+
+crit_dispositions:
+  - { id: CRIT-001, sev: MAJOR, fix: "presence-based S1..S7 over closed lexicons + tie-break; P1->clarification", refs: [R-017, R-018, AC-C05, AC-C06, AC-C07] }
+  - { id: CRIT-002, sev: MAJOR, fix: "extractor-determinism gate on 10 frozen fixtures", refs: [R-049, AC-C05, AC-C06] }
+  - { id: CRIT-003, sev: MAJOR, fix: "Arm-2 corpus incl. near-threshold + paraphrase + P1..P6; labeled-owner over-capture", refs: [R-041, R-042, AC-G03, AC-G04] }
+  - { id: CRIT-004, sev: MAJOR, fix: "Arm-1 stratified SHA-frozen holdout + rate-floor + pass^3", refs: [R-039, R-040, AC-G01, AC-G02] }
+  - { id: CRIT-005, sev: MAJOR, fix: "token-budget: ceil(chars/4) of marker-bounded region, fail > 850; BPE-tolerance fixture", refs: [R-022, R-023, AC-D02, AC-D04, AC-D06] }
+  - { id: CRIT-006, sev: MINOR, fix: "drop I-C2 cite; ground on I-C6", refs: [R-017] }
+  - { id: CRIT-007, sev: MINOR, fix: "REVERSAL-3 = Arm-1 coverage-rate below floor (evaluable)", refs: [R-047, AC-H04] }
+  - { id: CRIT-008, sev: MINOR, fix: "S5 blast-radius guard routes unbounded acts to clarification", refs: [R-048, AC-C08] }
+  - { id: CRIT-009, sev: MINOR, fix: "edge_origin: emitted-request on 5 outbound edges", refs: [R-050, AC-F05] }
+  - { id: CRIT-010, sev: MINOR, fix: "split AC-A02 into A02a superset + A02b length==9", refs: [AC-A02a, AC-A02b] }
+  - { id: CRIT-011, sev: MINOR, fix: "R-010 trace -> deliberation Step-2; document standard-tier rationale", refs: [R-010] }
+  - { id: CRIT-012, sev: MINOR, fix: "two-checker topology (RAMZA critic + ESL kupo) pre-flip", refs: [R-045] }
+  - { id: CRIT-013, sev: MAJOR, fix: "fixture table machine-derived; self-check frozen==extractor, zero hand-set", refs: [R-049, R-054, AC-C06, AC-C11] }
+  - { id: CRIT-014, sev: MAJOR, fix: "S1 imperative-position + DET_BLOCKLIST noun guard", refs: [R-018, AC-C09] }
+  - { id: CRIT-015, sev: MAJOR, fix: "PATH_OR_ID tightened; versions/decimals/abbrev excluded", refs: [R-018, AC-C10] }
+  - { id: CRIT-016, sev: MAJOR, fix: "S5 LIMITER+path bounding; bare co-path does not neutralize", refs: [R-048, AC-C08] }
+  - { id: CRIT-017, sev: MAJOR, fix: "Arm-2 labeler independence + blind + SHA-freeze + 2nd-blind adjudication", refs: [R-052, AC-G07] }
+  - { id: CRIT-018, sev: MINOR, fix: "ACT_VERBS broadened + out-of-lexicon->S1=0->clarify + versioning policy", refs: [R-018] }
+  - { id: CRIT-019, sev: MINOR, fix: "predicate scoped English; non-English->clarify by design", refs: [R-053, AC-C12] }
+  - { id: CRIT-020, sev: MINOR, fix: "OUT-OF-SCOPE (tooling): ramza-gate advance --to A verdict-blind; recorded for owner", refs: [] }
+  - { id: CRIT-021, sev: MINOR, fix: "OUT-OF-SCOPE (audit): T->A->T revert survives as corrections[]; provenance explicit", refs: [] }

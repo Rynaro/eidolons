@@ -1,0 +1,76 @@
+{"id": "sm-vigil-03", "prompt": "We saw a regression after the last deploy — investigate why it fails."}
+{"id": "sm-forge-03", "prompt": "Weigh the ambiguous trade-off between caching locally or remotely, counterfactual included."}
+{"id": "sm-idg-02", "prompt": "Chronicle the recent roster decisions in an ADR."}
+{"id": "pp-vivi-02", "prompt": "Stand up the health-check subcommand and hook its tests together."}
+{"id": "nt-forge-01", "prompt": "FORGE, any thoughts here?"}
+{"id": "p-class-P8", "prompt": "Configure the timeout to 30.5s until the healthcheck returns healthy."}
+{"id": "pp-idg-02", "prompt": "Put the recent roster decisions into a lasting record."}
+{"id": "pp-idg-01", "prompt": "Write up the sandbox loop feature so newcomers understand it."}
+{"id": "sm-ramza-01", "prompt": "Write a decision-ready spec for adding a new preset to roster/index.yaml."}
+{"id": "sm-spectra-03", "prompt": "Ask Spectra to clarify requirements for the mcp catalogue migration."}
+{"id": "pp-ramza-02", "prompt": "Break the work for a health-check command into ordered pieces first."}
+{"id": "sm-spectra-01", "prompt": "SPECTRA, write a decision-ready spec for the new health-check command."}
+{"id": "nt-ramza-01", "prompt": "Ramza, what do you think?"}
+{"id": "sm-kupo-02", "prompt": "Rename symbol getUserData to fetchUserProfile — a search-replace across two files."}
+{"id": "sm-atlas-01", "prompt": "Map the call graph for roster_get in cli/src/lib.sh."}
+{"id": "pp-vigil-01", "prompt": "Get to the bottom of why the checkout test only sometimes fails."}
+{"id": "sm-vivi-04", "prompt": "Add the missing flag to cli/src/mcp_list.sh and make tests pass."}
+{"id": "pp-atlas-01", "prompt": "Sketch the dependency graph for roster_get in cli/src/lib.sh."}
+{"id": "pp-kupo-02", "prompt": "Swap every occurrence of getUserData for fetchUserProfile in two files."}
+{"id": "nt-ramza-02", "prompt": "Ramza, any comments on the overall shape of this?"}
+{"id": "nt-atlas-02", "prompt": "Hey Atlas, any thoughts here?"}
+{"id": "pp-kupo-01", "prompt": "The import path in cli/src/roster.sh is wrong — correct that single line."}
+{"id": "pp-spectra-01", "prompt": "Spectra, put together a build-ready blueprint for the health-check command."}
+{"id": "nt-forge-02", "prompt": "Forge, what's your take?"}
+{"id": "pp-atlas-02", "prompt": "Locate every caller of fetch_eidolon and list the surface's starting points."}
+{"id": "sm-forge-01", "prompt": "Should we use REST or gRPC for the new health-check endpoint — deliberate the trade-off."}
+{"id": "sm-atlas-03", "prompt": "Audit the dispatch flow read-only, tracing who calls dispatch_eidolon.sh."}
+{"id": "nt-vigil-02", "prompt": "Vigil, what do you think?"}
+{"id": "p-class-P10", "prompt": "Crea el archivo `src/app.py` y anade la funcion `login` para que el test pase."}
+{"id": "sm-kupo-03", "prompt": "Bump the lockfile and pin the version for the dependency."}
+{"id": "sm-vigil-02", "prompt": "Why does this fail intermittently after the last release — post-mortem it."}
+{"id": "sm-ramza-04", "prompt": "Scope the work for migrating mcp catalogue entries, given/when/then."}
+{"id": "pp-ramza-01", "prompt": "Put together a build-ready blueprint for adding a new preset to roster/index.yaml."}
+{"id": "sm-ramza-02", "prompt": "Plan and decompose the work needed to add a health-check command."}
+{"id": "sm-atlas-02", "prompt": "Find where fetch_eidolon is called across cli/src and list entrypoints."}
+{"id": "nt-kupo-02", "prompt": "Kupo, what's your take?"}
+{"id": "nt-idg-01", "prompt": "IDG, any comments?"}
+{"id": "p-class-P5", "prompt": "Set up CI for the project."}
+{"id": "p-class-P1", "prompt": "Make the project better."}
+{"id": "nt-atlas-01", "prompt": "Atlas, what do you make of this?"}
+{"id": "nt-kupo-01", "prompt": "Kupo, any thoughts on this?"}
+{"id": "p-class-P2", "prompt": "Improve performance somewhere in the codebase."}
+{"id": "sm-spectra-02", "prompt": "Spectra, plan and decompose the sandbox loop feature requirements."}
+{"id": "p-class-P3", "prompt": "Rename `getUserData` to `fetchUserProfile` everywhere it appears and update all call sites and the docs."}
+{"id": "nt-apivr-02", "prompt": "apivr, what's your take on this?"}
+{"id": "sm-vivi-01", "prompt": "Implement a --json flag for cli/src/status.sh and make the tests pass."}
+{"id": "sm-ramza-03", "prompt": "Clarify requirements for the new sandbox loop feature before anyone builds it."}
+{"id": "p-class-P4", "prompt": "Look into the flaky checkout test and figure out what's going on."}
+{"id": "sm-forge-02", "prompt": "Which approach is better between polling and webhooks — decide between them."}
+{"id": "nt-vivi-01", "prompt": "Vivi, any comments here?"}
+{"id": "sm-vigil-01", "prompt": "Find the root cause of the flaky checkout test — it's a heisenbug."}
+{"id": "nt-spectra-02", "prompt": "Spectra, what's your take on it?"}
+{"id": "sm-apivr-02", "prompt": "Ask APIVR-Δ to fix the broken retry logic and extend the tests."}
+{"id": "sm-idg-01", "prompt": "Document the new sandbox loop feature and write the docs for it."}
+{"id": "p-class-P11", "prompt": "Bump the dependency to 2.5.0."}
+{"id": "p-class-P9", "prompt": "Refactor `src/legacy/` across the entire codebase to remove deprecated calls, until the test suite is green."}
+{"id": "nt-spectra-01", "prompt": "Spectra, any thoughts on this?"}
+{"id": "pp-vivi-01", "prompt": "Wire a --json switch into cli/src/status.sh and get the new case to succeed."}
+{"id": "pp-apivr-01", "prompt": "apivr, correct the broken retry logic and broaden its tests."}
+{"id": "p-class-P7", "prompt": "In `services/auth/Login.ts`, explain what the recent patch does and why the update matters, until it's clear to me."}
+{"id": "p-class-P6", "prompt": "Weigh whether we should use REST or gRPC for the new service and set it up."}
+{"id": "nt-apivr-01", "prompt": "APIVR-Δ, any thoughts?"}
+{"id": "sm-apivr-03", "prompt": "apivr, build the health-check subcommand and wire up its tests."}
+{"id": "sm-kupo-01", "prompt": "Fix the import in cli/src/roster.sh — it's a one-line fix."}
+{"id": "pp-vivi-03", "prompt": "Patch the sandbox loop's retry handling and broaden it a little."}
+{"id": "sm-vivi-03", "prompt": "Fix the broken sandbox loop and extend its retry handling."}
+{"id": "sm-apivr-01", "prompt": "APIVR-Δ, implement the missing flag in cli/src/mcp_list.sh."}
+{"id": "nt-ramza-03", "prompt": "Ramza, any reaction to this?"}
+{"id": "sm-idg-03", "prompt": "Synthesize a changelog narrative for the last three releases."}
+{"id": "nt-vivi-03", "prompt": "Vivi, any reaction to this?"}
+{"id": "nt-vivi-02", "prompt": "Vivi, thoughts on this general area?"}
+{"id": "nt-idg-02", "prompt": "IDG, what do you think of this?"}
+{"id": "sm-vivi-02", "prompt": "Build the new health-check subcommand and wire up its tests."}
+{"id": "sm-kupo-04", "prompt": "Autofix lint and format fix cli/src/lib.sh."}
+{"id": "pp-forge-01", "prompt": "REST or gRPC for the health-check endpoint — weigh the two and tell us which wins."}
+{"id": "nt-vigil-01", "prompt": "VIGIL, any comments?"}

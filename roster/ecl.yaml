@@ -58,5 +58,7 @@ classes:
     receiver: true
   debugger:
     receiver: true
+  generalist:
+    receiver: true   # Gilgamesh receives an inbound typed mission-contract from the orchestrator (R-006)
   memory:
     receiver: false   # MCP-mediated substrate; not an ECL hand-off receiver
