@@ -365,6 +365,50 @@ ARTIFACT="$(printf '%s' "$ROUTING_JSON" | jq \
   --argjson ctx "$CTX_JSON" \
   "$ROUTE_JQ")"
 
+# ── Step-2(a)/(b) — Gilgamesh fallthrough dispatch ──────────────────────────
+# ESL change generalist-eidolon, Track C (AC-C01/AC-C02). Fires only in the
+# no-match branch: at this point in the priority ladder chain,
+# refusal-reroute, and single-dispatch have all already failed to fire, so
+# S6 (no specialist >= tau_standard) and S7 (no chain) already hold by
+# construction — this is exactly the Dispatch Protocol Step-2(a)/(b) split
+# over the "no Eidolon scored >= tau" branch. gilgamesh itself never enters
+# Step-1 scoring (empty trigger_verbs in roster/routing.yaml — AC-C04); this
+# block only ever rewrites an already-computed "clarify" decision.
+#
+# The extractor is resolved the same EIDOLONS_NEXUS-aware way every other
+# kernel resource is resolved ($NEXUS, set in lib.sh: checkout ->
+# EIDOLONS_NEXUS, installed -> $EIDOLONS_HOME/nexus). Fail-open: a
+# missing/non-executable extractor, or any extractor failure, keeps the
+# existing clarify behavior — the router must never crash on this branch.
+_GILGAMESH_DECISION="$(printf '%s' "$ARTIFACT" | jq -r '.decision')"
+if [[ "$_GILGAMESH_DECISION" == "clarify" ]]; then
+  _PREDICATE_EXTRACTOR="$NEXUS/scripts/dispatch-predicate-extractor.sh"
+  if [[ -x "$_PREDICATE_EXTRACTOR" ]]; then
+    _PREDICATE_VERDICT="$(bash "$_PREDICATE_EXTRACTOR" --verdict "$PROMPT" 2>/dev/null || echo "clarify")"
+    if [[ "$_PREDICATE_VERDICT" == "actionable" ]]; then
+      # Reuses the extractor's own combinator evaluation (do not
+      # re-implement S1∧S2∧S3∧S4∧S5 here). confidence is left untouched —
+      # it already carries the base ladder's "top score, capped at 1"
+      # convention computed above, which is what "per existing conventions"
+      # resolves to for this branch (no specialist scoring is relevant to
+      # gilgamesh, which never entered Step-1).
+      ARTIFACT="$(printf '%s' "$ARTIFACT" | jq '. + {
+        decision: "dispatch",
+        selected: ["gilgamesh"],
+        chain: [{eidolon:"gilgamesh", role:"generalist", edge_origin:"routing"}],
+        model_tier_per_step: ["standard"],
+        tier: "standard",
+        degraded_mode: null,
+        escalation: null,
+        fallthrough_reason: "actionable-fallthrough",
+        clarification_request: null,
+        refusal_rerouting: false,
+        assumptions: ["[DECISION] Step-2(a): no specialist scored >= tau_standard and the actionable predicate (S1 AND S2 AND S3 AND S4 AND S5) holds over the closed lexicons; dispatching gilgamesh as a bounded-authority fallthrough worker (AC-C01)."]
+      }')"
+    fi
+  fi
+fi
+
 # Record the incoming-hand-off verification verdict on the artifact (Step 5).
 if [[ -n "$VERIFY_ENVELOPE" ]]; then
   ARTIFACT="$(printf '%s' "$ARTIFACT" | jq \

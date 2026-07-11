@@ -14,12 +14,25 @@
 #
 # Usage:
 #   dispatch-predicate-extractor.sh "<prompt text>"
+#   dispatch-predicate-extractor.sh --verdict "<prompt text>"
 #
-# Output (stdout): five space-separated 0/1 values — "S1 S2 S3 S4 S5" — for
-# the given prompt, in that order. Nothing else is written to stdout.
+# Output (stdout):
+#   default    — five space-separated 0/1 values — "S1 S2 S3 S4 S5" — for
+#                the given prompt, in that order. Nothing else is written.
+#   --verdict  — a single token, "actionable" or "clarify": the frozen
+#                combinator S1∧S2∧S3∧S4∧S5 evaluated over the computed
+#                vector (S6/S7 are preconditions from the Step-1 scorer —
+#                the caller, e.g. cli/src/run.sh, only invokes --verdict
+#                once it has already established S6∧S7 by construction, so
+#                this mode does not re-derive them). This is the single
+#                source of truth for the boolean the kernel dispatches
+#                on — callers MUST reuse this mode rather than
+#                re-implementing the combinator (see
+#                scripts/dispatch-predicate-selfcheck.sh for the
+#                independent re-derivation used by the fixture self-check).
 #
 # Exit codes:
-#   0 — vector computed and printed
+#   0 — vector/verdict computed and printed
 #   2 — usage error (no prompt argument)
 #
 # Implementation note — phrase pre-normalization: rather than a raw-string
@@ -39,14 +52,20 @@
 
 set -euo pipefail
 
+VERDICT_MODE=0
+if [ "$#" -ge 1 ] && [ "$1" = "--verdict" ]; then
+  VERDICT_MODE=1
+  shift
+fi
+
 if [ "$#" -lt 1 ]; then
-  printf 'Usage: %s "<prompt text>"\n' "$(basename "$0")" >&2
+  printf 'Usage: %s [--verdict] "<prompt text>"\n' "$(basename "$0")" >&2
   exit 2
 fi
 
 PROMPT="$1"
 
-awk -v prompt="$PROMPT" '
+awk -v prompt="$PROMPT" -v verdict_mode="$VERDICT_MODE" '
 function strip_lead_trail(s,    changed, c) {
   changed = 1
   while (changed == 1 && length(s) > 0) {
@@ -262,6 +281,16 @@ BEGIN {
     s5 = 1
   }
 
-  print s1, s2, s3, s4, s5
+  if (verdict_mode == 1) {
+    # Frozen combinator (acceptance-criteria.md "Predicate"): only evaluated
+    # by the caller once S6∧S7 already hold — see the --verdict usage note.
+    if (s1 == 1 && s2 == 1 && s3 == 1 && s4 == 1 && s5 == 1) {
+      print "actionable"
+    } else {
+      print "clarify"
+    }
+  } else {
+    print s1, s2, s3, s4, s5
+  }
 }
 '
