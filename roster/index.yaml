@@ -1559,7 +1559,7 @@ eidolons:
     status: in_construction # ESL change generalist-eidolon P1 — in-repo foothold only; P3 external repo + P4 two-arm gate precede a shipped flip
     methodology:
       name: GILGAMESH
-      version: "0.1.1"
+      version: "0.2.0"
       cycle: "Gauge → Inventory → Lock → Grind → Attest (G→I→L→G→A)"
       summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first, PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream: [] — worker, never router)."
     source:
@@ -1567,13 +1567,19 @@ eidolons:
       repo: Rynaro/Gilgamesh
       default_ref: main
     versions:
-      latest: "0.1.1"
+      latest: "0.2.0"
       pins:
-        stable: "0.1.1"
-      # No releases: block yet — Rynaro/Gilgamesh does not exist until Story 3
-      # (P3, external repo). roster-health.yml's in_construction skip covers
-      # this (AC-B09); nexus_verify_release()-style consumers treat a missing
-      # releases entry as the bootstrap-window sentinel.
+        stable: "0.2.0"
+      releases:
+        0.2.0:
+          tag: v0.2.0
+          commit: 1e75254b4dd0303f02015177c2439f04c6f566ce
+          tree: 2cc3d687e901608e336cceba22af8378234ba286
+          archive_sha256: f1227bce4bf13de97cb9e88b18de205dd9673e2d1cc70aeb3b800c3bcf436014
+          manifest_sha256:
+          provenance:
+            github_attestation: false
+            note: "tag hand-pushed during P4 remediation; no release workflow run yet — attested release lands with the v1.0.0 shipped flip"
     install:
       target_default: "./.eidolons/gilgamesh"
       standalone: true
