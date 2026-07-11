@@ -334,6 +334,16 @@
         "status"
       ],
       "authority": "orchestrator under maintainer GO-to-v1.0, 2026-07-11; blocked on external billing"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "Attempt 5 \u2014 FIRST VALID measurement of the actual v0.2.0 remediation (installed, host-loaded; spend limit reset; clean run, 0 stubs). Verdict FAIL under the frozen pass^3@80% rule, but the picture is transformed vs the mislabeled prior 'fails'. Grader v4 (as-committed) scored 40/40/33 \u2014 DOMINATED BY A GRADER ARTIFACT: the ANSWER-* check required whole-value exact match and rejected the agent's correct-answer-plus-annotation (e.g. expected '831', got '831 chars/4 ceil proxy tokens'), even though the frozen agent contract says 'the value's first token IS the answer; annotation may follow'. Grader-fix #5 (MAKER-PROPOSED, PROVABLY never-stricter: ANSWER first-token acceptance guarded on single-token expected \u2014 all 12 distinct expected values are single-token; symmetric with the checker-accepted fix #3 for VERIFY) re-grades to 100.0/73.3/66.7 (mean exactly 80.0). Still FAILS pass^3 (runs 2,3 <80). Residual failure mode is now SINGULAR and narrow: evidence-anchor line-precision drift (right file, non-resolving/wrong line; once an ephemeral /tmp path) \u2014 inconsistent across runs, run1 resolved every anchor. Gap to pass: run2 +1 cell, run3 +2 cells. GRADER-FIX #5 REQUIRES INDEPENDENT GATE-CHECKER RATIFICATION before any v5 number is authoritative; deferred because the verdict is FAIL under BOTH graders (no pass is being claimed \u2014 this is diagnosis, not Goodhart). AC-G06 holds: status=in_construction, shipped flip blocked. Decision routed to human: (1) v0.3.0 anchor-precision remediation + attempt 6; (2) deep-tier model pin; (3) re-examine the frozen pass^3 bar (mean=80.0 would pass a mean-rule, but post-hoc bar-change is the anti-Goodhart hazard); (4) accept in_construction.",
+      "affects": [
+        "AC-G01",
+        "AC-G02",
+        "status"
+      ],
+      "authority": "orchestrator measurement under maintainer GO-to-v1.0, 2026-07-11; verdict FAIL, decision pending human"
     }
   ],
   "open_questions_human": [

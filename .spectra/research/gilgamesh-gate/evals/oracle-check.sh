@@ -89,8 +89,18 @@ while IFS=$'\t' read -r key expected; do
   got="$(report_value "$key")"
   if [ -z "$got" ]; then
     note "missing report line: ${key}: <value>"
-  elif [ "$got" != "$expected" ]; then
-    note "${key}: expected exact match '${expected}', got '${got}'"
+  else
+    # 2026-07-11 grader-fix #5 (symmetric with fix #3 for VERIFY; PROVABLY
+    # never-stricter): accept the answer when the FULL value matches (original
+    # behavior) OR when the expected value is single-token and got's first
+    # whitespace-delimited token equals it (agent contract: "the value's first
+    # token IS the answer; annotation may follow"). Guarded on single-token
+    # expected so a future multi-token answer still demands a full match.
+    _ans_tok="${got%%[[:space:]]*}"
+    case "$expected" in
+      *[[:space:]]*) [ "$got" = "$expected" ] || note "${key}: expected exact match '${expected}', got '${got}'" ;;
+      *) { [ "$got" = "$expected" ] || [ "$_ans_tok" = "$expected" ]; } || note "${key}: expected '${expected}' (or first token), got '${got}'" ;;
+    esac
   fi
 done <<EOF_ANSWERS
 $(printf '%s' "$RECORD" | jq -r '.oracle_expected.answers | to_entries[] | [.key, .value] | @tsv')
