@@ -1,0 +1,247 @@
+{
+  "esl_version": "1.1",
+  "change_id": "generalist-eidolon",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-A01",
+      "verify_method": "jq enum index non-null (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-A02a",
+      "verify_method": "jq: all 8 original values present (superset) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-A02b",
+      "verify_method": "jq enum length == 9 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-A03",
+      "verify_method": "jq routing.schema capability_class type == string (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B01",
+      "verify_method": "make schema exit 0 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B02",
+      "verify_method": "yq status == in_construction (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B03",
+      "verify_method": "grep empty trigger cell; router excludes from Step-1 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B04",
+      "verify_method": "refuse-set checklist maps each specialist class (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B05",
+      "verify_method": "yq handoffs.downstream == [] (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B06",
+      "verify_method": "yq handoffs.upstream == [orchestrator] (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B07",
+      "verify_method": "yq security.writes_repo == false (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B08",
+      "verify_method": "grep roster-health matrix contains name (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B09",
+      "verify_method": "workflow conditional gates conformance on status != in_construction (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-B10",
+      "verify_method": "grep -c 'Bash(*)' == 0 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C01",
+      "verify_method": "routing fixture C1 -\u003e selected:[TBD_NAME] (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C02",
+      "verify_method": "fixtures P1,P2,P3,P4,P5,C2,C4 -\u003e clarification_request (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C03",
+      "verify_method": "over-capture count == 0 vs labeled-owner key (Arm-2) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C04",
+      "verify_method": "router unit: excluded from Step-1 candidate set (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C05",
+      "verify_method": "no-LLM reference extractor emits deterministic vectors for 17 fixtures (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C06",
+      "verify_method": "extractor S1..S5 == frozen fixture columns, exact match row-for-row (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C07",
+      "verify_method": "fixture P1 'Make the project better' -\u003e clarification_request (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C08",
+      "verify_method": "P3,P9,C4 yield S5=0; C6 (LIMITER+path) yields S5=1 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C09",
+      "verify_method": "fixture P7 (the recent patch/the update) yields S1=0 (noun guard) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C10",
+      "verify_method": "fixtures P8,P11 (30.5s,2.5.0) yield S3=0 (PATH_OR_ID excludes versions) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C11",
+      "verify_method": "self-check re-derives table; == frozen columns, zero hand-edits, exit 0 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-C12",
+      "verify_method": "fixture P10 (Spanish) yields S1=0 -\u003e clarification_request (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D01",
+      "verify_method": "token-budget script exit 1 on over-budget fixture (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D02",
+      "verify_method": "ceil(chars/4) of always-loaded region \u003c= 850 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D03",
+      "verify_method": "shellcheck -x -S error clean; no bash4 constructs (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D04",
+      "verify_method": "relocated tables sit outside the always-loaded markers (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D05",
+      "verify_method": "rollout gate: token CI green at/before the row commit (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-D06",
+      "verify_method": "chars/4 proxy within +/-15% of a BPE reference on a fixture (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E01",
+      "verify_method": "EIIS conformance checker exit 0 (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E02",
+      "verify_method": "TaskState schema artifact present (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E03",
+      "verify_method": "delegation-contract field-presence check (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E04",
+      "verify_method": "capability-authority table row check (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E05",
+      "verify_method": "methodology names externalized verification gate (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E06",
+      "verify_method": "stopping-policy enumerates 4 states (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E07",
+      "verify_method": "budget fields present in TaskState (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E08",
+      "verify_method": "grep nexus finds no methodology prose (HC1) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-E09",
+      "verify_method": "methodology cross-checks downstream=[]; no spawn primitive (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-F01",
+      "verify_method": "composition-drift.yml exit 0 post-regen (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-F02",
+      "verify_method": "ECL conformance checker rejects out-of-set performative (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-F03",
+      "verify_method": "one contracts/*.yaml per declared edge (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-F04",
+      "verify_method": "each artifact kind resolves to schemas/per-eidolon file (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-F05",
+      "verify_method": "each outbound edge edge_origin == emitted-request (PROPOSE-upward) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G01",
+      "verify_method": "Arm-1 verified-completion rate \u003e= frozen floor X% over stratified holdout (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G02",
+      "verify_method": "rate \u003e= floor on 3/3 independent runs (pass^3) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G03",
+      "verify_method": "over-capture == 0 on strongly-matched subset vs blind-frozen label key (hard MUST) (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G04",
+      "verify_method": "capture on near-threshold [tau-0.15,tau) subset \u003c= frozen bound (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G05",
+      "verify_method": "maker != checker attestation on gate record (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G06",
+      "verify_method": "rollout gate holds status until both arms pass (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-G07",
+      "verify_method": "labeler != maker/!=builder; labels SHA-frozen pre-replay; 2nd-blind adjudication (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-H01",
+      "verify_method": "requires_checker true + human go/no-go attestation (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-H02",
+      "verify_method": "grep -R TBD_NAME roster/ EIDOLONS.md == no matches at ship (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-H03",
+      "verify_method": "commit/PR ordering: enum+row precedes shipped-flip (frozen: acceptance-criteria.md)"
+    },
+    {
+      "id": "AC-H04",
+      "verify_method": "each reversal item -\u003e mechanically-evaluable signal (freq-null = Arm-1 rate below floor) (frozen: acceptance-criteria.md)"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "created_at": "2026-07-10",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-11-generalist-eidolon",
+  "has_code": true,
+  "memory_preflight": {
+    "ran": true,
+    "records": 4
+  }
+}
