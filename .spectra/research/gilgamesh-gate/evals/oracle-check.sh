@@ -97,8 +97,15 @@ while IFS=$'\t' read -r key expected; do
   got="$(report_value "$key")"
   if [ -z "$got" ]; then
     note "missing report line: ${key}: pass|fail"
-  elif [ "$got" != "$expected" ]; then
-    note "${key}: expected '${expected}', got '${got}'"
+  else
+    # 2026-07-11 grader-fix #3 (same batch as the anchor fixes; never
+    # stricter): accept the expected token followed by trailing annotation
+    # ("pass (confirmed via ...)"). The FIRST whitespace-delimited token
+    # must equal the expected value exactly.
+    _got_tok="${got%%[[:space:]]*}"
+    if [ "$_got_tok" != "$expected" ]; then
+      note "${key}: expected '${expected}', got '${got}'"
+    fi
   fi
 done <<EOF_VERIFIES
 $(printf '%s' "$RECORD" | jq -r '.oracle_expected.verifies | to_entries[] | [.key, .value] | @tsv')
@@ -106,10 +113,24 @@ EOF_VERIFIES
 
 # ── EVIDENCE-* anchor-resolution checks (path:line, sed -n spot-check) ─────
 resolve_anchor() {
-  # $1 = "path:line" (path may itself contain ':', so split on the LAST ':')
+  # $1 = "path:line" (path may itself contain ':', so split on the LAST ':').
+  # 2026-07-11 parser-robustness fix (instrumentation, NOT under FREEZE —
+  # see gate record): agents may append annotation after the anchor
+  # ("path:line (context…)"); honor the LEADING whitespace-delimited token
+  # when it is anchor-shaped. Never stricter: annotation-free values are
+  # split exactly as before.
   anchor="$1"
+  _tok="${anchor%%[[:space:]]*}"
+  case "$_tok" in
+    *:[0-9]*) anchor="$_tok" ;;
+  esac
   line="${anchor##*:}"
   path="${anchor%:*}"
+  # Accept a "path:START-END" range anchor by validating its START line
+  # (same fix batch; a range is a resolvable anchor, not a format error).
+  case "$line" in
+    [0-9]*-[0-9]*) line="${line%%-*}" ;;
+  esac
   case "$line" in
     ''|*[!0-9]*) note "evidence anchor has a non-numeric line: ${anchor}"; return ;;
   esac
