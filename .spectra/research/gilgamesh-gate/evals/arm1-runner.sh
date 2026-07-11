@@ -9,10 +9,13 @@ run_cell() {
   local dir="$GATE/arm1-runs/run$run"
   mkdir -p "$dir"
   local t0=$SECONDS
-  ( cd "$NEXUS" && timeout 900 claude -p "$prompt" --agent gilgamesh --allowedTools "$TOOLS" \
+  # --model pinned explicitly: NEVER let headless runs inherit the session
+  # default (Fable) — see memory no-fable-headless-runs. sonnet = the roster's
+  # standard tier for gilgamesh (agent.md model pin), i.e. the production tier.
+  ( cd "$NEXUS" && timeout 900 claude -p "$prompt" --agent gilgamesh --model claude-sonnet-5 --allowedTools "$TOOLS" \
       > "$dir/$id.report.md" 2> "$dir/$id.stderr.log" )
   local ec=$? secs=$((SECONDS-t0))
-  echo "{\"mission_id\":\"$id\",\"run\":$run,\"exit\":$ec,\"secs\":$secs}" >> "$GATE/arm1-runs/meta.jsonl"
+  echo "{\"mission_id\":\"$id\",\"run\":$run,\"exit\":$ec,\"secs\":$secs,\"model\":\"claude-sonnet-5\"}" >> "$GATE/arm1-runs/meta.jsonl"
   # oracle grade immediately (mechanical)
   local oec=0
   bash "$GATE/evals/oracle-check.sh" "$id" "$dir/$id.report.md" > "$dir/$id.oracle.log" 2>&1 || oec=$?

@@ -309,6 +309,20 @@
         "AC-C01"
       ],
       "authority": "orchestrator under maintainer GO-to-release, 2026-07-11"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "P4 CONCLUDED \u2014 GATE FAIL, ATTESTED. Arm-2 PASS (0 gilgamesh fires / 76 prompts; MUST=0 met; near-threshold 0% <= 5%). Arm-1 FAIL: attempt 1 discarded (billing outage), attempt 2 (v0.1.0) 66.7/53.3/53.3 under grader v4, attempt 3 (v0.1.1 remediation) 53.3/60.0/53.3 \u2014 all vs the pre-frozen 80% pass^3 floor. Grader evolved v1->v4 (four never-stricter parser fixes, each documented in-file); independent gate checker (gate-checker-opus-fresh, maker!=checker roll-call clean) ACCEPTED all four fixes, re-derived both arms, and attested the FAIL (gate-attestation.md). Structural residuals for the human: (1) sandbox approval gate blocks `bash scripts/*.sh` \u2014 the frozen allowlist cannot execute verifier scripts several missions require (allowlist-vs-mission-scoping decision); (2) evidence-anchor fabrication under load persists through prompt remediation. AC-G06 ENFORCED: roster status stays in_construction; shipped flip and nexus release BLOCKED pending human decision. No further remediation cycles without human direction (anti-Goodhart stop rule).",
+      "affects": [
+        "AC-G01",
+        "AC-G02",
+        "AC-G03",
+        "AC-G04",
+        "AC-G05",
+        "AC-G06",
+        "R-046"
+      ],
+      "authority": "gate-checker-opus-fresh attestation + orchestrator stop rule, 2026-07-11"
     }
   ],
   "open_questions_human": [

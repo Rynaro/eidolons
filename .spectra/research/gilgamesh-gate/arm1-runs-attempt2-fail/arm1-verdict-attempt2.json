@@ -1,0 +1,28 @@
+{
+  "floor_pct": 80,
+  "grader": "v3 (anchor-annotation + range + verify-token fixes, all never-stricter)",
+  "runs": {
+    "run1": {
+      "verified": 8,
+      "n": 15,
+      "rate_pct": 53.3
+    },
+    "run2": {
+      "verified": 5,
+      "n": 15,
+      "rate_pct": 33.3
+    },
+    "run3": {
+      "verified": 6,
+      "n": 15,
+      "rate_pct": 40.0
+    }
+  },
+  "per_difficulty": {
+    "easy": "7/15",
+    "medium": "6/15",
+    "hard": "6/15"
+  },
+  "pass_cubed": false,
+  "arm1_verdict": "FAIL"
+}

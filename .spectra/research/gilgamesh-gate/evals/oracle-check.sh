@@ -71,9 +71,14 @@ note() { printf '[FAIL] %s\n' "$1" >&2; fail=1; }
 # Fetch a report line by its exact label, e.g. "ANSWER-enum_count" -> value
 # after the first ':' , trimmed of surrounding whitespace. Empty if absent.
 report_value() {
-  # $1 = label (without trailing colon)
-  grep -m1 "^${1}:" "$REPORT_FILE" 2>/dev/null \
-    | sed -E "s/^${1}:[[:space:]]*//" \
+  # $1 = label (without trailing colon).
+  # 2026-07-11 grader-fix #4 (never stricter): the frozen mission text
+  # enumerates required lines as e.g. "EVIDENCE-x (path:line)" — agents
+  # faithfully reproducing that enumeration write the label WITH the
+  # parenthetical value-shape hint. Accept "LABEL:" and "LABEL (hint):"
+  # equally; the hint carries no information and is not part of the label.
+  grep -m1 -E "^${1}( \([^)]*\))?:" "$REPORT_FILE" 2>/dev/null \
+    | sed -E "s/^${1}( \([^)]*\))?:[[:space:]]*//" \
     | sed -E 's/[[:space:]]+$//' \
     || true
 }
