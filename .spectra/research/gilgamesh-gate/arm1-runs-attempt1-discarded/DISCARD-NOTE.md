@@ -12,3 +12,10 @@ Disposition: entire attempt discarded pre-scoring; preserved here for audit.
 The official Arm-1 measurement is the clean re-run in ../arm1-runs/
 (same frozen missions, same oracle, single consistent harness), executed
 after capacity was restored. Recorded for the gate checker (AC-G05).
+
+## Cleanup (2026-07-11, follow-up)
+
+The ~45 identical provider-error stub files originally preserved here were
+removed post-merge — they carried no audit information beyond repetition.
+Retained as evidence: this note, `meta.jsonl` (exit=1/secs≈8 for every
+cell), and one representative stub (`run1/arm1-01.report.md`).
