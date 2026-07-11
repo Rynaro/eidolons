@@ -323,6 +323,17 @@
         "R-046"
       ],
       "authority": "gate-checker-opus-fresh attestation + orchestrator stop rule, 2026-07-11"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "v0.2.0 remediation LANDED + INSTALLED, but gate re-run BLOCKED on exhausted monthly spend limit (human action required). Forensic finding: the v0.1.1 remediation had reached only member-repo skill files the headless harness never loads (local .claude/agents/gilgamesh.md mtime 07:46 predated the 13:50 remediation commit) \u2014 so attempts 2 AND 3 both measured the unremediated P1 agent stub. v0.2.0 (member commit 1e75254) concentrates the mission-report protocol (REQUIRED-LABELS enumeration, verbatim-label rule, quoted-anchor rule, sandbox verify-routing ladder) into the HOST-LOADED surfaces: install.sh's generated .claude/agents/<name>.md + agent.md. Member tagged v0.1.0/v0.1.1/v0.2.0, roster pinned 0.2.0 + release_integrity metadata added, installed via `eidolons sync` (member now at ./.eidolons/gilgamesh/). A single manual probe run confirmed the v0.2.0 agent emits a clean, gradeable, PASSING report with a real quoted anchor. Attempt 4 (the first genuine v0.2.0 measurement) hit the account monthly spend limit after 1 cell \u2014 44/45 provider-error stubs \u2014 DISCARDED like attempt 1 (see arm1-runs-attempt4-billing-outage/DISCARD-NOTE.md); the 1 real cell PASSED. NEXT: human raises spend limit (claude.ai/settings/usage) or waits for reset, then re-run `bash .spectra/research/gilgamesh-gate/evals/arm1-runner.sh` (already --model claude-sonnet-5 pinned) \u2192 grader v4 \u2192 gate-checker re-attest \u2192 P5 only on pass. Gate status unchanged: FAIL-of-record stands until a valid passing measurement exists; AC-G06 holds (in_construction).",
+      "affects": [
+        "AC-E01",
+        "AC-G01",
+        "AC-G02",
+        "status"
+      ],
+      "authority": "orchestrator under maintainer GO-to-v1.0, 2026-07-11; blocked on external billing"
     }
   ],
   "open_questions_human": [
