@@ -144,3 +144,77 @@ A meaningful fraction of Arm-1 failures trace to a **sandbox tool-approval gate 
 - **Per AC-G06:** two arms did not both pass → roster `status` **must remain `in_construction`**; the `shipped` flip is **BLOCKED**. Verified: `roster/index.yaml` gilgamesh entry reads `status: in_construction`; the change is not in a `verified` state.
 
 *Attested by `gate-checker-opus-fresh` — independent gate checker. This attestation is final for this gate.*
+
+---
+---
+
+## Attempt 6 — Gate Checker Attestation
+
+**Checker identity:** `gate-checker-opus-attempt6` (fresh Opus context; independent).
+**Date:** 2026-07-11.
+**Scope:** Rules on grader-fix **#5** (authored by the orchestrator, a maker-side role, and previously **un-ratified**) and attests the real attempt-6 verdict for Gilgamesh **v0.3.0** (anchor-precision remediation). Supersedes the attempt-3 verdict above **for the current agent version + grader**; the attempt-3 FAIL remains the honest record of v0.1.1/grader-v4.
+
+### Maker ≠ checker roll-call (AC-G05)
+
+My identity `gate-checker-opus-attempt6` is distinct from every maker/author/labeler in the record: spec maker `ramza`, implementation maker `vivi`, member builder `generalist-builder`, gate author `gate-author-sonnet-fresh`, prior checker `gate-checker-opus-fresh`, labelers L1/L2, adjudicator L3, and the orchestrator (who authored #5 — the very thing I am independently ratifying). **AC-G05: PASS.**
+
+### §1 Freeze integrity — PASS (blocking gate cleared)
+
+- `sha256sum --check FREEZE.sha256` → **all OK** (`SUCESSO`): `arm1-holdout.jsonl` = `9834732e…c90904`, `arm2-corpus.jsonl`, `labeling-rubric.md` — unchanged.
+- `sha256sum --check LABELS-FREEZE.sha256` → **all OK**: `labels-final.jsonl`, `labels-L1.jsonl`, `labels-L2.jsonl`, `labels-L3-adjudication.jsonl` — unchanged.
+- Missions **and** their `oracle_expected` blocks are frozen. No mission/oracle content changed across attempts 1→6. **Not blocking.**
+
+### §2 Grader-fix #5 ruling — **ACCEPT**
+
+Fix #5 (ANSWER-\* block): when the frozen expected value is **single-token**, accept the report line if the full value matches (original behavior) **OR** its first whitespace-delimited token equals the expected value; when expected is **multi-token**, require a full exact match (guard preserved).
+
+1. **Provably never-stricter.** The multi-token branch is byte-identical to the original strict match. The single-token branch accepts a **superset** (`[ got = expected ] || [ first_token = expected ]` — the original disjunct is retained first), so it can never reject anything the original accepted. Empirically, **every** expected ANSWER value in `arm1-holdout.jsonl` is single-token — `jq -r '.oracle_expected.answers|to_entries[].value' | grep ' '` returns **empty** (values: 9,10,11,17,18,19,22,47,831,850,no,yes). So the guarded strict branch is dead code for this holdout; #5 is provably never-stricter here, and the guard keeps a future multi-token answer strict.
+2. **Faithful to the FROZEN mission intent.** The frozen agent contract itself (installed `.eidolons/gilgamesh/agent.md:50`, unchanged) states: *"the value's first token is the answer, detail after a space."* #5 conforms the grader **to** the pre-existing frozen contract — it is not an orchestrator invention to manufacture a pass. In every one of the 25 cells #5 flips, the report is `ANSWER-<k>: <correct-value> <corroborating annotation>` (enumerations, `wc -l = 18; 18-1 header = 17` derivations) — the first token equals the frozen expected value and the annotation supports it. The adversarial `"9 no wait 8"` hedge is theoretical only: per the frozen contract the first token is the committed answer, and **no report exhibits it**.
+3. **Symmetric with — and stricter than — the already-ratified fix #3.** Fix #3 applied identical first-token semantics to VERIFY-\* with **no** guard; the prior checker ratified it (and proved it non-lenient in the failing direction: `VERIFY-selfcheck: fail` was correctly failed). #5 is the more conservative sibling (adds the multi-token guard) for a lower-stakes field (a count vs a pass/fail verdict).
+4. **Empirically not rubber-stamping.** Across **all 45** attempt-6 reports, every present ANSWER line's first token **exactly equals** the frozen expected value — there is **no** case where #5 let a wrong first token pass. A wrong count still fails; the two attempt-6 failures (anchor out-of-range) confirm the gate retains teeth.
+
+**Ruling: ACCEPT #5.** Grader v5 is the correct authoritative grader.
+
+**Counterfactual (had I rejected #5 → grader v4):** re-graded all 45 with #5 reverted to strict whole-value match → **run1 8/15 = 53.3%, run2 4/15 = 26.7%, run3 6/15 = 40.0% → FAIL.** #5 is therefore **load-bearing** (it flips 25/45 cells P). This does not undermine ACCEPT: v4 rejects correct answers solely for carrying frozen-contract-sanctioned annotation; v5 aligns the grader with the frozen agent contract while preserving exact first-token discipline.
+
+### §3 Attempt-6 re-derivation (grader v5, agent v0.3.0) — matches record
+
+Independently ran `evals/oracle-check.sh` on **all 45** reports:
+
+| Run | Verified | Rate | ≥80% |
+|---|---|---|---|
+| run1 | 14/15 | 93.3% | yes |
+| run2 | 14/15 | 93.3% | yes |
+| run3 | 15/15 | 100.0% | yes |
+
+Per-difficulty: easy 14/15, medium 14/15, hard 15/15. **pass³@80% = TRUE.** Reproduces `arm1-results.jsonl` and `arm1-verdict.json` **exactly** (43 PASS / 2 FAIL; failing cells `arm1-08`/run1, `arm1-07`/run2). No spend-limit stubs (`grep -l "monthly spend limit" arm1-runs/run*/*.report.md` → none). The two failures are **legitimate PROPOSAL-TARGET anchor out-of-range** fails (`scripts/dispatch-predicate-selfcheck.sh:90` and `fixtures.tsv:19`, both past EOF) — ANSWER/VERIFY/EVIDENCE all correct; **unrelated to #5**.
+
+### §4 Anchor-precision spot-check — PASS
+
+Verified 10 EVIDENCE/PROPOSAL-TARGET anchors across 4 passing reports (`run3/arm1-01`, `run1/arm1-06`, `run2/arm1-05`, `run3/arm1-12`) with `sed -n 'Np'`: **all 10 resolve and the quoted fragment is genuinely on the cited line** (e.g. `schemas/roster-entry.schema.json:11` → the 9-value enum; `roster/routing.yaml:139` → `gilgamesh:`; `scripts/token-budget-check.sh:36` → `CEILING=850`; `.github/workflows/roster-health.yml:210` → the 10-name matrix). No EVIDENCE/PROPOSAL-TARGET anchor cites a `/tmp` path (the single `/tmp` string in the corpus is scratch space **inside** a proposed CI command in `run3/arm1-05`'s PROPOSAL text, not an anchor). The v0.3.0 pre-emit re-read rule is producing genuinely resolvable anchors.
+
+### §5 Install provenance — PASS
+
+- `.eidolons/gilgamesh/agent.md` → `version: 0.3.0`, `methodology_version: 0.3.0`, carries the pre-emit anchor re-read rule (`:55–60`) and the first-token contract (`:50`).
+- Harness-loaded `.claude/agents/gilgamesh.md` carries the anchor-precision + quoted-anchor + first-token rules.
+- Roster `roster/index.yaml` gilgamesh: `versions.latest = 0.3.0`, `pins.stable = 0.3.0`, `releases.0.3.0.commit = 1333672de90e605d4caa9002fb6b4146c19857c6`, `tag: v0.3.0`.
+- **External tag verified** via `git ls-remote --tags Rynaro/Gilgamesh`: `v0.3.0` is annotated; its peeled commit `v0.3.0^{}` = **1333672de90e605d4caa9002fb6b4146c19857c6** = roster commit. (v0.2.0 = 1e75254… also matches.) Provenance holds.
+- **Minor, non-blocking:** the roster `methodology.version` sub-field still reads `"0.2.0"` while `pins`/`latest`/installed agent are `0.3.0` — cosmetic staleness; the measured and pinned agent is unambiguously 0.3.0. Cleanup at the shipped-flip commit.
+
+### §6 Arm-2 — PASS (prior attestation stands; spot-confirmed)
+
+`arm2-verdict.json`: gilgamesh fires = 0/corpus; strongly-matched over-capture = 0 = MUST bar; near-threshold 0/20 = 0.0% ≤ 5.0% bound → **PASS**. Spot-confirmed `labels-final.jsonl` (freeze-clean): 76 adjudicated records (73 `L1=L2`, 3 `L3-adjudicated`), owner distribution across atlas/forge/idg/kupo/ramza/vigil/vivi/clarify + 1 `generalist-fallthrough`; **zero rows owned by gilgamesh**, consistent with 0 over-captures independent of labels. Prior Arm-2 attestation unchanged.
+
+### ═══ ATTESTED VERDICT (Attempt 6) ═══
+
+- **GATE: PASS.**
+- **Grader-fix #5: ACCEPT** — provably never-stricter (guarded; all holdout answers single-token), faithful to the frozen first-token agent contract (`agent.md:50`), symmetric-and-stricter than the ratified fix #3, and empirically never passed a wrong first token across all 45 reports.
+- **Arm-1: PASS** (agent v0.3.0, grader v5) — **run1 14/15 = 93.3%, run2 14/15 = 93.3%, run3 15/15 = 100.0%** vs frozen 80% pass³; independently re-derived on all 45 reports; matches `arm1-results.jsonl` exactly; failing cells `arm1-08`/run1 and `arm1-07`/run2 are legitimate anchor-resolution fails.
+- **Arm-2: PASS** (0 fires; MUST=0; near-threshold 0.0% ≤ 5%).
+- **Counterfactual under a REJECT of #5 (grader v4):** Arm-1 = 53.3 / 26.7 / 40.0 → FAIL. Recorded for completeness; not the authoritative verdict.
+- **Freeze integrity:** intact (both manifests clean; holdout + oracle + labels unchanged).
+- **Install provenance:** v0.3.0 measured, pinned, and tag-verified (external `v0.3.0^{}` = 1333672).
+- **Maker ≠ checker:** enforced — my identity `gate-checker-opus-attempt6` is distinct from ramza / vivi / generalist-builder / gate-author-sonnet-fresh / gate-checker-opus-fresh / L1 / L2 / L3 / orchestrator (the #5 author).
+- **Per AC-G06:** both arms PASS → the gate PASSES → the shipped flip (`in_construction → shipped`, roster `status` + `methodology.version` bump to 0.3.0, ESL change → `verified`) is **AUTHORIZED**. (Recommend the shipped-flip commit also correct the cosmetic `methodology.version: "0.2.0"` field and land the attested release note referenced in the roster provenance blocks.)
+
+*Attested by `gate-checker-opus-attempt6` — independent gate checker. This attestation is final for this gate.*

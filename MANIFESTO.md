@@ -71,7 +71,7 @@ The Eidolons are opinionated. They are also humble about where the evidence is t
 | **FORGE** | Reasoner — deep reasoning, trade-offs, counterfactuals | shipped |
 | **VIGIL** | Debugger — forensic root-cause attribution | shipped |
 | **Kupo** | Executor — localized, verifier-backed micro-tasks | shipped |
-| **Gilgamesh** | Generalist — bounded-authority, specialist-preferring fallthrough worker | in_construction |
+| **Gilgamesh** | Generalist — bounded-authority, specialist-preferring fallthrough worker | shipped |
 | **CRYSTALIUM** | Memory — shared four-layer memory substrate | shipped |
 
 See [`roster/index.yaml`](roster/index.yaml) for the machine-readable registry and [`methodology/composition.md`](methodology/composition.md) for how they work together.
