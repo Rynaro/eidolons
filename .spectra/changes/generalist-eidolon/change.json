@@ -285,6 +285,17 @@
         "maker"
       ],
       "authority": "maintainer (user GO, 2026-07-11)"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "P3 executed. (1) Rynaro/Gilgamesh created + pushed (initial commit cfaff1a; EIIS conformance exit 0; GILGAMESH v0.1.0, cycle Gauge->Inventory->Lock->Grind->Attest); roster methodology placeholders replaced on the PR branch (989279a). (2) eidolons-ecl PR #16 opened (8 edge contracts + mission-contract.v1/handoff-request.v1 schemas; conformance CI green; release-stamped for v2.2.0). RESOLUTION RECORDED: the frozen edge_origin value 'emitted-request' (R-050/AC-F05) conflicted with ECL's closed edge_origin enum (roster|composition|implicit) \u2014 resolved by extending ECL's enum ADDITIVELY in the same v2.2.0 release (schema + spec 2.1 vocabulary + envelope v2/v2.1 + SDK Literal); backward compatible; ECL owns the field, so ECL accommodates rather than the nexus amending the frozen criteria. (3) Nexus composition.md regen + ECL_PINNED_TAG bump prepared as a patch, held until v2.2.0 exists (composition-drift pins a tag). BLOCKED ON HUMAN: merge eidolons-ecl#16 + create tag/release v2.2.0 (orchestrator was permission-denied from merging external PRs).",
+      "affects": [
+        "R-025",
+        "R-034",
+        "R-050",
+        "AC-F05"
+      ],
+      "authority": "orchestrator under maintainer GO (P3), 2026-07-11"
     }
   ],
   "open_questions_human": [
