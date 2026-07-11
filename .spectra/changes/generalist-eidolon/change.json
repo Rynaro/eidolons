@@ -344,6 +344,27 @@
         "status"
       ],
       "authority": "orchestrator measurement under maintainer GO-to-v1.0, 2026-07-11; verdict FAIL, decision pending human"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "Attempt 6 \u2014 CANDIDATE PASS. v0.3.0 anchor-precision remediation (member 1333672, installed, host-loaded; clean run 0 stubs, sonnet-pinned). Under grader v5: 93.3/93.3/100.0 \u2014 pass^3 MET (every run >=80), per-difficulty easy 14/15 medium 14/15 hard 15/15, only 2 total misses (arm1-07 run2, arm1-08 run1). Arm-2 PASS stands (0/76). This is a CANDIDATE pass, NOT authoritative: it depends on grader-fix #5 (ANSWER first-token acceptance), which is maker-proposed and requires independent gate-checker ratification per AC-G05. Dispatching a fresh opus gate-checker (distinct id from all makers) to: ratify-or-reject #5, independently re-derive attempt 6 under both v4 and its accepted grader, audit freeze integrity + clean-run + v0.3.0-install-matches-roster-pin, and attest the final Arm-1 verdict. shipped flip and P5 remain BLOCKED until the checker attests PASS.",
+      "affects": [
+        "AC-G01",
+        "AC-G02",
+        "AC-G05"
+      ],
+      "authority": "orchestrator measurement, 2026-07-11; candidate pass pending independent checker attestation"
+    },
+    {
+      "date": "2026-07-11",
+      "reason": "P5 SHIPPED FLIP. Independent gate-checker (gate-checker-opus-attempt6, distinct from all makers incl. #5's author) ATTESTED the gate PASS and AUTHORIZED the shipped flip: grader-fix #5 ACCEPTED (provably never-stricter; across all 45 reports every ANSWER first-token exactly equals the frozen expected, so it never passed a wrong answer; rejecting it would FAIL the gate, so the accept is load-bearing and honest), Arm-1 re-derived 93.3/93.3/100.0 pass^3 TRUE, Arm-2 PASS, freeze intact, anchors resolve, v0.3.0 provenance confirmed. Member cut v1.0.0 (commit b4ec6fe, tag v1.0.0, tree d5f91ee; methodology byte-identical to gate-cleared v0.3.0, version-labeled; EIIS conformance exit 0). Nexus roster: status in_construction -> shipped, methodology.version -> 1.0.0 (fixes the stale 0.2.0 field the checker flagged), versions.latest/pins.stable -> 1.0.0, release_integrity blocks for 0.3.0 + 1.0.0. README/MANIFESTO/CHANGELOG/preset flipped to shipped. Remaining: nexus release (v2.6.0) + ESL verified(kupo checker, maker!=checker)/drift/archive.",
+      "affects": [
+        "status",
+        "AC-B02",
+        "AC-G05",
+        "AC-G06"
+      ],
+      "authority": "gate-checker-opus-attempt6 attestation (shipped flip AUTHORIZED) + human GO-to-release, 2026-07-11"
     }
   ],
   "open_questions_human": [

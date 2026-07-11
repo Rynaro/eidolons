@@ -1556,10 +1556,10 @@ eidolons:
   - name: gilgamesh
     display_name: Gilgamesh
     capability_class: generalist
-    status: in_construction # ESL change generalist-eidolon P1 — in-repo foothold only; P3 external repo + P4 two-arm gate precede a shipped flip
+    status: shipped # ESL change generalist-eidolon — cleared the two-arm measurement gate (Arm-1 pass³ 93.3/93.3/100.0 on v0.3.0, Arm-2 0 over-capture), independently attested (gate-attestation.md); flipped in_construction → shipped at v1.0.0
     methodology:
       name: GILGAMESH
-      version: "0.2.0"
+      version: "1.0.0"
       cycle: "Gauge → Inventory → Lock → Grind → Attest (G→I→L→G→A)"
       summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first, PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream: [] — worker, never router)."
     source:
@@ -1567,9 +1567,9 @@ eidolons:
       repo: Rynaro/Gilgamesh
       default_ref: main
     versions:
-      latest: "0.2.0"
+      latest: "1.0.0"
       pins:
-        stable: "0.2.0"
+        stable: "1.0.0"
       releases:
         0.2.0:
           tag: v0.2.0
@@ -1580,6 +1580,24 @@ eidolons:
           provenance:
             github_attestation: false
             note: "tag hand-pushed during P4 remediation; no release workflow run yet — attested release lands with the v1.0.0 shipped flip"
+        0.3.0:
+          tag: v0.3.0
+          commit: 1333672de90e605d4caa9002fb6b4146c19857c6
+          tree: 045133de104e7414fa7ea6eb642b92c7a7a10f75
+          archive_sha256: eedce52e4f33528202fd54cf984343bc131e0ea2c654967f4c654026a6ea52cf
+          manifest_sha256:
+          provenance:
+            github_attestation: false
+            note: "anchor-precision remediation (attempt-5 residual fix); tag hand-pushed during P4, attested release lands with the v1.0.0 shipped flip"
+        1.0.0:
+          tag: v1.0.0
+          commit: b4ec6fe0506ee7524b31edf1c5e9a54a61324b87
+          tree: d5f91ee24e2c560142d0a7258658954334d11b11
+          archive_sha256: 37ab5a29595423a8a17e7b623bc85ca41f45e1cc76e976eb2eaa397235d7c009
+          manifest_sha256:
+          provenance:
+            github_attestation: false
+            note: "shipped release — methodology identical to v0.3.0 (which cleared the two-arm gate, independently attested); version-bumped to 1.0.0 at the in_construction → shipped flip"
     install:
       target_default: "./.eidolons/gilgamesh"
       standalone: true
@@ -2009,7 +2027,7 @@ presets:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [ramza, vivi]
   full:
-    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL), the Kupo executor, and the Gilgamesh fallthrough generalist (in_construction). Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
+    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL), the Kupo executor, and the Gilgamesh fallthrough generalist. Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
     members: [atlas, ramza, vivi, idg, forge, vigil, kupo, gilgamesh]
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."

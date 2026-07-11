@@ -1,0 +1,1 @@
+harness-v2: claude -p "<prompt>" --agent gilgamesh --allowedTools "<gilgamesh allowlist>" (official rerun)
