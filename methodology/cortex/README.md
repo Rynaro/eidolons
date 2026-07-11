@@ -10,7 +10,9 @@ here.
 | File | Contents | Load when |
 |------|----------|-----------|
 | `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
-| `trance-matrix.md` | Per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
+| `chain-templates.md` | Full Chain Template table (steps + trigger condition per template) relocated from EIDOLONS.md's always-loaded region | Composing a multi-Eidolon chain (Dispatch Protocol Step 2 chain branch) |
+| `trance-matrix.md` | TRANCE Activation Gates (G1–G6, relocated from EIDOLONS.md), per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
+| `dispatch-predicate.md` | The Step-2(a)/(b) mechanical predicate — closed lexicons, S1–S5 reference-extractor rules, tie-break, and the frozen normative fixture table | Auditing or reproducing a Step-2(a)/(b) actionable/underspecified routing decision (Gilgamesh fallthrough) |
 | `validation-gates.md` | All 14 GIVEN/WHEN/THEN acceptance gates (V1–V14) the cortex must satisfy | Testing cortex behavior, writing new routing rules |
 | `memory-protocol.md` | Full 8-tool CRYSTALIUM surface, layer × tier × operation matrix, Dream consolidation knobs, skill_invoke sandboxing, ECL-envelope → ingest mapping | Composing memory-aware chains, auditing tier gates, configuring Dream |
 | `esl-protocol.md` | ESL cortex protocol — Part 1: lifecycle orchestration (per-Eidolon adoption: state ownership SPECTRA→FORGE→Vivi→Kupo/VIGIL→IDG, right-sizing gate, maker≠checker, tonberry v0.4.0 ergonomics); Part 2: escalation RECORD→HONOR (`eidolons mcp assess` lock-write, two-layer verify-mode fallback, idempotency carry-forward, N/L/R knobs) | Composing a non-trivial change in an ESL-enabled project; verifying ESL changes; choosing the verify enforcement mode; recording an escalation |
