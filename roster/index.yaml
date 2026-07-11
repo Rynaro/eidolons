@@ -1559,8 +1559,8 @@ eidolons:
     status: in_construction # ESL change generalist-eidolon P1 — in-repo foothold only; P3 external repo + P4 two-arm gate precede a shipped flip
     methodology:
       name: GILGAMESH
-      version: "0.1"
-      cycle: "propose-upward loop (full cycle TBD — Track E, external repo Rynaro/Gilgamesh, not yet authored)"
+      version: "0.1.0"
+      cycle: "Gauge → Inventory → Lock → Grind → Attest (G→I→L→G→A)"
       summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first, PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream: [] — worker, never router)."
     source:
       type: github
