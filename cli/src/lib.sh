@@ -1333,6 +1333,27 @@ collapse_consecutive_blanks() {
   fi
 }
 
+# ─── ECM shared helper (harness install/hook) ────────────────────────────
+# _ecm_handoff_digest — reuse 'eidolons memory preflight --query' verbatim
+# (FINDING-015, no new docker plumbing) to recall the latest session_handoff
+# record. Shared by harness_hook.sh (SessionStart inject, live per-session)
+# and harness_install.sh (copilot's start-only static floor, install-time
+# snapshot — ecm-p2-host-adapters drift fix: copilot has no runtime hook
+# channel, so install time is its only chance to render this). Lifted here
+# rather than duplicated so both callers stay byte-identical. Empty on any
+# failure (gate absent, docker absent, zero records) — memory preflight
+# already guarantees empty-stdout/exit-0 on every failure mode.
+_ecm_handoff_digest() {
+  local _bin=""
+  if _bin="$(command -v eidolons 2>/dev/null)"; then
+    :
+  else
+    _bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
+    [[ -x "$_bin" ]] || return 0
+  fi
+  "$_bin" memory preflight --query "session_handoff recent context" 2>/dev/null || true
+}
+
 # ─── Dispatch-pointer vendor docs (PR-A1 / B2 / R3) ─────────────────────
 # Vendor → root file mapping for hosts.pointer_targets derivation.
 # Canonical table — single source of truth. Used by _vendor_file_for_host
