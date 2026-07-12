@@ -1006,6 +1006,15 @@ fi
 # block makes NO live-meter / per-prompt-refresh claim (AC-CP-3, honesty
 # posture). Marker-bounded via upsert_marker_block (never hand-rolled awk);
 # fully static content -> byte-identical on every re-run (AC-CP-4).
+#
+# Handoff digest (AC-CP-2, ecm-p2-host-adapters drift fix): copilot has NO
+# runtime hook channel (Track C's whole premise) — install time is its only
+# chance to render the handoff digest, unlike claude-code/codex which reuse
+# _ecm_handoff_digest at every SessionStart via harness_hook.sh. Call the
+# SAME shared helper (lib.sh) here, rendered as an install-time snapshot, so
+# the block never hardcodes a placeholder line. Fail-open: an absent/empty
+# digest degrades to an honest "none recorded" line — never a false promise
+# that a broken command can refresh it.
 if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",copilot,"; then
   _cp_pins_file="$(context_pins_file 2>/dev/null || true)"
   _cp_pins_csv=""
@@ -1013,6 +1022,12 @@ if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | gre
     _cp_pins_csv="$(yaml_to_json "$_cp_pins_file" 2>/dev/null | jq -r '(.pins // []) | map(.id) | join(", ")' 2>/dev/null || echo "")"
   fi
   [[ -z "$_cp_pins_csv" ]] && _cp_pins_csv="(pin set unavailable)"
+  _cp_handoff_digest="$(_ecm_handoff_digest 2>/dev/null || true)"
+  if [[ -n "$_cp_handoff_digest" ]]; then
+    _cp_handoff_line="Prior session handoff: ${_cp_handoff_digest}"
+  else
+    _cp_handoff_line="Prior session handoff: none recorded as of this install. Run 'eidolons context handoff' at session end to record one, then re-run 'eidolons harness install' to refresh this snapshot."
+  fi
   _cp_body="## Context policy (ECM — static floor, start-of-session only)
 
 This project runs Eidolons Context Management (ECM). Copilot's channel is
@@ -1021,7 +1036,7 @@ install' runs (upstream copilot-cli issues #1139/#2142 block a per-request
 channel). Treat the values below as an install-time snapshot.
 
 Pins: ${_cp_pins_csv}
-Prior session handoff: recorded via 'eidolons context handoff' at session end (not available here — refresh via 'eidolons harness install')."
+${_cp_handoff_line}"
   upsert_marker_block ".github/copilot-instructions.md" "ecm-context" "$_cp_body"
   ok "Wrote ECM static floor into .github/copilot-instructions.md (copilot: start-only, no live refresh)"
 fi

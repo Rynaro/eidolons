@@ -1,0 +1,149 @@
+# Machine-readable summary — ESL change ecm-p2-host-adapters
+# Companion to spec.md / acceptance-criteria.md. Frozen doc = acceptance-criteria.md
+# (SHA 629b0f10200d9fba6e01c187b9a8af3961953042c2de7a63c4a5335c8573281f).
+# Derived faithfully from spec.md + acceptance-criteria.md + amendment-atomos-go.md;
+# the acceptance_checks block below is regenerated post-drift-fix so it records the
+# TRUTH of what each gate now asserts, not the pre-fix state.
+schema: eidolons/change-spec.v1
+change_id: ecm-p2-host-adapters
+esl_version: "1.1"
+tier: full
+maker: vivi
+checker: vigil
+target: "nexus v2.3.0 (ECM P2 — host-adapter recipes: codex/opencode/copilot/cursor)"
+
+rightsize: { score: "6/9", complexity: "10/12 human_loop", confidence: "84 VALIDATE", tradeoff_present: true }
+
+problem: >
+  ECM P1 shipped a host-agnostic context kernel (meter math, P1-P7 policy table,
+  externalize, handoff) and wired exactly one host — claude-code — through the
+  harness. Every other declared host (codex, opencode, copilot, cursor) got nothing,
+  and two P1 removal gaps existed (compactThreshold in .claude/settings.json and the
+  context: block in eidolons.lock were never stripped by 'harness remove').
+
+decision:
+  host_tiers:
+    codex: "full ladder (T3) — its channel mirrors claude-code's: SessionStart pins+handoff, UserPromptSubmit meter/policy line, PostToolUse zone-transition refresh, don't-clobber model_auto_compact_token_limit knob"
+    opencode: "start + per-prompt (T1) — experimental.chat.system.transform appends a live zone= line; experimental.session.compacting externalizes on compaction"
+    copilot: "start-only static (T2) — .github/copilot-instructions.md marker block, re-read each request only (upstream copilot-cli #1139/#2980 block a per-request channel); NO live-meter claim"
+    cursor: "static documentary floor (T2) — .cursor/rules/eidolons-context.mdc states the static-only limitation explicitly; no confirmed runtime channel at all"
+  posture: "asymmetric-by-honesty and fail-open everywhere — a host with a broken or absent channel still installs a floor and exits 0; no adapter fabricates a channel its host does not expose"
+  track_h_retirement: >
+    Amendment (2026-07-07, amendment-atomos-go.md): the maintainer decided atomos is
+    a GO (committed P3 build). This retires AC-TW-1/AC-TW-2 (the atomos
+    delete-at-P2-exit tripwire) without re-cutting the frozen acceptance-criteria.md
+    SHA — Tracks A-G (the actual code, 30 checks) are unaffected.
+  post_ship_drift_fix: >
+    2026-07-12 (this branch, fix/ecm-p2-copilot-handoff): a drift check run after
+    five releases (v2.3.0..v2.8.0, change never archived) found AC-CP-2 shipped
+    half-true — the copilot block's pin digest was real (queried at install time
+    via context_pins_file) but the "Prior session handoff" line was a HARDCODED
+    LITERAL that never called _ecm_handoff_digest, and told the user to
+    "refresh via 'eidolons harness install'" even though harness install never
+    read a handoff record. Fix: _ecm_handoff_digest (previously private to
+    harness_hook.sh) lifted verbatim to lib.sh (shared by both harness_hook.sh's
+    live SessionStart inject and harness_install.sh's copilot install-time
+    snapshot — copilot has no runtime hook channel, so install time is its only
+    chance to render this). The copilot block now calls the SAME helper and
+    renders either the real queried digest or an honest "none recorded as of
+    this install" line — never a false promise. Idempotent: memory preflight's
+    own TTL cache (.eidolons/harness/cache/preflight.json) keeps a same-window
+    re-install byte-identical (AC-CP-4 unaffected).
+  gate_hardening: >
+    Three ACs shipped with gates that could not fail, surviving five releases.
+    AC-CP-2's bats test grepped for the label 'Prior session handoff' — a
+    string the hardcoded literal itself contained, so the gate could never
+    catch its own placeholder. AC-CR-2 grepped the WHOLE .mdc file for
+    'static', which matches unconditionally in the front-matter
+    ('description: ... static floor ...') independent of the marker BODY
+    the AC is actually about — a body dishonestly claiming live injection
+    still passed. AC-CDX-4's assertion was wrapped in
+    `if [[ -n "$output" ]]`, making an empty payload (the primary failure
+    mode) a vacuous pass. All three hardened in this branch; see
+    verify_method entries below and cli/tests/{harness,context}.bats.
+
+invariants:
+  - fail-open-everywhere            # broken/absent channel -> floor + exit 0, never a hang or hard fail
+  - honest-static-floor             # no adapter claims a live/per-prompt channel it doesn't have (AC-CP-3/AC-CR-3/AC-OC-4)
+  - kernel-untouched                # context.sh/lib_context.sh/context_policy.sh/context_externalize.sh/context_status.sh/context_handoff.sh reused verbatim, never edited
+  - policy-served-not-edited        # roster/context-policy.yaml, roster/pins.yaml are read, never modified
+  - claude-code-byte-identical      # the P1 claude-code recipe internals are regression-guarded, unaffected by P2/the drift fix
+  - marker-bounded-idempotent       # upsert_marker_block/remove_marker_block only; jq -cS / byte-diff before every write
+  - bash-3.2-clean                  # no declare -A, ${var,,}/${var^^}, readarray/mapfile, &>>
+  - stderr-discipline               # say/ok/info/warn/die -> stderr; stdout reserved for captured helpers
+  - no-false-promise                # (drift-fix addition) a fail-open degraded line must never name a command that cannot help
+
+files:
+  - cli/src/harness_install.sh
+  - cli/src/harness_hook.sh
+  - cli/src/harness_remove.sh
+  - cli/src/lib.sh                  # drift-fix addition: _ecm_handoff_digest lifted here (shared helper), not in the original 8-glob freeze
+  - cli/templates/harness/opencode-eidolons.js
+  - schemas/eidolons.lock.schema.json
+  - cli/tests/context.bats
+  - cli/tests/harness.bats
+
+verify_items:
+  - "codex: PostToolUse shim + hooks.json wiring; SessionStart/UserPromptSubmit dialect reused from harness_hook.sh unmodified; don't-clobber config.toml append"
+  - "opencode: plugin registers system.transform (live zone= line) + session.compacting (externalize); no per-tool inject claim"
+  - "copilot: marker block carries the pin digest AND a queried handoff digest (real content when a record exists; an honest 'none recorded' line when it doesn't) — never a hardcoded placeholder; byte-identical on re-install within the preflight TTL cache window"
+  - "cursor: marker BODY (not just file/front-matter) states the static-only limitation and makes no live-injection claim; byte-identical on re-install"
+  - "removal parity: compactThreshold + lock context: block + codex knob + copilot block + cursor .mdc all stripped; install->remove->install byte-identical for claude-code"
+  - "fail-open: cursor-only install exits 0; unknown zone -> policy continue; unwritable codex config warns + exits 0 with other hosts still wired"
+  - "lock: context.per_host records per-host tier; codex_autocompact_managed is boolean"
+  - "AC-CP-2 hardened: seeded fake preflight digest content (not just the label) must appear in the block; the old broken 'not available here' promise must be absent"
+  - "AC-CR-2 hardened: assertion scoped to the marker BODY via extract_marker_block, not the whole file (defeats the front-matter loophole)"
+  - "AC-CDX-4 hardened: `if [[ -n \"$output\" ]]` vacuous-pass guard removed; confirmed green unwrapped (no second defect found)"
+
+acceptance_checks:
+  - { id: AC-CDX-1, verify_method: "bats — file exists; grep -q 'run --hook codex --post-tool-use' codex-PostToolUse.sh (frozen: acceptance-criteria.md)" }
+  - { id: AC-CDX-2, verify_method: "bats — jq -e '.hooks.PostToolUse[].command | select(endswith(\"codex-PostToolUse.sh\"))' .codex/hooks.json (frozen: acceptance-criteria.md)" }
+  - { id: AC-CDX-3, verify_method: "bats parity test mirroring harness.bats:1655 — assert same envelope shape as claude-code (frozen: acceptance-criteria.md)" }
+  - { id: AC-CDX-4, verify_method: "bats — additionalContext matches 'Context: zone=', asserted UNCONDITIONALLY on a non-empty $output (hardened: the prior `if [[ -n \"$output\" ]]` vacuous-pass guard is removed; confirmed green against current behavior, no second defect found)" }
+  - { id: AC-CDX-5, verify_method: "bats — additionalContext matches 'Pins (must survive' (frozen: acceptance-criteria.md)" }
+  - { id: AC-CDX-6, verify_method: "bats — grep -q '^model_auto_compact_token_limit' .codex/config.toml (frozen: acceptance-criteria.md)" }
+  - { id: AC-CDX-7, verify_method: "bats — seed foreign value; assert file unchanged; assert lock codex_autocompact_managed=false (frozen: acceptance-criteria.md)" }
+  - { id: AC-OC-1, verify_method: "bats — grep -q 'experimental' && grep -q 'chat.system.transform' .opencode/plugins/eidolons.js (frozen: acceptance-criteria.md)" }
+  - { id: AC-OC-2, verify_method: "bats — grep -q 'output.system'; node smoke-run asserts a zone= line appended (frozen: acceptance-criteria.md)" }
+  - { id: AC-OC-3, verify_method: "bats — grep -q 'session.compacting' .opencode/plugins/eidolons.js (frozen: acceptance-criteria.md)" }
+  - { id: AC-OC-4, verify_method: "bats — ! grep -qi 'PostToolUse|per-tool inject' .opencode/plugins/eidolons.js (frozen: acceptance-criteria.md)" }
+  - { id: AC-CP-1, verify_method: "bats — grep -qF '<!-- eidolon:ecm-context start -->' .github/copilot-instructions.md (frozen: acceptance-criteria.md)" }
+  - { id: AC-CP-2, verify_method: "bats — block interior matches 'Pins:' AND 'Prior session handoff'; HARDENED (drift fix) to additionally seed a fake memory-preflight digest via setup_fake_eidolons_for_memory and assert its CONTENT (not just the label) lands in the block, and that the old broken 'not available here' promise is absent. The label-only frozen VERIFY text could not fail against a hardcoded placeholder; content assertion can." }
+  - { id: AC-CP-2b, verify_method: "bats (new, drift-fix companion) — with an empty preflight digest, the block renders 'Prior session handoff: none recorded as of this install...' — an honest fail-open line that never names a command (harness install alone) that cannot populate a digest it never queried" }
+  - { id: AC-CP-3, verify_method: "bats — ! grep -qi 'live meter|per-prompt refresh|updated each turn' within the marker block (frozen: acceptance-criteria.md)" }
+  - { id: AC-CP-4, verify_method: "bats — capture block; re-run; diff is empty (frozen: acceptance-criteria.md; unaffected by the drift fix — memory preflight's own TTL cache keeps a same-window re-install byte-identical)" }
+  - { id: AC-CR-1, verify_method: "bats — file exists; grep -qF '<!-- eidolon:ecm-context start -->' .cursor/rules/eidolons-context.mdc (frozen: acceptance-criteria.md)" }
+  - { id: AC-CR-2, verify_method: "bats — HARDENED (drift fix): asserted against the marker BODY via a local extract_marker_block helper, not the whole file. The original frozen VERIFY (`grep -qi 'static' .cursor/rules/eidolons-context.mdc`) passed vacuously off the unconditional .mdc front-matter regardless of marker-body content; confirmed reproducible and now closed." }
+  - { id: AC-CR-3, verify_method: "bats — ! grep -qi 'meter refresh|per-prompt|live inject' .cursor/rules/eidolons-context.mdc (frozen: acceptance-criteria.md)" }
+  - { id: AC-CR-4, verify_method: "bats — diff of before/after is empty (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-1, verify_method: "bats — jq -e 'has(\"compactThreshold\") | not' .claude/settings.json (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-2, verify_method: "bats — ! grep -q '^context:' eidolons.lock (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-3, verify_method: "bats — ! grep -q '^model_auto_compact_token_limit' .codex/config.toml when managed=true (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-4, verify_method: "bats — marker absent; a seeded sibling line still present (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-5, verify_method: "bats — file absent (frozen: acceptance-criteria.md)" }
+  - { id: AC-RM-6, verify_method: "bats — jq -cS . byte-compare of both installs (frozen: acceptance-criteria.md)" }
+  - { id: AC-FO-1, verify_method: "bats — status -eq 0; .cursor/rules/eidolons-context.mdc present (frozen: acceptance-criteria.md)" }
+  - { id: AC-FO-2, verify_method: "bats — seed meter zone=unknown; jq -e '.operation==\"continue\"' (frozen: acceptance-criteria.md)" }
+  - { id: AC-FO-3, verify_method: "bats — chmod 0444 config; status -eq 0; claude-code shim still written (frozen: acceptance-criteria.md; OUT OF SCOPE for this pass per maintainer — partial coverage tracked, not touched)" }
+  - { id: AC-LK-1, verify_method: "bats — jq -e '.context.per_host.codex.tier==\"T3\"' <(yaml_to_json eidolons.lock) (frozen: acceptance-criteria.md)" }
+  - { id: AC-LK-2, verify_method: "bats — jq -e '.context.codex_autocompact_managed | type==\"boolean\"' (frozen: acceptance-criteria.md)" }
+  - { id: AC-LK-3, verify_method: "CI — jq empty schemas/eidolons.lock.schema.json; validate P1 + P2 lock fixtures pass. KNOWN OVERCLAIM (maintainer-tracked follow-up, deliberately NOT fixed here): the VERIFY text says the schema 'validates' the lock, but the repo has no JSON-Schema validator (make schema is jq empty, structural only) and the surrogate bats test never descends into per_host.<host>. A real fix needs an actual validator; a second surrogate would just relabel the same gap." }
+  - { id: AC-TW-1, verify_method: "RETIRED — atomos GO (amendment-atomos-go.md); no code, no gate" }
+  - { id: AC-TW-2, verify_method: "RETIRED — atomos GO (amendment-atomos-go.md); no code, no gate" }
+
+out_of_scope_this_pass:
+  - { id: AC-LK-3, reason: "overclaims validation the repo cannot perform; real fix needs a JSON-Schema validator, tracked by the maintainer as follow-up, not silently patched with another surrogate" }
+  - { id: AC-CR-3, reason: "keyword-blocklist style gate, weak but the shipped artifact is honest; left as-is per maintainer instruction" }
+  - { id: AC-CP-3, reason: "keyword-blocklist style gate, weak but the shipped artifact is honest; left as-is per maintainer instruction" }
+  - { id: AC-OC-4, reason: "keyword-blocklist style gate, weak but the shipped artifact is honest; left as-is per maintainer instruction" }
+  - { id: AC-FO-3, reason: "partial coverage, left as-is per maintainer instruction" }
+
+kernel_fence_held:
+  - cli/src/context.sh
+  - cli/src/lib_context.sh
+  - cli/src/context_policy.sh
+  - cli/src/context_externalize.sh
+  - cli/src/context_status.sh
+  - cli/src/context_handoff.sh
+  - roster/context-policy.yaml
+  - roster/pins.yaml

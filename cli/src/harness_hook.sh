@@ -139,21 +139,9 @@ _ecm_pins_reminder() {
     | jq -r '(.pins // []) | map(.id) | join(", ")' 2>/dev/null || true
 }
 
-# _ecm_handoff_digest — reuse 'eidolons memory preflight --query' verbatim
-# (FINDING-015, no new docker plumbing) to recall the latest session_handoff
-# record for the successor-session SessionStart inject. Empty on any failure
-# (gate absent, docker absent, zero records) — memory preflight already
-# guarantees empty-stdout/exit-0 on every failure mode.
-_ecm_handoff_digest() {
-  local _bin=""
-  if _bin="$(command -v eidolons 2>/dev/null)"; then
-    :
-  else
-    _bin="${EIDOLONS_HOME:-$HOME/.eidolons}/nexus/cli/eidolons"
-    [[ -x "$_bin" ]] || return 0
-  fi
-  "$_bin" memory preflight --query "session_handoff recent context" 2>/dev/null || true
-}
+# _ecm_handoff_digest — lifted to lib.sh (shared with harness_install.sh's
+# copilot install-time snapshot, ecm-p2-host-adapters drift fix). Both files
+# source lib.sh at the top; the function is used here unchanged.
 
 # ── atlas-aci auto-sync (harness step) ─────────────────────────────────────
 # Pure reads + one bounded `docker run -d` spawn. Fires on BOTH SessionStart

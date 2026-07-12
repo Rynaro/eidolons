@@ -1988,6 +1988,24 @@ yaml_to_json_local() {
   yq -o=json eval '.' "$1" 2>/dev/null || yq . "$1"
 }
 
+# extract_marker_block FILE MARKER_NAME — echo ONLY the interior lines
+# between "<!-- eidolon:MARKER_NAME start -->" and "... end -->" (exclusive
+# of the marker lines themselves, and of any front-matter/sibling content
+# outside the block). Used to harden ACs that must assert against the
+# marker BODY specifically — a whole-file grep is fooled by unrelated file
+# content (e.g. YAML front-matter) that happens to contain the same word
+# (AC-CR-2 drift fix).
+extract_marker_block() {
+  local file="$1" marker_name="$2"
+  local start="<!-- eidolon:${marker_name} start -->"
+  local end="<!-- eidolon:${marker_name} end -->"
+  awk -v start="$start" -v end="$end" '
+    $0 == start { in_block = 1; next }
+    $0 == end   { in_block = 0; next }
+    in_block    { print }
+  ' "$file" 2>/dev/null
+}
+
 # ─── Track A remainder: AC-CDX-1, AC-CDX-2, AC-CDX-6, AC-CDX-7 ─────────────
 
 @test "AC-CDX-1: codex PostToolUse shim invokes run --hook codex --post-tool-use" {
@@ -2124,12 +2142,42 @@ EOF
 @test "AC-CP-2: copilot ECM block carries the pin digest plus the handoff digest" {
   seed_manifest_ecm_hosts copilot
   seed_lock
+  # The label alone ('Prior session handoff') is NOT sufficient evidence —
+  # the original implementation hardcoded that label next to a static
+  # placeholder and never called the digest query at all. Seed a fake
+  # preflight digest and assert its CONTENT lands in the block; a
+  # hardcoded literal cannot reproduce an arbitrary seeded string.
+  export FAKE_PREFLIGHT_OUTPUT="[semantic/T1] ECM-P2-DRIFT-CANARY: real handoff content, not a placeholder"
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
   run eidolons harness install --hosts copilot
   [ "$status" -eq 0 ]
   run grep -q 'Pins:' .github/copilot-instructions.md
   [ "$status" -eq 0 ]
   run grep -q 'Prior session handoff' .github/copilot-instructions.md
   [ "$status" -eq 0 ]
+  run grep -qF 'ECM-P2-DRIFT-CANARY: real handoff content, not a placeholder' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+  # The old broken promise ("not available here — refresh via ...", which
+  # named a command that could never fulfil it) must not resurface.
+  run grep -qi 'not available here' .github/copilot-instructions.md
+  [ "$status" -ne 0 ]
+}
+
+@test "AC-CP-2b: copilot handoff line degrades to an honest line when no handoff record exists" {
+  seed_manifest_ecm_hosts copilot
+  seed_lock
+  export FAKE_PREFLIGHT_OUTPUT=""
+  export FAKE_PREFLIGHT_EXIT="0"
+  setup_fake_eidolons_for_memory
+  run eidolons harness install --hosts copilot
+  [ "$status" -eq 0 ]
+  run grep -q 'Prior session handoff: none recorded' .github/copilot-instructions.md
+  [ "$status" -eq 0 ]
+  # Fail-open must never regress into a false promise about a command
+  # that cannot help.
+  run grep -qi 'not available here' .github/copilot-instructions.md
+  [ "$status" -ne 0 ]
 }
 
 @test "AC-CP-3: copilot ECM block makes no live-refresh claim" {
@@ -2165,12 +2213,19 @@ EOF
   [ "$status" -eq 0 ]
 }
 
-@test "AC-CR-2: cursor ECM floor documents its static-only limitation" {
+@test "AC-CR-2: cursor ECM floor documents its static-only limitation (inside the marker block)" {
   seed_manifest_ecm_hosts cursor
   seed_lock
   run eidolons harness install --hosts cursor
   [ "$status" -eq 0 ]
-  run grep -qi 'static' .cursor/rules/eidolons-context.mdc
+  # A whole-file grep is fooled by the .mdc front-matter (written
+  # unconditionally, independent of the marker body: 'description: ...
+  # static floor ...') — assert against the marker BODY specifically, so a
+  # body that dishonestly claims live injection cannot pass just because
+  # the front-matter above it happens to say "static" (drift fix).
+  _body="$(extract_marker_block .cursor/rules/eidolons-context.mdc ecm-context)"
+  [ -n "$_body" ]
+  run grep -qi 'static' <<< "$_body"
   [ "$status" -eq 0 ]
 }
 
