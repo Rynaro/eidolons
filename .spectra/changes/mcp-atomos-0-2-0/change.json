@@ -1,0 +1,54 @@
+{
+  "esl_version": "1.0",
+  "change_id": "mcp-atomos-0-2-0",
+  "status": "in_progress",
+  "tier": "lite",
+  "maker": "orchestrator",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "given": "roster/mcps.yaml atomos entry",
+      "when": "versions are read",
+      "then": "latest and pins.stable are both 0.2.0",
+      "verify_method": "yq eval + eidolons mcp show atomos"
+    },
+    {
+      "id": "AC-2",
+      "given": "the recorded releases 0.2.0 digest read back OUT OF THE FILE",
+      "when": "re-resolved against the registry",
+      "then": "it byte-equals the multi-arch INDEX digest for ghcr.io/rynaro/atomos:0.2.0 (never a per-arch manifest digest, never copied from a release note)",
+      "verify_method": "docker buildx imagetools inspect --format Manifest.Digest compared to the value parsed from roster/mcps.yaml"
+    },
+    {
+      "id": "AC-3",
+      "given": "exposes_tools.list",
+      "when": "compared to tools/list served by the pinned digest itself",
+      "then": "it contains exactly the four mcp__atomos__* names including compose_externalize_manifest",
+      "verify_method": "stdio MCP tools/list against the pinned ghcr digest"
+    },
+    {
+      "id": "AC-4",
+      "given": "the releases map",
+      "when": "inspected",
+      "then": "0.1.0 is retained and reachable via eidolons mcp use atomos@0.1.0",
+      "verify_method": "yq eval"
+    },
+    {
+      "id": "AC-5",
+      "given": "the nexus test suite",
+      "when": "run",
+      "then": "no NEW red relative to a clean tree (doctor_deep DD-7 is a confirmed pre-existing failure)",
+      "verify_method": "bats cli/tests/ with a stash-and-rerun control on DD-7"
+    },
+    {
+      "id": "AC-6",
+      "given": "the commit",
+      "when": "inspected",
+      "then": ".mcp.json and .gitignore are NOT included (local consumer artefacts carrying machine-absolute paths)",
+      "verify_method": "git show --stat"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

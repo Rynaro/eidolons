@@ -7,7 +7,7 @@
 #   wiring_mode: transport — MCP registered in .mcp.json only; never injected
 #   into agent tools: allowlists (e.g. junction, a project-level bus).
 catalogue_version: "1.2"
-updated_at: "2026-07-10"
+updated_at: "2026-07-12"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -338,13 +338,14 @@ mcps:
         - mcp__atomos__compose_handoff
         - mcp__atomos__verify_envelope
         - mcp__atomos__verify_pins
+        - mcp__atomos__compose_externalize_manifest
     source:
       type: ghcr
       image: "ghcr.io/rynaro/atomos"
     versions:
-      latest: "0.1.0"
+      latest: "0.2.0"
       pins:
-        stable: "0.1.0"
+        stable: "0.2.0"
       releases:
         "0.1.0":
           # MVP: 3 compose/verify tools at byte-parity with the eidolons kernel
@@ -352,6 +353,18 @@ mcps:
           # fence; distroless multi-arch INDEX digest. ATOMOS_VERSION 0.1.0; commit 5c10193.
           digest: "sha256:ff2449e92cae030e8cb25796c2b9e06ad4814e59ac6db8fc19beffc5606d8a73"
           released_at: "2026-07-07T00:00:00Z"
+        "0.2.0":
+          # Feature-complete: compose_externalize_manifest is the FOURTH and final
+          # tool of the closed set (atomos ADR §2, deferred to v0.2 by §2.4). The
+          # file-floor identifier manifest at byte/SHA parity with `eidolons context
+          # externalize` — it NEVER reaches durable memory: the kernel's persist
+          # chain (context_externalize.sh:154-196), the budget ledger, and the meter
+          # read all stay permanently out of fence. atomos writes one file and stops.
+          # exposes_tools.list above gained the 4th entry and was verified against
+          # tools/list served by THIS digest, not assumed.
+          # ATOMOS_VERSION 0.2.0; commit dee3550; multi-arch INDEX digest (amd64+arm64).
+          digest: "sha256:b3f67b4ef64230ebe91aa37efea14e386f178950a2750e0c26c8d29d7ea4a639"
+          released_at: "2026-07-12T14:32:27Z"
     install:
       hosts_wired:
         - ".mcp.json"
