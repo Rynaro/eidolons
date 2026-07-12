@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.7.0] — 2026-07-12 — the statusline: an FF battle-window HUD that closes ECM's rung-1 telemetry gap
+
 ### Added
 
 - **`eidolons statusline render` — a Claude Code statusline that closes ECM's rung-1 telemetry gap, and renders a Final-Fantasy HUD while it does (ESL change `ecm-claude-statusline`, tier lite).** The ECM spec has promised this surface since P1 — `docs/specs/ecm/spec.md` §5 lists Claude Code at tier **T3** with "statusline JSON `context_window.used_percentage` → exact telemetry, no estimation", and `cli/src/context_status.sh` was built with a `--stdin` reader for precisely that payload (evidence C4, `evidence-host-facts.md`, CONFIRMED against the official docs). But nothing ever wrote the `statusLine` key: `harness install` wires only `UserPromptSubmit` + `SessionStart`. The consequence was silent and total — the meter sat at `estimate_source: "unknown", zone: "unknown"`, so every rule in the decision policy resolved to the fail-open `continue` floor. **The context kernel was running blind on its own flagship host.** The new subcommand pipes its stdin payload straight into `context status --stdin`, promoting the meter to `estimate_source: "host"` — exact utilization, no `bytes/4` estimation — in ~85 ms end-to-end, inside the ECM **CC3 ≤ 300 ms** prompt-path budget.
