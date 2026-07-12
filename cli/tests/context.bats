@@ -463,10 +463,13 @@ EOF
   stdin_json="$(jq -n --arg p "implement the authentication flow" --arg tp "$PWD/transcript.jsonl" '{prompt:$p, transcript_path:$tp}')"
   run bash -c "printf '%s' '$stdin_json' | '$EIDOLONS_ROOT/cli/eidolons' run --hook codex --stdin"
   [ "$status" -eq 0 ]
-  if [[ -n "$output" ]]; then
-    ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
-    [[ "$ctx" == *"Context: zone="* ]] || return 1
-  fi
+  # The primary failure mode this AC guards against is an EMPTY payload (the
+  # meter line never injected) — that must be a hard failure, not a vacuous
+  # pass. The old `if [[ -n "$output" ]]` guard let an empty $output skip
+  # the assertion entirely (drift fix).
+  [ -n "$output" ]
+  ctx="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+  [[ "$ctx" == *"Context: zone="* ]]
 }
 
 # ─── AC-CDX-5: codex SessionStart carries the "## Context policy" pins block ─
