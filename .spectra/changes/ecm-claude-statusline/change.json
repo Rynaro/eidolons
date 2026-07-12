@@ -1,0 +1,72 @@
+{
+  "esl_version": "1.1",
+  "change_id": "ecm-claude-statusline",
+  "status": "verified",
+  "tier": "lite",
+  "maker": "opus-orchestrator",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-SL-1",
+      "verify_method": "bats: cli/tests/statusline.bats — a payload carrying context_window.used_percentage writes .eidolons/.context/meter.json with estimate_source=host and the correct zone (ECM rung-1 promotion)"
+    },
+    {
+      "id": "AC-SL-2",
+      "verify_method": "bats: cli/tests/statusline.bats — render emits exactly 2 lines on stdout and exits 0"
+    },
+    {
+      "id": "AC-SL-3",
+      "verify_method": "bats: cli/tests/statusline.bats — zone label follows the ECM §3.1 ladder at every boundary (green \u003c50 \u003c= amber \u003c75 \u003c= red \u003c90 \u003c= critical)"
+    },
+    {
+      "id": "AC-SL-4",
+      "verify_method": "bats: cli/tests/statusline.bats — fail-open: empty stdin / malformed JSON / nulls / absent jq / no git repo all exit 0 with non-empty stdout (a dead statusline blanks the Claude Code bar)"
+    },
+    {
+      "id": "AC-SL-5",
+      "verify_method": "bats: cli/tests/statusline.bats — NO_COLOR=1 emits zero ANSI escapes; colour IS emitted by default despite stdout being a pipe"
+    },
+    {
+      "id": "AC-SL-6",
+      "verify_method": "bats: cli/tests/statusline.bats — render completes within the ECM CC3 \u003c=300ms prompt-path budget"
+    },
+    {
+      "id": "AC-SL-7",
+      "verify_method": "bats: cli/tests/statusline.bats — no bash 4+ constructs and no dynamic evaluation (no eval, no sourcing of payload/branch-derived data) in cli/src/statusline.sh"
+    },
+    {
+      "id": "AC-SL-8",
+      "verify_method": "bats: cli/tests/statusline.bats — no emitted line exceeds $COLUMNS at widths 40..120; the gauge survives every degradation level"
+    },
+    {
+      "id": "AC-SL-9",
+      "verify_method": "bats: cli/tests/statusline.bats — rate_limits.five_hour renders an MP gauge showing REMAINING; absent rate_limits renders no MP segment"
+    },
+    {
+      "id": "AC-SL-10",
+      "verify_method": "bats: cli/tests/statusline.bats — delta popup (↑n/↓n) fires on the second render of a session when used_percentage moved; absent on the first render"
+    },
+    {
+      "id": "AC-SL-11",
+      "verify_method": "bats: cli/tests/statusline.bats — zone-transition flash (reverse video) present on exactly the transition render, absent on the next same-zone render, suppressed entirely under NO_COLOR"
+    },
+    {
+      "id": "AC-SL-12",
+      "verify_method": "bats: cli/tests/statusline.bats — quest fanfare renders COMPLETE exactly once when the tracked quest goes in_progress→verified, then decays"
+    },
+    {
+      "id": "AC-SL-13",
+      "verify_method": "bats: cli/tests/statusline.bats — demo exits 0 with ≥5 HUD frames + wiring snippet; doctor exits 0 and leaves settings.json byte-identical"
+    },
+    {
+      "id": "AC-SL-14",
+      "verify_method": "bats: cli/tests/statusline.bats — roster agent renders in its class colour (kupo=1;35m); model.id job title present at wide widths, dropped at the floor; exceeds_200k_tokens renders OVERFLOW"
+    },
+    {
+      "id": "AC-SL-15",
+      "verify_method": "bats: cli/tests/statusline.bats — v1 invariants hold with v2 segments live: width 40..120, unwritable state dir stays fail-open 2-line, NO_COLOR zero ANSI"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

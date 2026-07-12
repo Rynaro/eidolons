@@ -124,6 +124,17 @@ Commands:
                    externalize  Checkpoint identifiers to crystalium (file-floor fallback)
                    handoff      Compose a session handoff brief + ECL envelope
                  Run 'eidolons context --help' for full usage.
+  statusline <sub> Claude Code statusline: FF-style HUD + ECM rung-1 telemetry.
+                   render      Read the statusline JSON payload on stdin, feed
+                               the ECM meter (estimate_source=host — exact, no
+                               estimation), print a 2-row battle-window HUD
+                               with self-decaying effects (zone flash, delta
+                               popup, quest fanfare, MP bar, critical pulse).
+                   demo        Preview a canned five-frame session arc + the
+                               settings.json wiring snippet.
+                   doctor      Read-only environment check (jq, wiring, meter
+                               freshness, render latency vs the 300ms budget).
+                 Wire it via .claude/settings.json "statusLine".
   telemetry <sub> Opt-in token-cost telemetry (audited spend, not estimated).
                    capture --hook STOP_<HOST> --stdin   Capture turn rows at session Stop
                    rollup  [--by ...] [--since ...]     Pure-jq M1/M2/M3 aggregation (Phase D)
@@ -313,6 +324,15 @@ case "$cmd" in
     esac
     ;;
   context)      exec bash "$CLI_SRC/context.sh"    "$@" ;;
+  statusline)
+    _sl_sub="${1:-render}"
+    [[ $# -gt 0 ]] && shift
+    case "$_sl_sub" in
+      render|demo|doctor|-h|--help) exec bash "$CLI_SRC/statusline.sh" "$_sl_sub" "$@" ;;
+      *) printf 'Unknown statusline subcommand: %s\n' "$_sl_sub" >&2
+         printf 'Available: render, demo, doctor\n' >&2; exit 2 ;;
+    esac
+    ;;
   version|--version|-v)
     # --quiet → single-line grep-compat form (legacy CI surface preserved)
     _quiet=false
