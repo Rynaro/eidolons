@@ -1,0 +1,146 @@
+{
+  "esl_version": "1.1",
+  "change_id": "ecm-p2-host-adapters",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "vigil",
+  "acceptance_checks": [
+    {
+      "id": "AC-CDX-1",
+      "verify_method": "acceptance-criteria.md#AC-CDX-1 (frozen)"
+    },
+    {
+      "id": "AC-CDX-2",
+      "verify_method": "acceptance-criteria.md#AC-CDX-2 (frozen)"
+    },
+    {
+      "id": "AC-CDX-3",
+      "verify_method": "acceptance-criteria.md#AC-CDX-3 (frozen)"
+    },
+    {
+      "id": "AC-CDX-4",
+      "verify_method": "acceptance-criteria.md#AC-CDX-4 (frozen)"
+    },
+    {
+      "id": "AC-CDX-5",
+      "verify_method": "acceptance-criteria.md#AC-CDX-5 (frozen)"
+    },
+    {
+      "id": "AC-CDX-6",
+      "verify_method": "acceptance-criteria.md#AC-CDX-6 (frozen)"
+    },
+    {
+      "id": "AC-CDX-7",
+      "verify_method": "acceptance-criteria.md#AC-CDX-7 (frozen)"
+    },
+    {
+      "id": "AC-OC-1",
+      "verify_method": "acceptance-criteria.md#AC-OC-1 (frozen)"
+    },
+    {
+      "id": "AC-OC-2",
+      "verify_method": "acceptance-criteria.md#AC-OC-2 (frozen)"
+    },
+    {
+      "id": "AC-OC-3",
+      "verify_method": "acceptance-criteria.md#AC-OC-3 (frozen)"
+    },
+    {
+      "id": "AC-OC-4",
+      "verify_method": "acceptance-criteria.md#AC-OC-4 (frozen)"
+    },
+    {
+      "id": "AC-CP-1",
+      "verify_method": "acceptance-criteria.md#AC-CP-1 (frozen)"
+    },
+    {
+      "id": "AC-CP-2",
+      "verify_method": "acceptance-criteria.md#AC-CP-2 (frozen)"
+    },
+    {
+      "id": "AC-CP-3",
+      "verify_method": "acceptance-criteria.md#AC-CP-3 (frozen)"
+    },
+    {
+      "id": "AC-CP-4",
+      "verify_method": "acceptance-criteria.md#AC-CP-4 (frozen)"
+    },
+    {
+      "id": "AC-CR-1",
+      "verify_method": "acceptance-criteria.md#AC-CR-1 (frozen)"
+    },
+    {
+      "id": "AC-CR-2",
+      "verify_method": "acceptance-criteria.md#AC-CR-2 (frozen)"
+    },
+    {
+      "id": "AC-CR-3",
+      "verify_method": "acceptance-criteria.md#AC-CR-3 (frozen)"
+    },
+    {
+      "id": "AC-CR-4",
+      "verify_method": "acceptance-criteria.md#AC-CR-4 (frozen)"
+    },
+    {
+      "id": "AC-RM-1",
+      "verify_method": "acceptance-criteria.md#AC-RM-1 (frozen)"
+    },
+    {
+      "id": "AC-RM-2",
+      "verify_method": "acceptance-criteria.md#AC-RM-2 (frozen)"
+    },
+    {
+      "id": "AC-RM-3",
+      "verify_method": "acceptance-criteria.md#AC-RM-3 (frozen)"
+    },
+    {
+      "id": "AC-RM-4",
+      "verify_method": "acceptance-criteria.md#AC-RM-4 (frozen)"
+    },
+    {
+      "id": "AC-RM-5",
+      "verify_method": "acceptance-criteria.md#AC-RM-5 (frozen)"
+    },
+    {
+      "id": "AC-RM-6",
+      "verify_method": "acceptance-criteria.md#AC-RM-6 (frozen)"
+    },
+    {
+      "id": "AC-FO-1",
+      "verify_method": "acceptance-criteria.md#AC-FO-1 (frozen)"
+    },
+    {
+      "id": "AC-FO-2",
+      "verify_method": "acceptance-criteria.md#AC-FO-2 (frozen)"
+    },
+    {
+      "id": "AC-FO-3",
+      "verify_method": "acceptance-criteria.md#AC-FO-3 (frozen)"
+    },
+    {
+      "id": "AC-LK-1",
+      "verify_method": "acceptance-criteria.md#AC-LK-1 (frozen)"
+    },
+    {
+      "id": "AC-LK-2",
+      "verify_method": "acceptance-criteria.md#AC-LK-2 (frozen)"
+    },
+    {
+      "id": "AC-LK-3",
+      "verify_method": "acceptance-criteria.md#AC-LK-3 (frozen)"
+    },
+    {
+      "id": "AC-TW-1",
+      "verify_method": "RETIRED — atomos GO (amendment-atomos-go.md); no code, no gate"
+    },
+    {
+      "id": "AC-TW-2",
+      "verify_method": "RETIRED — atomos GO (amendment-atomos-go.md); no code, no gate"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-12-ecm-p2-host-adapters",
+  "has_code": true
+}

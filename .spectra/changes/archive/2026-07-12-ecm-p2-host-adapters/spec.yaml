@@ -147,3 +147,46 @@ kernel_fence_held:
   - cli/src/context_handoff.sh
   - roster/context-policy.yaml
   - roster/pins.yaml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Defects in the FROZEN SPEC itself — authoring defects, not implementation
+# drift, and not attributable to the maker. Recorded (not resolved) so the
+# archive states the contradiction rather than quietly stepping around it.
+# Surfaced by the checker (vigil) during the post-hoc drift check, 2026-07-12.
+# ─────────────────────────────────────────────────────────────────────────────
+known_spec_defects:
+  - id: drift-fence-guard-unsatisfiable
+    where: "spec.md § Drift fence"
+    severity: authoring-defect
+    detail: >
+      The guard "a `harness install --hosts claude-code` diff before/after P2 must be
+      byte-identical" is UNSATISFIABLE alongside AC-LK-1/AC-LK-2, which mandate that the
+      lock's context: block gain per_host (for EVERY wired host, including claude-code)
+      and codex_autocompact_managed on any ECM install. No implementation can honor both.
+      Verified at HEAD: a claude-code-only install pre- vs post-P2 differs by exactly and
+      only those Track-G lock fields; every NAMED forbidden internal
+      (_write_compact_threshold(claude), claude base-hooks JSON, _SS_MATCHER, claude
+      PostToolUse behavior) is byte-identical. The implementation correctly honored the
+      AC-backed branch. The guard was never mechanized as a test, which is why the
+      contradiction went unnoticed until the drift check finally ran.
+    resolution: >
+      Recorded, not silently resolved. The invariant that IS true and verified — "the P1
+      claude-code recipe internals are regression-guarded" — is stated elsewhere in this
+      file; this entry exists so that narrower true statement does not stand in for the
+      contradiction it papers over.
+
+  - id: ac-lk-3-overclaims-validation
+    where: "acceptance-criteria.md § AC-LK-3"
+    severity: unfalsifiable-gate
+    detail: >
+      AC-LK-3 claims the schema "validates" a P1 and a P2 lock. No JSON-Schema validator
+      exists in this repo — `make schema` is `jq empty`, which only checks that the schema
+      FILE is itself valid JSON. The shipped bats test substitutes a key-subset surrogate:
+      every top-level `.context` key must be DECLARED in the schema. It never checks types,
+      `required`, or `additionalProperties`, and never descends into `per_host.<host>` — so
+      P2's own new {tier, channel, ecm_features} sub-shape is validated by nothing.
+    resolution: >
+      OUT OF SCOPE this pass, deliberately. A real fix needs a JSON-Schema validator in the
+      toolchain. Patching it with a second grep-shaped surrogate would manufacture another
+      gate that cannot fail on the defect it names — the exact failure class this change's
+      drift check was convened to catch. Tracked as follow-up; NOT papered over.
