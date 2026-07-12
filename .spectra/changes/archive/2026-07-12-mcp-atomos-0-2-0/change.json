@@ -1,7 +1,7 @@
 {
   "esl_version": "1.0",
   "change_id": "mcp-atomos-0-2-0",
-  "status": "in_progress",
+  "status": "archived",
   "tier": "lite",
   "maker": "orchestrator",
   "checker": "kupo",
@@ -50,5 +50,7 @@
     }
   ],
   "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-12-mcp-atomos-0-2-0",
   "has_code": true
 }
