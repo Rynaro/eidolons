@@ -18,6 +18,12 @@
 #     .github/copilot-instructions.md, siblings preserved (AC-RM-4)
 #   - Removes the cursor ECM static floor .cursor/rules/eidolons-context.mdc
 #     (AC-RM-5)
+#
+# ecm-statusline-rollout additionally strips the 'statusLine' key from
+# .claude/settings.json — ONLY when lock-recorded as
+# context.statusline_managed=true (AC-SL-4); a foreign statusLine
+# (statusline_managed=false) is left byte-unchanged (AC-SL-5), same
+# don't-clobber-aware discipline as compactThreshold above.
 # All ECM removal is managed-flag-aware (don't-clobber-aware): a foreign
 # pre-existing value we never wrote is left untouched, mirroring install's
 # own don't-clobber semantics.
@@ -81,10 +87,12 @@ fi
 # would no longer be recoverable from the lock.
 _ecm_compactthreshold_managed_lock="false"
 _ecm_codex_autocompact_managed_lock="false"
+_ecm_statusline_managed_lock="false"
 if [[ -f "$PROJECT_LOCK" ]]; then
   _ecm_lock_json="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null || echo '{}')"
   _ecm_compactthreshold_managed_lock="$(printf '%s' "$_ecm_lock_json" | jq -r '.context.compactthreshold_managed // false' 2>/dev/null || echo false)"
   _ecm_codex_autocompact_managed_lock="$(printf '%s' "$_ecm_lock_json" | jq -r '.context.codex_autocompact_managed // false' 2>/dev/null || echo false)"
+  _ecm_statusline_managed_lock="$(printf '%s' "$_ecm_lock_json" | jq -r '.context.statusline_managed // false' 2>/dev/null || echo false)"
 fi
 
 # ── Remove shim files ──────────────────────────────────────────────────────
@@ -168,6 +176,23 @@ if [[ -f "$SETTINGS_JSON" ]] && [[ "$_ecm_compactthreshold_managed_lock" == "tru
     else
       rm -f "$_ct_tmp"
       warn "could not strip compactThreshold from $SETTINGS_JSON — leaving as-is (fail-open)"
+    fi
+  fi
+fi
+
+# ── ecm-statusline-rollout: strip statusLine from .claude/settings.json ──
+# Don't-clobber-aware: only strip when THIS install actually wrote it
+# (statusline_managed=true in the lock, read above). A foreign pre-existing
+# statusLine (managed=false) is left byte-unchanged (AC-SL-5).
+if [[ -f "$SETTINGS_JSON" ]] && [[ "$_ecm_statusline_managed_lock" == "true" ]]; then
+  if jq empty "$SETTINGS_JSON" 2>/dev/null && jq -e 'has("statusLine")' "$SETTINGS_JSON" >/dev/null 2>&1; then
+    _sl_tmp="$(mktemp)"
+    if jq 'del(.statusLine)' "$SETTINGS_JSON" > "$_sl_tmp" 2>/dev/null; then
+      mv "$_sl_tmp" "$SETTINGS_JSON"
+      ok "Removed statusLine from .claude/settings.json (ECM managed, AC-SL-4)"
+    else
+      rm -f "$_sl_tmp"
+      warn "could not strip statusLine from $SETTINGS_JSON — leaving as-is (fail-open)"
     fi
   fi
 fi

@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`eidolons harness install` now wires the `statusLine` key for claude-code (ESL change `ecm-statusline-rollout`, tier lite).** `eidolons statusline render` shipped in v2.7.0 as ECM's rung-1 telemetry feed, but its own spec explicitly deferred auto-wiring — "this change wires this repo's `.claude/settings.json` by hand" — and nothing ever closed that gap: `grep -rn 'statusLine' cli/src/harness_install.sh` returned zero matches, so every consumer project's meter sat at `estimate_source: "unknown"`, `zone: "unknown"`, with every ECM decision-policy rule resolving to the fail-open `continue` floor. `harness install` now writes `{"type":"command","command":"eidolons statusline render","padding":0,"refreshInterval":2}` into `.claude/settings.json` — gated on the same ECM opt-in (`context:` block) and claude-code being wired, mirroring `_write_compact_threshold`'s don't-clobber design exactly (`_write_status_line`, `cli/src/harness_install.sh`). The command is always the installed CLI on PATH, never an absolute path. A pre-existing foreign `statusLine` is left byte-unchanged and recorded as `eidolons.lock` `context.statusline_managed: false`; ours is `true`. `harness remove` strips the key only when `statusline_managed` is `true` (same discipline as the existing `compactThreshold` strip), leaving a foreign value untouched. `schemas/eidolons.lock.schema.json` gains `context.statusline_managed`. `cli/tests/harness.bats` gains AC-SL-1..6, including a don't-clobber/idempotency pair asserted by **sha256 content hash** (not a substring grep) and an end-to-end proof that the wired command actually promotes the ECM meter to `estimate_source: "host"` — closing the loop the v2.7.0 spec opened.
+
 ## [2.8.0] — 2026-07-12 — atomos closes its tool set: the ECM compose/verify executor is feature-complete
 
 ### Changed

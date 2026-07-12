@@ -5,7 +5,9 @@
 # Wires host hook shims (claude-code, codex) into the consumer project.
 # Writes:
 #   .eidolons/harness/hooks/<host>-<event>.sh  — executable shim scripts
-#   .claude/settings.json                       — merged hooks block (claude-code)
+#   .claude/settings.json                       — merged hooks block (claude-code),
+#                                                  + statusLine when ECM is on
+#                                                  (ecm-statusline-rollout)
 #   .codex/hooks.json                           — conservative shape (codex)
 #   eidolons.lock                               — harness: key extension
 #
@@ -530,6 +532,66 @@ _write_compact_threshold() {
   fi
 }
 
+# _write_status_line SETTINGS_JSON — ecm-statusline-rollout: write the
+# 'statusLine' key so Claude Code feeds ECM's rung-1 telemetry (exact
+# context_window.used_percentage, no estimation) into 'context status --stdin'
+# via 'eidolons statusline render' (cli/src/statusline.sh). Mirrors
+# _write_compact_threshold's don't-clobber design one function up: the
+# comparison key is .statusLine.command (an object, not a scalar, so we
+# compare the command identity — "is this entry ours?" — not the whole
+# object). command is ALWAYS the installed CLI on PATH, never an absolute
+# path (a machine-local hardcoded path is not the shipped shape).
+# Echoes "true" (managed) or "false" (left untouched, foreign value) on stdout.
+_write_status_line() {
+  local settings_file="$1"
+  local target_cmd="eidolons statusline render"
+
+  if [[ ! -f "$settings_file" ]]; then
+    jq -n --arg cmd "$target_cmd" \
+      '{statusLine: {type: "command", command: $cmd, padding: 0, refreshInterval: 2}}' \
+      > "$settings_file"
+    ok "Wrote $settings_file with statusLine ($target_cmd)"
+    echo "true"
+    return
+  fi
+  if ! jq empty "$settings_file" 2>/dev/null; then
+    warn "$settings_file is not valid JSON — skipping statusLine write"
+    echo "false"
+    return
+  fi
+  local _existing_cmd
+  _existing_cmd="$(jq -r 'if has("statusLine") then (.statusLine.command // "") else "absent" end' "$settings_file" 2>/dev/null || echo absent)"
+  if [[ "$_existing_cmd" == "absent" ]]; then
+    local _merged
+    _merged="$(jq --arg cmd "$target_cmd" \
+      '. + {statusLine: {type: "command", command: $cmd, padding: 0, refreshInterval: 2}}' \
+      "$settings_file")"
+    printf '%s\n' "$_merged" > "$settings_file"
+    ok "Wrote statusLine ($target_cmd) into $settings_file (managed=true)"
+    echo "true"
+  elif [[ "$_existing_cmd" == "$target_cmd" ]]; then
+    # Already ours — heal any drifted padding/refreshInterval fields in place
+    # (mirrors _heal_session_start_matcher's upsert-in-place discipline).
+    # Idempotent: jq -cS canonical compare before writing; write ONLY on change.
+    local _existing_canonical _merged _merged_canonical
+    _existing_canonical="$(jq -cS . "$settings_file" 2>/dev/null || echo "")"
+    _merged="$(jq --arg cmd "$target_cmd" \
+      '.statusLine = {type: "command", command: $cmd, padding: 0, refreshInterval: 2}' \
+      "$settings_file")"
+    _merged_canonical="$(printf '%s' "$_merged" | jq -cS . 2>/dev/null || echo "")"
+    if [[ "$_existing_canonical" != "$_merged_canonical" ]]; then
+      printf '%s\n' "$_merged" > "$settings_file"
+      ok "Healed statusLine fields in $settings_file (managed=true)"
+    else
+      info "$settings_file already has statusLine: $target_cmd (no-op, managed=true)"
+    fi
+    echo "true"
+  else
+    warn "$settings_file already sets statusLine.command=$_existing_cmd (!= $target_cmd) — leaving untouched (don't-clobber); recording managed=false"
+    echo "false"
+  fi
+}
+
 # _write_codex_autocompact_config CONFIG_TOML — [A-CODEX-CFG] ECM P2 Track A
 # piece 4: append 'model_auto_compact_token_limit' to .codex/config.toml with
 # don't-clobber semantics (AC-CDX-6/AC-CDX-7), mirroring _write_compact_threshold's
@@ -958,10 +1020,12 @@ fi
 # any other hook needing to touch the file — defensive, mirrors telemetry's
 # own independent gate below).
 _ecm_compactthreshold_managed=false
+_ecm_statusline_managed=false
 if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   mkdir -p .claude
   _register_posttooluse_in_settings "$HARNESS_SHIM_DIR/claude-code-PostToolUse.sh" ".claude/settings.json"
   _ecm_compactthreshold_managed="$(_write_compact_threshold ".claude/settings.json")"
+  _ecm_statusline_managed="$(_write_status_line ".claude/settings.json")"
 fi
 
 # ── Wire telemetry Stop shim (--with-telemetry opt-in) ───────────────────
@@ -1256,8 +1320,8 @@ if [[ "$_ecm_enabled" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
   _red="$(printf '%s' "$_zones_effective_json" | jq -r '.red // 0.75')"
   _critical="$(printf '%s' "$_zones_effective_json" | jq -r '.critical // 0.90')"
 
-  _new_context_block="$(printf 'context:\n  schema_version: 1\n  ecm_version: "%s"\n  host_tier: "%s"\n  thresholds:\n    amber: %s\n    red: %s\n    critical: %s\n  compactthreshold_managed: %s\n  codex_autocompact_managed: %s\n  per_host:\n%s' \
-    "$_ecm_version" "$_effective_ecm_tier" "$_amber" "$_red" "$_critical" "$_ecm_compactthreshold_managed" "$_ecm_codex_autocompact_managed" "$_per_host_yaml")"
+  _new_context_block="$(printf 'context:\n  schema_version: 1\n  ecm_version: "%s"\n  host_tier: "%s"\n  thresholds:\n    amber: %s\n    red: %s\n    critical: %s\n  compactthreshold_managed: %s\n  statusline_managed: %s\n  codex_autocompact_managed: %s\n  per_host:\n%s' \
+    "$_ecm_version" "$_effective_ecm_tier" "$_amber" "$_red" "$_critical" "$_ecm_compactthreshold_managed" "$_ecm_statusline_managed" "$_ecm_codex_autocompact_managed" "$_per_host_yaml")"
 
   _lock_no_context="$(awk '
     /^context:/ { skip=1; next }
