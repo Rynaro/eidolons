@@ -216,6 +216,42 @@ Routing decides *who* works. Two younger contracts govern *how the work moves* a
 
 **ECM — the context economy** *(new in the v2.2–v2.3 line)*. Long sessions die of context exhaustion, usually at the worst moment. ECM gives the session a deterministic meter and a zone ladder (amber 0.50 / red 0.75 / critical 0.90) with a table-driven policy — first-match rules, never model discretion — that fires context operations autonomously: externalize to memory, prune, compact, or hand off to a fresh session with a structured brief that travels as an ECL envelope. A pin set survives every lossy operation, externalize-before-compact rides CRYSTALIUM, and everything fails open. Kernel verbs: `eidolons context status|policy|externalize|handoff`; deep table: [`methodology/cortex/context-protocol.md`](methodology/cortex/context-protocol.md).
 
+### The statusline — ECM's rung-1 telemetry feed
+
+Claude Code can display a real-time HUD while you work. The statusline is a two-row Final-Fantasy-themed battle window — cosmetic on the surface, but its *actual job* is load-bearing: it pipes exact context-window telemetry from the host into `eidolons context status --stdin`, promoting ECM from blind-estimation (`estimate_source: unknown`) to precise host telemetry (`estimate_source: host`). Without it, ECM runs on a heuristic and every policy rule fails open. With it, the meter sees the truth.
+
+The cosmetics are a wink; the mapping is real. Every FF term is checkable:
+
+```
+╭─⟪ Fable 5 · Sage ✦ ⟫─ eidolons · main ────────────────── $0.31 · +42/-3 ─╮
+╰─ ◈ ▰▰▱▱▱▱▱▱▱▱ 18% ↑2 GREEN · kupo · ▸ ecm-statusline ─ MP ▰▰▰▰▰ 92% ─╯
+```
+
+| Area | FF term | What it measures |
+|------|---------|------------------|
+| **Job & Class** | Fable 5 · Sage | `model.display_name` and the model tier mapped to FF jobs (Haiku→Ninja, Sonnet→Bard, Opus→Summoner, Fable→Sage). |
+| **Project** | eidolons | The project name (basename of cwd), shown in bold. |
+| **Branch & Dirty** | main | Git branch name; `*N` appends the count of dirty files. |
+| **Gil** | $0.31 | Session spend so far (`cost.total_cost_usd`), rendered in gold. |
+| **EXP** | +42/-3 | Lines added/removed (`cost.total_lines_added`, `total_lines_removed`) — yellow diff stats. |
+| **Limit Gauge** | ◈ ▰▰▱▱▱▱▱▱▱▱ 18% | HP = context-window utilization (`context_window.used_percentage`), coloured by ECM zone: green <50%, amber <75%, red <90%, critical ≥90%. Decays left-to-right as the session runs. |
+| **Delta** | ↑2 | Damage number: the % change since the last render. Pops in amber on increase, green on decrease; self-decays. |
+| **Zone** | GREEN / AMBER / RED / CRITICAL | The ECM zone label, coloured and flashed (reverse video) when it changes — these are not decorative, they are the thresholds (0.50 / 0.75 / 0.90) that fire real context operations. At critical, the label pulses by second-parity if you've set `"refreshInterval": 2`. |
+| **Party/Agent** | kupo | Either the dispatched Eidolon name (when one holds the row) in its class colour, or the party size (e.g. `party 8`) when idle. A live agent outranks the roster count. |
+| **Quest** | ▸ ecm-statusline | The active ESL change ID (first in-progress, else proposed), with a one-render `✓ COMPLETE!` fanfare when it verifies. |
+| **MP** | ▰▰▰▰▰ 92% | The 5-hour rate-limit budget (`rate_limits.five_hour.used_percentage`), shown as remaining; drains as you cast. Colours: cyan → amber (>50% used) → red (>75% used). |
+
+Wire it in `.claude/settings.json`:
+
+```json
+{ "statusLine": { "type": "command",
+                  "command": "eidolons statusline render",
+                  "padding": 0,
+                  "refreshInterval": 2 } }
+```
+
+`eidolons harness install` wires this for you when ECM is on — and **it will not clobber a `statusLine` you already have**: a foreign one is left byte-unchanged and recorded as unmanaged, so `eidolons remove` never touches it either. Your prompt is yours. `refreshInterval: 2` is optional — with it, the critical pulse animates while the session idles; without it, the pulse blinks per message. To verify the wiring and check the meter, run `eidolons statusline doctor`.
+
 Four sibling contracts, one seam each — every Eidolon satisfies the first, and the rest are opt-in:
 
 | Contract | Governs | Spec |
