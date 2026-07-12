@@ -1,7 +1,7 @@
 {
   "esl_version": "1.1",
   "change_id": "ecm-statusline-rollout",
-  "status": "verified",
+  "status": "archived",
   "tier": "lite",
   "maker": "vivi",
   "checker": "kupo",
@@ -51,5 +51,6 @@
   ],
   "spec_ref": "spec.md",
   "drift_checked": true,
+  "archive_path": "archive/2026-07-12-ecm-statusline-rollout",
   "has_code": true
 }
