@@ -35,6 +35,10 @@
           }
         },
         "compactthreshold_managed": { "type": "boolean" },
+        "statusline_managed": {
+          "type": "boolean",
+          "description": "ecm-statusline-rollout: whether 'eidolons harness install' wrote (and owns) the claude-code statusLine key in .claude/settings.json (feeds ECM's rung-1 telemetry via 'eidolons statusline render'). false when claude-code is unwired, ECM is off, or a foreign statusLine was left don't-clobbered (AC-SL-2)."
+        },
         "codex_autocompact_managed": {
           "type": "boolean",
           "description": "ECM P2 Track A/G: whether 'eidolons harness install' wrote (and owns) codex's model_auto_compact_token_limit config knob. false when codex is unwired, ECM is off, or a foreign value was left don't-clobbered (AC-CDX-7)."

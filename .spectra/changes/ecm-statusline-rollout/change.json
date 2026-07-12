@@ -1,0 +1,55 @@
+{
+  "esl_version": "1.1",
+  "change_id": "ecm-statusline-rollout",
+  "status": "verified",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-SL-1",
+      "given": "eidolons.yaml has a context: block (ECM on) and claude-code is a wired host",
+      "when": "eidolons harness install runs",
+      "then": ".claude/settings.json .statusLine.command == \"eidolons statusline render\" and eidolons.lock context.statusline_managed == true",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-1"
+    },
+    {
+      "id": "AC-SL-2",
+      "given": ".claude/settings.json already has a foreign statusLine (e.g. command \"starship prompt\")",
+      "when": "eidolons harness install runs",
+      "then": ".claude/settings.json is byte-unchanged (sha256 before == after) and eidolons.lock context.statusline_managed == false",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-2"
+    },
+    {
+      "id": "AC-SL-3",
+      "given": "eidolons harness install has already run once with ECM on + claude-code wired",
+      "when": "eidolons harness install runs a second time",
+      "then": ".claude/settings.json is byte-identical across both runs (jq -cS compare)",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-3"
+    },
+    {
+      "id": "AC-SL-4",
+      "given": "eidolons.lock records context.statusline_managed: true after install",
+      "when": "eidolons harness remove runs",
+      "then": "the statusLine key is deleted from .claude/settings.json and sibling keys (hooks, other top-level keys) survive intact",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-4"
+    },
+    {
+      "id": "AC-SL-5",
+      "given": "eidolons.lock records context.statusline_managed: false (a foreign statusLine was left don't-clobbered at install)",
+      "when": "eidolons harness remove runs",
+      "then": "the foreign statusLine is left byte-unchanged (sha256 before == after)",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-5"
+    },
+    {
+      "id": "AC-SL-6",
+      "given": "a realistic Claude Code statusline stdin payload carrying context_window.used_percentage",
+      "when": "cli/src/statusline.sh render consumes it",
+      "then": ".eidolons/.context/meter.json is written with estimate_source == \"host\" (not \"unknown\")",
+      "verify_method": "bats: cli/tests/harness.bats AC-SL-6"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "has_code": true
+}

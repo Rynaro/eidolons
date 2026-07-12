@@ -2383,6 +2383,152 @@ EOF
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# ecm-statusline-rollout (.spectra/changes/ecm-statusline-rollout) — AC-SL-1..6.
+#
+# Wires the 'statusLine' key into .claude/settings.json from 'harness install'
+# so Claude Code feeds ECM's rung-1 telemetry (exact context_window.
+# used_percentage) into 'eidolons statusline render' (cli/src/statusline.sh,
+# shipped v2.7.0 but never auto-wired until now). Mirrors the compactThreshold
+# don't-clobber precedent (_write_compact_threshold) exactly.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# setup_fake_eidolons_bin_for_statusline — a fake 'eidolons' on PATH that
+# delegates everything to the real checkout CLI. Needed so the OUTER shell
+# invocation of the wired statusLine command (a bare "eidolons statusline
+# render" string, exactly as shipped — never an absolute path) can resolve
+# "eidolons" at all in this sandboxed test environment. Local copy per
+# FINDING-031 (bats test files share no functions); mirrors context.bats's
+# identically-implemented setup_fake_eidolons_bin.
+setup_fake_eidolons_bin_for_statusline() {
+  local fake_bin="$BATS_TEST_TMPDIR/fake-eidolons-bin-sl"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/eidolons" <<STUB
+#!/usr/bin/env bash
+exec bash "$EIDOLONS_ROOT/cli/eidolons" "\$@"
+STUB
+  chmod +x "$fake_bin/eidolons"
+  export PATH="$fake_bin:$PATH"
+}
+
+@test "AC-SL-1: statusLine wired for claude-code with ECM on; lock records statusline_managed=true" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  run jq -r '.statusLine.command' .claude/settings.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "eidolons statusline render" ]
+  run jq -e '.context.statusline_managed == true' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-SL-2: a foreign statusLine is left byte-unchanged (sha256); lock records statusline_managed=false" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  # Bring the file to install's steady state FIRST (hooks + compactThreshold +
+  # our own statusLine all settled), THEN swap ONLY statusLine to a foreign
+  # value. A second install call is then a true no-op for everything except
+  # the (correctly skipped) statusLine write — isolating the don't-clobber
+  # path instead of conflating it with the unrelated first-time hooks write.
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  jq '.statusLine = {"type":"command","command":"starship prompt"}' .claude/settings.json \
+    > .claude/settings.json.tmp
+  mv .claude/settings.json.tmp .claude/settings.json
+  before_sum="$(sha256sum .claude/settings.json 2>/dev/null || shasum -a 256 .claude/settings.json)"
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  after_sum="$(sha256sum .claude/settings.json 2>/dev/null || shasum -a 256 .claude/settings.json)"
+  [ "$before_sum" = "$after_sum" ]
+  run jq -e '.context.statusline_managed == false' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-SL-3: two consecutive harness install runs leave .claude/settings.json byte-identical" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  first_sum="$(sha256sum .claude/settings.json 2>/dev/null || shasum -a 256 .claude/settings.json)"
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  second_sum="$(sha256sum .claude/settings.json 2>/dev/null || shasum -a 256 .claude/settings.json)"
+  [ "$first_sum" = "$second_sum" ]
+}
+
+@test "AC-SL-4: harness remove strips statusLine (managed=true); sibling settings survive intact" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  run jq -e '.context.statusline_managed == true' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+  # Add a foreign top-level key and a foreign (non-eidolons) hook entry to
+  # prove the statusLine strip is scoped — remove must not touch either.
+  jq '. + {"editorTheme":"solarized"}
+      | .hooks.Notification = [{"hooks":[{"type":"command","command":"my-own-notifier.sh"}]}]' \
+    .claude/settings.json > .claude/settings.json.tmp
+  mv .claude/settings.json.tmp .claude/settings.json
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  run jq -e 'has("statusLine") | not' .claude/settings.json
+  [ "$status" -eq 0 ]
+  run jq -e '.editorTheme == "solarized"' .claude/settings.json
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.Notification[0].hooks[0].command == "my-own-notifier.sh"' .claude/settings.json
+  [ "$status" -eq 0 ]
+}
+
+@test "AC-SL-5: harness remove leaves a foreign statusLine's content byte-unchanged (managed=false)" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  jq '.statusLine = {"type":"command","command":"starship prompt"}' .claude/settings.json \
+    > .claude/settings.json.tmp
+  mv .claude/settings.json.tmp .claude/settings.json
+  # Re-install so the lock reflects the don't-clobbered foreign value BEFORE
+  # remove reads it (remove is managed-flag-aware, same as compactThreshold).
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  run jq -e '.context.statusline_managed == false' <<< "$(yaml_to_json_local eidolons.lock)"
+  [ "$status" -eq 0 ]
+  # A whole-file hash would legitimately change across remove (our OWN hooks +
+  # compactThreshold ARE stripped) — so hash the .statusLine value specifically
+  # (canonical JSON, not a substring grep) to prove THAT sub-tree is untouched.
+  before_hash="$(jq -cS '.statusLine' .claude/settings.json | sha256sum | awk '{print $1}')"
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ -f .claude/settings.json ]
+  after_hash="$(jq -cS '.statusLine' .claude/settings.json | sha256sum | awk '{print $1}')"
+  [ "$before_hash" = "$after_hash" ]
+}
+
+@test "AC-SL-6: the wired statusLine command promotes the ECM meter to estimate_source=host" {
+  seed_manifest_ecm_hosts claude-code
+  seed_lock
+  run eidolons harness install --hosts claude-code
+  [ "$status" -eq 0 ]
+  cmd="$(jq -r '.statusLine.command' .claude/settings.json)"
+  [ "$cmd" = "eidolons statusline render" ]
+
+  setup_fake_eidolons_bin_for_statusline
+
+  # A realistic Claude Code statusline stdin payload — context_window.
+  # used_percentage is the rung-1 field; this is the whole point of the
+  # feature this change wires in (not just that a settings.json key exists).
+  payload='{"session_id":"sl-ac6","transcript_path":"/dev/null","cwd":"'"$PWD"'","workspace":{"project_dir":"'"$PWD"'"},"model":{"id":"claude-opus-4-8","display_name":"Opus 4.8"},"version":"2.1.90","cost":{"total_cost_usd":1.2,"total_lines_added":10,"total_lines_removed":2},"context_window":{"used_percentage":57,"context_window_size":200000},"effort":{"level":"high"},"thinking":{"enabled":true}}'
+
+  run bash -c "printf '%s' '$payload' | $cmd >/dev/null"
+  [ "$status" -eq 0 ]
+
+  [ -f ".eidolons/.context/meter.json" ]
+  run jq -r '.estimate_source' .eidolons/.context/meter.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "host" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # atlas-aci auto-sync (.spectra/changes/atlas-aci-autosync) — AC-1..AC-8.
 #
 # A fake `docker` shim on PATH is REQUIRED for every positive-path test in
