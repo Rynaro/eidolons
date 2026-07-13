@@ -1,11 +1,13 @@
 {
   "esl_version": "1.1",
   "change_id": "fix-ecm-meter-hot-path-spawns",
-  "status": "proposed",
+  "status": "archived",
   "tier": "trivial",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": "docs/specs/ecm/spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-13-fix-ecm-meter-hot-path-spawns",
   "has_code": true
 }
