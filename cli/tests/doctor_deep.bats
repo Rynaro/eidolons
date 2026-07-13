@@ -154,9 +154,7 @@ EOF
 
   # Compute the actual SHA of the install manifest and write it to the lock.
   local manifest_sha
-  manifest_sha="$(shasum -a 256 ".eidolons/atlas/install.manifest.json" 2>/dev/null \
-    | awk '{print $1}' \
-    || sha256sum ".eidolons/atlas/install.manifest.json" | awk '{print $1}')"
+  manifest_sha="$(_dd_sha ".eidolons/atlas/install.manifest.json")"
 
   cat > eidolons.lock <<EOF
 generated_at: "2026-04-21T00:00:00Z"
@@ -380,7 +378,7 @@ EOF
   # bats --jobs N (see the long comment in harness.bats around line 138).
   # Helper picks shasum (macOS) or sha256sum (linux) automatically.
   local sha_before
-  sha_before="$(_dd18_sha ".eidolons/atlas/agent.md")"
+  sha_before="$(_dd_sha ".eidolons/atlas/agent.md")"
 
   # Run with just --deep (no --fix) so only the doctor's own read-only checks run.
   # The D1 error should be reported but agent.md must remain untouched.
@@ -389,7 +387,7 @@ EOF
   [[ "$output" =~ "token" ]]
 
   local sha_after
-  sha_after="$(_dd18_sha ".eidolons/atlas/agent.md")"
+  sha_after="$(_dd_sha ".eidolons/atlas/agent.md")"
 
   # agent.md must not have been modified by the doctor --deep run.
   [ "$sha_before" = "$sha_after" ]
@@ -499,7 +497,9 @@ JSON
   ! [[ "$output" =~ "does not reference the lint/edit gate (D11 —" ]]
 }
 
-_dd18_sha() {
+# Shared helper (was _dd18_sha; not DD-18-specific — used by DD-7 too).
+# Picks shasum (macOS) or sha256sum (Linux) automatically.
+_dd_sha() {
   if command -v shasum >/dev/null 2>&1; then
     shasum -a 256 "$1" | awk '{print $1}'
   else
