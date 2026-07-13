@@ -303,7 +303,13 @@ JSTUB
   diff .mcp.json.after1 .mcp.json
 }
 
-@test "T7-G3c: _mcp_binary_merge_mcp_json with malformed .mcp.json → warn, no write, exit 0" {
+@test "T7-G3c: _mcp_binary_merge_mcp_json with malformed .mcp.json → warn, no write, exit non-zero (R1)" {
+  # R1 (ESL change mcp-verify-lock-vs-artifact): this test USED TO assert
+  # exit 0 on a merge that silently did nothing — that assertion was encoding
+  # the P1 bug (the installer becoming the witness to its own, false, success).
+  # The merge target is still never clobbered (no data loss), but the helper
+  # now MUST return non-zero so the caller (mcp_driver_binary_install) refuses
+  # to write a lock entry for an install that never reached .mcp.json.
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
 
   # Seed a malformed .mcp.json.
@@ -326,10 +332,11 @@ JSTUB
     . '$EIDOLONS_ROOT/cli/src/lib_mcp.sh'
     _mcp_binary_merge_mcp_json junction '$bin' '$(pwd)'
   " 2>&1
-  # Must NOT fail (soft-fail discipline).
-  [ "$status" -eq 0 ]
+  # Must fail loudly (R1) — no more silent 'success'.
+  [ "$status" -ne 0 ]
 
-  # .mcp.json must be unchanged (no write on malformed input).
+  # .mcp.json must be unchanged (no write on malformed input — no data loss;
+  # the fix is to refuse to LIE about it, not to force-write).
   diff .mcp.json.before .mcp.json
 }
 

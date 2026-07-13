@@ -3,9 +3,19 @@
 #
 # Usage: eidolons mcp images [--json]
 #
-# Shows a table over oci-image MCPs: NAME / IMAGE / PRESENT / LOCAL / PINNED
-# / DRIFT / SIZE. Binary (junction) and other kinds are omitted entirely.
+# Shows a table over oci-image MCPs: NAME / IMAGE / PRESENT / LOCAL / PINNED /
+# WIRED / DRIFT / SIZE. Binary (junction) and other kinds are omitted entirely.
 # Always exits 0 (docker absence is a cell-level condition, not a failure).
+#
+# R10 / F3 (ESL change mcp-verify-lock-vs-artifact): DRIFT was a TAUTOLOGY —
+# it built `${image}@${pinned}`, inspected THAT exact ref, and compared the
+# result back to `pinned`. LOCAL *is* PINNED by construction; `drift="yes"`
+# was unreachable (confirmed live: wired to an older digest, this column
+# still printed "no"). DRIFT is now wired-vs-locked (WIRED column, computed
+# from .mcp.json — no docker required) vs `lock.integrity.value`, the SAME
+# question 'eidolons mcp verify' answers as V-OCI-WIRED-MISMATCH. This is a
+# genuinely different axis from the old LOCAL-vs-PINNED comparison, which
+# stays (LOCAL/PINNED/PRESENT are still docker-derived and unchanged).
 #
 # Bash 3.2 compatible — no declare -A, no ${var,,}/^^, no readarray/mapfile, no &>>.
 # See CLAUDE.md §"Bash 3.2 compatibility".
@@ -38,12 +48,16 @@ Table columns:
   PRESENT  yes | no | (n/a)   — n/a when docker CLI/daemon unavailable
   LOCAL    first 19 chars of the locally-resolved digest, or "—"
   PINNED   first 19 chars of catalogue pins.stable digest
-  DRIFT    no | yes | unknown
+  WIRED    first 19 chars of the digest baked into .mcp.json, or "—"
+  DRIFT    no | yes | unknown   (wired vs locked — see below)
   SIZE     human-readable image size, or "—" when absent/unknown
 
-DRIFT is unknown when: docker unavailable, image absent, or local digest
-unresolvable (locally-built/no RepoDigest). DRIFT is "no" when LOCAL ==
-PINNED; "yes" when present but LOCAL != PINNED.
+DRIFT is wired-vs-locked (WIRED column vs eidolons.mcp.lock's
+integrity.value) — the exact axis 'eidolons mcp verify' names
+V-OCI-WIRED-MISMATCH. It needs NO docker: "unknown" when the MCP is not
+locked or not wired; "no" when WIRED == locked digest; "yes" otherwise. This
+is a DIFFERENT question from LOCAL/PINNED (docker-inspected image vs the
+catalogue's pinned digest) — both stay, on separate axes.
 
 Scope: oci-image MCPs ONLY. Binary (junction) and script kinds are omitted.
 Exit code: always 0.
@@ -77,6 +91,13 @@ lock_json="$(mcp_lock_read)"
 
 # _images_get_row NAME IMAGE PINNED_DIGEST LOCKED_DIGEST
 # Computes and outputs a JSON row for the --json mode.
+#
+# R10 / F3: `drift` is wired-vs-locked (WIRED digest, read from .mcp.json —
+# no docker needed — vs `locked_digest`, i.e. lock.integrity.value). This is
+# the SAME question 'eidolons mcp verify' asks as V-OCI-WIRED-MISMATCH
+# (drift_axis: "wired_vs_locked"). LOCAL/PINNED (docker-inspected image vs
+# catalogue pin) are a separate, still-present axis — present/local_digest
+# are unchanged and remain docker-gated.
 _images_get_row_json() {
   local _nm="$1"
   local _img="$2"
@@ -87,7 +108,6 @@ _images_get_row_json() {
   local _local_digest=""
   local _size_bytes="null"
   local _docker_available=false
-  local _drift="unknown"
 
   if [ "$_docker_cli_ok" = "true" ] && [ "$_docker_daemon_ok" = "true" ]; then
     _docker_available=true
@@ -109,9 +129,13 @@ _images_get_row_json() {
     fi
   fi
 
-  # Compute drift.
-  if [ "$_present" = "true" ] && [ -n "$_local_digest" ] && [ -n "$_pin" ]; then
-    if [ "$_local_digest" = "$_pin" ]; then
+  # Wired digest — the digest actually baked into .mcp.json for this MCP
+  # (cwd-relative; no docker involved). Compute drift wired-vs-locked.
+  local _wired_digest _drift
+  _wired_digest="$(_mcp_oci_mcpjson_digest "$_nm" "$(pwd)" 2>/dev/null || true)"
+  _drift="unknown"
+  if [ -n "$_wired_digest" ] && [ -n "$_lkd" ]; then
+    if [ "$_wired_digest" = "$_lkd" ]; then
       _drift="no"
     else
       _drift="yes"
@@ -125,6 +149,7 @@ _images_get_row_json() {
     --arg ld "$_local_digest" \
     --arg pd "$_pin" \
     --arg lkd "$_lkd" \
+    --arg wd "$_wired_digest" \
     --arg dr "$_drift" \
     --argjson sz "$_size_bytes" \
     --argjson da "$_docker_available" \
@@ -136,7 +161,9 @@ _images_get_row_json() {
       local_digest: (if $ld == "" then null else $ld end),
       pinned_digest: (if $pd == "" then null else $pd end),
       locked_digest: (if $lkd == "" then null else $lkd end),
+      wired_digest: (if $wd == "" then null else $wd end),
       drift: $dr,
+      drift_axis: "wired_vs_locked",
       size_bytes: $sz,
       docker_available: $da
     }'
@@ -166,10 +193,10 @@ if [ "$JSON" = "true" ]; then
 fi
 
 # Table output.
-printf '%-16s %-40s %-10s %-22s %-22s %-8s %s\n' \
-  "NAME" "IMAGE" "PRESENT" "LOCAL" "PINNED" "DRIFT" "SIZE"
-printf '%-16s %-40s %-10s %-22s %-22s %-8s %s\n' \
-  "────────────────" "────────────────────────────────────────" "──────────" "──────────────────────" "──────────────────────" "────────" "────"
+printf '%-16s %-40s %-10s %-22s %-22s %-22s %-8s %s\n' \
+  "NAME" "IMAGE" "PRESENT" "LOCAL" "PINNED" "WIRED" "DRIFT" "SIZE"
+printf '%-16s %-40s %-10s %-22s %-22s %-22s %-8s %s\n' \
+  "────────────────" "────────────────────────────────────────" "──────────" "──────────────────────" "──────────────────────" "──────────────────────" "────────" "────"
 
 while IFS= read -r _mname; do
   [ -z "$_mname" ] && continue
@@ -180,11 +207,13 @@ while IFS= read -r _mname; do
   _image="$(mcp_catalogue_get_field "$_mname" '.source.image')"
   _pinned="$(mcp_catalogue_get "$_mname" \
     | jq -r '.versions.releases[.versions.pins.stable].digest // empty')"
+  _locked="$(printf '%s' "$lock_json" \
+    | jq -r --arg n "$_mname" '(.mcps // [])[] | select(.name == $n) | .integrity.value // ""')"
 
   _present="(n/a)"
   _local_disp="—"
   _pinned_disp="—"
-  _drift="unknown"
+  _wired_disp="—"
   _size="—"
   _local_full=""
 
@@ -216,14 +245,6 @@ while IFS= read -r _mname; do
             _size="${_size_raw}B"
           fi
         fi
-
-        if [ -n "$_local_full" ]; then
-          if [ "$_local_full" = "$_pinned" ]; then
-            _drift="no"
-          else
-            _drift="yes"
-          fi
-        fi
       else
         _present="no"
       fi
@@ -232,8 +253,23 @@ while IFS= read -r _mname; do
     fi
   fi
 
-  printf '%-16s %-40s %-10s %-22s %-22s %-8s %s\n' \
-    "$_mname" "$_image" "$_present" "$_local_disp" "$_pinned_disp" "$_drift" "$_size"
+  # WIRED / DRIFT (R10 / F3): wired-vs-locked, computed straight from
+  # .mcp.json — no docker involved, unlike PRESENT/LOCAL/PINNED above.
+  _wired_full="$(_mcp_oci_mcpjson_digest "$_mname" "$(pwd)" 2>/dev/null || true)"
+  _drift="unknown"
+  if [ -n "$_wired_full" ]; then
+    _wired_disp="${_wired_full:0:19}"
+    if [ -n "$_locked" ]; then
+      if [ "$_wired_full" = "$_locked" ]; then
+        _drift="no"
+      else
+        _drift="yes"
+      fi
+    fi
+  fi
+
+  printf '%-16s %-40s %-10s %-22s %-22s %-22s %-8s %s\n' \
+    "$_mname" "$_image" "$_present" "$_local_disp" "$_pinned_disp" "$_wired_disp" "$_drift" "$_size"
 done <<< "$(mcp_catalogue_list_names)"
 
 exit 0

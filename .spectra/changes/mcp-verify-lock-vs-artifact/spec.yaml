@@ -1,0 +1,69 @@
+schema: eidolons/change-spec.v1
+change_id: mcp-verify-lock-vs-artifact
+tier: full
+maker: vivi
+checker: kupo
+target: nexus (the lock/artifact reconciliation gap filed as a Known issue in v2.10.0)
+
+problem: >
+  "Nothing reconciles eidolons.mcp.lock against .mcp.json" was too generous a framing.
+  P1 - the lock-lie is still MANUFACTURABLE: `mcp install` into an invalid .mcp.json warns,
+  writes nothing to the artifact, EXITS 0, and records the lock entry anyway (reproduced live).
+  P2 - the lie is SELF-SEALING: install/sync/upgrade all gate on the lock, believe it, and
+  no-op (0 servers wired); only --force escapes. The drift was not merely undetected, it was
+  unfixable by the documented commands.
+  P3 - `mcp images` DRIFT is a TAUTOLOGY, not a wrong axis: it inspects image@${_pinned} and
+  compares the result to ${_pinned}, so `yes` is unreachable. It printed DRIFT:no during the
+  live atomos drift. mcp list repeats the lock's lie as truth; doctor --deep exits 0.
+  Mechanism: everything trusts the lock; nothing verifies the artifact.
+
+decision:
+  F1: lock-is-intent-mcpjson-is-effect     # verify reports, never repairs (maker != checker)
+  F2: diagnostic-verbs-must-be-able-to-say-no   # fail-open is a HOT-PATH doctrine, not this
+  F3: fix-the-lying-column                 # DRIFT redefined wired-vs-locked; WIRED column added
+  F4: axes-A-B-C-D-in-probe-opt-in         # default verify executes NOTHING
+  F5: a-lock-entry-is-a-receipt-not-an-order    # THE CURE (verify is only the detector)
+
+invariants:
+  - installer-may-not-witness-its-own-success   # F5: read back <target> before asserting installed
+  - merge-failure-returns-nonzero               # R1: no more warn-and-return-0
+  - install-readback-confirms-before-lock-write # R2: the GENERAL gate (pinned by AC-14, not AC-11)
+  - binary-driver-confirms-command-path         # R3: algo:none is not an exemption
+  - verify-never-repairs                        # F1: a checker that can make its subject pass is not one
+  - verify-executes-nothing-by-default          # safe against an untrusted checkout
+  - probe-is-a-usage-error-not-a-no-op          # a check that cannot run is never scored as a pass
+  - exit-3-is-indeterminate-not-pass-not-fail   # the narrow ledge; collapsing it rebuilds the bug
+  - drift-computable-without-docker             # AC-2b: mechanical proof the AXIS changed
+  - doctor-red-on-block-never-on-indeterminate
+  - stdout-reserved-logs-to-stderr
+  - bash-3.2-clean
+
+files:
+  - cli/src/lib_mcp.sh          # the cure (R1/R2/R3)
+  - cli/src/mcp_verify.sh       # the detector (new)
+  - cli/src/mcp.sh              # dispatch + usage
+  - cli/eidolons                # top-level dispatcher has its OWN mcp whitelist
+  - cli/src/mcp_images.sh       # WIRED column; DRIFT axis (R10)
+  - cli/src/doctor.sh           # fast-path wiring-integrity section (R9)
+  - cli/tests/mcp_verify.bats   # the AC suite (new)
+  - cli/tests/mcp_install.bats  # T7-G3c asserted exit 0 on a failed merge — it ENCODED the bug
+  - CHANGELOG.md
+
+verify_items:
+  - AC-1: verify on FIXTURE-drift -> exit 1, names both digests + the remedy
+  - AC-2: mcp images on FIXTURE-drift -> DRIFT yes (was an unreachable `yes`)
+  - AC-2b: DRIFT still yes with docker ABSENT — proves the AXIS changed, not the sensitivity
+  - AC-3: lock says 0.2.0 carrying 0.1.0's digest, artifact faithfully wires it (A PASSES) -> V-LOCK-INCOHERENT
+  - AC-4: binary (junction) wired-path mismatch -> block; deleted target -> a DIFFERENT code
+  - AC-5: doctor (fast, no --deep) -> non-zero, while still printing the catalogue-stable tick
+  - AC-6: valid lock + NO .mcp.json -> exit EXACTLY 3, prints INDETERMINATE; doctor unaffected
+  - AC-7: --strict promotes 3 -> exactly 1; clean --strict -> 0
+  - AC-8: a hand-added non-catalogue server is IGNORED — asserts an ABSENCE from the output
+  - AC-9: unpinned mutable tag -> WARN + exit 0; --strict -> exit 1
+  - AC-10: --json is contractual; stdout stays clean (2>/dev/null | jq empty)
+  - AC-11: invalid .mcp.json -> install exits non-zero AND the lock gains NO entry (P1, the factory)
+  - AC-12: shellcheck -x -S error clean; bash 3.2
+  - AC-13: --probe exits 2, even with stderr discarded, and BEFORE emitting any verdict
+  - AC-14: template wires the WRONG digest (merge SUCCEEDS, so R1 cannot fire) -> install fails,
+           lock gains no entry. THE ONLY test that pins R2. Neutering _mcp_oci_confirm_wired to
+           `return 0` leaves every AC-11 green; AC-14 is what goes red.
