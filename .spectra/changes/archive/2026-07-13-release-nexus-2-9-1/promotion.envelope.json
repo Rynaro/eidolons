@@ -1,0 +1,18 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "idg"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(promotion): archived change \"release-nexus-2-9-1\" ready for CRYSTALIUM Semantic promotion.",
+  "context_delta": {
+    "archive_path": "archive/2026-07-13-release-nexus-2-9-1",
+    "change_id": "release-nexus-2-9-1",
+    "intent": "promotion",
+    "spec_ref": "null",
+    "summary": "Verified + archived spec; route to mcp__crystalium__ingest (Semantic layer). tonberry does not call crystalium."
+  }
+}
