@@ -1,0 +1,11 @@
+{
+  "esl_version": "1.1",
+  "change_id": "fix-ac-sl-6-flaky-perf-gate",
+  "status": "proposed",
+  "tier": "trivial",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": null,
+  "has_code": true
+}
