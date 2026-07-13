@@ -140,13 +140,38 @@ _plain() { sed 's/\x1b\[[0-9;]*m//g'; }
 # ── AC-SL-6: latency (ECM CC3 = 300 ms prompt path) ───────────────────────
 
 @test "AC-SL-6: render completes within the 300ms ECM budget" {
-  local start end elapsed
-  start=$(date +%s%N)
-  echo "$(_payload 68 perf)" | "$EIDOLONS_BIN" statusline render >/dev/null
-  end=$(date +%s%N)
-  elapsed=$(( (end - start) / 1000000 ))
-  echo "render took ${elapsed}ms (budget 300ms)"
-  [ "$elapsed" -lt 300 ]
+  # BEST-OF-N, NOT A SINGLE SAMPLE. This gate was one `date`, one render, one
+  # compare — and it flaked on macos-latest: PR #496 and #497 carried byte-
+  # identical cli/src and it passed on one, failed on the other. A shared CI
+  # runner can preempt or cold-cache any single sample into the hundreds of ms,
+  # so a one-shot wall-clock assertion reddens releases at random. Re-rolling CI
+  # until it goes green is not a fix; it just teaches everyone to ignore the gate.
+  #
+  # MINIMUM is the correct statistic for a latency FLOOR. The budget asks "can
+  # the render do this", not "does it always, under arbitrary neighbour load".
+  # A genuine regression (an added fork, a new file read) raises EVERY sample, so
+  # it raises the minimum and this still goes red. Scheduler noise only inflates
+  # SOME samples, and the minimum ignores it. One warmup absorbs cold-cache and
+  # first-fork cost.
+  #
+  # The deterministic partner to this gate is the spawn-count assertion in
+  # context.bats (fix-ecm-meter-hot-path-spawns) — that one cannot flake at all,
+  # and it is what actually caught the 4->7 fork regression. This remains as the
+  # end-to-end backstop over the whole render, which spawn-counting cannot cover.
+  local i start end elapsed best=999999
+
+  echo "$(_payload 68 perf)" | "$EIDOLONS_BIN" statusline render >/dev/null 2>&1 || true  # warmup
+
+  for i in 1 2 3 4 5; do
+    start=$(date +%s%N)
+    echo "$(_payload 68 perf)" | "$EIDOLONS_BIN" statusline render >/dev/null
+    end=$(date +%s%N)
+    elapsed=$(( (end - start) / 1000000 ))
+    [ "$elapsed" -lt "$best" ] && best="$elapsed"
+  done
+
+  echo "render best-of-5: ${best}ms (budget 300ms)"
+  [ "$best" -lt 300 ]
 }
 
 # ── AC-SL-7: bash 3.2 (macOS system shell) ────────────────────────────────
