@@ -1,12 +1,13 @@
 {
   "esl_version": "1.1",
   "change_id": "fix-dd7-shasum-fallback",
-  "status": "verified",
+  "status": "archived",
   "tier": "trivial",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": null,
   "drift_checked": true,
+  "archive_path": "archive/2026-07-13-fix-dd7-shasum-fallback",
   "has_code": true
 }
