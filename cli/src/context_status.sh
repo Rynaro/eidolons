@@ -118,19 +118,37 @@ _prev_compaction=0
 _prev_ceiling=null
 _prev_age=0
 # R2: a prior meter that is not valid JSON is treated as ABSENT (inherit
-# defaults) rather than partially read. Without this guard, a corrupt file
-# makes `jq -r '...' 2>/dev/null || echo 0` capture BOTH jq's partial stdout
-# AND the `|| echo 0` fallback (jq prints what it parsed, then exits 5 on the
-# trailing garbage) -> a two-line value where --argjson below demands a
-# single JSON scalar -> the compose fails -> METER_JSON="" -> the kernel
-# bails BEFORE ever reaching the write -> the corrupt file can never be
-# overwritten. `jq empty` validates the WHOLE file (including any trailing
-# garbage) in one shot, so a corrupt-tailed file fails this guard and falls
-# through to the defaults, letting the write below heal it unconditionally.
-if [ -f "$METER_PATH" ] && jq empty "$METER_PATH" >/dev/null 2>&1; then
-  _prev_compaction="$(jq -r '.compaction_count // 0' "$METER_PATH" 2>/dev/null || echo 0)"
-  _prev_ceiling="$(jq -r '.budget.ceiling_tokens // "null"' "$METER_PATH" 2>/dev/null || echo null)"
-  _prev_age="$(jq -r '.externalize_age_turns // 0' "$METER_PATH" 2>/dev/null || echo 0)"
+# defaults) rather than partially read. Without this, a corrupt file makes
+# `jq -r '...' 2>/dev/null || echo 0` capture BOTH jq's partial stdout AND the
+# `|| echo 0` fallback (jq prints what it parsed, then exits 5 on the trailing
+# garbage) -> a two-line value where --argjson below demands a single JSON
+# scalar -> the compose fails -> METER_JSON="" -> the kernel bails BEFORE ever
+# reaching the write -> the corrupt file can never be overwritten.
+#
+# ONE jq invocation does both jobs: it validates the whole file (jq exits
+# non-zero on trailing garbage) AND extracts all three inherited fields. On any
+# failure the `||` discards jq's partial stdout wholesale and the defaults above
+# stand, so the write below heals the file unconditionally.
+#
+# HOT PATH (CC3, prompt_path_ms <= 300): this is 1 spawn, not 4. The statusline
+# feeds the meter on EVERY render (refreshInterval 2s) and the harness hook on
+# every prompt, so each `jq` fork is paid constantly — and fork/exec is dear on
+# macOS. Do not "clarify" this back into a validate-then-read-thrice sequence.
+if [ -f "$METER_PATH" ]; then
+  _prev_triple="$(jq -r '[(.compaction_count // 0),
+                          (.budget.ceiling_tokens // "null"),
+                          (.externalize_age_turns // 0)] | @tsv' \
+                    "$METER_PATH" 2>/dev/null)" || _prev_triple=""
+  # A multi-document file (two valid objects concatenated) would exit 0 and emit
+  # two lines; treat that as corrupt too rather than inheriting from the first.
+  case "$_prev_triple" in
+    '' | *"$(printf '\n')"*) _prev_triple="" ;;
+  esac
+  if [ -n "$_prev_triple" ]; then
+    IFS="$(printf '\t')" read -r _prev_compaction _prev_ceiling _prev_age <<EOF
+$_prev_triple
+EOF
+  fi
 fi
 
 [ -n "$COMPACTION_COUNT" ] || COMPACTION_COUNT="$_prev_compaction"
@@ -213,12 +231,16 @@ fi
 # writer never observes a partially-written file. The directory already
 # exists (context_meter_path -> context_sidecar_dir does `mkdir -p` above).
 # Fail-open at every step; clean up the temp file on any failure.
-_meter_dir="$(dirname "$METER_PATH")"
-_meter_tmp="$(mktemp "$_meter_dir/.meter.XXXXXX" 2>/dev/null || true)"
-if [ -z "$_meter_tmp" ]; then
-  warn "context status: could not create temp file for atomic write — degrading, not writing sidecar"
-  exit 0
-fi
+#
+# HOT PATH (CC3): the temp name is built with parameter expansion + $$ rather
+# than `mktemp`, and the directory with ${var%/*} rather than `dirname` — two
+# forks saved on a path that runs on every statusline render and every prompt.
+# $$ is this process's pid, and the concurrent writers this guards against are
+# always DISTINCT processes (statusline vs harness hook), so the names cannot
+# collide. Predictable-name temp files are safe here: the sidecar dir is
+# project-local and not world-writable.
+_meter_dir="${METER_PATH%/*}"
+_meter_tmp="$_meter_dir/.meter.$$.tmp"
 if ! printf '%s\n' "$METER_JSON" > "$_meter_tmp" 2>/dev/null; then
   rm -f "$_meter_tmp" 2>/dev/null
   warn "context status: could not write temp meter file"
