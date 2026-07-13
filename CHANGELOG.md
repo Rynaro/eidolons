@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.9.1] — 2026-07-13 — the suite goes fully green
+
+Test-harness only: **no runtime behaviour changes for consumers.** `cli/src/` is byte-unchanged from v2.9.0. The fix ships in the release tarball because `cli/tests/` is part of it, and it restores a green suite for anyone running the tests on a host without `shasum`.
+
 ### Fixed
 
 - **DD-7 (`cli/tests/doctor_deep.bats`) fixed on hosts without `shasum` (ESL change `fix-dd7-shasum-fallback`, tier trivial).** DD-7 computed its expected `manifest_sha256` with `shasum -a 256 FILE 2>/dev/null | awk '{print $1}' || sha256sum FILE | awk '{print $1}'` — the `||` binds to the whole pipeline, whose exit status is `awk`'s (always 0, even on empty stdin), so on a host with no `shasum` the `sha256sum` fallback never ran and `manifest_sha` silently resolved to the empty string, making DD-7 red on any Linux box lacking the `shasum` perl binary. This was a test-harness portability bug only — `cli/src/lib.sh`'s `sha256_file()` already picks `shasum`/`sha256sum` correctly via `command -v`. DD-7 now reuses the file's existing correct helper (previously misleadingly named `_dd18_sha` despite being shared by DD-18 too; renamed to `_dd_sha`).
