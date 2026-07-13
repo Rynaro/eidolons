@@ -347,22 +347,58 @@ members: []
 EOF
 }
 
-@test "AC-5: eidolons doctor (fast, no --deep) on FIXTURE-drift -> non-zero" {
+# AC-5 asserts the WIRING SECTION's own contribution, NOT doctor's global exit.
+#
+# The first draft asserted `[ "$status" -eq 0 ]` on the clean fixture and
+# `-ne 0` on the drift fixture. Both are environment-dependent, and macos-latest
+# proved it: doctor there exits non-zero for reasons that have nothing to do with
+# this change (no docker on the runner, absent agent files), so
+#   * the clean-fixture half FAILED — for a reason we did not cause; and, worse,
+#   * the drift half would have PASSED VACUOUSLY — doctor was already non-zero
+#     whether or not the wiring section did anything at all.
+# A gate whose verdict is decided by the runner is not a gate. Same lesson as
+# AC-SL-6 in v2.10.0, wearing different clothes.
+#
+# So we assert the SECTION's own markers, which no unrelated check can forge:
+#   block          -> `err "<mcp>: <msg>"`, and err ALWAYS feeds doctor's exit code
+#                     (that is a code-level invariant, not an environmental one)
+#   indeterminate  -> "could not fully verify MCP wiring"
+#   clean          -> "All locked MCPs verified against .mcp.json"
+# These discriminate on every host, including one where doctor is red anyway.
+
+@test "AC-5: doctor (fast, no --deep) on FIXTURE-drift -> the wiring section ERRORS" {
   _setup_fixture_drift
   _seed_clean_project_manifest
   run bash "$EIDOLONS_ROOT/cli/src/doctor.sh"
+
+  # The real signal: the finding was emitted by err(), which prints "✗" AND
+  # increments ERRORS (doctor.sh:71) — so an "✗ … wired digest …" line IS the
+  # redness, by construction, and no unrelated docker failure can forge it.
+  #
+  # Assert the MARKER, not just the message. An advisory downgrade (err -> a "·"
+  # printf) still prints the same text, so a message-only assertion would pass on
+  # any host where doctor is already red for other reasons — i.e. exactly on
+  # macos-latest, which is where this class of test fails us. Requiring "✗" on the
+  # same line kills that: it goes red on EVERY host when the section stops erroring.
+  echo "$output" | grep -q '✗.*wired digest'
+  echo "$output" | grep -q '✗.*atomos'
   [ "$status" -ne 0 ]
+
   # Different axis, still true — a test that passes by making Check 8 red is
-  # testing the wrong thing (this is the lock-vs-pins.stable check, not the
-  # lock-vs-artifact check).
+  # testing the wrong thing (that is lock-vs-pins.stable; this is
+  # lock-vs-artifact). Neither subsumes the other.
   [[ "$output" =~ "All installed MCPs at catalogue stable" ]]
 }
 
-@test "AC-5 two-sided: eidolons doctor (fast) on the clean fixture -> exit 0" {
+@test "AC-5 two-sided: doctor (fast) on the clean fixture -> the wiring section PASSES" {
   _setup_fixture_clean
   _seed_clean_project_manifest
   run bash "$EIDOLONS_ROOT/cli/src/doctor.sh"
-  [ "$status" -eq 0 ]
+
+  # Section-level, not global-exit: doctor's overall status is the environment's
+  # business (macOS CI has no docker), but the wiring section must be clean.
+  [[ "$output" =~ "All locked MCPs verified against .mcp.json" ]]
+  [[ ! "$output" =~ "wired digest" ]]
 }
 
 # ─── AC-6 ─────────────────────────────────────────────────────────────────────
@@ -376,11 +412,18 @@ EOF
   [[ ! "$output" =~ "OK" ]]
 }
 
-@test "AC-6: doctor exits 0 on the same (valid lock, no .mcp.json) fixture" {
+@test "AC-6: doctor does NOT redden on INDETERMINATE (valid lock, no .mcp.json)" {
   _write_lock_atomos "0.2.0" "$ATOMOS_D2"
   _seed_clean_project_manifest
   run bash "$EIDOLONS_ROOT/cli/src/doctor.sh"
-  [ "$status" -eq 0 ]
+
+  # R9: INDETERMINATE must never make the wiring section go red — the fresh-clone
+  # state is not a defect. Asserted at the SECTION, not on doctor's global exit:
+  # macos-latest exits non-zero here for unrelated reasons (no docker), and an
+  # `-eq 0` assertion would fail for something we did not cause while telling us
+  # nothing about the check under test.
+  [[ "$output" =~ "could not fully verify MCP wiring" ]]
+  [[ ! "$output" =~ "wired digest" ]]
 }
 
 # ─── AC-7 ─────────────────────────────────────────────────────────────────────
