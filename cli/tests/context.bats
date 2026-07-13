@@ -138,6 +138,77 @@ STUB
   [[ "$output" =~ "Unknown context subcommand" ]]
 }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# fix-ecm-meter-race-atlas-sync (D1) — AC-1 (concurrent-write race) / AC-2
+# (corrupt-meter self-heal). Global spec AC numbering — distinct from this
+# file's OWN internal "AC-1"/"AC-2" section labels below, which predate this
+# change and cover unrelated status/policy behaviour.
+#
+# Both writers feeding .eidolons/.context/meter.json (statusline.sh every 2s,
+# harness_hook.sh on SessionStart/UserPromptSubmit) invoke
+# cli/src/context_status.sh directly, so these tests do the same — spawning
+# the script itself, not going through the `eidolons context status`
+# dispatcher — to reproduce the exact concurrency shape that corrupted the
+# real meter.json on disk.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# ─── AC-1: 40 concurrent differing-length write pairs -> 0 corrupt meters ────
+# Pre-fix: the write at context_status.sh's old `printf ... > "$METER_PATH"`
+# was a plain (non-atomic) redirect — a short write landing over an
+# in-flight long write leaves the long write's tail behind. Measured 9/40
+# (and independently reproduced 2-5/40 across repeated runs) corrupt files
+# pre-fix; this asserts 0/40 post-fix.
+
+@test "fix-ecm-meter-race AC-1: 40 concurrent differing-length write pairs never corrupt meter.json" {
+  mkdir -p .eidolons/.context
+  local corrupt=0
+  local i p1 p2
+  for i in $(seq 1 40); do
+    rm -f .eidolons/.context/meter.json
+    bash "$EIDOLONS_ROOT/cli/src/context_status.sh" \
+      --session-id "race-sid-${i}-0123456789abcdef0123456789abcdef" \
+      --used-percentage 22 --window-tokens 1000000 >/dev/null 2>&1 &
+    p1=$!
+    bash "$EIDOLONS_ROOT/cli/src/context_status.sh" --used-percentage 7 >/dev/null 2>&1 &
+    p2=$!
+    wait "$p1" 2>/dev/null || true
+    wait "$p2" 2>/dev/null || true
+    if [ ! -f .eidolons/.context/meter.json ] || ! jq empty .eidolons/.context/meter.json 2>/dev/null; then
+      corrupt=$((corrupt + 1))
+    fi
+  done
+  [ "$corrupt" -eq 0 ]
+}
+
+# ─── AC-2: a corrupt prior meter self-heals on the next write ────────────────
+# Pre-fix: the inherit-prior-meter reads were `jq -r '...' 2>/dev/null ||
+# echo 0` — on a corrupt file jq prints ITS partial output AND exits 5, so
+# the shell captures both -> a two-line value where --argjson demands a
+# single JSON scalar -> the compose fails -> METER_JSON="" -> the kernel
+# bails BEFORE the write, so the corrupt file is never overwritten (wedged
+# forever). Fixture below is the real shape: a complete JSON object directly
+# followed by the orphaned tail of a longer previous write.
+
+@test "fix-ecm-meter-race AC-2: corrupt meter.json (valid object + orphaned tail) self-heals on next write" {
+  mkdir -p .eidolons/.context
+  cat > .eidolons/.context/meter.json <<'EOF'
+{"ecm_version":"0.1","session_id":null,"window_tokens":200000,"used_tokens_est":14000,"utilization":0.07,"estimate_source":"host","zone":"green","tool_result_share_est":0,"compaction_count":0,"externalize_age_turns":0,"budget":{"ceiling_tokens":null,"spent_tokens_est":14000},"updated_at":"2026-07-12T00:00:00Z"}
+"session_id":"sl-abcdefgh-1234-5678-90ab-cdef01234567","window_tokens":200000,"used_tokens_est":114000,"utilization":0.57,"estimate_source":"host","zone":"amber","tool_result_share_est":0.1,"compaction_count":0,"externalize_age_turns":0,"budget":{"ceiling_tokens":null,"spent_tokens_est":114000},"updated_at":"2026-07-12T00:00:05Z"}
+EOF
+  # Sanity: the seeded fixture really is invalid JSON (the bug's precondition).
+  run jq empty .eidolons/.context/meter.json
+  [ "$status" -ne 0 ]
+
+  run eidolons context status --used-percentage 34
+  [ "$status" -eq 0 ]
+
+  run jq empty .eidolons/.context/meter.json
+  [ "$status" -eq 0 ]
+  run jq -r '.zone' .eidolons/.context/meter.json
+  [ "$status" -eq 0 ]
+  [ "$output" = "green" ]
+}
+
 # ─── AC-1: status writes meter.json with a zone field, exit 0 ───────────────
 
 @test "status_writes_meter_and_zone" {

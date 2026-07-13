@@ -144,7 +144,8 @@ _ecm_pins_reminder() {
 # source lib.sh at the top; the function is used here unchanged.
 
 # ── atlas-aci auto-sync (harness step) ─────────────────────────────────────
-# Pure reads + one bounded `docker run -d` spawn. Fires on BOTH SessionStart
+# Pure reads + one bounded `docker run -d` spawn (plus an occasional bounded
+# `docker rm` reconcile — see Strategy D below). Fires on BOTH SessionStart
 # and UserPromptSubmit (spec §"Behaviour") so the code-graph converges on the
 # working tree within ~one turn of any edit. On by default; opt-out only.
 # Never touches stdout (the caller redirects this call to /dev/null) and
@@ -167,10 +168,15 @@ _ecm_pins_reminder() {
 # fail-open no-op rather than guessing a slug from a different helper
 # (memory_probe_project_slug / project_slug are for OTHER surfaces and can
 # disagree with the mcp-install slug baked into .mcp.json).
-# Dedups by container name atlas-aci-sync-<slug>: skips the spawn if one
-# already exists (AC-4). Spawns `docker run --rm -d --pull=never` (detached,
-# returns immediately — AC-5) with /repo mounted READ-WRITE (the inverse of
-# serve's `:ro` — index writes .atlas/graph.<epoch>.db).
+# Spawns `docker run --rm -d --pull=never` (detached, returns immediately —
+# AC-5) with /repo mounted READ-WRITE (the inverse of serve's `:ro` — index
+# writes .atlas/graph.<epoch>.db) AND `--user "$(id -u):$(id -g)"` (R3): the
+# image runs as user `atlas`, and a host `.atlas/` created 1000:1000 mode 755
+# makes an unmatched-UID container die on `.atlas/.index.lock` with EACCES —
+# the index then never builds and every atlas-aci query returns
+# INDEX_UNAVAILABLE. --user makes the container's write UID match the host
+# directory's owner, mirroring the tonberry/atomos MCP entries in .mcp.json
+# which already carry the same flag for the same reason.
 # --pull=never is load-bearing for AC-5, not cosmetic: `-d` only defers the
 # CONTAINER's lifetime, not image ACQUISITION — a plain `docker run -d` on a
 # not-yet-local image pulls synchronously in the foreground before ever
@@ -180,30 +186,80 @@ _ecm_pins_reminder() {
 # image IS already local, because `serve` runs from the same digest the user
 # is already using — so --pull=never never removes real functionality, it
 # only removes the possibility of a foreground pull blocking a turn.
-# Both docker calls (the `ps` dedup probe and the `run` spawn) are wrapped in
-# `with_timeout` (lib.sh:616, already in scope — this file sources lib.sh at
-# the top) rather than a hand-rolled timeout(1)-or-background-watcher idiom:
-# with_timeout is the ONE bash-3.2-safe timeout idiom this repo already uses
-# repo-wide (lib_context.sh's per-turn meter refresh, memory.sh's preflight,
-# canary, doctor, release) and its FD-hygiene fix (lib.sh:607-615) is exactly
-# what keeps a `$(with_timeout ...)` capture from blocking on an orphaned
-# timer. `docker ps` failing fast on a DOWN daemon (~10-15ms, verified
-# empirically) does not cover a daemon that is UP but wedged (Docker Desktop
-# stalled, storage stall, overloaded host) — an unbounded synchronous call
-# there can hang the turn indefinitely, which is exactly what a fixed
-# wall-clock bound closes. Bound: 1.5s, matching lib_context.sh's
-# ECM_MEMORY_TIMEOUT_S — this call fires on EVERY UserPromptSubmit (the same
-# hot-path class as ECM's PostToolUse meter refresh), not a once-per-session
-# SessionStart-only budget like memory.sh's 8s. On timeout, with_timeout
-# returns 124 -> `|| true` -> fail-open (an empty dedup probe result falls
-# through to a spawn attempt; a killed spawn just means no container this
-# turn — both are backstopped by --name uniqueness / the single-writer lock,
-# never a wedged turn).
+#
+# Dedup — Strategy D: spawn-first, reconcile-on-collision, `docker rm`
+# (never `-f`) (FORGE decision, confidence 0.86; see
+# .spectra/changes/fix-ecm-meter-race-atlas-sync/spec.md). The PRIOR
+# implementation probed with `docker ps -a` first — but `-a` matches
+# non-running containers too, and `with_timeout`'s `kill -9` landing on
+# `docker run -d` mid-create leaves exactly that: a `Created` orphan that
+# `--rm` never reaps (it only cleans up containers that actually STARTED).
+# Two such orphans made the `-a` probe match unconditionally, permanently
+# skipping the reindex. `docker run --name` IS the dedup gate now — the only
+# *atomic* test-and-set Docker exposes (the daemon serialises name
+# allocation at container-create time) — so we act first and read the
+# failure instead of check-then-act. `_atlas_sync_spawn` (below) issues that
+# `docker run`; it is defined ONCE and called from both the first attempt and
+# the post-reap retry so they stay byte-identical (a retry that silently
+# drifted from the first attempt could spawn a differently-configured
+# indexer). On success (rc=0) or a with_timeout kill (rc=124, daemon
+# wedged) we return immediately — rc=124 must NOT retry this turn, because a
+# retry against a still-wedged daemon just re-times-out and mints a SECOND
+# orphan; any orphan actually minted is reaped next turn by the branch below.
+# Any OTHER failure is read as a name collision and disambiguated with a
+# single `docker rm "$cname"` — deliberately NOT `rm -f`: the daemon REFUSES
+# to remove a container that is currently `running`, so that one exit code
+# separates "a legitimate in-flight reindex — leave it alone" (rm fails,
+# R5/C5) from "a wedged `Created`/`Exited` orphan — reap it" (rm succeeds,
+# R4/C4) with no state parsing (`{{.State}}`) and no staleness clock. `-f`
+# would re-arm a check-then-act race (it can SIGKILL a healthy in-flight
+# indexer between a stale read and the removal) and was rejected for exactly
+# that reason. If `rm` succeeds, whoever reaped the name is OBLIGATED to
+# respawn (R4) — skipping the respawn after a successful reap can leave ZERO
+# indexers running when two hooks raced on the same wedged orphan.
+#
+# Timeout split (R9 fail-open, unchanged budget): reconcile (`docker rm`)
+# keeps the 1.5s hot-path bound (EIDOLONS_ATLAS_SYNC_TIMEOUT_S, mirrors
+# lib_context.sh's ECM_MEMORY_TIMEOUT_S) because it is cheap and rare — it
+# only runs on an actual name collision. The SPAWN gets a separate 3s bound
+# (EIDOLONS_ATLAS_SYNC_SPAWN_TIMEOUT_S) because 1.5s sits *inside* the normal
+# container-create latency distribution on a cold daemon; bounding the
+# common-case spawn at the old 1.5s made IT the orphan factory the dedup
+# logic then had to work around. Deleting the `ps` probe buys back that
+# budget: worst case is unchanged (rm 1.5s + spawn 3s bound the SAME 4.5s the
+# old ps-then-run pair could already reach), while the common case HALVES
+# from 2 docker calls (ps + run) to 1 (run only).
+#
+# Both docker calls are wrapped in `with_timeout` (lib.sh:616, already in
+# scope — this file sources lib.sh at the top) rather than a hand-rolled
+# timeout(1)-or-background-watcher idiom: with_timeout is the ONE
+# bash-3.2-safe timeout idiom this repo already uses repo-wide (lib_context
+# .sh's per-turn meter refresh, memory.sh's preflight, canary, doctor,
+# release) and its FD-hygiene fix (lib.sh:607-615) is exactly what keeps a
+# `$(with_timeout ...)` capture from blocking on an orphaned timer.
+#
 # cwd bound (documented, not fixed here): the mount root is the hook's cwd,
 # which every wired host (claude-code/codex/copilot) sets to the project
 # root before invoking the shim — see the SPEC/README note on the one known
 # nested-workspace edge (a different, also-atlas-aci-wired project root as
 # cwd would reindex THAT tree instead; not solved by this change).
+
+# _atlas_sync_spawn CNAME SLUG ROOT IMAGE_REF SECS — one bounded, detached
+# `docker run` of the reindex container. Defined ONCE: the first attempt and
+# the post-reap retry MUST stay byte-identical or the retry can spawn a
+# differently-configured indexer.
+_atlas_sync_spawn() {
+  local cname="$1" slug="$2" root="$3" image_ref="$4" secs="$5"
+  with_timeout "$secs" docker run --rm -d --pull=never \
+    --name "$cname" \
+    --label "eidolons.project=${slug}" \
+    --user "$(id -u):$(id -g)" \
+    -v "${root}:/repo" \
+    --cap-drop ALL --security-opt no-new-privileges \
+    "$image_ref" \
+    index --repo /repo --since auto >/dev/null 2>&1
+}
+
 _atlas_autosync() {
   local root="${1:-$(pwd)}"
   local mcp="$root/.mcp.json"
@@ -237,30 +293,33 @@ _atlas_autosync() {
 
   local cname="atlas-aci-sync-${slug}"
 
-  # Per-turn call budget (s) — see header note (with_timeout, 1.5s, mirrors
-  # lib_context.sh's ECM_MEMORY_TIMEOUT_S hot-path bound). Overridable for
-  # tests / unusually slow hosts.
+  # Per-call budgets (s) — see header note (Strategy D's timeout split).
+  # Overridable for tests / unusually slow hosts.
   local _atlas_sync_timeout="${EIDOLONS_ATLAS_SYNC_TIMEOUT_S:-1.5}"
+  local _atlas_spawn_timeout="${EIDOLONS_ATLAS_SYNC_SPAWN_TIMEOUT_S:-3}"
 
-  # Dedup (AC-4): skip the spawn if a container by this name already exists.
-  # Bounded via with_timeout (lib.sh) — a wedged-but-up daemon must not hang
-  # the turn; on timeout (rc=124) `running` is empty and we fall through to
-  # the (also-bounded) spawn attempt below, backstopped by --name uniqueness.
-  local running
-  running="$(with_timeout "$_atlas_sync_timeout" docker ps -a --filter "name=^/${cname}\$" --format '{{.Names}}' 2>/dev/null || true)"
-  printf '%s\n' "$running" | grep -qx "$cname" && return 0
+  local _atlas_rc=0
+  _atlas_sync_spawn "$cname" "$slug" "$root" "$image_ref" "$_atlas_spawn_timeout" \
+    || _atlas_rc=$?
 
-  # Spawn detached (AC-3/AC-5). --pull=never: never block a turn on a pull;
-  # rely on the already-local serve image (see header note above). Also
-  # wrapped in with_timeout — cheap and consistent even though -d + --pull=
-  # never already bound this to container-creation time in the common case.
-  with_timeout "$_atlas_sync_timeout" docker run --rm -d --pull=never \
-    --name "$cname" \
-    --label "eidolons.project=${slug}" \
-    -v "${root}:/repo" \
-    --cap-drop ALL --security-opt no-new-privileges \
-    "$image_ref" \
-    index --repo /repo --since auto >/dev/null 2>&1 || true
+  # rc=0 -> spawned (COMMON CASE: exactly ONE docker call).
+  # rc=124 -> with_timeout fired; daemon is wedged. Do NOT reconcile or retry
+  #           this turn (a retry re-times-out and mints a SECOND orphan). Any
+  #           orphan minted is reaped next turn by the branch below.
+  if [ "$_atlas_rc" -eq 0 ] || [ "$_atlas_rc" -eq 124 ]; then
+    return 0
+  fi
+
+  # Fast failure on a responsive daemon — dominant cause is a name collision.
+  # `docker rm` (deliberately NOT `rm -f`) disambiguates daemon-side in one call:
+  #   running namesake -> daemon REFUSES -> rc!=0 -> return, touch nothing (C5).
+  #   Created/Exited orphan -> removed -> name freed -> respawn (C4 self-heal).
+  #   no such container (image absent / daemon down) -> rc!=0 -> no-op. Correct.
+  with_timeout "$_atlas_sync_timeout" docker rm "$cname" >/dev/null 2>&1 || return 0
+
+  # INVARIANT: rm-success => respawn. Whoever reaps the name is OBLIGATED to
+  # take it, or concurrent hooks can leave zero indexers running.
+  _atlas_sync_spawn "$cname" "$slug" "$root" "$image_ref" "$_atlas_spawn_timeout" || true
 
   return 0
 }

@@ -1,0 +1,48 @@
+schema: eidolons/change-spec.v1
+change_id: fix-ecm-meter-race-atlas-sync
+tier: full
+maker: vivi
+checker: kupo
+target: nexus v2.10.0 (D1 meter race, D2 atlas sync dedup, D3 atomos lock reconciliation)
+
+problem: >
+  Three independent defects, all silent fail-opens:
+  D1 - .eidolons/.context/meter.json permanently corrupt; non-atomic write raceable by concurrent writers;
+  D2 - atlas-aci auto-sync dedup probe matches non-running containers, permanently skipping reindex;
+  D3 - atomos pinned to 0.1.0 in .mcp.json while lockfile declares 0.2.0.
+
+decision:
+  D1: atomic-write-with-recovery
+  D2: spawn-first-reconcile-on-collision-strategy-D
+  D3: lock-artifact-reconciliation
+
+invariants:
+  - meter-write-atomic                    # mktemp + mv -f in same dir
+  - corrupt-meter-self-heals              # jq empty guard; write on failure
+  - atlas-spawn-includes-user-flag        # --user $(id -u):$(id -g)
+  - atlas-dedup-spawn-first               # docker run --name collision detection
+  - atlas-reconcile-without-force         # docker rm (never -f)
+  - atlas-respawn-after-successful-reap   # rm success => obligated respawn
+  - no-docker-ps-probe                    # Strategy D eliminates check-then-act race
+  - atomos-digest-lock-match              # .mcp.json sha256 == eidolons.mcp.lock value
+  - fail-open                             # all paths exit 0, never block
+  - bash-3.2-clean
+
+files:
+  - cli/src/context_status.sh
+  - cli/src/harness_hook.sh
+  - .mcp.json
+  - cli/tests/context.bats
+  - cli/tests/harness.bats
+  - CHANGELOG.md
+
+verify_items:
+  - AC-1: 40 concurrent differing-length write pairs -> 0 corrupt meters
+  - AC-2: corrupt meter self-heals on next write
+  - AC-3: common case (no namesake) -> exactly ONE docker invocation
+  - AC-4: Created namesake -> exactly one rm, then a successful respawn
+  - AC-5: running namesake -> rm issued and REFUSED; zero containers created
+  - AC-6: the reap (rm) command line never contains -f
+  - AC-7: the spawn command line contains --user
+  - AC-8: .mcp.json atomos digest == lockfile atomos digest
+  - AC-9: make lint clean; bash-3.2 compatible

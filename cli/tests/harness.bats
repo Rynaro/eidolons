@@ -2577,37 +2577,105 @@ JSON
 
 # setup_fake_docker_autosync
 # Installs a fake `docker` on PATH (prepended, shadowing the real binary).
+# Models the daemon's NAME REGISTRY + CONTAINER STATE (fix-ecm-meter-race-
+# atlas-sync D2 rewrite) rather than being state-blind: `run --name` gets a
+# conflict rc when the name is already registered, and `rm` refuses when the
+# registered container's state is "running" — matching the atomic
+# test-and-set / disambiguate-by-rm shape the Strategy D dedup fix relies on.
+# The PRIOR shim's `docker ps` echoed FAKE_DOCKER_RUNNING_NAME regardless of
+# `-a`/filters/state and its `docker run` always exited 0 — it could never
+# simulate a name collision, which is precisely why the `docker ps -a` bug
+# (matches non-running orphans, permanently skipping the reindex) shipped
+# green through 649 tests. This shim can fail a spawn on collision and can
+# refuse an `rm`, so a regression against either invariant now shows up red.
+#
 # Controlled by:
-#   FAKE_DOCKER_ARGV_LOG      — path appended with one line per `docker run` argv.
-#   FAKE_DOCKER_RUNNING_NAME  — when `docker ps` is called, echoed back verbatim
-#                               (simulates an already-running sync container).
-#   FAKE_DOCKER_PS_SLEEP      — seconds `docker ps` sleeps BEFORE responding
-#                               (simulates a daemon that is up but wedged, for
-#                               the with_timeout wall-clock proof — F-1).
+#   FAKE_DOCKER_ARGV_LOG        — path appended with one line per `docker run`
+#                                 / `docker rm` invocation ("run ..." / "rm ...").
+#   FAKE_DOCKER_EXISTING_NAME    — name of a container already registered in
+#                                  the fake daemon (empty = no namesake).
+#   FAKE_DOCKER_EXISTING_STATE   — "running" or "created" (any non-"running"
+#                                  value behaves like a reapable orphan).
+#                                  Read once, at setup time, into a state
+#                                  file so a successful `rm` can clear the
+#                                  registration (letting a follow-up `run`
+#                                  for the same name succeed — self-heal).
+#   FAKE_DOCKER_RUN_SLEEP        — seconds `docker run` sleeps BEFORE
+#                                  responding (simulates a wedged-but-up
+#                                  daemon for the with_timeout wall-clock
+#                                  proof — replaces the old ps-sleep F-1).
 setup_fake_docker_autosync() {
   local fake_bin="$BATS_TEST_TMPDIR/fake-docker-bin"
   mkdir -p "$fake_bin"
+  # Internal bookkeeping file — NOT a test-facing knob (tests set
+  # FAKE_DOCKER_EXISTING_NAME/STATE; this file is how the shim persists a
+  # name's removal across the SEPARATE `docker` process invocations of one
+  # test, e.g. run(fail) -> rm(succeed, clears this file) -> run(succeed)).
+  FAKE_DOCKER_STATE_FILE="$BATS_TEST_TMPDIR/fake-docker-state"
+  export FAKE_DOCKER_STATE_FILE
+  : > "$FAKE_DOCKER_STATE_FILE"
+  if [ -n "${FAKE_DOCKER_EXISTING_NAME:-}" ]; then
+    printf '%s\n%s\n' "$FAKE_DOCKER_EXISTING_NAME" "${FAKE_DOCKER_EXISTING_STATE:-created}" > "$FAKE_DOCKER_STATE_FILE"
+  fi
   cat > "$fake_bin/docker" <<'DSHIM'
 #!/usr/bin/env bash
 ARGV_LOG="${FAKE_DOCKER_ARGV_LOG:-}"
-RUNNING_NAME="${FAKE_DOCKER_RUNNING_NAME:-}"
-PS_SLEEP="${FAKE_DOCKER_PS_SLEEP:-0}"
+STATE_FILE="${FAKE_DOCKER_STATE_FILE:-}"
+RUN_SLEEP="${FAKE_DOCKER_RUN_SLEEP:-0}"
+
+_read_state() {
+  EXIST_NAME=""
+  EXIST_STATE=""
+  if [ -n "$STATE_FILE" ] && [ -s "$STATE_FILE" ]; then
+    EXIST_NAME="$(sed -n '1p' "$STATE_FILE")"
+    EXIST_STATE="$(sed -n '2p' "$STATE_FILE")"
+  fi
+}
+
 case "${1:-}" in
-  ps)
+  run)
+    [ -n "$ARGV_LOG" ] && printf 'run %s\n' "$*" >> "$ARGV_LOG"
     # exec (not a plain `sleep` subprocess): the real docker CLI is a single
     # process that blocks on its OWN syscall when a daemon is wedged — it
     # never forks a child that could outlive a `kill -9` on the parent and
     # keep a command-substitution pipe open. `exec` replaces THIS process's
     # image with `sleep` (same PID, no descendant), matching that shape so
     # with_timeout's `kill -9 "$pid"` genuinely terminates the "hang".
-    if [ "$PS_SLEEP" != "0" ]; then
-      exec sleep "$PS_SLEEP"
+    if [ "$RUN_SLEEP" != "0" ]; then
+      exec sleep "$RUN_SLEEP"
     fi
-    [ -n "$RUNNING_NAME" ] && printf '%s\n' "$RUNNING_NAME"
+    name=""
+    prev=""
+    for a in "$@"; do
+      [ "$prev" = "--name" ] && name="$a"
+      prev="$a"
+    done
+    _read_state
+    if [ -n "$EXIST_NAME" ] && [ "$name" = "$EXIST_NAME" ]; then
+      # Real docker's name-collision behaviour: no container created, the
+      # daemon returns a non-zero "Conflict ... already in use" exit.
+      exit 125
+    fi
     exit 0
     ;;
-  run)
-    [ -n "$ARGV_LOG" ] && printf '%s\n' "$*" >> "$ARGV_LOG"
+  rm)
+    [ -n "$ARGV_LOG" ] && printf 'rm %s\n' "$*" >> "$ARGV_LOG"
+    cname="${2:-}"
+    _read_state
+    if [ -n "$EXIST_NAME" ] && [ "$cname" = "$EXIST_NAME" ]; then
+      if [ "$EXIST_STATE" = "running" ]; then
+        exit 1   # daemon REFUSES to remove a running container
+      fi
+      [ -n "$STATE_FILE" ] && : > "$STATE_FILE"   # name freed -> respawn can succeed
+      exit 0
+    fi
+    exit 1   # no such container
+    ;;
+  *)
+    # Any OTHER subcommand (notably a regressed `docker ps` probe) is still
+    # logged — AC-3's "exactly ONE invocation" assertion must be able to SEE
+    # a reintroduced extra call, not silently swallow it.
+    [ -n "$ARGV_LOG" ] && printf '%s %s\n' "${1:-<none>}" "$*" >> "$ARGV_LOG"
     exit 0
     ;;
 esac
@@ -2766,46 +2834,61 @@ EOF
   [ ! -s "$argv_log" ]
 }
 
-# ─── AC-4: dedup — a same-named container already running skips the spawn ───
+# ─── AC-4 (legacy numbering, pre-D2-rewrite): dedup — a same-named container
+# already running blocks the spawn; a differently-named one does not. Bodies
+# adapted to the Strategy D shim (FAKE_DOCKER_EXISTING_NAME/STATE replace the
+# retired FAKE_DOCKER_RUNNING_NAME) — the mechanism changed (spawn-first +
+# rm-on-collision, not a `docker ps` probe) but the observable contract these
+# two tests describe is unchanged. See the fix-ecm-meter-race-atlas-sync
+# AC-3..AC-7 section below for the full new-mechanism coverage.
 
-@test "atlas-aci autosync AC-4: container already running -> zero NEW docker run calls" {
+@test "atlas-aci autosync AC-4: container already running -> zero NEW containers created" {
   seed_manifest
   seed_mcp_with_atlas_aci
+  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_STATE="running"
   setup_fake_docker_autosync
-  export FAKE_DOCKER_RUNNING_NAME="atlas-aci-sync-test-project"
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
   export FAKE_DOCKER_ARGV_LOG="$argv_log"
   run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
     bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
   [ "$status" -eq 0 ]
-  [ ! -s "$argv_log" ]
+  # Collision attempt + refused rm are both logged, but no SECOND (successful)
+  # `run` line follows — zero new containers created.
+  [ "$(grep -c '^run ' "$argv_log")" -eq 1 ]
+  [ "$(grep -c '^rm ' "$argv_log")" -eq 1 ]
 }
 
 @test "atlas-aci autosync AC-4: a DIFFERENTLY-named running container does NOT block the spawn" {
   seed_manifest
   seed_mcp_with_atlas_aci
+  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-some-other-project"
+  export FAKE_DOCKER_EXISTING_STATE="running"
   setup_fake_docker_autosync
-  export FAKE_DOCKER_RUNNING_NAME="atlas-aci-sync-some-other-project"
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
   export FAKE_DOCKER_ARGV_LOG="$argv_log"
   run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
     bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
   [ "$status" -eq 0 ]
   [ -s "$argv_log" ]
+  [ "$(grep -c '^rm ' "$argv_log")" -eq 0 ]
 }
 
 # ─── F-1 (checker finding): a wedged-but-up daemon must not hang the turn ────
-# Mechanical proof that with_timeout actually bounds the dedup probe — not
-# just that a flag/helper name is present in the source. The fake `docker ps`
-# sleeps far LONGER than the configured bound; the hook must still return
-# within roughly the bound (wall-clock), never the full sleep duration.
+# Mechanical proof that with_timeout actually bounds the SPAWN call — not
+# just that a flag/helper name is present in the source. Adapted from the
+# retired `docker ps`-sleep proof: Strategy D deleted the `ps` probe, so the
+# call that fires on EVERY turn (and thus the one that most needs a wall-clock
+# bound) is now the spawn itself. The fake `docker run` sleeps far LONGER
+# than the configured spawn bound; the hook must still return within roughly
+# that bound, never the full sleep duration.
 
-@test "atlas-aci autosync F-1: wedged 'docker ps' is bounded by with_timeout (wall-clock proof)" {
+@test "atlas-aci autosync F-1: wedged 'docker run' (spawn) is bounded by with_timeout (wall-clock proof)" {
   seed_manifest
   seed_mcp_with_atlas_aci
   setup_fake_docker_autosync
-  export FAKE_DOCKER_PS_SLEEP=8            # sleeps far longer than the bound below
-  export EIDOLONS_ATLAS_SYNC_TIMEOUT_S=2   # short bound to keep the test fast
+  export FAKE_DOCKER_RUN_SLEEP=8                    # sleeps far longer than the bound below
+  export EIDOLONS_ATLAS_SYNC_SPAWN_TIMEOUT_S=2      # short bound to keep the test fast
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
   export FAKE_DOCKER_ARGV_LOG="$argv_log"
   local start_s end_s elapsed
@@ -2816,12 +2899,14 @@ EOF
   elapsed=$(( end_s - start_s ))
   [ "$status" -eq 0 ]
   # Must return well BEFORE the full 8s sleep would have elapsed (~2s bound +
-  # slack for with_timeout's own housekeeping + the follow-on spawn call) —
-  # proves the wedged probe was actually killed, not merely flagged.
+  # slack for with_timeout's own housekeeping) — proves the wedged spawn was
+  # actually killed, not merely flagged.
   [ "$elapsed" -lt 6 ]
-  # The killed (empty) dedup probe must fall through to a (also-bounded)
-  # spawn attempt — proving the fail-open composition, not a silent stall.
-  [ -s "$argv_log" ]
+  # rc=124 (with_timeout fired) must NOT reconcile/retry this turn (spec
+  # R9/AC-3..-7 note: a retry against a still-wedged daemon just re-times-out
+  # and mints a SECOND orphan) — exactly one `run` line, zero `rm` lines.
+  [ "$(grep -c '^run ' "$argv_log")" -eq 1 ]
+  [ "$(grep -c '^rm ' "$argv_log")" -eq 0 ]
 }
 
 @test "atlas-aci autosync F-1: with_timeout is the ONLY timeout idiom used (no hand-rolled duplicate)" {
@@ -2829,8 +2914,109 @@ EOF
   # call — the checker's explicit instruction was one idiom repo-wide.
   run grep -c "with_timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
   [ "$status" -eq 0 ]
-  [ "$output" -ge 2 ]   # the ps dedup probe + the run spawn
+  [ "$output" -ge 2 ]   # the spawn helper + the rm reconcile
   ! grep -q "GNU timeout" "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# fix-ecm-meter-race-atlas-sync (D2) — Strategy D dedup rewrite: AC-3..AC-7
+# (global spec AC numbering; see .spectra/changes/fix-ecm-meter-race-atlas-sync
+# /spec.md). Spawn-first, reconcile-on-collision, `docker rm` (never `-f`).
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "fix-ecm-meter-race AC-3: common case (no namesake) -> exactly ONE docker invocation" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ "$(wc -l < "$argv_log")" -eq 1 ]
+  grep -q '^run ' "$argv_log"
+}
+
+@test "fix-ecm-meter-race AC-4: 'Created' namesake -> exactly one rm, then a successful respawn (self-heal in one turn)" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_STATE="created"
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  # run(collision, fails) -> rm(succeeds, reaps orphan) -> run(succeeds, respawn).
+  [ "$(wc -l < "$argv_log")" -eq 3 ]
+  [ "$(grep -c '^rm ' "$argv_log")" -eq 1 ]
+  [ "$(sed -n '1p' "$argv_log" | cut -d' ' -f1)" = "run" ]
+  [ "$(sed -n '2p' "$argv_log" | cut -d' ' -f1)" = "rm" ]
+  [ "$(sed -n '3p' "$argv_log" | cut -d' ' -f1)" = "run" ]
+  # The retry MUST be byte-identical to the first attempt (header note: a
+  # drifted retry could spawn a differently-configured indexer) — same
+  # single defined-once _atlas_sync_spawn call both times.
+  [ "$(sed -n '1p' "$argv_log")" = "$(sed -n '3p' "$argv_log")" ]
+}
+
+@test "fix-ecm-meter-race AC-5: 'running' namesake -> rm issued and REFUSED; zero containers created" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_STATE="running"
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  # run(collision, fails) -> rm(refused) -> NO retry. Exactly one of each;
+  # the running container is never touched again by this turn.
+  [ "$(wc -l < "$argv_log")" -eq 2 ]
+  [ "$(grep -c '^run ' "$argv_log")" -eq 1 ]
+  [ "$(grep -c '^rm ' "$argv_log")" -eq 1 ]
+  # The fake daemon's registration for the running container must survive —
+  # the state file was never cleared (only a successful rm clears it).
+  [ -s "$FAKE_DOCKER_STATE_FILE" ]
+  [ "$(sed -n '2p' "$FAKE_DOCKER_STATE_FILE")" = "running" ]
+}
+
+@test "fix-ecm-meter-race AC-6: the reap (rm) command line never contains -f" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_STATE="created"
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  local rm_line
+  rm_line="$(grep '^rm ' "$argv_log")"
+  [ -n "$rm_line" ]
+  # Literal check on the ACTUAL invocation, not merely the source text — this
+  # is the guard that stops a future contributor from "fixing" a flaky test
+  # by adding `-f` back (which would re-arm the check-then-act SIGKILL race
+  # Strategy D was chosen specifically to avoid).
+  [[ "$rm_line" != *" -f"* ]]
+  [[ "$rm_line" != *"-f "* ]]
+}
+
+@test "fix-ecm-meter-race AC-7: the spawn command line contains --user" {
+  seed_manifest
+  seed_mcp_with_atlas_aci
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  local run_line
+  run_line="$(grep '^run ' "$argv_log")"
+  [ -n "$run_line" ]
+  [[ "$run_line" == *"--user"* ]]
 }
 
 # ─── AC-5: fail-open — docker absent -> exit 0, silent; never blocks ─────────
