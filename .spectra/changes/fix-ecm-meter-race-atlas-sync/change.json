@@ -1,0 +1,16 @@
+{
+  "esl_version": "1.1",
+  "change_id": "fix-ecm-meter-race-atlas-sync",
+  "status": "verified",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": "docs/specs/ecm/spec.md",
+  "drift_checked": true,
+  "has_code": true,
+  "memory_preflight": {
+    "ran": true,
+    "records": 2
+  }
+}
