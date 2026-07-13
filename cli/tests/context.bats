@@ -641,3 +641,81 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "claude-code" ]
 }
+
+# ─── fix-ecm-meter-hot-path-spawns: CC3 prompt-path budget (<= 300ms) ───────
+#
+# The meter is fed on EVERY statusline render (refreshInterval 2s) and every
+# UserPromptSubmit, so each fork on this path is paid constantly — and fork/exec
+# is dear on macOS, where the 300ms budget (AC-SL-6) actually binds. The first
+# cut of the atomicity fix took the path from 4 spawns to 7 (jq empty + 3x jq -r
+# + jq -n + mktemp + mv) and tipped AC-SL-6 red on macos-latest CI.
+#
+# Wall-clock is the wrong gate here — it is exactly what flaked. SPAWN COUNT is
+# the deterministic invariant, so that is what we pin. A counting shim wraps the
+# real binary and tallies invocations.
+
+_spawn_counter_shim() {   # $1=binary name, $2=tally file
+  local d="$BATS_TEST_TMPDIR/shimbin"
+  mkdir -p "$d"
+  local real; real="$(command -v "$1")"
+  cat > "$d/$1" <<SHIM
+#!/usr/bin/env bash
+echo "$1" >> "$2"
+exec "$real" "\$@"
+SHIM
+  chmod +x "$d/$1"
+  export PATH="$d:$PATH"
+}
+
+@test "fix-ecm-meter-hot-path-spawns: meter write costs <= 2 jq spawns (was 4)" {
+  cd "$BATS_TEST_TMPDIR"
+  mkdir -p .eidolons/.context
+  local tally="$BATS_TEST_TMPDIR/jq.tally"
+
+  # Seed a valid prior meter FIRST (un-shimmed), so the run under test takes the
+  # expensive inherit-prior-meter path — the path that actually runs in a session.
+  run bash "$EIDOLONS_ROOT/cli/src/context_status.sh" --used-percentage 30 --window-tokens 1000000
+  [ "$status" -eq 0 ]
+  jq empty .eidolons/.context/meter.json
+
+  : > "$tally"
+  _spawn_counter_shim jq "$tally"
+  run bash "$EIDOLONS_ROOT/cli/src/context_status.sh" --used-percentage 31 --window-tokens 1000000
+  [ "$status" -eq 0 ]
+
+  # 1 to read+validate the prior meter, 1 to compose the new one. No more.
+  local n; n="$(wc -l < "$tally" | tr -d ' ')"
+  echo "jq spawns: $n" >&3
+  [ "$n" -le 2 ]
+
+  # and the meter is still correct
+  jq empty .eidolons/.context/meter.json
+  [ "$(jq -r .zone .eidolons/.context/meter.json)" = "green" ]
+}
+
+@test "fix-ecm-meter-hot-path-spawns: meter write adds no mktemp/dirname fork over the bootstrap floor" {
+  cd "$BATS_TEST_TMPDIR"
+  mkdir -p .eidolons/.context
+  local tally="$BATS_TEST_TMPDIR/fork.tally"
+  : > "$tally"
+  _spawn_counter_shim mktemp "$tally"
+  _spawn_counter_shim dirname "$tally"
+
+  run bash "$EIDOLONS_ROOT/cli/src/context_status.sh" --used-percentage 30 --window-tokens 1000000
+  [ "$status" -eq 0 ]
+  jq empty .eidolons/.context/meter.json
+
+  # The floor is NOT zero: `dirname` is forked 4x at bootstrap, before any meter
+  # work — SELF_DIR resolution in context_status.sh, plus lib.sh sourcing its ui/
+  # modules. That floor is pre-existing and out of scope here. What this gate pins
+  # is that the meter WRITE adds nothing on top of it: parameter expansion
+  # (${METER_PATH%/*}) and $$ replace the `dirname` and `mktemp` the first cut of
+  # the atomicity fix introduced. Measured: v2.9.1 = 4/0, first cut = 5/1 (the
+  # regression), this = 4/0.
+  local n_dirname n_mktemp
+  n_dirname="$(grep -c '^dirname$' "$tally" 2>/dev/null || true)"; : "${n_dirname:=0}"
+  n_mktemp="$(grep -c '^mktemp$' "$tally" 2>/dev/null || true)";  : "${n_mktemp:=0}"
+  echo "dirname=$n_dirname mktemp=$n_mktemp" >&3
+  [ "$n_mktemp" -eq 0 ]
+  [ "$n_dirname" -le 4 ]
+}
