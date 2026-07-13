@@ -386,6 +386,61 @@ if command -v jq >/dev/null 2>&1 && [ -f ".mcp.json" ]; then
   fi
 fi
 
+# ─── Check 7c: MCP wiring integrity ───────────────────────────────────────
+# ESL change mcp-verify-lock-vs-artifact (R9): the lock is intent, .mcp.json
+# is effect — the previous checks (7/7b) trust the lock; this one verifies
+# the artifact via 'eidolons mcp verify --json' (F1: verify never repairs).
+# Fast path (NOT --deep) — F2: fail-open is a hot-path doctrine (ECM fires
+# every prompt, autonomously); doctor is explicitly invoked and waiting for
+# an answer, so a diagnostic that cannot say NO is a printf. The check costs
+# one extra jq-only subprocess reading files doctor already opens: no docker,
+# no network, no --probe.
+#
+# BLOCK findings increment ERRORS (exit non-zero). INDETERMINATE (e.g. a
+# fresh clone with no .mcp.json yet) does NOT — that is the normal state
+# 'mcp verify' itself reports as exit 3, never a doctor failure (AC-6).
+#
+# This is a DIFFERENT question from "MCP catalogue drift" below (lock vs
+# pins.stable — "you could upgrade"): this asks "you are lying" (lock vs the
+# artifact it claims to describe). Both stay in the fast path; neither
+# subsumes the other (AC-5).
+ui_section_out "MCP wiring integrity"
+if ! command -v jq >/dev/null 2>&1; then
+  printf "  %s·%s jq not on PATH — MCP wiring integrity check skipped\n" \
+    "${YELLOW:-}" "${RESET:-}"
+else
+  _verify_json="$(bash "$SELF_DIR/mcp_verify.sh" --json 2>/dev/null || true)"
+  if [[ -z "$_verify_json" ]] || ! jq empty <<< "$_verify_json" >/dev/null 2>&1; then
+    printf "  %s·%s MCP wiring integrity check unavailable (mcp verify produced no parseable output)\n" \
+      "${YELLOW:-}" "${RESET:-}"
+  else
+    _verify_block_count="$(jq -r '.summary.block // 0' <<< "$_verify_json" 2>/dev/null || echo 0)"
+    _verify_warn_count="$(jq -r '.summary.warn // 0' <<< "$_verify_json" 2>/dev/null || echo 0)"
+    _verify_indet_count="$(jq -r '.summary.indeterminate // 0' <<< "$_verify_json" 2>/dev/null || echo 0)"
+    if [[ "$_verify_block_count" -gt 0 ]]; then
+      while IFS= read -r _vfinding; do
+        [[ -z "$_vfinding" ]] && continue
+        _vmcp="$(jq -r '.mcp' <<< "$_vfinding")"
+        _vmsg="$(jq -r '.message' <<< "$_vfinding")"
+        _vremedy="$(jq -r '.remedy // empty' <<< "$_vfinding")"
+        err "${_vmcp}: ${_vmsg}"
+        if [[ -n "$_vremedy" ]]; then
+          printf "      remedy: %s\n" "$_vremedy"
+        fi
+      done < <(jq -c '.findings[] | select(.severity == "block")' <<< "$_verify_json")
+    elif [[ "$_verify_indet_count" -gt 0 ]]; then
+      printf "  %s·%s could not fully verify MCP wiring (%s indeterminate — run 'eidolons mcp verify' for detail; typically a fresh clone with no .mcp.json yet)\n" \
+        "${YELLOW:-}" "${RESET:-}" "$_verify_indet_count"
+    else
+      pass "All locked MCPs verified against .mcp.json (wired matches locked)"
+    fi
+    if [[ "$_verify_warn_count" -gt 0 ]] && [[ "$_verify_block_count" -eq 0 ]]; then
+      printf "  %s·%s %s advisory finding(s) — run 'eidolons mcp verify' for details\n" \
+        "${YELLOW:-}" "${RESET:-}" "$_verify_warn_count"
+    fi
+  fi
+fi
+
 # ─── Check 8: MCP catalogue drift ─────────────────────────────────────────
 # Non-fatal: surfaces MCPs in eidolons.mcp.lock that are behind catalogue stable.
 # Does not increment ERRORS — informational / advisory only.

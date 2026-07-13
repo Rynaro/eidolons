@@ -704,6 +704,13 @@ _mcp_host_is_wired() {
 #       · canonical form unchanged AND not FORCE → skip the swap (no mtime/inode
 #         churn → no harness MCP re-prompt).
 #   - Present invalid JSON → warn + skip (soft-fail, no data loss).
+#
+# R1 (ESL change mcp-verify-lock-vs-artifact): every failure path below now
+# returns non-zero instead of a silent `return 0`. The target file is still
+# never clobbered — the fix is to refuse to LIE about having written it, not
+# to force-write. Callers (the oci-image and binary install drivers) MUST
+# check this return value and MUST NOT call mcp_lock_upsert when it is
+# non-zero: a lock entry is a RECEIPT, not an ORDER.
 # Bash 3.2 compatible.
 _mcp_merge_into_json_file() {
   local rendered="$1"
@@ -717,17 +724,18 @@ _mcp_merge_into_json_file() {
     if printf '%s\n' "$rendered" | jq '.' > "$tmp" 2>/dev/null; then
       mv "$tmp" "$target"
       ok "${name} entry written at ${target}"
+      return 0
     else
       rm -f "$tmp"
       warn "jq failed to normalise ${name} template — skipping ${target} write"
+      return 1
     fi
-    return 0
   fi
 
   if ! jq empty "$target" 2>/dev/null; then
     rm -f "$tmp"
     warn "${target} is not valid JSON — skipping ${name} server registration (manual merge required)"
-    return 0
+    return 1
   fi
 
   if printf '%s\n' "$rendered" \
@@ -753,9 +761,11 @@ _mcp_merge_into_json_file() {
       mv "$tmp" "$target"
       ok "${name} entry merged into ${target}"
     fi
+    return 0
   else
     rm -f "$tmp"
     warn "jq merge failed for ${target} — skipping ${name} server registration"
+    return 1
   fi
 }
 
@@ -987,6 +997,28 @@ _mcp_oci_mcpjson_digest() {
     | head -1
 }
 
+# _mcp_oci_confirm_wired NAME PROJECT_ROOT EXPECTED_DIGEST
+# R2 read-back (ESL change mcp-verify-lock-vs-artifact — the cure): confirm
+# that PROJECT_ROOT/.mcp.json actually wires NAME's image to EXPECTED_DIGEST
+# BEFORE the caller is allowed to assert "installed" by writing the lock. A
+# lock entry is a RECEIPT, not an ORDER — nothing may assert "installed"
+# except the artifact itself.
+#
+# Thin wrapper over _mcp_oci_mcpjson_digest so the install driver's gate and
+# 'eidolons mcp verify's V-OCI-WIRED-MISMATCH check (R4) share ONE code path:
+# if this helper ever rots, installs break loudly (non-zero exit, no lock
+# write) instead of lying quietly (exit 0, lock claims success).
+# Returns 0 when confirmed, 1 otherwise (unreadable/absent/mismatched).
+# Bash 3.2 safe (jq only, via _mcp_oci_mcpjson_digest).
+_mcp_oci_confirm_wired() {
+  local name="$1"
+  local project_root="$2"
+  local expected="$3"
+  local actual
+  actual="$(_mcp_oci_mcpjson_digest "$name" "$project_root")"
+  [ -n "$actual" ] && [ "$actual" = "$expected" ]
+}
+
 # _mcp_oci_render_and_merge NAME PROJECT_ROOT DIGEST TEMPLATE_PATH [FORCE]
 # Internal helper: renders a template with placeholder substitution and
 # jq-merges the resulting server entry into PROJECT_ROOT/.mcp.json.
@@ -1040,13 +1072,21 @@ _mcp_oci_render_and_merge() {
     -e "s|__HOME__|${HOME}|g" \
     "$tmpl")"
 
-  # Write .mcp.json (primary target).
-  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}" "$force"
+  # Write .mcp.json (primary target). R1/R2 (the cure): this is the ONE call
+  # whose failure must be loud — a failed write here means the caller's
+  # subsequent read-back-confirm (R2) MUST fail too, and the lock MUST NOT be
+  # written. Propagate explicitly rather than lean on implicit `set -e`
+  # through the call chain (both hold here, but the explicit form is the
+  # actual contract, not an accident of shell option state).
+  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}" "$force" || return 1
 
-  # Write .cursor/mcp.json when cursor is in hosts.wire (R10).
+  # Write .cursor/mcp.json when cursor is in hosts.wire (R10). Secondary
+  # target: soft-fail — a broken .cursor/mcp.json must not block the primary
+  # .mcp.json write above from being confirmed and locked (`|| true` keeps
+  # this call's own R1 non-zero return from aborting the whole function).
   if _mcp_host_is_wired "cursor" "$project_root"; then
     mkdir -p "${project_root}/.cursor"
-    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor" "$force"
+    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor" "$force" || true
   fi
 
   # Write .codex/config.toml managed section when codex is in hosts.wire (R11).
@@ -1169,11 +1209,30 @@ mcp_driver_oci_image_install() {
       if [ -n "$existing_mcpjson_digest" ] && [ "$existing_mcpjson_digest" = "$digest" ]; then
         info "${name}: .mcp.json digest unchanged (${digest}) — unchanged, skipping render"
       else
-        _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force"
+        _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force" \
+          || { warn "${name}: .mcp.json write failed — the lock will NOT be updated."; return 1; }
       fi
     else
-      _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force"
+      _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force" \
+        || { warn "${name}: .mcp.json write failed — the lock will NOT be updated."; return 1; }
     fi
+  fi
+
+  # ── R2 (the cure, ESL change mcp-verify-lock-vs-artifact): read back
+  # .mcp.json and require the observed wired digest to equal the digest we
+  # intended BEFORE ever asserting "installed" by writing the lock. A lock
+  # entry is a RECEIPT, not an ORDER — nothing may assert "installed" except
+  # the artifact itself. Runs unconditionally (atlas-aci's own script already
+  # gates the same way via `die`, so this is a harmless redundant confirm
+  # there; for the generic path above it is the primary gate). This is axis A
+  # — the SAME comparison 'eidolons mcp verify' makes (V-OCI-WIRED-MISMATCH,
+  # R4) — so if the read-back helper itself ever rots, installs break loudly
+  # (non-zero exit, no lock write) instead of lying quietly. Skipped only when
+  # no digest could be resolved at all (nothing to compare against).
+  if [ -n "$digest" ] && ! _mcp_oci_confirm_wired "$name" "$project_root" "$digest"; then
+    warn "${name}: install did not confirm — ${project_root}/.mcp.json's wired digest does not match the intended ${digest}. The lock was NOT updated."
+    warn "Fix ${project_root}/.mcp.json (or its permissions) and re-run 'eidolons mcp install ${name}@${version}'."
+    return 1
   fi
 
   # Build and upsert lockfile entry.
@@ -1563,7 +1622,9 @@ _mcp_source_harness() {
 #   - If .mcp.json is absent: write a fresh file with the junction entry only.
 #   - If .mcp.json is present and valid JSON: jq-merge so that .mcpServers["junction"]
 #     is added/updated while ALL sibling keys (atlas-aci, etc.) are preserved.
-#   - If .mcp.json is present but NOT valid JSON: warn and do not write (soft-fail).
+#   - If .mcp.json is present but NOT valid JSON: warn, do not write, return
+#     non-zero (R1, ESL change mcp-verify-lock-vs-artifact — the target is
+#     still never clobbered, but the caller MUST NOT treat this as success).
 # Binary-present gate (INV-7): callers MUST only call this when $BIN is non-empty and
 # the binary exists. The die at lib_mcp.sh:743-745 enforces this before reaching here.
 _mcp_binary_merge_mcp_json() {
@@ -1576,19 +1637,21 @@ _mcp_binary_merge_mcp_json() {
   tmpl="${_LIB_MCP_DIR}/../templates/mcp/junction.mcp.json.tmpl"
   if [ ! -f "$tmpl" ]; then
     warn "_mcp_binary_merge_mcp_json: template not found at ${tmpl} — skipping .mcp.json write"
-    return 0
+    return 1
   fi
 
   # Render: substitute __JUNCTION_BIN__ with the resolved binary path (INV-3: sed, no eval).
   rendered="$(sed -e "s|__JUNCTION_BIN__|${bin}|g" "$tmpl")"
 
-  # Write .mcp.json (primary target).
-  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}"
+  # Write .mcp.json (primary target). Propagate failure explicitly (R1/R3) —
+  # the caller's read-back-confirm gate depends on this being loud.
+  _mcp_merge_into_json_file "$rendered" "${project_root}/.mcp.json" "${name}" || return 1
 
-  # Write .cursor/mcp.json when cursor is in hosts.wire (R10).
+  # Write .cursor/mcp.json when cursor is in hosts.wire (R10). Secondary
+  # target: soft-fail so it never blocks the primary .mcp.json confirm+lock.
   if _mcp_host_is_wired "cursor" "$project_root"; then
     mkdir -p "${project_root}/.cursor"
-    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor"
+    _mcp_merge_into_json_file "$rendered" "${project_root}/.cursor/mcp.json" "${name} .cursor" || true
   fi
 
   # Write .codex/config.toml managed section when codex is in hosts.wire (R11).
@@ -1600,6 +1663,29 @@ _mcp_binary_merge_mcp_json() {
   if _mcp_host_is_wired "opencode" "$project_root"; then
     _mcp_merge_into_opencode_json "$rendered" "${project_root}/opencode.json" "${name}"
   fi
+}
+
+# _mcp_binary_confirm_wired NAME PROJECT_ROOT EXPECTED_COMMAND
+# R3 read-back (ESL change mcp-verify-lock-vs-artifact — the cure): confirm
+# that PROJECT_ROOT/.mcp.json actually wires NAME's "command" to
+# EXPECTED_COMMAND BEFORE the caller is allowed to assert "installed" by
+# writing the lock. Mirrors _mcp_oci_confirm_wired's shape so the install
+# driver's gate and 'eidolons mcp verify's V-BIN-WIRED-MISMATCH check (R8)
+# share ONE code path.
+# Returns 0 when confirmed, 1 otherwise (unreadable/absent/mismatched).
+# Bash 3.2 safe (jq only).
+_mcp_binary_confirm_wired() {
+  local name="$1"
+  local project_root="$2"
+  local expected="$3"
+  local mcpjson="${project_root}/.mcp.json"
+
+  [ -f "$mcpjson" ] || return 1
+  jq empty "$mcpjson" 2>/dev/null || return 1
+
+  local actual
+  actual="$(jq -r --arg n "$name" '.mcpServers[$n].command // empty' "$mcpjson" 2>/dev/null)"
+  [ -n "$actual" ] && [ "$actual" = "$expected" ]
 }
 
 # mcp_driver_binary_install NAME VERSION [--force]
@@ -1638,12 +1724,20 @@ mcp_driver_binary_install() {
     fi
     if [ -n "$existing_bin" ] && [ "$force" = "false" ]; then
       ok "junction@${ver} already installed at $existing_bin (use --force to reinstall)"
-      # Still upsert lockfile in case it's missing.
-      _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
       # Idempotent .mcp.json merge: a project fresh-cloned may have the binary
       # cached but no .mcp.json yet — register the bus entry (merge is safe to
       # call repeatedly; jq merge is order-stable and single-entry).
+      #
+      # R3 (the cure): merge THEN read-back-confirm BEFORE the lock write — a
+      # lock entry is a RECEIPT, not an ORDER. Order matters: upserting the
+      # lock first (the old shape) would have already asserted "installed"
+      # before .mcp.json was ever touched on this run.
       _mcp_binary_merge_mcp_json "$name" "$existing_bin" "$(pwd)"
+      if ! _mcp_binary_confirm_wired "$name" "$(pwd)" "$existing_bin"; then
+        warn "${name}: install did not confirm — .mcp.json's wired command does not match ${existing_bin}. The lock was NOT updated."
+        return 1
+      fi
+      _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
       return 0
     fi
     if [ "$force" = "true" ]; then
@@ -1687,11 +1781,19 @@ mcp_driver_binary_install() {
 
   ok "junction@${ver} installed at $bin"
 
-  _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
   # Register the junction MCP server entry in the project .mcp.json (merge,
   # not overwrite — atlas-aci and any sibling keys are preserved). Only called
   # when $bin is confirmed present (binary-present gate INV-7 satisfied above).
+  #
+  # R3 (the cure, ESL change mcp-verify-lock-vs-artifact): merge THEN
+  # read-back-confirm BEFORE mcp_lock_upsert. A lock entry is a RECEIPT, not
+  # an ORDER — nothing may assert "installed" except the artifact itself.
   _mcp_binary_merge_mcp_json "$name" "$bin" "$(pwd)"
+  if ! _mcp_binary_confirm_wired "$name" "$(pwd)" "$bin"; then
+    warn "${name}: install did not confirm — .mcp.json's wired command does not match ${bin}. The lock was NOT updated."
+    return 1
+  fi
+  _mcp_binary_upsert_lock "$name" "$ver" "$cache_dir"
 }
 
 # _mcp_binary_upsert_lock NAME VERSION CACHE_DIR — write/update the lockfile
