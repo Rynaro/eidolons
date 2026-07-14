@@ -197,6 +197,97 @@ _seed_mcp_json_uid() {
 EOF
 }
 
+# ═══════════════════════════════════════════════════════════════════════════
+# Regression coverage: _mcp_driver_oci_uid_bind_probes must honor $name and
+# NOT hardcode "atlas-aci" — the exact defect that let tonberry/atomos report
+# fully green under 'eidolons mcp health'/'eidolons doctor' while their
+# .mcp.json entries carried no --user pin at all (every container write
+# failing with EACCES/EPERM against the UID-1000 workspace bind mount).
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Helper: seed a minimal tonberry MCP lock entry (kind: oci-image, same shape
+# as atlas-aci's, just a different name/image — tonberry is one of the three
+# workspace-binding OCI servers named in the fix).
+_seed_tonberry_lock() {
+  local digest="sha256:55dd2fed08070461e1f3b92c303128a0ae1f3c1b62165fd07d0c327e7b1f94f9"
+  cat > eidolons.mcp.lock <<EOF
+# eidolons.mcp.lock
+generated_at: "2026-05-19T00:00:00Z"
+eidolons_cli_version: "1.3.0"
+catalogue_version: "1.0"
+mcps:
+  - name: tonberry
+    kind: oci-image
+    version: "0.5.2"
+    source:
+      image: "ghcr.io/rynaro/tonberry"
+    integrity:
+      algo: sha256
+      value: "${digest}"
+    hosts_wired:
+      - ".mcp.json"
+    installed_at: "2026-05-19T00:00:00Z"
+EOF
+}
+
+# Helper: write .mcp.json for tonberry with given uid_gid (or omit if empty)
+# and optional bind specs (each as "host:container"). Mirrors _seed_mcp_json_uid
+# but keys the mcpServers entry as "tonberry" instead of "atlas-aci" — this is
+# the shape that exposed the hardcoded-name regression.
+_seed_mcp_json_uid_tonberry() {
+  local uid_gid="$1"
+  shift
+  local digest="sha256:55dd2fed08070461e1f3b92c303128a0ae1f3c1b62165fd07d0c327e7b1f94f9"
+  local args_json
+  args_json='["run","--rm","-i"'
+  if [ -n "$uid_gid" ]; then
+    args_json="${args_json},\"-u\",\"${uid_gid}\""
+  fi
+  for bind_spec in "$@"; do
+    args_json="${args_json},\"-v\",\"${bind_spec}\""
+  done
+  args_json="${args_json},\"ghcr.io/rynaro/tonberry@${digest}\",\"serve\"]"
+  cat > .mcp.json <<EOF
+{
+  "mcpServers": {
+    "tonberry": {
+      "command": "docker",
+      "args": ${args_json}
+    }
+  }
+}
+EOF
+}
+
+@test "mcp health uid-probe: NON-atlas-aci server (tonberry) — no -u flag → mcp_uid_pin warn (regression guard)" {
+  setup_mcp_env
+  _setup_fake_docker_for_uid_probe
+  _seed_tonberry_lock
+  _seed_mcp_json_uid_tonberry ""  # omit -u pair
+
+  run eidolons mcp health tonberry
+  [ "$status" -eq 0 ]  # health always exits 0
+  # Must actually surface a tonberry-scoped probe line — NOT silently skip it
+  # the way the hardcoded-"atlas-aci" defect did for every non-atlas-aci name.
+  echo "$output" | grep -q "^tonberry  mcp_uid_pin.*warn"
+  [[ "$output" =~ "no -u UID:GID pin" ]]
+  [[ "$output" =~ "eidolons mcp install tonberry --force" ]]
+}
+
+@test "mcp health uid-probe: NON-atlas-aci server (tonberry) — matching UID:GID → mcp_uid_pin ok (regression guard)" {
+  setup_mcp_env
+  _setup_fake_docker_for_uid_probe
+  _seed_tonberry_lock
+  cur_uid="$(id -u)"
+  cur_gid="$(id -g)"
+  _seed_mcp_json_uid_tonberry "${cur_uid}:${cur_gid}"
+
+  run eidolons mcp health tonberry
+  [ "$status" -eq 0 ]
+  echo "$output" | grep -q "^tonberry  mcp_uid_pin.*ok"
+  [[ ! "$output" =~ "no -u UID:GID pin" ]]
+}
+
 @test "mcp health uid-probe: matching UID:GID → mcp_uid_pin ok" {
   setup_mcp_env
   _setup_fake_docker_for_uid_probe
@@ -228,7 +319,7 @@ EOF
   [[ "$output" =~ "${cur_uid}:${cur_gid}" ]]
 }
 
-@test "mcp health uid-probe: no -u flag → mcp_uid_pin warn with wire hint" {
+@test "mcp health uid-probe: no -u flag → mcp_uid_pin warn with re-install hint" {
   setup_mcp_env
   _setup_fake_docker_for_uid_probe
   _seed_atlas_aci_lock
@@ -238,7 +329,7 @@ EOF
   [ "$status" -eq 0 ]  # health always exits 0
   echo "$output" | grep -q "mcp_uid_pin.*warn"
   [[ "$output" =~ "no -u UID:GID pin" ]]
-  [[ "$output" =~ "eidolons atlas aci wire" ]]
+  [[ "$output" =~ "eidolons mcp install atlas-aci --force" ]]
 }
 
 @test "mcp health uid-probe: bind path missing → mcp_bind_path_exists err" {

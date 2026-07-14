@@ -357,33 +357,44 @@ else
   fi
 fi
 
-# ─── Check 7b: atlas-aci .mcp.json UID/GID + bind-path sanity ─────────────
+# ─── Check 7b: OCI-server .mcp.json UID/GID + bind-path sanity ────────────
 # Reads .mcp.json directly (not via eidolons.mcp.lock) to surface UID/GID pin
-# and bind-path issues even when atlas-aci is wired as an MCP but the lockfile
-# entry is absent. Requires jq. Silently skips when .mcp.json is absent,
-# malformed, or carries no atlas-aci key (D-T3.6/3.7/3.8 semantics).
+# and bind-path issues even when a server is wired as an MCP but the lockfile
+# entry is absent. Requires jq. Silently skips per-name when .mcp.json is
+# absent, malformed, or carries no key for that name (D-T3.6/3.7/3.8 semantics).
+#
+# Iterates every workspace-binding OCI MCP name (tonberry, atomos, atlas-aci —
+# the three servers that bind-mount the project root read-write and therefore
+# need a --user pin matching the host UID/GID). This used to hardcode a single
+# call to _mcp_driver_oci_uid_bind_probes "atlas-aci", so doctor silently
+# never probed tonberry/atomos even when their .mcp.json entries had no --user
+# pin at all — every write inside those distroless containers was failing
+# while doctor reported green. Keep this list in sync with the OCI templates
+# under cli/templates/mcp/*.mcp.json.tmpl that bind __PROJECT_ROOT__.
 #
 # err probe lines → increment ERRORS (exit non-zero per D-T3.2/3.4/3.5).
 # warn probe lines → print yellow warning without incrementing ERRORS (D-T3.3).
 if command -v jq >/dev/null 2>&1 && [ -f ".mcp.json" ]; then
-  _dt3_probe_output="$(_mcp_driver_oci_uid_bind_probes "atlas-aci" 2>/dev/null || true)"
-  if [ -n "$_dt3_probe_output" ]; then
-    while IFS= read -r _dt3_line; do
-      [ -n "$_dt3_line" ] || continue
-      # Extract the status word (3rd whitespace-separated field).
-      _dt3_status="$(printf '%s' "$_dt3_line" | awk '{print $3}')"
-      # Extract the reason (everything after the first 3 fields).
-      _dt3_reason="$(printf '%s' "$_dt3_line" | awk '{$1=$2=$3=""; sub(/^[[:space:]]+/,""); print}')"
-      case "$_dt3_status" in
-        err)
-          err "atlas-aci: ${_dt3_reason}"
-          ;;
-        warn)
-          printf "  %s·%s atlas-aci: %s\n" "${YELLOW:-}" "${RESET:-}" "$_dt3_reason"
-          ;;
-      esac
-    done <<< "$_dt3_probe_output"
-  fi
+  for _dt3_name in atlas-aci tonberry atomos; do
+    _dt3_probe_output="$(_mcp_driver_oci_uid_bind_probes "$_dt3_name" 2>/dev/null || true)"
+    if [ -n "$_dt3_probe_output" ]; then
+      while IFS= read -r _dt3_line; do
+        [ -n "$_dt3_line" ] || continue
+        # Extract the status word (3rd whitespace-separated field).
+        _dt3_status="$(printf '%s' "$_dt3_line" | awk '{print $3}')"
+        # Extract the reason (everything after the first 3 fields).
+        _dt3_reason="$(printf '%s' "$_dt3_line" | awk '{$1=$2=$3=""; sub(/^[[:space:]]+/,""); print}')"
+        case "$_dt3_status" in
+          err)
+            err "${_dt3_name}: ${_dt3_reason}"
+            ;;
+          warn)
+            printf "  %s·%s %s: %s\n" "${YELLOW:-}" "${RESET:-}" "$_dt3_name" "$_dt3_reason"
+            ;;
+        esac
+      done <<< "$_dt3_probe_output"
+    fi
+  done
 fi
 
 # ─── Check 7c: MCP wiring integrity ───────────────────────────────────────
