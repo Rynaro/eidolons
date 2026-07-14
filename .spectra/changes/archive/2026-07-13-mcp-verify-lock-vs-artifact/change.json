@@ -1,13 +1,14 @@
 {
   "esl_version": "1.1",
   "change_id": "mcp-verify-lock-vs-artifact",
-  "status": "verified",
+  "status": "archived",
   "tier": "full",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": null,
   "drift_checked": true,
+  "archive_path": "archive/2026-07-13-mcp-verify-lock-vs-artifact",
   "has_code": true,
   "memory_preflight": {
     "ran": true,
