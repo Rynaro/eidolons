@@ -1090,3 +1090,64 @@ STUB
   [ "$before_md5" = "$after_md5" ] || return 1
   [ "$before_mtime" = "$after_mtime" ]
 }
+
+# ─── ESL mcp-identity-mount-host-path (#507 / tonberry#8 / atomos#4) ────────
+#
+# Root cause: the tonberry + atomos install templates hard-coded the docker
+# container mount destination to /workspace, but both servers accept
+# project_root as a per-call tool argument. A host caller only knows its own
+# host-absolute path, so the server resolves it inside the container's mount
+# namespace — where the project actually lives at /workspace, not at the
+# host path — producing ENOENT / a silent count:0 (tonberry#8, counterfactually
+# reproduced; inferred identical for atomos#4, same template shape).
+#
+# Fix: identity-mount the host root (-v P:P:z -w P) so the container exposes
+# the project at the SAME absolute path the caller naturally supplies. This
+# test renders both templates through the real install path and asserts the
+# identity-mount shape (AC-1, AC-2, AC-4, AC-5) and the absence of any
+# /workspace token (AC-3, AC-6 — the check that would have caught #507).
+
+_assert_identity_mount_args() {
+  local server="$1"
+  local root="$2"
+
+  run jq -r ".mcpServers.${server}.args | index(\"-v\") as \$i | .[\$i+1]" .mcp.json
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "${root}:${root}:z" ] || return 1
+
+  run jq -r ".mcpServers.${server}.args | index(\"-w\") as \$i | .[\$i+1]" .mcp.json
+  [ "$status" -eq 0 ] || return 1
+  [ "$output" = "$root" ] || return 1
+
+  # Teeth: on the pre-fix template (:/workspace:z + -w /workspace) this jq -e
+  # finds a match and exits 0, so the negation below goes RED.
+  run jq -e ".mcpServers.${server}.args[] | select(type==\"string\" and test(\"/workspace\"))" .mcp.json
+  [ "$status" -ne 0 ] || return 1
+}
+
+@test "#507 AC-1/AC-2/AC-3: tonberry .mcp.json identity-mounts the host root (-v P:P:z, -w P, no /workspace)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+  export EIDOLONS_SKIP_AUTO_ASSESS=1
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" tonberry
+  [ "$status" -eq 0 ]
+  [ -f ".mcp.json" ]
+
+  _assert_identity_mount_args tonberry "$PWD"
+}
+
+@test "#507 AC-4/AC-5/AC-6: atomos .mcp.json identity-mounts the host root (-v P:P:z, -w P, no /workspace)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_docker_for_oci
+  export FAKE_DOCKER_INFO_RESULT=ok
+  export FAKE_DOCKER_INSPECT_RESULT=ok
+
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" atomos
+  [ "$status" -eq 0 ]
+  [ -f ".mcp.json" ]
+
+  _assert_identity_mount_args atomos "$PWD"
+}
