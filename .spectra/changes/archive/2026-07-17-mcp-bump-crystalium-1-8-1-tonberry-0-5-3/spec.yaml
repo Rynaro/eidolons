@@ -1,0 +1,44 @@
+schema: eidolons/change-spec.v1
+change_id: mcp-bump-crystalium-1-8-1-tonberry-0-5-3
+tier: lite
+maker: vivi
+checker: kupo
+target: nexus (roster/mcps.yaml catalogue pins)
+
+problem: >
+  crystalium and tonberry shipped upstream releases the catalogue does not yet pin.
+  crystalium 1.8.1 (commit af24493) fixes a recall crash on cl100k special-token
+  strings inside a stored summary (crystalium#32). tonberry 0.5.3 (commit 80f07ff)
+  adds a C2a failure-detail diagnostic for a non-canonical stage field (tonberry#9),
+  diagnostic-only, no tool/parity change. Under integrity.enforcement: strict,
+  roster/mcps.yaml is what `eidolons verify` checks an installed image against, so
+  the stale pins (1.8.0 / 0.5.2) block every consumer from reaching the new images
+  via `eidolons mcp use <name>@<ver>`.
+
+decision:
+  D1: pin-both-in-one-change                # same catalogue, same day, low-risk data-only bump
+  D2: digest-from-registry-never-scrollback # resolve, then re-verify by reading the file back
+  D3: no-fixture-change                     # no S8-guard exists for crystalium/tonberry;
+                                             # CRYSTALIUM_PINNED is the deliberate S9 drift
+                                             # fixture (tracks 1.2.0) and stays untouched
+
+invariants:
+  - never-copy-a-digest-from-a-release-note
+  - catalogue_version-tracks-shape-not-contents
+  - updated_at-bumped
+  - no-unrelated-working-tree-sweep   # .mcp.json / .gitignore / other untracked edits excluded
+
+files:
+  - roster/mcps.yaml
+  - CHANGELOG.md
+
+verify_items:
+  - AC-1: crystalium releases."1.8.1".digest == registry index digest for ghcr.io/rynaro/crystalium:1.8.1;
+          latest == pins.stable == "1.8.1"
+  - AC-2: tonberry releases."0.5.3".digest == registry index digest for ghcr.io/rynaro/tonberry:0.5.3;
+          latest == pins.stable == "0.5.3"
+  - AC-3: make schema exits 0
+  - AC-4: EIDOLONS_NEXUS="$(pwd)" bash cli/eidolons mcp show crystalium reports 1.8.1;
+          ... mcp show tonberry reports 0.5.3
+  - AC-5: cli/tests/mcp_images.bats stays green, unmodified (no S8-guard exists for
+          crystalium/tonberry; CRYSTALIUM_PINNED's deliberate S9 mismatch is untouched)

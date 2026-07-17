@@ -1,0 +1,134 @@
+# Machine-readable summary — ESL change mcp-identity-mount-host-path
+# Companion to spec.md (the human-readable spec of record; frozen criteria source,
+# SHA febe18599ad67d35924fb548aec7c5f2507ad51b2d5ead051f6ad51eb9b28035).
+# Derived faithfully from spec.md — same scope, same chosen Option-A fix, same
+# scope-out rationale, same ten acceptance checks (here in complete GIVEN/WHEN/THEN
+# EARS form). This file adds no new decisions.
+schema: eidolons/change-spec.v1
+change_id: mcp-identity-mount-host-path
+esl_version: "1.1"
+status: proposed
+tier: full
+maker: vivi
+checker: kupo
+issue: "Rynaro/eidolons#507"
+target: "nexus — MCP wiring templates for tonberry + atomos (docker mount destination)"
+
+rightsize: { computed: lite, final: full, override_reason: "documented competing-approach trade-off (Option A identity-mount vs Option B server-side path translation) routes to full; tier pre-established in change.json", confidence: "92.5 AUTO_PROCEED" }
+
+problem: >
+  The tonberry and atomos MCP wiring templates hard-code the CONTAINER mount
+  destination to /workspace: both render "-v __PROJECT_ROOT__:/workspace:z -w
+  /workspace". __PROJECT_ROOT__ is substituted (in cli/src/lib_mcp.sh,
+  _mcp_oci_render_and_merge, sed, global g) with the HOST-absolute project root.
+  Both tools expose project_root as a PER-CALL tool argument. A host-side caller
+  only knows its own host-absolute path, passes that, and the server resolves it
+  inside the container's mount namespace where the project lives at /workspace,
+  not at the host path -> ENOENT / silent count:0. Counterfactual (tonberry#8):
+  project_root=<host path> -> count 0 (wrong); project_root=/workspace -> count 9
+  (right); omitted -> count 9 (container WorkingDir fallback). Reproduced for
+  tonberry (Rynaro/tonberry#8); inferred identical for atomos (Rynaro/atomos#4,
+  same template shape + same per-call project_root contract).
+
+decision:
+  option_A_identity_mount: "CHOSEN. In BOTH templates change the mount + workdir to identity-map the host path: '-v __PROJECT_ROOT__:__PROJECT_ROOT__:z -w __PROJECT_ROOT__'. After substitution a project at host path P renders '-v P:P:z -w P', so the container exposes the project at the identical absolute path the caller naturally supplies, and the omitted-arg WorkingDir fallback also points at P. No server-side change; no cli/src change (the global __PROJECT_ROOT__ substitution already renders it — atlas-aci already uses __PROJECT_ROOT__ twice)."
+  residual_tradeoff: "ACCEPTED. Identity-mapping exposes the host path structure inside the container (vs /workspace opacity). Accepted because the only opacity-preserving alternative (Option B) is strictly more invasive."
+
+rejected_alternatives:
+  option_B_server_side_translation: "REJECTED — teach the tonberry/atomos servers to translate an incoming host-absolute project_root into the container mount point. Strictly more invasive: two other repos, and the server needs a host<->container mount table it is not given over the MCP transport. Option A is a pure nexus-side template fix, no cross-repo coordination."
+  option_C_document_pass_workspace: "REJECTED — leave templates and tell callers to pass project_root=/workspace. Pushes a container-internal detail onto every host caller, contradicts the natural host-absolute path, and is unenforceable (the silent count:0 failure is one forgotten argument away)."
+
+invariants:
+  - identity-mount-both-templates      # tonberry AND atomos, same two-token edit
+  - no-cli-src-change                  # render path unchanged; __PROJECT_ROOT__ already substituted globally
+  - no-server-side-change              # tonberry/atomos repos untouched by THIS change
+  - atlas-aci-template-immune          # nexus controls BOTH mount + serve --repo /repo; self-consistent
+  - assess-path-immune                 # mcp_driver_oci_image_assess controls BOTH mount + literal /workspace
+  - idempotent-render                  # second install at same digest -> byte-identical .mcp.json
+  - bash-3.2-clean                     # guard: no cli/src edit expected
+  - regression-test-fails-on-old-shape # the RED-on-defect anchor (AC-3/AC-6)
+
+files:
+  - cli/templates/mcp/tonberry.mcp.json.tmpl   # -v/-w identity-mount edit
+  - cli/templates/mcp/atomos.mcp.json.tmpl     # -v/-w identity-mount edit
+  - cli/tests/mcp_install.bats (or a new cli/tests/mcp_mount_identity.bats)  # regression test (AC-1..AC-6, AC-9)
+  - CHANGELOG.md                               # one Unreleased entry
+
+out_of_scope:
+  - id: atlas-aci-template
+    path: cli/templates/mcp/atlas-aci.mcp.json.tmpl
+    reason: "Immune. Launched with 'serve --repo /repo' baked into the same template that owns the __PROJECT_ROOT__:/repo:ro mount; the nexus controls BOTH the mount destination and the literal /repo argument; callers never supply a root. Internally self-consistent. Editing it is scope creep."
+  - id: assess-path
+    path: "cli/src/lib_mcp.sh :: mcp_driver_oci_image_assess (~lines 247-252)"
+    reason: "Immune. Runs 'docker run ... -v ${project_root}:/workspace:ro -w /workspace ... assess /workspace' — the nexus controls both the mount AND the literal /workspace positional argument it passes. Like atlas-aci, self-consistent; no external caller injects a path. Changing it is scope creep with real test-breakage risk (mcp_assess.bats stubs this invocation). No cli/src change is required by this fix at all."
+  - id: server-side-mitigation
+    path: "Rynaro/tonberry, Rynaro/atomos (their own repos)"
+    reason: "No server-side change in THIS change. Any loud-error mitigation (e.g. reject a non-container path) belongs to the upstream repos (tonberry#8 may add one separately) and is independent of the nexus wiring fix."
+
+acceptance_checks:
+  - id: AC-1
+    form: event-driven
+    given: "a project whose resolved host-absolute root is P and the tonberry install template"
+    when: "eidolons mcp install tonberry renders .mcp.json"
+    then: "the docker -v bind value in .mcpServers.tonberry.args equals P:P:z"
+    verify_method: "bats — render tonberry via mcp_install.sh under setup_fake_docker_for_oci; assert jq -r (args|index(\"-v\") as $i|.[$i+1]) == \"$PWD:$PWD:z\""
+  - id: AC-2
+    form: event-driven
+    given: "the rendered tonberry .mcp.json"
+    when: "the -w workdir argument is read"
+    then: "the docker -w value in .mcpServers.tonberry.args equals P (never the literal /workspace)"
+    verify_method: "bats — assert jq -r (args|index(\"-w\") as $i|.[$i+1]) == \"$PWD\" (catches a non-global substitution that left -w literal)"
+  - id: AC-3
+    form: unwanted-behavior
+    given: "the rendered .mcpServers.tonberry.args array"
+    when: "every arg string is scanned"
+    then: "no arg contains the literal token /workspace"
+    verify_method: "bats — ! jq -e (.mcpServers.tonberry.args[]|select(type==\"string\" and test(\"/workspace\"))). Teeth: reverting the template to :/workspace:z + -w /workspace turns this RED (the check that would have caught #507)"
+  - id: AC-4
+    form: event-driven
+    given: "a project whose resolved host-absolute root is P and the atomos install template"
+    when: "eidolons mcp install atomos renders .mcp.json"
+    then: "the docker -v bind value in .mcpServers.atomos.args equals P:P:z"
+    verify_method: "bats — assert jq -r (args|index(\"-v\") as $i|.[$i+1]) == \"$PWD:$PWD:z\""
+  - id: AC-5
+    form: event-driven
+    given: "the rendered atomos .mcp.json"
+    when: "the -w workdir argument is read"
+    then: "the docker -w value in .mcpServers.atomos.args equals P"
+    verify_method: "bats — assert jq -r (args|index(\"-w\") as $i|.[$i+1]) == \"$PWD\""
+  - id: AC-6
+    form: unwanted-behavior
+    given: "the rendered .mcpServers.atomos.args array"
+    when: "every arg string is scanned"
+    then: "no arg contains the literal token /workspace"
+    verify_method: "bats — ! jq -e (.mcpServers.atomos.args[]|select(type==\"string\" and test(\"/workspace\"))). Teeth: the pre-fix atomos template turns this RED"
+  - id: AC-7
+    form: ubiquitous
+    given: "the change has been applied"
+    when: "cli/templates/mcp/atlas-aci.mcp.json.tmpl is inspected and diffed against base"
+    then: "it still binds __PROJECT_ROOT__:/repo:ro and still passes serve --repo /repo, and the atlas-aci template is absent from the change diff"
+    verify_method: "grep — template still contains __PROJECT_ROOT__:/repo:ro and /repo; git diff --name-only base..head does not list the atlas-aci template"
+  - id: AC-8
+    form: ubiquitous
+    given: "the change has been applied"
+    when: "cli/src/lib_mcp.sh is diffed against base"
+    then: "it has zero modified lines (mcp_driver_oci_image_assess still uses ${project_root}:/workspace:ro, -w /workspace, literal assess /workspace)"
+    verify_method: "cmd — git diff --name-only base..head does not list cli/src/lib_mcp.sh; grep confirms the assess -v/-w/positional block byte-identical"
+  - id: AC-9
+    form: event-driven
+    given: "tonberry (or atomos) already installed into a project at a fixed digest"
+    when: "eidolons mcp install <name> runs a second time with the same digest"
+    then: "the resulting .mcp.json is byte-identical to the first run and the existing MCP bats suite stays green"
+    verify_method: "bats — existing MCP suite (mcp_install.bats, mcp_wiring.bats, mcp_assess.bats) stays green; a diff of .mcp.json after two installs is empty (idempotency invariant preserved)"
+  - id: AC-10
+    form: ubiquitous
+    given: "the change touches only the two templates, a bats test, and CHANGELOG (no cli/src/*.sh edit)"
+    when: "make lint runs"
+    then: "shellcheck -x -S error over cli exits 0, bash 3.2 compatibility is preserved, and git diff lists no cli/src/*.sh file"
+    verify_method: "cmd — make lint exits 0; git diff --name-only base..head lists no cli/src/*.sh file (guard, not a code review — the render path is unchanged)"
+
+risks:
+  - { id: R1, sev: P1, risk: "host-path exposure inside the container", mitigation: "accepted trade-off; still --cap-drop ALL --security-opt no-new-privileges; bind unchanged in scope (single project root, :z relabelled)" }
+  - { id: R2, sev: P2, risk: "non-global __PROJECT_ROOT__ substitution regression leaves -w literal", mitigation: "AC-2/AC-5 assert the -w value equals the resolved path, not the placeholder" }
+  - { id: R3, sev: P2, risk: "scope creep into the immune atlas-aci/assess surfaces", mitigation: "AC-7/AC-8 assert those surfaces are unchanged" }
+  - { id: R4, sev: P2, risk: "idempotency / harness re-prompt churn from a malformed edit", mitigation: "AC-9 byte-identical second render + existing _mcp_merge_into_json_file no-op guard" }

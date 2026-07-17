@@ -1,0 +1,49 @@
+{
+  "esl_version": "1.1",
+  "change_id": "mcp-bump-crystalium-1-8-1-tonberry-0-5-3",
+  "status": "archived",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "given": "roster/mcps.yaml crystalium entry",
+      "when": "versions are read",
+      "then": "releases.\"1.8.1\".digest byte-equals the registry index digest for ghcr.io/rynaro/crystalium:1.8.1, and latest == pins.stable == \"1.8.1\"",
+      "verify_method": "ghcr anonymous-token registry API (manifests/1.8.1 Docker-Content-Digest) compared to the value parsed back out of roster/mcps.yaml + yq eval / eidolons mcp show crystalium"
+    },
+    {
+      "id": "AC-2",
+      "given": "roster/mcps.yaml tonberry entry",
+      "when": "versions are read",
+      "then": "releases.\"0.5.3\".digest byte-equals the registry index digest for ghcr.io/rynaro/tonberry:0.5.3, and latest == pins.stable == \"0.5.3\"",
+      "verify_method": "ghcr anonymous-token registry API (manifests/0.5.3 Docker-Content-Digest) compared to the value parsed back out of roster/mcps.yaml + yq eval / eidolons mcp show tonberry"
+    },
+    {
+      "id": "AC-3",
+      "given": "the nexus schema checks",
+      "when": "make schema runs",
+      "then": "it exits 0 (jq empty on schemas/*.json + yq eval on roster/mcps.yaml)",
+      "verify_method": "make schema"
+    },
+    {
+      "id": "AC-4",
+      "given": "the nexus CLI against this checkout",
+      "when": "EIDOLONS_NEXUS=\"$(pwd)\" bash cli/eidolons mcp show crystalium and ... mcp show tonberry run",
+      "then": "they report 1.8.1 / 0.5.3 respectively, with the new digests",
+      "verify_method": "EIDOLONS_NEXUS=\"$(pwd)\" bash cli/eidolons mcp show \u003cname\u003e"
+    },
+    {
+      "id": "AC-5",
+      "given": "cli/tests/mcp_images.bats",
+      "when": "run unmodified",
+      "then": "it stays green — no fixture change, and CRYSTALIUM_PINNED's deliberately-stale S9 drift digest is untouched",
+      "verify_method": "bats cli/tests/mcp_images.bats"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-17-mcp-bump-crystalium-1-8-1-tonberry-0-5-3",
+  "has_code": false
+}

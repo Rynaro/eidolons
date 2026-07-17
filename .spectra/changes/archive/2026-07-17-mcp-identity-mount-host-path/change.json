@@ -1,0 +1,84 @@
+{
+  "esl_version": "1.1",
+  "change_id": "mcp-identity-mount-host-path",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "given": "a project whose resolved host-absolute root is P and the tonberry install template",
+      "when": "eidolons mcp install tonberry renders .mcp.json",
+      "then": "the docker -v bind value in .mcpServers.tonberry.args equals P:P:z",
+      "verify_method": "bats: render tonberry via mcp_install.sh under setup_fake_docker_for_oci; assert jq -r (args|index(\"-v\") as $i|.[$i+1]) == \"$PWD:$PWD:z\""
+    },
+    {
+      "id": "AC-2",
+      "given": "the rendered tonberry .mcp.json",
+      "when": "the -w workdir argument is read",
+      "then": "the docker -w value in .mcpServers.tonberry.args equals P (never the literal /workspace)",
+      "verify_method": "bats: assert jq -r (args|index(\"-w\") as $i|.[$i+1]) == \"$PWD\" (catches non-global substitution)"
+    },
+    {
+      "id": "AC-3",
+      "given": "the rendered .mcpServers.tonberry.args array",
+      "when": "every arg string is scanned",
+      "then": "no arg contains the literal token /workspace",
+      "verify_method": "bats: ! jq -e (.mcpServers.tonberry.args[]|select(type==\"string\" and test(\"/workspace\"))); teeth: reverting template to :/workspace:z turns this RED (the check that would have caught #507)"
+    },
+    {
+      "id": "AC-4",
+      "given": "a project whose resolved host-absolute root is P and the atomos install template",
+      "when": "eidolons mcp install atomos renders .mcp.json",
+      "then": "the docker -v bind value in .mcpServers.atomos.args equals P:P:z",
+      "verify_method": "bats: render atomos via mcp_install.sh; assert jq -r (args|index(\"-v\") as $i|.[$i+1]) == \"$PWD:$PWD:z\""
+    },
+    {
+      "id": "AC-5",
+      "given": "the rendered atomos .mcp.json",
+      "when": "the -w workdir argument is read",
+      "then": "the docker -w value in .mcpServers.atomos.args equals P",
+      "verify_method": "bats: assert jq -r (args|index(\"-w\") as $i|.[$i+1]) == \"$PWD\""
+    },
+    {
+      "id": "AC-6",
+      "given": "the rendered .mcpServers.atomos.args array",
+      "when": "every arg string is scanned",
+      "then": "no arg contains the literal token /workspace",
+      "verify_method": "bats: ! jq -e (.mcpServers.atomos.args[]|select(type==\"string\" and test(\"/workspace\"))); teeth: pre-fix atomos template turns this RED"
+    },
+    {
+      "id": "AC-7",
+      "given": "the change has been applied",
+      "when": "cli/templates/mcp/atlas-aci.mcp.json.tmpl is inspected and diffed against base",
+      "then": "it still binds __PROJECT_ROOT__:/repo:ro and still passes serve --repo /repo, and the atlas-aci template is absent from the change diff",
+      "verify_method": "grep: template still contains __PROJECT_ROOT__:/repo:ro and /repo; git diff --name-only base..head does not list the atlas-aci template"
+    },
+    {
+      "id": "AC-8",
+      "given": "the change has been applied",
+      "when": "cli/src/lib_mcp.sh is diffed against base",
+      "then": "it has zero modified lines (mcp_driver_oci_image_assess still uses ${project_root}:/workspace:ro, -w /workspace, literal assess /workspace)",
+      "verify_method": "cmd: git diff --name-only base..head does not list cli/src/lib_mcp.sh; grep confirms the assess -v/-w/positional block byte-identical"
+    },
+    {
+      "id": "AC-9",
+      "given": "tonberry (or atomos) already installed into a project at a fixed digest",
+      "when": "eidolons mcp install \u003cname\u003e runs a second time with the same digest",
+      "then": "the resulting .mcp.json is byte-identical to the first run and the existing MCP bats suite stays green",
+      "verify_method": "bats: existing MCP suite (mcp_install.bats, mcp_wiring.bats, mcp_assess.bats) stays green; diff of .mcp.json after two installs is empty"
+    },
+    {
+      "id": "AC-10",
+      "given": "the change touches only the two templates, a bats test, and CHANGELOG (no cli/src/*.sh edit)",
+      "when": "make lint runs",
+      "then": "shellcheck -x -S error over cli exits 0, bash 3.2 compatibility is preserved, and git diff lists no cli/src/*.sh file",
+      "verify_method": "cmd: make lint exits 0; git diff --name-only base..head lists no cli/src/*.sh file"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-17-mcp-identity-mount-host-path",
+  "has_code": true
+}
