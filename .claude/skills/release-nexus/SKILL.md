@@ -113,8 +113,8 @@ If that matches, `eidolons verify` and `eidolons upgrade self` will succeed for 
 The nexus runs ESL. A release cut right-sizes to `trivial` (VERSION + CHANGELOG, no spec required):
 
 ```bash
-tb propose --change_id release-nexus-X-Y-Z --maker vivi --checker kupo --has_code false --project_root /workspace
-tb right_size --change_id … --files_touched 2 --rubric_score 1 --tradeoff_present false --project_root /workspace
+tb propose --change_id release-nexus-X-Y-Z --maker vivi --checker kupo --has_code false --project_root "$PWD"
+tb right_size --change_id … --files_touched 2 --rubric_score 1 --tradeoff_present false --project_root "$PWD"
 ```
 
 ## Traps
