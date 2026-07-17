@@ -114,12 +114,12 @@ This repo runs ESL. Open a change before editing (`trivial` routes need no spec)
 
 ```bash
 tb() { docker run --rm -i --user "$(id -u):$(id -g)" \
-  -v "$PWD:/workspace:z" -w /workspace --cap-drop ALL --security-opt no-new-privileges \
+  -v "$PWD:$PWD:z" -w "$PWD" --cap-drop ALL --security-opt no-new-privileges \
   ghcr.io/rynaro/tonberry@sha256:<pinned> "$@"; }
 
 tb propose --change_id mcp-<name>-<ver-dashed> --maker vivi --checker kupo \
-   --has_code true --spec_ref spec.md --project_root /workspace
-tb right_size --change_id … --files_touched 5 --rubric_score 3 --tradeoff_present false --project_root /workspace
+   --has_code true --spec_ref spec.md --project_root "$PWD"
+tb right_size --change_id … --files_touched 5 --rubric_score 3 --tradeoff_present false --project_root "$PWD"
 ```
 
 `has_code: true` — you are editing `cli/tests/*.bats`. Write `spec.md`, thread `acceptance_checks` via `compose_manifest --patch`, then `transition`. A catalogue bump right-sizes to `lite`.
