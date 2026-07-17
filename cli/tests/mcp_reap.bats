@@ -463,6 +463,7 @@ setup_core_safety_scenario() {
 # ─── AC-018: shellcheck-clean ───────────────────────────────────────────────
 
 @test "AC-018: cli/src/mcp_reap.sh is shellcheck-clean under -S error" {
+  command -v shellcheck >/dev/null 2>&1 || skip "shellcheck not on PATH"
   run shellcheck -x -S error "$EIDOLONS_ROOT/cli/src/mcp_reap.sh"
   [ "$status" -eq 0 ]
 }
