@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.13.0] — 2026-07-17 — the reaper never stops the session that runs it
+
 ### Added
 
 - **`eidolons mcp reap [--dry-run] [-y|--yes] [--all] [--project <slug>] [--older-than <dur>] [--json]`** (ESL change `mcp-reap-command`, tier full) — a reaper for stale MCP `docker run --rm -i` containers. `.mcp.json` runs `crystalium`/`tonberry`/`atlas-aci`/`atomos` as stdio containers that live exactly as long as their `docker run` client keeps stdin open; an abandoned Claude Code session (or a daemon-prewarmed spare) never closes it, so its containers never exit and accumulate indefinitely. There was no reaper before this — `eidolons mcp uninstall` only unwires `.mcp.json`, and the nexus had no `docker stop` anywhere. Container identity is label-only (`eidolons.project=<slug>`, bare `eidolons.project` under `--all`); an unlabeled container (e.g. a legacy `atlas-aci` install predating the label) is never a candidate — safe, but invisible to reap, and cleaned up manually. Preview is the default: with neither `--yes` nor `--dry-run`, `reap` lists what it would stop and stops nothing; `--dry-run` is an explicit forced-preview that always wins over a stray `--yes`. Exit 0 on every non-usage outcome (reaped, nothing-to-reap, docker absent, guard indeterminate, or any preview); exit 2 on a usage error (unknown flag, malformed `--older-than`, `--all` combined with `--project`).
