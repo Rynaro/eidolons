@@ -1,7 +1,7 @@
 {
   "esl_version": "1.1",
   "change_id": "mcp-reap-command",
-  "status": "verified",
+  "status": "archived",
   "tier": "full",
   "maker": "vivi",
   "checker": "kupo",
@@ -29,5 +29,6 @@
   ],
   "spec_ref": "spec.md",
   "drift_checked": true,
+  "archive_path": "archive/2026-07-17-mcp-reap-command",
   "has_code": true
 }
