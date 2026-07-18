@@ -34,6 +34,7 @@ Subcommands:
   pull <name>             Pull an oci-image MCP image onto this host (catalogue-pin driven)
   images                  Show image inventory for oci-image MCPs (present/digest/drift)
   verify [<name>]         Verify wired reality (.mcp.json) against locked intent (never repairs)
+  reap                    Stop stale MCP containers (never the current session; preview by default)
 
 Options:
   -h, --help    Show this help
@@ -63,6 +64,7 @@ case "$subcmd" in
   pull)      exec bash "$SELF_DIR/mcp_pull.sh"      "$@" ;;
   images)    exec bash "$SELF_DIR/mcp_images.sh"    "$@" ;;
   verify)    exec bash "$SELF_DIR/mcp_verify.sh"    "$@" ;;
+  reap)      exec bash "$SELF_DIR/mcp_reap.sh"      "$@" ;;
   -h|--help|help)
     usage
     exit 0
@@ -74,7 +76,7 @@ case "$subcmd" in
   *)
     echo "Unknown mcp subcommand: $subcmd" >&2
     echo "" >&2
-    echo "Available subcommands: list show install refresh uninstall upgrade use assess sync health run pull images verify" >&2
+    echo "Available subcommands: list show install refresh uninstall upgrade use assess sync health run pull images verify reap" >&2
     echo "Run 'eidolons mcp --help' for usage." >&2
     exit 2
     ;;
