@@ -1,0 +1,11 @@
+{
+  "esl_version": "1.1",
+  "change_id": "release-nexus-2-13-0",
+  "status": "proposed",
+  "tier": "trivial",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": null,
+  "has_code": false
+}

@@ -1,0 +1,207 @@
+schema: eidolons/change-spec.v1
+change_id: mcp-reap-command
+tier: full
+maker: vivi
+checker: kupo
+target: nexus — new `eidolons mcp reap` subcommand
+
+problem: >
+  Every Claude Code session (and every daemon-prewarmed spare) launches a full set of
+  `docker run --rm -i` MCP stdio containers (crystalium, tonberry, atlas-aci, atomos; junction is
+  a native binary). A `--rm -i` container is auto-removed only on a clean stdin EOF, so containers
+  from live-but-abandoned sessions never exit and pile up. There is no reaper: `mcp uninstall`
+  only unwires `.mcp.json` and the nexus has no `docker stop` anywhere.
+
+decision:
+  selected: B-reap-all-except-current-session
+  scores: { A-orphan-only: 70, B-reap-except-current: 80, C-oldest-surplus: 60 }
+  rejected:
+    - A-orphan-only: strictly safe but a no-op — with `--rm -i` a dead client means the container
+        already auto-removed; the real stale case (live-but-abandoned sessions) is missed.
+    - C-oldest-surplus: unsafe — the current session may not own the newest container of a
+        signature, so "keep newest N" can leave the live session's container reapable.
+    - guard-signature-match-only: safe but over-protects to a no-op; kept only as the ambiguity
+        fallback, not the primary mechanism.
+  safety_default: preview (neither --yes nor --dry-run stops anything); --dry-run overrides --yes.
+
+safety_invariant: >
+  The current session's containers are NEVER passed to `docker stop`. Guard is process-anchored:
+  resolve CURRENT_CLAUDE_PID by walking parents to the ancestor `claude`; the session's MCP
+  `docker run` clients are its direct children (verified live); a per-signature rank-bijection
+  (client start-order == container creation-order) marks the current session's containers PROTECTED;
+  ambiguity/count-mismatch and unresolved-guard both fail safe to protect-all.
+
+cli:
+  verb: eidolons mcp reap
+  flags:
+    - "--dry-run: forced preview; wins over --yes"
+    - "-y|--yes: execute docker stop on the reap set"
+    - "--all: span every eidolons.project slug (mutually exclusive with --project)"
+    - "--project <slug>: restrict to one slug (default: project_slug of cwd)"
+    - "--older-than <dur>: only reap containers older than Ns|Nm|Nh|Nd (default 0)"
+    - "--json: emit eidolons/mcp-reap.v1 object on stdout"
+    - "-h|--help"
+  exit_codes:
+    0: success — reaped | nothing-to-reap | docker-absent | guard-indeterminate | any preview
+    2: usage error — unknown flag | malformed --older-than | --all with --project
+  json_schema: eidolons/mcp-reap.v1
+
+invariants:
+  - never-stop-current-session          # the load-bearing safety invariant (AC-003)
+  - label-only-identity                 # eidolons.project=<slug>; unlabeled is never a candidate
+  - preview-by-default                   # --yes required to stop; --dry-run overrides --yes
+  - docker-absent-exit-0                 # reuse atlas_aci_check_docker_cli/daemon, like mcp_images
+  - guard-indeterminate-protect-all      # fail safe, never fail unsafe
+  - idempotent-second-run                # --rm auto-removes; 2nd run stops nothing
+  - rm-handles-removal                   # docker stop only; no docker rm needed
+  - stdout-json-only                     # human logs to stderr (say/ok/info/warn/die)
+  - bash-3.2-clean                       # no declare -A, no ${var,,}/^^, no mapfile, no &>>
+
+known_gaps:
+  - label-coverage: legacy label-less atlas-aci containers are invisible to reap (safe but
+      incomplete); documented in --help + CHANGELOG, cleaned manually.
+  - ps-portability: hosts without POSIX `ps` yield no snapshot -> guard indeterminate -> protect-all.
+
+files_touched:
+  - path: cli/src/mcp_reap.sh
+    change: new — the reap subcommand (arg parse, guard, filters, docker stop loop, --json)
+  - path: cli/src/mcp.sh
+    change: register — case arm, usage `Subcommands:` line, and the `Available subcommands:` error line
+  - path: cli/tests/mcp_reap.bats
+    change: new — inline fake-docker + fake-ps harness; all acceptance_checks
+  - path: CHANGELOG.md
+    change: edit — `[Unreleased] › Added` entry for `eidolons mcp reap`
+  - path: cli/src/lib_mcp.sh
+    change: conditional — add a shared helper (e.g. container-row parse) ONLY if S1/S3 find real
+            duplication; default is self-contained in mcp_reap.sh (no change)
+
+test_harness:
+  fake_docker: >
+    inline shim on PATH (model cli/tests/mcp_images.bats lines 24-90). Logs every argv line to
+    $DOCKER_LOG; `docker ps` prints a fixtured table; `docker inspect` returns fixtured Created;
+    `docker stop` appends `stop <name>` to the log; `docker info` gated by FAKE_DOCKER_INFO_RESULT.
+  fake_ps: >
+    inline shim on PATH emitting a controlled process table (pid ppid etime args). The reaper is
+    rooted via EIDOLONS_REAP_SELF_PID (test-only seam); CLAUDECODE set/unset selects guard state.
+  requires_real_daemon: false
+
+acceptance_checks:
+  - id: AC-001
+    form: event-driven
+    given: the docker CLI is absent from PATH
+    when: eidolons mcp reap --yes runs
+    then: no `docker stop` line is ever written to the docker log
+    verify: bats AC-001 — remove fake-docker from PATH; assert exit 0; grep -c '^stop' $DOCKER_LOG == 0
+  - id: AC-002
+    form: event-driven
+    given: the docker daemon is unreachable (docker info exits non-zero)
+    when: eidolons mcp reap --yes runs
+    then: the command exits 0 having stopped nothing
+    verify: bats AC-002 — FAKE_DOCKER_INFO_RESULT=fail; assert exit 0; no `stop` line
+  - id: AC-003
+    form: unwanted-behavior
+    core_safety: true
+    given: a session table where CURRENT_CLAUDE_PID owns one crystalium client rank-paired to container cur-crystalium
+    when: eidolons mcp reap --yes runs with other-session containers present
+    then: docker stop is never invoked with cur-crystalium
+    verify: bats AC-003 — assert $DOCKER_LOG has no line `stop cur-crystalium`; every protected name absent from stop lines
+  - id: AC-004
+    form: event-driven
+    given: an other-session container old-crystalium owned by a different claude PID
+    when: eidolons mcp reap --yes runs with the guard active
+    then: docker stop old-crystalium is invoked exactly once
+    verify: bats AC-004 — grep -c '^stop old-crystalium' $DOCKER_LOG == 1
+  - id: AC-005
+    form: state-driven
+    given: reapable other-session containers exist and neither --yes nor --dry-run is passed
+    when: eidolons mcp reap runs
+    then: no `docker stop` line is written to the docker log
+    verify: bats AC-005 — assert exit 0; no `stop` line; output lists the would-reap set
+  - id: AC-006
+    form: unwanted-behavior
+    given: reapable other-session containers exist
+    when: eidolons mcp reap --dry-run --yes runs
+    then: no `docker stop` line is written to the docker log
+    verify: bats AC-006 — assert exit 0; no `stop` line (dry-run overrides --yes)
+  - id: AC-007
+    form: event-driven
+    given: labeled containers exist under two slugs eidolons and other
+    when: eidolons mcp reap --yes --project other runs
+    then: no container labeled eidolons.project=eidolons appears in a stop line
+    verify: bats AC-007 — stop lines reference only other-slug names
+  - id: AC-008
+    form: unwanted-behavior
+    given: an other-session container created 30s ago
+    when: eidolons mcp reap --yes --older-than 10m runs
+    then: that container is not passed to docker stop
+    verify: bats AC-008 — its name absent from stop lines; --json records it skipped reason too-young
+  - id: AC-009
+    form: event-driven
+    given: an other-session container created 2h ago
+    when: eidolons mcp reap --yes --older-than 10m runs
+    then: docker stop is invoked with that container
+    verify: bats AC-009 — its name appears in a stop line
+  - id: AC-010
+    form: event-driven
+    given: any reap invocation with --json
+    when: the command completes
+    then: stdout parses as a JSON object whose .schema equals eidolons/mcp-reap.v1
+    verify: bats AC-010 — jq -e '.schema=="eidolons/mcp-reap.v1" and (.guard.status|type=="string") and (.reap|type=="array") and (.protected|type=="array")'
+  - id: AC-011
+    form: state-driven
+    given: the only labeled containers belong to the current session
+    when: eidolons mcp reap --yes runs
+    then: the command exits 0 having written no `stop` line
+    verify: bats AC-011 — assert exit 0; no `stop` line; --json .reap == []
+  - id: AC-012
+    form: event-driven
+    given: a first reap removed all other-session containers so docker ps now returns only current-session containers
+    when: eidolons mcp reap --yes runs a second time
+    then: no `docker stop` line is written on the second run
+    verify: bats AC-012 — repoint fake docker ps to post-reap set; assert exit 0; no `stop` line
+  - id: AC-013
+    form: unwanted-behavior
+    given: CLAUDECODE is set but the process walk resolves no claude ancestor
+    when: eidolons mcp reap --yes runs with candidates present
+    then: no `docker stop` line is written to the docker log
+    verify: bats AC-013 — fake-ps has no claude row; assert exit 0; no `stop` line; --json .guard.status=="indeterminate"
+  - id: AC-014
+    form: event-driven
+    given: labeled containers exist under slugs eidolons and other, none owned by the current session
+    when: eidolons mcp reap --yes --all runs
+    then: docker stop is invoked with an other-slug container
+    verify: bats AC-014 — a stop line references the other-slug name
+  - id: AC-015
+    form: unwanted-behavior
+    given: a running container that carries no eidolons.project label
+    when: eidolons mcp reap --yes --all runs
+    then: that container is never passed to docker stop
+    verify: bats AC-015 — unlabeled container absent from label-filtered docker ps; name never in a stop line
+  - id: AC-016
+    form: event-driven
+    given: an unknown flag --bogus
+    when: eidolons mcp reap --bogus runs
+    then: the command exits 2
+    verify: bats AC-016 — assert status 2
+  - id: AC-017
+    form: event-driven
+    given: a malformed duration --older-than 5x
+    when: eidolons mcp reap --older-than 5x runs
+    then: the command exits 2
+    verify: bats AC-017 — assert status 2
+  - id: AC-018
+    form: ubiquitous
+    then: cli/src/mcp_reap.sh is shellcheck-clean under the repo error gate
+    verify: shellcheck -x -S error cli/src/mcp_reap.sh exits 0 (mirrors make lint)
+  - id: AC-019
+    form: event-driven
+    given: the mcp sub-dispatcher
+    when: eidolons mcp reap --help runs
+    then: the command exits 0
+    verify: bats AC-019 — assert status 0; grep mcp.sh for `reap` in case arm + usage line + error-list line
+  - id: AC-020
+    form: unwanted-behavior
+    given: a signature whose client-count and container-count disagree (mid-respawn) with a current-session client present
+    when: eidolons mcp reap --yes runs
+    then: none of that signature's containers are passed to docker stop
+    verify: bats AC-020 — fixture a 1-client / 2-container signature partly owned by CURRENT_CLAUDE_PID; none of its names in stop lines

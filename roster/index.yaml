@@ -1358,10 +1358,19 @@ eidolons:
       # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
       signer_workflow: .github/workflows/release.yml
     versions:
-      latest: "1.8.0"
+      latest: "1.8.1"
       pins:
-        stable: "1.8.0"
+        stable: "1.8.1"
       releases:
+        1.8.1:
+          tag: v1.8.1
+          commit: af24493ff235ff1ccbedbeacddb5a445efb326c6
+          tree: 4ec58d6ab123b4493c1af8d92d240fe8fa7adfc0
+          archive_sha256: 7788b4f02cb94edbe6ae0df383039701ee7333797b4213860aed406bcc81c6b2
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
         1.0.0:
           tag: v1.0.0
           commit: 459d2228fb0dfd8b74efa1ec629307487a73ed67
@@ -1625,11 +1634,11 @@ eidolons:
 # after tagging; placeholders here are a bootstrap-window sentinel that
 # nexus_verify_release() detects and skips gracefully.
 nexus:
-  version: "2.11.0"
+  version: "2.13.0"
   versions:
-    latest: "2.11.0"
+    latest: "2.13.0"
     pins:
-      stable: "2.11.0"
+      stable: "2.13.0"
     releases:
       "1.0.0":
         tag: "v1.0.0"
@@ -2049,6 +2058,16 @@ nexus:
         tree: 60d9afb369f3b3652b0a196d0fc2985f08a13daa
         archive_sha256: dad216231a055c8a36adfbbb5a494ca3b906e0873655a1054e4fc0c24499e95c
         released_at: "2026-07-14T01:26:41Z"
+      2.12.0:
+        commit: 4e5200eca3ac59a04b5566bbea02634809bb598c
+        tree: 12b85ef523fb7e42ec9d718cdbdd0497e22dfe50
+        archive_sha256: 77adbda2e9a14f4b11125d25e85fbbf9484c1e01be2849aa4123fc6cd77140f1
+        released_at: "2026-07-17T20:50:30Z"
+      2.13.0:
+        commit: d768704486c7835090afad8ae6b9e60a4ca0c5b3
+        tree: 0dd3839e46780c8e6a7bfb4dcfcd52cd0ff4ec55
+        archive_sha256: 7f6fd213d512b1461601998679b7dedec6a028603a3465acd0c62a28ba6e7444
+        released_at: "2026-07-18T00:20:04Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:

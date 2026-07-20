@@ -7,7 +7,7 @@
 #   wiring_mode: transport — MCP registered in .mcp.json only; never injected
 #   into agent tools: allowlists (e.g. junction, a project-level bus).
 catalogue_version: "1.2"
-updated_at: "2026-07-12"
+updated_at: "2026-07-17"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -162,10 +162,15 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.8.0"
+      latest: "1.8.1"
       pins:
-        stable: "1.8.0"
+        stable: "1.8.1"
       releases:
+        "1.8.1":
+          # Recall no longer crashes on cl100k special-token strings in a stored
+          # summary (crystalium#32). 9 tools (MCP surface unchanged).
+          digest: "sha256:90105b213b2eb9dfdd37cd0b922af8b8b998be9b819b345ffebb2aa1b4b329d8"
+          released_at: "2026-07-17T00:00:00Z"
         "1.8.0":
           # One-shot `ingest` CLI verb (third verb of the out-of-session CLI
           # pairing: recall 1.4.0 -> commit 1.7.0 -> ingest 1.8.0) — parity with
@@ -259,10 +264,15 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/tonberry"
     versions:
-      latest: "0.5.2"
+      latest: "0.5.3"
       pins:
-        stable: "0.5.2"
+        stable: "0.5.3"
       releases:
+        "0.5.3":
+          # C2a failure-detail diagnostic for a non-canonical `stage` field
+          # (tonberry#9); diagnostic-only, no tool/parity change.
+          digest: "sha256:df6ec882ed2b932483b9cb44449b2e2a233d8e71901e9c6307f627df3979be73"
+          released_at: "2026-07-17T00:00:00Z"
         "0.5.2":
           # Container-UID write-failure diagnostic (tonberry#4). New internal/fsdiag
           # ownership detector: when the process euid (distroless-nonroot UID 65532)
