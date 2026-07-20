@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tonberry` and `atomos` had no `--user` pin, so every ESL write failed on any host whose UID is not the distroless image default (65532) — `eidolons esl` was dead on arrival everywhere except that one UID.** All three workspace-binding OCI MCP servers (`tonberry`, `atomos`, `atlas-aci`) bind-mount the project root read-write, but only `atlas-aci`'s template carried a `--user` pin; `tonberry.mcp.json.tmpl` and `atomos.mcp.json.tmpl` did not, so their containers ran as UID 65532 against a workspace owned by the host user (typically 1000) and every write — `mcp__tonberry__propose`, `right_size`, `transition`, `archive`, `compose_manifest` — failed with a bare `mkdir: Permission denied`, no diagnostic. Verified by replaying patched args against the live images: adding `--user "$(id -u):$(id -g)"` makes both handshake and write files owned by the host user. All three templates now render a `--user __UID_GID__` pair, substituted to the invoking host's `id -u:id -g` (never hardcoded) by both OCI render paths (`_mcp_oci_render_and_merge` in `lib_mcp.sh`, used by `tonberry`/`atomos`/`crystalium`; the dedicated sed pass in `mcp_atlas_aci.sh`).
+- **`eidolons doctor`'s UID/GID pin probe silently ignored its own `NAME` argument and always inspected `.mcpServers["atlas-aci"]`, so `doctor` and `mcp health` reported `tonberry`/`atomos` fully green while they had no `--user` pin at all** — this is precisely how the defect above went undetected: the probe existed, but only ever looked at one hardcoded key. `_mcp_driver_oci_uid_bind_probes()` (`lib_mcp.sh`) now keys every jq query off its `$name` parameter, and `doctor`'s Check 7b (`cli/src/doctor.sh`) now iterates all three workspace-binding OCI servers instead of calling the probe once with a literal `"atlas-aci"`. The stale re-wire hint in the resulting warning (`re-run 'eidolons atlas aci wire'` — not a real command) is now `eidolons mcp install <name> --force`, parameterised on whichever server tripped the probe.
+- New coverage: `cli/tests/mcp_uid_pin.bats` (templates render `--user <uid>:<gid>` for all three servers, both merge paths), `cli/tests/doctor.bats` D-T3.9, and `cli/tests/mcp_health.bats`'s "NON-atlas-aci server (tonberry)" cases assert the probe fires on a server other than `atlas-aci` — the exact regression that hid this defect.
+
 ## [2.13.0] — 2026-07-17 — the reaper never stops the session that runs it
 
 ### Added

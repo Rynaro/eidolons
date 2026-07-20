@@ -845,7 +845,7 @@ teardown() {
   # warn does NOT increment ERRORS → exit 0.
   [ "$status" -eq 0 ]
   [[ "$output" =~ "no -u UID:GID pin" ]]
-  [[ "$output" =~ "eidolons atlas aci wire" ]]
+  [[ "$output" =~ "eidolons mcp install atlas-aci --force" ]]
   # Must NOT trigger the "pins --user" error message.
   [[ ! "$output" =~ "pins --user" ]]
 }
@@ -925,12 +925,15 @@ teardown() {
   [[ ! "$output" =~ "is not readable" ]]
 }
 
-# ─── D-T-WIRE: doctor warn references the wire verb ──────────────────────
-# Tracks ATLAS v1.8.0 rename: install → wire. The probe that emits the
-# UID/bind warn hint was migrated to mcp_driver_oci_image_health (see D-T3.3
-# skip note). This test is preserved for spec-traceability and re-enabled
-# when the driver surfaces the eidolons atlas aci wire hint.
-@test "D-T-WIRE: doctor warn references the wire verb" {
+# ─── D-T-WIRE: doctor warn references a real, name-parameterised re-install verb ─
+# Previously asserted the stale hardcoded hint text "eidolons atlas aci wire"
+# (a verb that does not exist as a CLI command). The mcp-uid-pin-all-oci-servers
+# fix replaced it with 'eidolons mcp install <name> --force' — a real command
+# that already exists elsewhere in this CLI (see lib_mcp_wiring.sh, mcp_verify.sh)
+# and is now parameterised on the probed server's own name instead of a literal
+# "atlas-aci". This test is preserved for spec-traceability under its original
+# D-T-WIRE id.
+@test "D-T-WIRE: doctor warn references a real re-install verb, parameterised on the probed name" {
   _dt3_setup_project
   # Omit -u pair so probe fires.
   seed_mcp_json_uid_probe ""
@@ -938,7 +941,7 @@ teardown() {
   run eidolons doctor
   [ "$status" -eq 0 ]
   [[ "$output" =~ "no -u UID:GID pin" ]]
-  [[ "$output" =~ "eidolons atlas aci wire" ]]
+  [[ "$output" =~ "eidolons mcp install atlas-aci --force" ]]
 }
 
 # ─── D-T3.8: mcpServers present but no atlas-aci key → silent skip ───────
@@ -965,6 +968,43 @@ EOF
   [[ ! "$output" =~ "pins --user" ]]
   [[ ! "$output" =~ "does not exist" ]]
   [[ ! "$output" =~ "is not readable" ]]
+}
+
+# ─── D-T3.9: doctor probes a NON-atlas-aci OCI server (regression guard) ──
+# Check 7b previously called _mcp_driver_oci_uid_bind_probes "atlas-aci" with
+# a hardcoded literal, so a .mcp.json entry for tonberry or atomos was NEVER
+# inspected — doctor reported a clean bill of health while those distroless
+# containers had no --user pin and every write against the bind-mounted
+# workspace was failing. This asserts doctor now surfaces the tonberry probe
+# directly from .mcp.json (no eidolons.mcp.lock entry needed — mirrors D-T3.3
+# but keyed on tonberry instead of atlas-aci).
+@test "D-T3.9: .mcp.json tonberry entry without -u flag — doctor warns (was silently skipped pre-fix)" {
+  seed_manifest
+  seed_lock
+  seed_agent_install_manifest atlas
+  mkdir -p .claude/agents
+  echo "---" > .claude/agents/atlas.md
+  cat > .mcp.json <<'EOF'
+{
+  "mcpServers": {
+    "tonberry": {
+      "command": "docker",
+      "args": ["run", "--rm", "-i", "--label", "eidolons.project=x",
+        "-v", "/tmp:/workspace:z", "-w", "/workspace",
+        "ghcr.io/rynaro/tonberry@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "serve"]
+    }
+  }
+}
+EOF
+
+  run eidolons doctor
+  # warn does NOT increment ERRORS → exit 0.
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "no -u UID:GID pin" ]]
+  [[ "$output" =~ "eidolons mcp install tonberry --force" ]]
+  # The line must be scoped to tonberry, not the atlas-aci literal.
+  [[ "$output" =~ "tonberry: no -u UID:GID pin" ]]
 }
 
 # ─── Check 10: Orphaned host-vendor files (Block 5 / B5) ──────────────────

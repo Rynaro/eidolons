@@ -1029,6 +1029,13 @@ _mcp_oci_confirm_wired() {
 #   __PROJECT_ROOT__  → resolved absolute project root path
 #   __PROJECT_SLUG__  → slug derived from basename($PROJECT_ROOT)
 #   __IMAGE_DIGEST__  → OCI digest from catalogue (e.g. sha256:...)
+#   __UID_GID__       → "$(id -u):$(id -g)" of the HOST user running this driver —
+#                       NEVER hardcoded. Distroless OCI images (tonberry, atomos,
+#                       atlas-aci) default to a fixed non-root UID (65532) inside
+#                       the container; without a matching --user pin, every write
+#                       through a bind-mounted workspace fails with EACCES/EPERM
+#                       even though the host directory is owned by the invoking
+#                       user. See templates under cli/templates/mcp/*.mcp.json.tmpl.
 #
 # Merge semantics (idempotent by construction — see INV-1 in _mcp_binary_merge_mcp_json):
 #   - Missing .mcp.json → write fresh file (normalised through jq for canonical form).
@@ -1064,11 +1071,16 @@ _mcp_oci_render_and_merge() {
 
   # Render: substitute all known placeholders via sed (| delimiter — safe for paths).
   # Order: longest/most-specific first to avoid partial matches.
+  # __UID_GID__ is always the HOST user's id -u:id -g — never a hardcoded value —
+  # so the rendered --user pin matches whoever actually runs the driver.
+  local _uid_gid
+  _uid_gid="$(id -u):$(id -g)"
   local rendered
   rendered="$(sed \
     -e "s|__PROJECT_ROOT__|${project_root}|g" \
     -e "s|__PROJECT_SLUG__|${_project_slug}|g" \
     -e "s|__IMAGE_DIGEST__|${digest}|g" \
+    -e "s|__UID_GID__|${_uid_gid}|g" \
     -e "s|__HOME__|${HOME}|g" \
     "$tmpl")"
 
@@ -1424,15 +1436,27 @@ mcp_driver_oci_image_version() {
 
 # _mcp_driver_oci_uid_bind_probes NAME → UID/GID and bind-path probe lines to stdout.
 #
-# Reads .mcp.json in CWD. If absent, malformed, or missing the atlas-aci key,
-# this function silently no-ops (zero output, exit 0). This preserves the
-# D-T3.6/D-T3.7/D-T3.8 semantics.
+# Reads .mcp.json in CWD. If absent, malformed, or NAME is missing / not a
+# docker-command entry with an args array, this function silently no-ops
+# (zero output, exit 0). This preserves the D-T3.6/D-T3.7/D-T3.8 semantics —
+# AND is what keeps this function safe to call generically against every
+# server key found in .mcp.json (see doctor.sh Check 7b): a binary-kind MCP
+# like junction (command != "docker") is a clean no-op, not a false warning.
 #
-# When the atlas-aci entry is found, three probe classes run:
+# IMPORTANT: every jq path below is parameterised on NAME ($1) via --arg n.
+# This function previously hardcoded .mcpServers["atlas-aci"] in all three
+# jq queries below, silently ignoring its own $name argument — so 'eidolons
+# doctor'/'eidolons mcp health' reported tonberry and atomos as fully green
+# while their .mcp.json entries had no --user pin at all (the actual bug:
+# every write inside those distroless containers was failing). Any future
+# edit to this function MUST keep all jq queries keyed off $name — do not
+# reintroduce a literal "atlas-aci" (or any other name) here.
+#
+# For a docker-command NAME with an args array, three probe classes run:
 #
 #   mcp_uid_pin  ok    — -u UID:GID present and matches id -u:id -g
 #   mcp_uid_pin  err   — -u UID:GID present but mismatches current user
-#   mcp_uid_pin  warn  — no -u flag at all (includes the 'eidolons atlas aci wire' hint)
+#   mcp_uid_pin  warn  — no -u flag at all (includes a re-wire hint)
 #
 #   mcp_bind_path_exists     err — a -v host:container arg's host path does not exist
 #   mcp_bind_path_readable   err — host path exists but is not readable
@@ -1455,10 +1479,18 @@ _mcp_driver_oci_uid_bind_probes() {
     return 0
   fi
 
-  # Check that atlas-aci key exists and has an args array.
-  # jq -e exits non-zero when the value is null/false/missing.
-  if ! jq -e '.mcpServers["atlas-aci"].args | arrays' .mcp.json >/dev/null 2>&1; then
-    # Malformed JSON, no mcpServers, or no atlas-aci key — silent skip.
+  # Check that NAME exists, is a docker-command entry, and has an args array.
+  # jq -e exits non-zero when the last output is false/null/missing.
+  # The command=="docker" guard is what makes it safe to call this function
+  # for EVERY key in .mcpServers (not just known OCI-image names): a
+  # binary-kind entry (e.g. junction, command = its own binary path, or a
+  # generic "node"/"npx" stdio server) is a silent skip, not a bogus warn.
+  if ! jq -e --arg n "$name" \
+      '(.mcpServers[$n].command // "") == "docker"
+        and ((.mcpServers[$n].args // null) | type) == "array"' \
+      .mcp.json >/dev/null 2>&1; then
+    # Malformed JSON, no mcpServers, missing/non-docker NAME key, or args not
+    # an array — silent skip.
     return 0
   fi
 
@@ -1467,8 +1499,8 @@ _mcp_driver_oci_uid_bind_probes() {
   # Strategy: to_entries on the args array, select entries whose value is "-u",
   # then return $arr at (key+1) — that's the UID:GID value.
   local _pinned_uid_gid
-  _pinned_uid_gid="$(jq -r '
-    .mcpServers["atlas-aci"].args as $arr
+  _pinned_uid_gid="$(jq -r --arg n "$name" '
+    .mcpServers[$n].args as $arr
     | $arr | to_entries
     | map(select(.value == "-u") | .key + 1)
     | map($arr[.])
@@ -1482,7 +1514,8 @@ _mcp_driver_oci_uid_bind_probes() {
 
   if [ -z "$_pinned_uid_gid" ]; then
     # No -u flag at all.
-    printf '%s  mcp_uid_pin       warn      no -u UID:GID pin in .mcp.json — re-run '"'"'eidolons atlas aci wire'"'"' to rebuild with current UID:GID\n' "$name"
+    printf '%s  mcp_uid_pin       warn      no -u UID:GID pin in .mcp.json — re-run '"'"'eidolons mcp install %s --force'"'"' to rebuild with current UID:GID\n' \
+      "$name" "$name"
   elif [ "$_pinned_uid_gid" = "$_cur_uidgid" ]; then
     printf '%s  mcp_uid_pin       ok\n' "$name"
   else
@@ -1495,8 +1528,8 @@ _mcp_driver_oci_uid_bind_probes() {
   # Strategy: to_entries on args, select entries whose value is "-v",
   # return $arr at (key+1) — that's the host:container bind spec.
   local _bind_specs _bspec _host_path
-  _bind_specs="$(jq -r '
-    .mcpServers["atlas-aci"].args as $arr
+  _bind_specs="$(jq -r --arg n "$name" '
+    .mcpServers[$n].args as $arr
     | $arr | to_entries
     | map(select(.value == "-v") | .key + 1)
     | map($arr[.])

@@ -236,11 +236,17 @@ MCP_JSON="$PROJECT_ROOT/.mcp.json"
 say "Rendering template: $TEMPLATE_FILE"
 
 # Use | as the sed delimiter so absolute paths (which contain /) are safe.
-# Four substitution passes: PROJECT_ROOT, PROJECT_SLUG, IMAGE_DIGEST, HOME.
+# Five substitution passes: PROJECT_ROOT, PROJECT_SLUG, IMAGE_DIGEST, UID_GID, HOME.
+# UID_GID is always the HOST user's id -u:id -g — never hardcoded — so the
+# rendered --user pin matches whoever actually runs this generator. Without it,
+# the distroless atlas-aci image's default UID (65532) cannot write through the
+# bind-mounted .atlas/memex/ directory even though the host owns it.
+UID_GID="$(id -u):$(id -g)"
 _RENDERED="$(sed \
   -e "s|__PROJECT_ROOT__|${PROJECT_ROOT}|g" \
   -e "s|__PROJECT_SLUG__|${PROJECT_SLUG}|g" \
   -e "s|__IMAGE_DIGEST__|${IMAGE_DIGEST}|g" \
+  -e "s|__UID_GID__|${UID_GID}|g" \
   -e "s|__HOME__|${HOME}|g" \
   "$TEMPLATE_FILE")"
 
