@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.14.0] — 2026-07-20 — the container must run as the user who owns the workspace
+
 ### Fixed
 
 - **`tonberry` and `atomos` had no `--user` pin, so every ESL write failed on any host whose UID is not the distroless image default (65532) — `eidolons esl` was dead on arrival everywhere except that one UID.** All three workspace-binding OCI MCP servers (`tonberry`, `atomos`, `atlas-aci`) bind-mount the project root read-write, but only `atlas-aci`'s template carried a `--user` pin; `tonberry.mcp.json.tmpl` and `atomos.mcp.json.tmpl` did not, so their containers ran as UID 65532 against a workspace owned by the host user (typically 1000) and every write — `mcp__tonberry__propose`, `right_size`, `transition`, `archive`, `compose_manifest` — failed with a bare `mkdir: Permission denied`, no diagnostic. Verified by replaying patched args against the live images: adding `--user "$(id -u):$(id -g)"` makes both handshake and write files owned by the host user. All three templates now render a `--user __UID_GID__` pair, substituted to the invoking host's `id -u:id -g` (never hardcoded) by both OCI render paths (`_mcp_oci_render_and_merge` in `lib_mcp.sh`, used by `tonberry`/`atomos`/`crystalium`; the dedicated sed pass in `mcp_atlas_aci.sh`).
