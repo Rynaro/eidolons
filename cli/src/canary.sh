@@ -1037,7 +1037,7 @@ _canary_host_probe() {
         fail_count=$((fail_count + 1))
       else
         local ups_n
-        ups_n="$(jq -r '(.hooks.UserPromptSubmit // []) | map(.hooks[]?.command? // "") | map(select(startswith(".eidolons/harness/"))) | length' .claude/settings.json 2>/dev/null || echo "0")"
+        ups_n="$(harness_ups_anchor_count .claude/settings.json)"
         if [[ "$ups_n" == "0" ]]; then
           _HOST_REASONS="${_HOST_REASONS}.claude/settings.json missing eidolons UserPromptSubmit entry; "
           fail_count=$((fail_count + 1))

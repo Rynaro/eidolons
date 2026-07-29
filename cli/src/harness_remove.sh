@@ -41,6 +41,12 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 
 HARNESS_SHIM_DIR=".eidolons/harness/hooks"
+# The CLAUDE_PROJECT_DIR-anchored command form written by harness_install.sh
+# (claude-code only) — a literal, single-quoted string (mirrors
+# harness_install.sh's HARNESS_SHIM_CMD_DIR). Removal must recognise BOTH
+# this prefix AND the pre-anchor relative prefix below, across every event,
+# or an anchored install is silently orphaned by 'harness remove'.
+HARNESS_SHIM_CMD_DIR='"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks'
 
 usage() {
   cat <<EOF
@@ -123,17 +129,25 @@ if [[ -f "$SETTINGS_JSON" ]]; then
     _has_hooks="$(jq -r 'if has("hooks") then "yes" else "no" end' "$SETTINGS_JSON" 2>/dev/null || echo "no")"
     if [[ "$_has_hooks" == "yes" ]]; then
       _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
-      # Our shim commands match the pattern ".eidolons/harness/hooks/claude-code-*.sh".
-      # jq: for each event array, filter out entries whose nested command matches our path prefix.
-      # An entry is "ours" if any of its hooks[].command starts with HARNESS_SHIM_DIR.
+      # Our shim commands match either the pre-anchor relative prefix
+      # ".eidolons/harness/hooks/claude-code-*.sh" or the CLAUDE_PROJECT_DIR-
+      # anchored prefix '"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks/claude-code-*.sh'
+      # written by harness_install.sh. An entry written under EITHER form must
+      # be removed, across every event (UserPromptSubmit, SessionStart,
+      # PreToolUse, PostToolUse, Stop) — matching only the old prefix would
+      # silently orphan every anchored entry.
+      # jq: for each event array, filter out entries whose nested command matches either prefix.
+      # An entry is "ours" if any of its hooks[].command starts with either prefix.
       _shim_prefix="$HARNESS_SHIM_DIR/"
+      _shim_prefix_anchored="$HARNESS_SHIM_CMD_DIR/"
       _tmp="$(mktemp)"
       jq \
         --arg prefix "$_shim_prefix" \
+        --arg prefix2 "$_shim_prefix_anchored" \
         '
-        # Helper: true if an entry has any hooks[].command starting with $prefix
+        # Helper: true if an entry has any hooks[].command starting with either prefix
         def is_ours(entry):
-          (entry.hooks? // [] | map(.command? // "") | any(startswith($prefix)));
+          (entry.hooks? // [] | map(.command? // "") | any(startswith($prefix) or startswith($prefix2)));
 
         # Filter each event array; delete event key if array becomes empty.
         if has("hooks") then

@@ -325,3 +325,69 @@ WRAPPER
   done
   [ "$_found_row" = "true" ]
 }
+
+# ─── harness-hook-project-dir-anchor: Stop hook $CLAUDE_PROJECT_DIR anchor ────
+#
+# AC-3: the telemetry Stop entry is written in the anchored form. AC-10(f):
+# 'telemetry disable' strips BOTH the anchored and the pre-anchor relative
+# form. The on-disk shim path (eidolons.lock, -f checks) stays relative
+# (AC-8); only the settings.json *command* string is anchored.
+
+_ANCHOR_STOP="\"\$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-Stop.sh"
+
+@test "anchor AC-3: telemetry enable writes the Stop command in the literal \$CLAUDE_PROJECT_DIR-anchored form" {
+  mkdir -p .claude
+  eidolons telemetry enable
+  _cmd="$(jq -r '.hooks.Stop[0].hooks[0].command // empty' .claude/settings.json)"
+  [ "$_cmd" = "$_ANCHOR_STOP" ]
+  # eidolons.lock shim_paths entry stays relative (AC-8).
+  grep -qF '.eidolons/harness/hooks/claude-code-Stop.sh' eidolons.lock
+  ! grep -qF 'CLAUDE_PROJECT_DIR' eidolons.lock
+}
+
+@test "anchor AC-2: telemetry Stop shim carries the CLAUDE_PROJECT_DIR cd guard" {
+  mkdir -p .claude
+  eidolons telemetry enable
+  grep -q 'cd "${CLAUDE_PROJECT_DIR:-\$PWD}"' "$HARNESS_SHIM_DIR/claude-code-Stop.sh"
+}
+
+@test "anchor AC-10f: telemetry disable strips the anchored Stop entry" {
+  mkdir -p .claude
+  eidolons telemetry enable
+  run eidolons telemetry disable
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.Stop // empty' .claude/settings.json
+  [ "$status" -ne 0 ] || [ -z "$output" ]
+}
+
+@test "anchor AC-10f: telemetry disable strips BOTH an old-form AND an anchored Stop entry in one pass" {
+  mkdir -p "$HARNESS_SHIM_DIR" .claude
+  jq -n \
+    --arg oldstop "$HARNESS_SHIM_DIR/claude-code-Stop.sh" \
+    --arg newstop "$_ANCHOR_STOP" \
+    '{"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": $oldstop}]},
+        {"hooks": [{"type": "command", "command": $newstop}]}
+    ]}}' > .claude/settings.json
+
+  run eidolons telemetry disable
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.Stop // empty' .claude/settings.json
+  [ "$status" -ne 0 ] || [ -z "$output" ]
+}
+
+@test "anchor AC-4: telemetry enable over an old-form Stop fixture migrates without duplication" {
+  mkdir -p "$HARNESS_SHIM_DIR" .claude
+  jq -n \
+    --arg oldstop "$HARNESS_SHIM_DIR/claude-code-Stop.sh" \
+    '{"hooks": {"Stop": [
+        {"hooks": [{"type": "command", "command": $oldstop}]}
+    ]}}' > .claude/settings.json
+
+  run eidolons telemetry enable
+  [ "$status" -eq 0 ]
+  _n="$(jq -r '.hooks.Stop | length' .claude/settings.json)"
+  [ "$_n" = "1" ]
+  _cmd="$(jq -r '.hooks.Stop[0].hooks[0].command' .claude/settings.json)"
+  [ "$_cmd" = "$_ANCHOR_STOP" ]
+}

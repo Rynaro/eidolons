@@ -692,6 +692,87 @@ EOF
   [[ "$output" =~ "strict recorded" ]]
 }
 
+# ─── harness-hook-project-dir-anchor: anchored-form D12/canary detection (AC-3/7/10e) ─
+#
+# AC-7: doctor D12 and canary's --host claude-code probe must accept the
+# $CLAUDE_PROJECT_DIR-anchored command form (not just the pre-anchor
+# relative form) — and still fail on a genuinely unwired project. Anchored
+# twin of _can_seed_claude_code_shims_and_settings_ok (fixture at :566-574).
+
+_can_seed_claude_code_shims_and_settings_anchored() {
+  mkdir -p .eidolons/harness/hooks .claude
+  printf '#!/bin/sh\n' > .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  printf '#!/bin/sh\n' > .eidolons/harness/hooks/claude-code-SessionStart.sh
+  chmod +x .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh .eidolons/harness/hooks/claude-code-SessionStart.sh
+  cat > .claude/settings.json <<'EOF'
+{"hooks":{"UserPromptSubmit":[{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"\"$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-SessionStart.sh"}]}]}}
+EOF
+}
+
+@test "anchor CAN-A1: --host PASS — claude-code backed by the anchored-form settings.json (AC-10e)" {
+  _can_seed_lock_harness_claude_codex_wired
+  _can_seed_claude_code_shims_and_settings_anchored
+  run eidolons canary --host claude-code
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "PASS" ]]
+}
+
+@test "anchor CAN-A2: doctor D12 PASSes on a project wired with the anchored form" {
+  seed_manifest
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-04-21T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+  _can_seed_claude_code_shims_and_settings_anchored
+  run eidolons doctor --deep
+  [[ "$output" =~ "D12" ]]
+  ! [[ "$output" =~ "missing eidolons UserPromptSubmit entry" ]]
+}
+
+@test "anchor CAN-A3: gate-integrity — the pre-fix D12/canary predicate returns 0 against the anchored fixture (AC-7 negative proof)" {
+  _can_seed_claude_code_shims_and_settings_anchored
+  # The EXACT pre-fix predicate (hand-rolled here, not calling
+  # harness_ups_anchor_count) — proves the OLD detection surface would have
+  # wrongly reported "missing" on a correctly-anchored project. A detection
+  # surface that cannot go red on the defect it names is not a gate.
+  _old_count="$(jq -r '(.hooks.UserPromptSubmit // []) | map(.hooks[]?.command? // "") | map(select(startswith(".eidolons/harness/"))) | length' .claude/settings.json)"
+  [ "$_old_count" = "0" ]
+
+  # The FIXED shared helper (harness_ups_anchor_count, lib.sh) must find it.
+  run bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh' >/dev/null 2>&1
+    harness_ups_anchor_count .claude/settings.json
+  "
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+}
+
+@test "anchor CAN-A4: --host FAIL still fires on a genuinely unwired project (predicate not vacuously true)" {
+  _can_seed_lock_harness_claude_codex_wired
+  mkdir -p .claude
+  printf '{"hooks":{}}\n' > .claude/settings.json
+  run eidolons canary --host claude-code
+  [ "$status" -eq 1 ]
+  [[ "$output" =~ "FAIL" ]]
+  [[ "$output" =~ "missing eidolons UserPromptSubmit entry" ]]
+}
+
 # ─── CAN-30..CAN-33: --memory round trip (crystalium >= 1.7 `commit` verb) ────
 #
 # The fake docker below dispatches on the REPLACEMENT verb embedded by

@@ -1131,8 +1131,14 @@ fi
 if [[ "$sub" == "enable" || "$sub" == "disable" ]]; then
 
   HARNESS_SHIM_DIR=".eidolons/harness/hooks"
+  # The CLAUDE_PROJECT_DIR-anchored command form (mirrors harness_install.sh's
+  # HARNESS_SHIM_CMD_DIR — a literal, single-quoted, never-expanded string).
+  HARNESS_SHIM_CMD_DIR='"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks'
   _tel_stop_shim="${HARNESS_SHIM_DIR}/claude-code-Stop.sh"
-  _tel_stop_cmd="$(cd "$(pwd)" && printf '%s/%s' "$HARNESS_SHIM_DIR" "claude-code-Stop.sh")"
+  # settings.json command: anchored form (AC-1/AC-3). The on-disk shim path
+  # and eidolons.lock shim_paths value stay relative ($_tel_stop_shim, AC-8).
+  _tel_stop_cmd="${HARNESS_SHIM_CMD_DIR}/claude-code-Stop.sh"
+  _tel_stop_cmd_old="$_tel_stop_shim"
   SETTINGS_JSON=".claude/settings.json"
 
   # ── enable ───────────────────────────────────────────────────────────────
@@ -1147,10 +1153,15 @@ if [[ "$sub" == "enable" || "$sub" == "disable" ]]; then
     # ── 1. Write the zero-logic Stop shim (mirrors UPS shim §4.1) ──────────
     mkdir -p "$HARNESS_SHIM_DIR"
 
-    # Only write (or overwrite) if the shim does not already contain our marker.
+    # Only write (or overwrite) if the shim does not already contain our
+    # marker AND the second-order CLAUDE_PROJECT_DIR cd guard (a pre-existing
+    # shim from before this fix has the marker but not the guard, and must be
+    # migrated so its cwd resolves at the project root — the anchored
+    # settings.json command alone fixes the ENOENT, not the fail-open).
     _shim_needs_write=true
     if [[ -f "$_tel_stop_shim" ]]; then
-      if grep -q 'telemetry capture --hook STOP_claude-code --stdin' "$_tel_stop_shim" 2>/dev/null; then
+      if grep -q 'telemetry capture --hook STOP_claude-code --stdin' "$_tel_stop_shim" 2>/dev/null \
+        && grep -q 'CLAUDE_PROJECT_DIR' "$_tel_stop_shim" 2>/dev/null; then
         _shim_needs_write=false
       fi
     fi
@@ -1162,6 +1173,8 @@ if [[ "$sub" == "enable" || "$sub" == "disable" ]]; then
 # ZERO LOGIC: cat stdin → exec telemetry capture. No parsing. No decisions.
 # FAIL-OPEN: any error → exit 0.
 set -euo pipefail
+
+cd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0
 
 _eidolons_bin() {
   if command -v eidolons >/dev/null 2>&1; then
@@ -1203,10 +1216,15 @@ SHIM
         _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
         _merged="$(jq \
           --arg stop "$_tel_stop_cmd" \
+          --arg stopold "$_tel_stop_cmd_old" \
           '
-          # Append Stop entry only if command not already present.
+          # Migrate (drop) any old-form entry, then append the anchored entry
+          # only if not already present (AC-4: zero old-form entries, no dupes).
           .hooks.Stop = (
-            (.hooks.Stop // []) as $arr |
+            (
+              (.hooks.Stop // [])
+              | map(select(((.hooks // []) | map(.command? // "") | any(. == $stopold)) | not))
+            ) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $stop)) then $arr
             else $arr + [{"hooks": [{"type": "command", "command": $stop}]}]
             end
@@ -1283,15 +1301,19 @@ SHIM
         warn "$SETTINGS_JSON is not valid JSON — skipping Stop hook removal"
       else
         _existing_canonical="$(jq -cS . "$SETTINGS_JSON" 2>/dev/null || echo "")"
+        # Strip BOTH the anchored form and the pre-anchor relative form — an
+        # unfixed project may still carry the old-form entry, and disable
+        # must remove it too (AC-6).
         _cleaned="$(jq \
           --arg stop "$_tel_stop_cmd" \
+          --arg stopold "$_tel_stop_cmd_old" \
           '
           if (.hooks.Stop // []) == [] then .
           else
             .hooks.Stop = (
               (.hooks.Stop // [])
               | map(select(
-                  (.hooks // [] | map(.command // "") | any(. == $stop)) | not
+                  (.hooks // [] | map(.command // "") | any(. == $stop or . == $stopold)) | not
                 ))
             ) |
             # Remove the Stop key entirely if the array is now empty.
