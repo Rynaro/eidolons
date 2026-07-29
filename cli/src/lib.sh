@@ -2234,6 +2234,25 @@ deep_check_host_tier_gate() {
   esac
 }
 
+# harness_ups_anchor_count SETTINGS_JSON
+# Counts .hooks.UserPromptSubmit entries whose command starts with either the
+# legacy relative shim prefix (.eidolons/harness/) or the CLAUDE_PROJECT_DIR-
+# anchored prefix ('"$CLAUDE_PROJECT_DIR"/.eidolons/harness/) written by
+# harness_install.sh (claude-code). Single source of truth for the D12
+# doctor check below AND canary.sh's claude-code host probe, so the two
+# detection surfaces can never drift apart the way they did before this fix
+# (the anchor migration bug was exactly two copies of the same jq predicate
+# going stale independently).
+harness_ups_anchor_count() {
+  local settings_json="$1"
+  jq -r '
+    (.hooks.UserPromptSubmit // [])
+    | map(.hooks[]?.command? // "")
+    | map(select(startswith(".eidolons/harness/") or startswith("\"$CLAUDE_PROJECT_DIR\"/.eidolons/harness/")))
+    | length
+  ' "$settings_json" 2>/dev/null || echo "0"
+}
+
 #
 # D12: harness lock⇄files consistency (R22, P3)
 # Project-level gate: verifies that the lockfile's harness: claims match
@@ -2287,7 +2306,7 @@ deep_check_harness_consistency() {
       rc=$((rc + 1))
     else
       local _ups_check
-      _ups_check="$(jq -r '(.hooks.UserPromptSubmit // []) | map(.hooks[]?.command? // "") | map(select(startswith(".eidolons/harness/"))) | length' "$settings_json" 2>/dev/null || echo "0")"
+      _ups_check="$(harness_ups_anchor_count "$settings_json")"
       if [[ "$_ups_check" == "0" ]]; then
         err "D12 .claude/settings.json missing eidolons UserPromptSubmit entry"
         rc=$((rc + 1))

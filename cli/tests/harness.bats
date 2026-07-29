@@ -3114,3 +3114,285 @@ EOF
   run grep -Ein "on by default|default: on|default is on|enabled by default" "$EIDOLONS_ROOT/README.md"
   [ "$status" -eq 0 ]
 }
+
+# ─── harness-hook-project-dir-anchor: $CLAUDE_PROJECT_DIR anchor (AC-1/2/4/5/6) ─
+#
+# claude-code execs hook commands via `/bin/sh -c` from the session's shell
+# cwd, not the project root — a session parked in a subdirectory got
+# exit-127 ENOENT on every hook firing. Fix: anchor the settings.json
+# *command* to $CLAUDE_PROJECT_DIR (literal, unexpanded) AND cd the shim
+# into it before invoking the kernel (second-order cwd fix — else
+# eidolons.yaml stays unreachable and run --hook silently fail-opens).
+
+_ANCHOR_UPS="\"\$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"
+_ANCHOR_SS="\"\$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-SessionStart.sh"
+
+# AC-1: fresh install writes the literal anchored command, byte-identical,
+# with $CLAUDE_PROJECT_DIR unexpanded in the file.
+@test "anchor AC-1: fresh install writes the literal \$CLAUDE_PROJECT_DIR-anchored command" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  _ups_cmd="$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' .claude/settings.json)"
+  _ss_cmd="$(jq -r '.hooks.SessionStart[0].hooks[0].command' .claude/settings.json)"
+  [ "$_ups_cmd" = "$_ANCHOR_UPS" ]
+  [ "$_ss_cmd" = "$_ANCHOR_SS" ]
+  # $CLAUDE_PROJECT_DIR must appear unexpanded (literal $-sign, JSON-escaped
+  # quotes) in the raw file — never substituted to an actual path.
+  grep -qF '\"$CLAUDE_PROJECT_DIR\"' .claude/settings.json
+}
+
+# AC-8: eidolons.lock's harness.shim_paths[] stays relative even though the
+# settings.json command is anchored — the on-disk write path/lock value are
+# untouched by this change.
+@test "anchor AC-8: eidolons.lock shim_paths stay relative after an anchored install" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  grep -qF '.eidolons/harness/hooks/claude-code-UserPromptSubmit.sh' eidolons.lock
+  grep -qF '.eidolons/harness/hooks/claude-code-SessionStart.sh' eidolons.lock
+  ! grep -qF 'CLAUDE_PROJECT_DIR' eidolons.lock
+}
+
+# AC-1 (--strict): PreToolUse also anchored.
+@test "anchor AC-1: --strict PreToolUse command is also anchored" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive --strict
+  [ "$status" -eq 0 ]
+  _ptu_cmd="$(jq -r '.hooks.PreToolUse[0].hooks[0].command' .claude/settings.json)"
+  [ "$_ptu_cmd" = "\"\$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-PreToolUse.sh" ]
+}
+
+# AC-2: the shim resolves and reaches the kernel at the project root when
+# invoked from a subdirectory with CLAUDE_PROJECT_DIR set; fail-open (exit 0,
+# no output) when CLAUDE_PROJECT_DIR points at an invalid path.
+@test "anchor AC-2: cwd-drift — shim invoked from a subdir with CLAUDE_PROJECT_DIR set reaches the kernel" {
+  seed_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  local project_root="$PWD"
+  local shim="${project_root}/.eidolons/harness/hooks/claude-code-SessionStart.sh"
+  mkdir -p "subdir/nested"
+  # Fake eidolons on PATH delegating to the checkout binary.
+  local fake_bin="$BATS_TEST_TMPDIR/anchor-fake-bin"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/eidolons" <<WRAPPER
+#!/usr/bin/env bash
+export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+exec bash "$EIDOLONS_BIN" "\$@"
+WRAPPER
+  chmod +x "$fake_bin/eidolons"
+
+  run env PATH="$fake_bin:$PATH" CLAUDE_PROJECT_DIR="$project_root" \
+    bash -c "cd '${project_root}/subdir/nested' && '$shim'"
+  [ "$status" -eq 0 ]
+  # Reached the kernel at the project root: additionalContext carries the cortex.
+  [ -n "$output" ]
+  _ctx="$(printf '%s' "$output" | jq -r '.hookSpecificOutput.additionalContext' 2>/dev/null || echo "")"
+  [[ "$_ctx" =~ "Roster Index" ]]
+}
+
+@test "anchor AC-2: fail-open — invalid CLAUDE_PROJECT_DIR exits 0 with empty stdout" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  local shim="$PWD/.eidolons/harness/hooks/claude-code-SessionStart.sh"
+  run env CLAUDE_PROJECT_DIR="/no/such/path/anywhere" bash -c "'$shim'"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+# AC-4/AC-5: re-install over an old-form fixture migrates without duplication
+# and is a no-op on a second run (mirrors harness.bats:178-206's stale-matcher
+# fixture and sync.bats:1999-2004's old-form SessionStart fixture).
+@test "anchor AC-4: --force over an old-form UPS/SessionStart fixture migrates, no duplicates" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude .eidolons/harness/hooks
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]}
+    ],
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  run eidolons harness install --hosts claude-code --non-interactive --force
+  [ "$status" -eq 0 ]
+
+  # Anchored entry present, exactly one, matcher healed.
+  _ups_n="$(jq -r '[.hooks.UserPromptSubmit[] | select(.hooks[0].command == $ups)] | length' --arg ups "$_ANCHOR_UPS" .claude/settings.json)"
+  [ "$_ups_n" = "1" ]
+  _ss_n="$(jq -r '[.hooks.SessionStart[] | select(.hooks[0].command == $ss)] | length' --arg ss "$_ANCHOR_SS" .claude/settings.json)"
+  [ "$_ss_n" = "1" ]
+  _ss_matcher="$(jq -r '.hooks.SessionStart[0].matcher' .claude/settings.json)"
+  [ "$_ss_matcher" = "startup|resume|clear|compact" ]
+
+  # Zero old-form entries survive.
+  _ups_old_n="$(jq -r '[.hooks.UserPromptSubmit[] | select(.hooks[0].command == ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh")] | length' .claude/settings.json)"
+  [ "$_ups_old_n" = "0" ]
+  _ss_old_n="$(jq -r '[.hooks.SessionStart[] | select(.hooks[0].command == ".eidolons/harness/hooks/claude-code-SessionStart.sh")] | length' .claude/settings.json)"
+  [ "$_ss_old_n" = "0" ]
+
+  # Overall array length is exactly one each (no stray duplicate pair).
+  _ups_total="$(jq -r '.hooks.UserPromptSubmit | length' .claude/settings.json)"
+  [ "$_ups_total" = "1" ]
+  _ss_total="$(jq -r '.hooks.SessionStart | length' .claude/settings.json)"
+  [ "$_ss_total" = "1" ]
+}
+
+@test "anchor AC-5: second --force run over a migrated fixture is byte-identical (idempotent)" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude .eidolons/harness/hooks
+  cat > .claude/settings.json <<'JSON'
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]}
+    ],
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ]
+  }
+}
+JSON
+  run eidolons harness install --hosts claude-code --non-interactive --force
+  [ "$status" -eq 0 ]
+  _after_migrate="$(jq -cS . .claude/settings.json)"
+  run eidolons harness install --hosts claude-code --non-interactive --force
+  [ "$status" -eq 0 ]
+  _after_second="$(jq -cS . .claude/settings.json)"
+  [ "$_after_migrate" = "$_after_second" ]
+  [[ "$output" =~ "no-op" ]]
+}
+
+# AC-6: harness remove strips BOTH the anchored form and the old relative
+# form, across every event, with empty-key cleanup and non-eidolons
+# preservation intact.
+@test "anchor AC-6: harness remove strips anchored form" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  _ups_cmd="$(jq -r '.hooks.UserPromptSubmit[0].hooks[0].command' .claude/settings.json)"
+  [ "$_ups_cmd" = "$_ANCHOR_UPS" ]
+
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  _has_hooks="$(jq -r 'has("hooks")' .claude/settings.json)"
+  [ "$_has_hooks" = "false" ]
+}
+
+@test "anchor AC-6: harness remove strips BOTH anchored and old-form entries in one pass, siblings preserved" {
+  seed_manifest
+  seed_lock
+  mkdir -p .claude .eidolons/harness/hooks
+  cat > .claude/settings.json <<'JSON'
+{
+  "permissions": {"allow": ["Bash(*)"]},
+  "hooks": {
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]},
+      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-UserPromptSubmit.sh"}]},
+      {"hooks": [{"type": "command", "command": "/usr/local/bin/other-ups.sh"}]}
+    ],
+    "SessionStart": [
+      {"matcher": "startup", "hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}
+    ],
+    "PostToolUse": [
+      {"hooks": [{"type": "command", "command": "\"$CLAUDE_PROJECT_DIR\"/.eidolons/harness/hooks/claude-code-PostToolUse.sh"}]}
+    ],
+    "Stop": [
+      {"hooks": [{"type": "command", "command": ".eidolons/harness/hooks/claude-code-Stop.sh"}]}
+    ]
+  }
+}
+JSON
+  # Fake harness lock so 'harness remove' proceeds (schema present).
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-07-01T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members: []
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+
+  # Foreign entry survives byte-identically.
+  _foreign="$(jq -r '.hooks.UserPromptSubmit // [] | map(select(.hooks[0].command == "/usr/local/bin/other-ups.sh")) | length' .claude/settings.json)"
+  [ "$_foreign" = "1" ]
+  # permissions block survives.
+  run jq -e '.permissions.allow[0] == "Bash(*)"' .claude/settings.json
+  [ "$status" -eq 0 ]
+
+  # Every eidolons entry (old-form and anchored) is gone from every event.
+  _ups_left="$(jq -r '(.hooks.UserPromptSubmit // []) | map(select(.hooks[0].command | test("\\.eidolons/harness/hooks"))) | length' .claude/settings.json)"
+  [ "$_ups_left" = "0" ]
+  run jq -e 'has("hooks") and (.hooks | has("SessionStart"))' .claude/settings.json
+  [ "$status" -ne 0 ] || [ "$output" = "false" ]
+  run jq -e 'has("hooks") and (.hooks | has("PostToolUse"))' .claude/settings.json
+  [ "$status" -ne 0 ] || [ "$output" = "false" ]
+  run jq -e 'has("hooks") and (.hooks | has("Stop"))' .claude/settings.json
+  [ "$status" -ne 0 ] || [ "$output" = "false" ]
+}
+
+# AC-2 (shim body): claude-code shims contain the cd guard; non-claude-code
+# shims (codex) do NOT — the second-order fix and its scope boundary.
+@test "anchor: claude-code shims contain the CLAUDE_PROJECT_DIR cd guard" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  grep -q 'cd "${CLAUDE_PROJECT_DIR:-\$PWD}"' .eidolons/harness/hooks/claude-code-UserPromptSubmit.sh
+  grep -q 'cd "${CLAUDE_PROJECT_DIR:-\$PWD}"' .eidolons/harness/hooks/claude-code-SessionStart.sh
+}
+
+@test "anchor: codex shims do NOT contain the cd guard (out of scope, no CLAUDE_PROJECT_DIR equivalent)" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts codex --non-interactive
+  [ "$status" -eq 0 ]
+  run grep -q 'CLAUDE_PROJECT_DIR' .eidolons/harness/hooks/codex-UserPromptSubmit.sh
+  [ "$status" -ne 0 ]
+  run grep -q 'CLAUDE_PROJECT_DIR' .eidolons/harness/hooks/codex-SessionStart.sh
+  [ "$status" -ne 0 ]
+}
+
+# AC-9: non-claude-code host surfaces are byte-identical to pre-change output
+# — $CLAUDE_PROJECT_DIR must never appear in them.
+@test "anchor AC-9: codex .codex/hooks.json never carries \$CLAUDE_PROJECT_DIR" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts codex --non-interactive
+  [ "$status" -eq 0 ]
+  run grep -q 'CLAUDE_PROJECT_DIR' .codex/hooks.json
+  [ "$status" -ne 0 ]
+}
+
+@test "anchor AC-9: copilot .github/hooks/eidolons.json never carries \$CLAUDE_PROJECT_DIR" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  run grep -q 'CLAUDE_PROJECT_DIR' .github/hooks/eidolons.json
+  [ "$status" -ne 0 ]
+}

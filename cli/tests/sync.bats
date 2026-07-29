@@ -2017,3 +2017,51 @@ JSON
   _m2="$(jq -r '.hooks.SessionStart[0].matcher' .claude/settings.json)"
   [ "$_m2" = "startup" ]
 }
+
+# harness-hook-project-dir-anchor AC-4: the SAME --refresh-shims-only heal
+# path (called by 'eidolons sync') migrates the SessionStart *command* from
+# the pre-anchor relative form to the $CLAUDE_PROJECT_DIR-anchored form —
+# not just the matcher. --no-heal leaves the command untouched too.
+@test "sync refresh path: heal migrates the old-form command to the anchored form; --no-heal leaves it" {
+  seed_manifest
+  cat > eidolons.lock <<'EOF'
+generated_at: "2026-06-15T00:00:00Z"
+eidolons_cli_version: "1.0.0"
+nexus_commit: "test"
+members:
+  - name: atlas
+    version: "1.0.0"
+    resolved: "github:Rynaro/ATLAS@test"
+    target: "./.eidolons/atlas"
+    hosts_wired: ["claude-code"]
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+EOF
+  mkdir -p .claude .eidolons/harness/hooks
+  _seed_stale_old_form() {
+    cat > .claude/settings.json <<'JSON'
+{"hooks":{"SessionStart":[{"matcher":"startup","hooks":[{"type":"command","command":".eidolons/harness/hooks/claude-code-SessionStart.sh"}]}]}}
+JSON
+  }
+  _anchor='"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks/claude-code-SessionStart.sh'
+
+  # Default (heal on) — command migrates to the anchored form, matcher heals.
+  _seed_stale_old_form
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only
+  [ "$status" -eq 0 ]
+  _cmd="$(jq -r '.hooks.SessionStart[0].hooks[0].command' .claude/settings.json)"
+  [ "$_cmd" = "$_anchor" ]
+  _n="$(jq -r '.hooks.SessionStart | length' .claude/settings.json)"
+  [ "$_n" = "1" ]
+
+  # --no-heal — command (and matcher) untouched.
+  _seed_stale_old_form
+  run bash "$EIDOLONS_ROOT/cli/src/harness_install.sh" --refresh-shims-only --no-heal
+  [ "$status" -eq 0 ]
+  _cmd2="$(jq -r '.hooks.SessionStart[0].hooks[0].command' .claude/settings.json)"
+  [ "$_cmd2" = ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
+}

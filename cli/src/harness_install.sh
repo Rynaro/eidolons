@@ -25,6 +25,16 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 HARNESS_SHIM_DIR=".eidolons/harness/hooks"
 
+# HARNESS_SHIM_CMD_DIR — the *command* form written into claude-code's
+# .claude/settings.json (claude-code only). Claude Code execs hook commands
+# via `/bin/sh -c` from the session's shell cwd, not the project root, so a
+# session parked in a subdirectory got exit-127 ENOENT on every hook firing.
+# This is a literal, single-quoted string — NEVER expanded at install time —
+# so $CLAUDE_PROJECT_DIR lands unexpanded in settings.json and Claude Code
+# resolves it itself when it execs the hook. HARNESS_SHIM_DIR above stays
+# relative: it is still the on-disk write path and the shim_paths lock value.
+HARNESS_SHIM_CMD_DIR='"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks'
+
 # Canonical SessionStart matcher — single source of truth. Covers every CC
 # source value (startup|resume|clear|compact) so the cortex is re-injected
 # after auto-compaction. Changing the source-list touches ONLY this line.
@@ -132,6 +142,31 @@ fi
 
 WIRE_HOSTS="$_resolved_hosts"
 
+# _cd_guard SHIM_PATH HOST
+# Second-order cwd fix: anchoring the settings.json *command* to
+# $CLAUDE_PROJECT_DIR stops the ENOENT, but the shim then still runs with the
+# drifted cwd — the kernel resolves the project purely cwd-relatively
+# (manifest_exists() in lib.sh does no upward walk), so eidolons.yaml is
+# unreachable and `run --hook` fail-opens to empty stdout / exit 0, silently.
+# claude-code shims only (no equivalent project-root variable is confirmed
+# for codex/copilot). Inserts the guard right after `set -euo pipefail` —
+# a no-op line-count-preserving insert for every other host, so
+# codex/copilot shim bodies stay byte-identical to pre-change output.
+_cd_guard() {
+  local shim_path="$1"
+  local host="$2"
+  [[ "$host" == "claude-code" ]] || return 0
+  local tmp_shim
+  tmp_shim="$(mktemp)"
+  while IFS= read -r _cdg_line || [[ -n "$_cdg_line" ]]; do
+    printf '%s\n' "$_cdg_line" >> "$tmp_shim"
+    if [[ "$_cdg_line" == "set -euo pipefail" ]]; then
+      printf '\ncd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0\n' >> "$tmp_shim"
+    fi
+  done < "$shim_path"
+  mv "$tmp_shim" "$shim_path"
+}
+
 # ── Shim template renderer ─────────────────────────────────────────────────
 # _write_shim HOST EVENT [--session-start]
 # Writes the shim to HARNESS_SHIM_DIR/<host>-<event>.sh
@@ -207,6 +242,7 @@ SHIM
       || sed -i "s/UPS_HOST/${host}/g" "$shim_path"
   fi
 
+  _cd_guard "$shim_path" "$host"
   chmod +x "$shim_path"
 }
 
@@ -336,6 +372,7 @@ SHIM
     mv "$tmp_shim2" "$shim_path"
   fi
 
+  _cd_guard "$shim_path" "$host"
   chmod +x "$shim_path"
 }
 
@@ -370,15 +407,20 @@ _input="$(cat 2>/dev/null)" || exit 0
 SHIM
   sed -i '' "s/STOP_HOST/${host}/g" "$shim_path" 2>/dev/null \
     || sed -i "s/STOP_HOST/${host}/g" "$shim_path"
+  _cd_guard "$shim_path" "$host"
   chmod +x "$shim_path"
 }
 
-# _register_stop_in_settings SHIM_CMD SETTINGS_JSON
+# _register_stop_in_settings SHIM_CMD SETTINGS_JSON [SHIM_CMD_OLD]
 # Idempotent surgical-append of a Stop hook entry into .claude/settings.json.
 # Mirrors the UPS/SessionStart pattern (harness_install.sh:497-550).
+# SHIM_CMD_OLD, when non-empty, is the pre-anchor relative command form — any
+# entry carrying it is migrated (dropped, then re-added anchored) instead of
+# left as a stale duplicate (AC-4: zero old-form entries after --force).
 _register_stop_in_settings() {
   local stop_cmd="$1"
   local settings_file="$2"
+  local stop_cmd_old="${3:-}"
 
   if [[ ! -f "$settings_file" ]]; then
     jq -n \
@@ -397,9 +439,13 @@ _register_stop_in_settings() {
   _existing_canonical="$(jq -cS . "$settings_file" 2>/dev/null || echo "")"
   _merged="$(jq \
     --arg stop "$stop_cmd" \
+    --arg stopold "$stop_cmd_old" \
     '
     .hooks.Stop = (
-      (.hooks.Stop // []) as $arr |
+      (
+        (.hooks.Stop // [])
+        | map(select(($stopold == "") or (((.hooks // []) | map(.command? // "") | any(. == $stopold)) | not)))
+      ) as $arr |
       if ($arr | map(.hooks[]?.command? // "") | any(. == $stop)) then $arr
       else $arr + [{"hooks": [{"type": "command", "command": $stop}]}]
       end
@@ -449,15 +495,18 @@ _input="$(cat 2>/dev/null)" || exit 0
 SHIM
   sed -i '' "s/POSTTOOLUSE_HOST/${host}/g" "$shim_path" 2>/dev/null \
     || sed -i "s/POSTTOOLUSE_HOST/${host}/g" "$shim_path"
+  _cd_guard "$shim_path" "$host"
   chmod +x "$shim_path"
 }
 
-# _register_posttooluse_in_settings SHIM_CMD SETTINGS_JSON
+# _register_posttooluse_in_settings SHIM_CMD SETTINGS_JSON [SHIM_CMD_OLD]
 # Idempotent surgical-append of an UNMATCHED (all-tools) PostToolUse hook
-# entry — mirrors _register_stop_in_settings's shape exactly.
+# entry — mirrors _register_stop_in_settings's shape exactly, including the
+# old-form migration (AC-4).
 _register_posttooluse_in_settings() {
   local ptu_cmd="$1"
   local settings_file="$2"
+  local ptu_cmd_old="${3:-}"
 
   if [[ ! -f "$settings_file" ]]; then
     jq -n \
@@ -476,9 +525,13 @@ _register_posttooluse_in_settings() {
   _existing_canonical="$(jq -cS . "$settings_file" 2>/dev/null || echo "")"
   _merged="$(jq \
     --arg ptu "$ptu_cmd" \
+    --arg ptuold "$ptu_cmd_old" \
     '
     .hooks.PostToolUse = (
-      (.hooks.PostToolUse // []) as $arr |
+      (
+        (.hooks.PostToolUse // [])
+        | map(select(($ptuold == "") or (((.hooks // []) | map(.command? // "") | any(. == $ptuold)) | not)))
+      ) as $arr |
       if ($arr | map(.hooks[]?.command? // "") | any(. == $ptu)) then $arr
       else $arr + [{"hooks": [{"type": "command", "command": $ptu}]}]
       end
@@ -656,15 +709,19 @@ _write_codex_autocompact_config() {
   echo "true"
 }
 
-# _heal_session_start_matcher SETTINGS_JSON SHIM_CMD
+# _heal_session_start_matcher SETTINGS_JSON SHIM_CMD [SHIM_CMD_OLD]
 # Seamless self-heal: if SETTINGS_JSON has OUR SessionStart entry (command ==
 # SHIM_CMD), force its matcher to the canonical $_SS_MATCHER (upsert: heal-in-place
 # if present, else append). Foreign entries and sibling events are never touched.
+# SHIM_CMD_OLD, when non-empty, is the pre-anchor relative command form — an
+# entry still carrying it is migrated to SHIM_CMD (command AND matcher healed
+# together) rather than left stale (AC-4 applies to the sync heal path too).
 # Idempotent: jq -cS canonical compare before writing; write ONLY on change.
 # Fail-SOFT: any jq/IO error → warn + return (never abort the caller).
 _heal_session_start_matcher() {
   local settings_file="$1"
   local ss_cmd="$2"
+  local ss_cmd_old="${3:-}"
   [[ -f "$settings_file" ]] || return 0
   if ! jq empty "$settings_file" 2>/dev/null; then
     warn "$settings_file is not valid JSON — skipping SessionStart matcher heal"
@@ -674,12 +731,19 @@ _heal_session_start_matcher() {
   _before="$(jq -cS . "$settings_file" 2>/dev/null)" || { warn "could not read $settings_file — skipping heal"; return 0; }
   _healed="$(jq \
     --arg ss "$ss_cmd" \
+    --arg ssold "$ss_cmd_old" \
     --arg m "$_SS_MATCHER" \
     '
     .hooks.SessionStart = (
       (.hooks.SessionStart // []) as $arr |
       if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
         ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+      elif ($ssold != "") and ($arr | map(.hooks[]?.command? // "") | any(. == $ssold)) then
+        ($arr | map(
+          if ((.hooks // []) | any(.command? == $ssold)) then
+            (.matcher = $m | .hooks = ((.hooks // []) | map(if .command == $ssold then (.command = $ss) else . end)))
+          else . end
+        ))
       else
         $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
       end
@@ -719,7 +783,9 @@ if [[ "$REFRESH_SHIMS_ONLY" == "true" ]]; then
     # Seamless self-heal: correct a stale 'startup'-only SessionStart matcher
     # in .claude/settings.json (claude-code only). Opt out with --no-heal.
     if [[ "$_host" == "claude-code" ]] && [[ "$NO_HEAL" != "true" ]]; then
-      _heal_session_start_matcher ".claude/settings.json" "$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
+      _heal_session_start_matcher ".claude/settings.json" \
+        "$HARNESS_SHIM_CMD_DIR/claude-code-SessionStart.sh" \
+        "$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
     fi
     # ECM P1: re-render the meter-refresh shim only when the lock already
     # claims 'context:' — no lock/settings changes here (content-only refresh).
@@ -906,10 +972,16 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   mkdir -p .claude
   SETTINGS_JSON=".claude/settings.json"
 
-  _ups_cmd="$HARNESS_SHIM_DIR/claude-code-UserPromptSubmit.sh"
-  _ss_cmd="$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
+  # Anchored (written) forms — literal, unexpanded $CLAUDE_PROJECT_DIR (AC-1).
+  _ups_cmd="$HARNESS_SHIM_CMD_DIR/claude-code-UserPromptSubmit.sh"
+  _ss_cmd="$HARNESS_SHIM_CMD_DIR/claude-code-SessionStart.sh"
+  _ptu_cmd="$HARNESS_SHIM_CMD_DIR/claude-code-PreToolUse.sh"
+  # Pre-anchor relative forms — recognised so an existing old-form entry is
+  # migrated in place rather than left as a stale duplicate (AC-4).
+  _ups_cmd_old="$HARNESS_SHIM_DIR/claude-code-UserPromptSubmit.sh"
+  _ss_cmd_old="$HARNESS_SHIM_DIR/claude-code-SessionStart.sh"
+  _ptu_cmd_old="$HARNESS_SHIM_DIR/claude-code-PreToolUse.sh"
 
-  _ptu_cmd="$HARNESS_SHIM_DIR/claude-code-PreToolUse.sh"
   _ptu_matcher="Edit|Write|MultiEdit|NotebookEdit"
 
   if [[ ! -f "$SETTINGS_JSON" ]]; then
@@ -947,31 +1019,48 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
       if [[ "$STRICT" == "true" ]] && printf '%s' ",$_strict_hosts," | grep -q ",claude-code,"; then
         _merged="$(jq \
           --arg ups "$_ups_cmd" \
+          --arg upsold "$_ups_cmd_old" \
           --arg ss "$_ss_cmd" \
+          --arg ssold "$_ss_cmd_old" \
           --arg ptu "$_ptu_cmd" \
+          --arg ptuold "$_ptu_cmd_old" \
           --arg ptm "$_ptu_matcher" \
           --arg m "$_SS_MATCHER" \
           '
-          # Append UserPromptSubmit entry only if command not already present.
+          # Migrate (drop) any old-form entry, then append the anchored entry
+          # only if not already present (AC-4: zero old-form entries, no dupes).
           .hooks.UserPromptSubmit = (
-            (.hooks.UserPromptSubmit // []) as $arr |
+            (
+              (.hooks.UserPromptSubmit // [])
+              | map(select(((.hooks // []) | map(.command? // "") | any(. == $upsold)) | not))
+            ) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
             else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
             end
           ) |
-          # SessionStart UPSERT: heal-our-matcher-in-place if present, else append.
-          # (Heals a stale "startup"-only matcher so --force self-heals.)
+          # SessionStart UPSERT: heal-our-matcher-in-place if present; migrate an
+          # old-form entry (command AND matcher) in place if present; else append.
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
               ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+            elif ($arr | map(.hooks[]?.command? // "") | any(. == $ssold)) then
+              ($arr | map(
+                if ((.hooks // []) | any(.command? == $ssold)) then
+                  (.matcher = $m | .hooks = ((.hooks // []) | map(if .command == $ssold then (.command = $ss) else . end)))
+                else . end
+              ))
             else
               $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
             end
           ) |
-          # Append PreToolUse entry only if command not already present (R19 AC-R19-1).
+          # Append PreToolUse entry only if command not already present (R19 AC-R19-1);
+          # migrate an old-form entry away first (AC-4).
           .hooks.PreToolUse = (
-            (.hooks.PreToolUse // []) as $arr |
+            (
+              (.hooks.PreToolUse // [])
+              | map(select(((.hooks // []) | map(.command? // "") | any(. == $ptuold)) | not))
+            ) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ptu)) then $arr
             else $arr + [{"matcher": $ptm, "hooks": [{"type": "command", "command": $ptu}]}]
             end
@@ -980,22 +1069,34 @@ if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
       else
         _merged="$(jq \
           --arg ups "$_ups_cmd" \
+          --arg upsold "$_ups_cmd_old" \
           --arg ss "$_ss_cmd" \
+          --arg ssold "$_ss_cmd_old" \
           --arg m "$_SS_MATCHER" \
           '
-          # Append UserPromptSubmit entry only if command not already present.
+          # Migrate (drop) any old-form entry, then append the anchored entry
+          # only if not already present (AC-4: zero old-form entries, no dupes).
           .hooks.UserPromptSubmit = (
-            (.hooks.UserPromptSubmit // []) as $arr |
+            (
+              (.hooks.UserPromptSubmit // [])
+              | map(select(((.hooks // []) | map(.command? // "") | any(. == $upsold)) | not))
+            ) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ups)) then $arr
             else $arr + [{"hooks": [{"type": "command", "command": $ups}]}]
             end
           ) |
-          # SessionStart UPSERT: heal-our-matcher-in-place if present, else append.
-          # (Heals a stale "startup"-only matcher so --force self-heals.)
+          # SessionStart UPSERT: heal-our-matcher-in-place if present; migrate an
+          # old-form entry (command AND matcher) in place if present; else append.
           .hooks.SessionStart = (
             (.hooks.SessionStart // []) as $arr |
             if ($arr | map(.hooks[]?.command? // "") | any(. == $ss)) then
               ($arr | map(if ((.hooks // []) | any(.command? == $ss)) then (.matcher = $m) else . end))
+            elif ($arr | map(.hooks[]?.command? // "") | any(. == $ssold)) then
+              ($arr | map(
+                if ((.hooks // []) | any(.command? == $ssold)) then
+                  (.matcher = $m | .hooks = ((.hooks // []) | map(if .command == $ssold then (.command = $ss) else . end)))
+                else . end
+              ))
             else
               $arr + [{"matcher": $m, "hooks": [{"type": "command", "command": $ss}]}]
             end
@@ -1023,7 +1124,8 @@ _ecm_compactthreshold_managed=false
 _ecm_statusline_managed=false
 if [[ "$_ecm_enabled" == "true" ]] && printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
   mkdir -p .claude
-  _register_posttooluse_in_settings "$HARNESS_SHIM_DIR/claude-code-PostToolUse.sh" ".claude/settings.json"
+  _register_posttooluse_in_settings "$HARNESS_SHIM_CMD_DIR/claude-code-PostToolUse.sh" ".claude/settings.json" \
+    "$HARNESS_SHIM_DIR/claude-code-PostToolUse.sh"
   _ecm_compactthreshold_managed="$(_write_compact_threshold ".claude/settings.json")"
   _ecm_statusline_managed="$(_write_status_line ".claude/settings.json")"
 fi
@@ -1033,12 +1135,15 @@ fi
 # the existing UPS/SessionStart/PreToolUse behavior when flag is absent.
 if [[ "$WITH_TELEMETRY" == "true" ]]; then
   if printf '%s' ",$_hosts_wired_sorted," | grep -q ",claude-code,"; then
+    # On-disk path (shim_paths lock value) stays relative; the settings.json
+    # command is the anchored form (AC-8).
     _tel_stop_path="$HARNESS_SHIM_DIR/claude-code-Stop.sh"
-    _tel_stop_cmd="$_tel_stop_path"
+    _tel_stop_cmd="$HARNESS_SHIM_CMD_DIR/claude-code-Stop.sh"
+    _tel_stop_cmd_old="$_tel_stop_path"
     _write_stop_shim "claude-code"
     info "  wrote claude-code-Stop.sh (telemetry Stop shim)"
     _shim_paths="${_shim_paths:+${_shim_paths},}${_tel_stop_path}"
-    _register_stop_in_settings "$_tel_stop_cmd" ".claude/settings.json"
+    _register_stop_in_settings "$_tel_stop_cmd" ".claude/settings.json" "$_tel_stop_cmd_old"
   fi
 fi
 

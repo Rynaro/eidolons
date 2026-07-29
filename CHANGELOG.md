@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **`harness install`'s claude-code hook commands were project-relative, so any session parked in a subdirectory got exit-127 ENOENT on every hook firing** (ESL change `harness-hook-project-dir-anchor`, tier lite). Claude Code execs a hook `command` via `/bin/sh -c` from the session's shell cwd, not the project root; `.claude/settings.json` carried `.eidolons/harness/hooks/claude-code-<event>.sh`, which only resolved when the session cwd happened to be the project root. Claude Code exports `$CLAUDE_PROJECT_DIR` into every hook's environment for exactly this case — the command is now the literal, unexpanded `"$CLAUDE_PROJECT_DIR"/.eidolons/harness/hooks/claude-code-<event>.sh` for UserPromptSubmit, SessionStart, the `--strict` PreToolUse entry, the ECM PostToolUse entry, and the `--with-telemetry` / `telemetry enable` Stop entry. A second-order defect found during scoping: anchoring the command alone fixes the ENOENT but not the outcome — the shim still ran with the drifted cwd, and the kernel resolves `eidolons.yaml` purely cwd-relatively, so `run --hook` silently fail-opened to empty stdout instead of loudly failing. Every claude-code shim now `cd`s into `$CLAUDE_PROJECT_DIR` (fail-open on an invalid/unset value) before invoking the kernel. `harness install --force` migrates an existing old-form entry in place (zero duplicates, byte-identical on a repeat run); `harness remove`, `telemetry disable`, `eidolons doctor`'s D12 check, and `eidolons canary` all recognise both the old relative form and the new anchored form, so an unmigrated project is never silently orphaned. `eidolons.lock`'s `harness.shim_paths[]` and the on-disk shim write path are unchanged (still project-relative); non-claude-code hosts (codex, copilot, cursor, opencode) are unaffected — no equivalent project-root variable is confirmed for them, and their surfaces stay byte-identical.
+
 ## [2.14.0] — 2026-07-20 — the container must run as the user who owns the workspace
 
 ### Fixed
