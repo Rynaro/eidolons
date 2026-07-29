@@ -1,0 +1,18 @@
+{
+  "esl_version": "1.1",
+  "change_id": "harness-hook-project-dir-anchor",
+  "status": "archived",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": null,
+  "created_at": "2026-07-29",
+  "drift_checked": true,
+  "archive_path": "archive/2026-07-29-harness-hook-project-dir-anchor",
+  "has_code": true,
+  "memory_preflight": {
+    "ran": true,
+    "records": 3
+  }
+}
