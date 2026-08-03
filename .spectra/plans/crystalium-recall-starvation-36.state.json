@@ -1,0 +1,218 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "crystalium-recall-starvation-36",
+  "created_at": "2026-08-02T23:16:30Z",
+  "tier": "full",
+  "phase": "A",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "A"
+  ],
+  "rightsize": {
+    "score": 6,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 12,
+      "new_dep": false,
+      "public_api": true,
+      "migration": false,
+      "security": false,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 11,
+      "dims": {
+        "scope": 3,
+        "ambiguity": 2,
+        "dependencies": 3,
+        "risk": 3
+      },
+      "verdict": "human_loop",
+      "at": "2026-08-02T23:16:37Z",
+      "label": "recall-starvation-36"
+    },
+    {
+      "rubric": "explore",
+      "total": 70.5,
+      "dims": {
+        "alignment": 6,
+        "correctness": 6,
+        "maintainability": 8,
+        "performance": 9,
+        "simplicity": 9,
+        "risk": 8,
+        "innovation": 2
+      },
+      "verdict": "solid",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-D importance-init only (no composer change)"
+    },
+    {
+      "rubric": "explore",
+      "total": 77,
+      "dims": {
+        "alignment": 9,
+        "correctness": 9,
+        "maintainability": 7,
+        "performance": 8,
+        "simplicity": 6,
+        "risk": 5,
+        "innovation": 6
+      },
+      "verdict": "solid",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-A relevance-primary eviction key, default-on"
+    },
+    {
+      "rubric": "explore",
+      "total": 72.5,
+      "dims": {
+        "alignment": 8,
+        "correctness": 9,
+        "maintainability": 6,
+        "performance": 8,
+        "simplicity": 4,
+        "risk": 7,
+        "innovation": 5
+      },
+      "verdict": "solid",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-B same as A but config-gated (ablation-or-revert)"
+    },
+    {
+      "rubric": "explore",
+      "total": 60,
+      "dims": {
+        "alignment": 7,
+        "correctness": 7,
+        "maintainability": 5,
+        "performance": 7,
+        "simplicity": 3,
+        "risk": 4,
+        "innovation": 7
+      },
+      "verdict": "weak",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-C weighted composite relevance+importance score"
+    },
+    {
+      "rubric": "explore",
+      "total": 85,
+      "dims": {
+        "alignment": 9,
+        "correctness": 8,
+        "maintainability": 9,
+        "performance": 9,
+        "simplicity": 9,
+        "risk": 7,
+        "innovation": 7
+      },
+      "verdict": "elite",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-E relevance-gated top-k pre-composer (no eviction-key change)"
+    },
+    {
+      "rubric": "explore",
+      "total": 85.5,
+      "dims": {
+        "alignment": 10,
+        "correctness": 10,
+        "maintainability": 8,
+        "performance": 8,
+        "simplicity": 7,
+        "risk": 6,
+        "innovation": 7
+      },
+      "verdict": "elite",
+      "at": "2026-08-02T23:18:42Z",
+      "label": "H-E-prime hybrid: top-k gate + relevance-primary eviction key"
+    },
+    {
+      "rubric": "confidence",
+      "total": 80,
+      "dims": {
+        "pattern_match": 85,
+        "requirement_clarity": 70,
+        "decomposition_stability": 80,
+        "constraint_compliance": 85
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-08-02T23:28:48Z",
+      "label": "crystalium-recall-starvation-36 spec v1.0.0"
+    },
+    {
+      "rubric": "confidence",
+      "total": 88.25,
+      "dims": {
+        "pattern_match": 88,
+        "requirement_clarity": 95,
+        "decomposition_stability": 88,
+        "constraint_compliance": 82
+      },
+      "verdict": "AUTO_PROCEED",
+      "at": "2026-08-02T23:43:58Z",
+      "label": "crystalium-recall-starvation-36 spec v2.0.0 (FORGE-bound)"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 1,
+      "total": 4,
+      "min": 3,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 5,
+        "testability": 3
+      },
+      "verdict": "pass",
+      "at": "2026-08-02T23:55:58Z",
+      "label": "critic vigil — spec v2.0.0 crystalium-recall-starvation-36"
+    }
+  ],
+  "amendments": [
+    {
+      "prev": "8fd32daf09b7d500913fe9f46c1647b0bc5fd0ee53b3660e6bd36b314279f577",
+      "new": "487058986ff25ac9e9a4d286e73019e79c2284fae1f14c777f9629e05a861d36",
+      "reason": "Post-verification C-13 batch after vigil VERIFIED-with-notes at 323229f: FORGE DP-R2 strengthens AC-007 (eviction-forcing fixture; attack E left the gate green, F-V2); DP-R3 strengthens AC-016/AC-017 oracles to derive truncated_count/k_applied from the performed slice (attack D produced phantom drops and k_applied>k_requested with all oracles green, F-V3); DP-R1 adds AC-031 for seam-3b small-k fetch-width decoupling (FETCH_WIDTH_FLOOR=10, flag-gated; fresh crystal excluded at k<=3, F-V1); AC-032 preserves AC-017's displaced evicted_count pin verbatim. 30 -> 32 criteria.",
+      "at": "2026-08-03T02:16:28Z"
+    }
+  ],
+  "declared_scope": [
+    "mcp-server/src/crystalium/aetheryte/retrieve.py",
+    "mcp-server/src/crystalium/composer.py",
+    "mcp-server/src/crystalium/schemas.py",
+    "mcp-server/src/crystalium/config.py",
+    "mcp-server/src/crystalium/server.py",
+    "mcp-server/src/crystalium/enforcement.py",
+    "mcp-server/src/crystalium/importance.py",
+    "mcp-server/src/crystalium/__main__.py",
+    "mcp-server/src/crystalium/layers/episodic.py",
+    "mcp-server/src/crystalium/layers/procedural.py",
+    "mcp-server/src/crystalium/layers/semantic.py",
+    "schemas/recall-result.v1.json",
+    "mcp-server/tests/*",
+    "evals/BENCH-NOTES.md",
+    "CHANGELOG.md",
+    "mcp-server/pyproject.toml"
+  ],
+  "criteria_sha256": "487058986ff25ac9e9a4d286e73019e79c2284fae1f14c777f9629e05a861d36",
+  "critic": {
+    "author": "ramza",
+    "checker": "vigil",
+    "at": "2026-08-02T23:57:25Z"
+  },
+  "scope_declared_at": "2026-08-02T23:28:48Z",
+  "criteria_frozen_at": "2026-08-02T23:44:19Z"
+}
