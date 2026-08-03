@@ -1,0 +1,194 @@
+# C-5 RED-first evidence — crystalium-recall-starvation-36
+
+Branch: fix/recall-starvation-36
+Commit under test: 3fd0c5e59af2c6f4fb403523f018f42577db9351
+  ("test(recall): add issue #36 regression suite (RED-first)")
+  = af24493ff235ff1ccbedbeacddb5a445efb326c6 (v1.8.1, clean, target_commit per
+    spec.md) PLUS the new mcp-server/tests/test_recall_starvation.py, and
+    NOTHING else — verified via `git status --short` (clean) and `git diff
+    --stat` (empty) against af24493 for every src/ and schemas/ file before
+    this run.
+
+git rev-parse HEAD:
+3fd0c5e59af2c6f4fb403523f018f42577db9351
+
+Command: docker compose run --rm crystalium pytest mcp-server/tests/test_recall_starvation.py -v
+
+======================================================================
+PART 1 — OFFICIAL RUN (exact committed test file, exact af24493 source)
+======================================================================
+
+ Container crystalium-crystalium-run-0e735fecae00 Creating 
+ Container crystalium-crystalium-run-0e735fecae00 Created 
+============================= test session starts ==============================
+platform linux -- Python 3.12.13, pytest-9.1.1, pluggy-1.6.0 -- /app/.venv/bin/python3
+cachedir: .pytest_cache
+rootdir: /app/mcp-server
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, anyio-4.14.0, cov-7.1.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 0 items / 1 error
+
+==================================== ERRORS ====================================
+_______________ ERROR collecting tests/test_recall_starvation.py _______________
+ImportError while importing test module '/app/mcp-server/tests/test_recall_starvation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/local/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mcp-server/tests/test_recall_starvation.py:51: in <module>
+    from crystalium.importance import COLD_START_IMPORTANCE_CEILING, importance_score
+E   ImportError: cannot import name 'COLD_START_IMPORTANCE_CEILING' from 'crystalium.importance' (/app/mcp-server/src/crystalium/importance.py)
+------------------------------- Captured stdout --------------------------------
+2026-08-03 00:33:40 [debug    ] tokenizer_backend              backend=tiktoken_cl100k_base
+=========================== short test summary info ============================
+ERROR mcp-server/tests/test_recall_starvation.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+=============================== 1 error in 2.84s ===============================
+
+
+Result: pytest reports 1 collection ERROR, 0 items collected, exit != 0.
+Every test in the file — including the five C-5-mandated AC-001, AC-002,
+AC-004, AC-005, AC-010 — fails to even collect, because
+`crystalium.importance.COLD_START_IMPORTANCE_CEILING` (added by this fix)
+does not exist at af24493. This is legitimate, maximally-strong RED evidence
+(the entire new API surface the fix introduces is absent) but it does not by
+itself discharge critique.md F1's narrower concern — that AC-001/AC-004 must
+fail for the SPECIFIC reason ("composer eviction picks the wrong crystal"),
+not an unrelated reason (e.g. "the fixture's competitor crystals never became
+candidates in the first place", or here, a missing-symbol ImportError). Part 2
+isolates that.
+
+======================================================================
+PART 2 — DIAGNOSTIC RUN (F1 verification: red for the RIGHT reason)
+======================================================================
+
+Method (NOT committed — reverted immediately after, `git status --short`
+verified clean before PART 3 / the real implementation commits below):
+  1. Shimmed the two symbols the fix adds that the test module imports at
+     collection time (`COLD_START_IMPORTANCE_CEILING`, `server.normalize_k`)
+     with trivial local definitions, so collection succeeds and each test can
+     run to its OWN assertion.
+  2. Patched `Composer.__init__` and `Aetheryte.__init__` to accept-and-ignore
+     an unrecognised `recall_relevance_primary=` kwarg (**_diagnostic_ignored),
+     so the test harness's forward-looking constructor calls do not themselves
+     raise TypeError before the real (still-unfixed) recall/composition logic
+     ever runs. No other behavior was changed — the eviction key, ordering,
+     `k` handling, `score` population and cold-start importance are ALL still
+     exactly the af24493 (broken) implementation.
+  3. Ran the suite; confirmed AC-001/002/004/005/010 fail on their OWN
+     assertions (not on a setup/constructor error), inspected the captured
+     `evicted`/`evicted_count` debug logs to confirm the failure mechanism is
+     literally "composer evicted the query-relevant/fresh/cold-start crystal
+     via the legacy (importance, last_access, id) key", exactly the defect
+     #36 reports.
+  4. Reverted every diagnostic edit (`git checkout -- composer.py retrieve.py`
+     + restored test_recall_starvation.py from a pre-shim backup) before any
+     real implementation commit. `git status --short` confirmed clean / back
+     to the PART 1 state.
+
+--- AC-001 (TestIssue36Regression::test_fresh_distinctive_crystal_is_returned) ---
+FAILS on its OWN assertion:
+  AssertionError: fresh distinctive crystal must survive composition; got {'comp-3'}
+Captured log shows all 5 crystals became candidates (candidates=5, filtered=5)
+and the legacy eviction key evicted the fresh/relevant crystal FIRST purely on
+importance=0.0, then 3 of the 4 high-importance competitors, leaving the
+4th competitor (comp-3, importance=0.9) as the sole survivor:
+  evicted importance=0.0 record_id=target slot=episodic tokens=6
+  evicted importance=0.9 record_id=comp-0 slot=episodic tokens=6
+  evicted importance=0.9 record_id=comp-1 slot=episodic tokens=6
+  evicted importance=0.9 record_id=comp-2 slot=episodic tokens=6
+  recall_ok after_compose=1 candidates=5 evicted=4 filtered=5 k=10
+This is exactly the composer-eviction defect crystalium#36 reports (not a
+candidate-absence artefact — F1's concern is discharged).
+
+--- AC-002 (TestKIsACap::test_k5_returns_five_when_five_fit) ---
+FAILS on its OWN assertion:
+  AssertionError: assert 8 == 5   (len(result.records) == 8, not 5)
+Captured log: recall_ok after_compose=8 candidates=8 evicted=0 filtered=8 k=5
+— all 8 query-matching crystals fit the token budget (no composer eviction)
+and `k=5` was never applied as a cap; the pre-fix `candidate_k=max(k*3,10)`
+only sizes the per-layer FETCH, never truncates the result set.
+
+--- AC-004 (TestRelevanceBeatsImportance::test_relevant_zero_importance_survives_eviction) ---
+FAILS on its OWN assertion:
+  AssertionError: query-relevant crystal must survive; got {'irrelevant'}
+Captured log: evicted importance=0.0 record_id=relevant slot=episodic tokens=5
+             recall_ok after_compose=1 candidates=2 evicted=1 filtered=2 k=10
+Both crystals became candidates (dense-arm mock fix); the legacy eviction key
+evicted the QUERY-MATCHING crystal (importance 0.0) and kept the irrelevant
+one (importance 0.9) — the textbook starvation inversion #36 reports.
+
+--- AC-005 (TestScorePopulated::test_score_is_not_none) ---
+FAILS on its OWN assertion: `assert rec.score is not None` -> AssertionError
+(CrystalSummary.score is declared but never populated at the single
+construction site in aetheryte/retrieve.py at af24493).
+
+--- AC-010 (TestColdStartImportance::test_commit_importance_nonzero, x3) ---
+FAILS on its OWN assertion for ALL THREE parametrised layers:
+  episodic:   AssertionError: episodic: cold-start importance must be nonzero
+              assert 0.0 > 0.0
+  procedural: (same assertion, same 0.0 > 0.0 shape)
+  semantic:   (same assertion, same 0.0 > 0.0 shape)
+Every layer's commit() writes the literal utility.importance=0.0 despite each
+layer already being handed an importance_fn it never calls — exactly root
+cause (b)/(d) in the Problem Statement.
+
+======================================================================
+CONCLUSION
+======================================================================
+
+C-5 discharged. AC-001, AC-002, AC-004, AC-005, AC-010 all demonstrably fail
+at af24493:
+  - PART 1 (official, committed test file, unmodified af24493 source): every
+    test fails via a collection-time ImportError — the strongest possible
+    form of "does not exist yet" evidence, exactly reflecting that the new
+    API surface (COLD_START_IMPORTANCE_CEILING, normalize_k, the
+    recall_relevance_primary kwarg family) is entirely absent pre-fix.
+  - PART 2 (diagnostic-only, reverted, not committed): with collection
+    unblocked by trivial shims, each of the five mandated ACs fails on its
+    OWN assertion, for the semantically-correct reason F1 required — genuine
+    composer-eviction / k-non-cap / unpopulated-score / zero-importance
+    defects, not a candidate-absence or setup artefact.
+
+Neither run passed for any of the five mandated ACs. No test was modified to
+make any of these five pass; the implementation (this branch's subsequent
+commits) is what turns them green.
+
+======================================================================
+PATCH ROUND 2 (2026-08-02/03) — AC-031 RED-first evidence (DP-R1/C-12)
+======================================================================
+
+Branch: fix/recall-starvation-36
+Commit under test: 89c23d9 ("test(recall): add AC-031 seam-3b fetch-width
+  regression (RED-first)") = 323229f (VERIFIED-with-notes by vigil) PLUS
+  ONLY the new TestSmallKFetchWidth test class in test_recall_starvation.py.
+  `git status --short` clean before this run; `git diff 323229f --stat`
+  showed only the one test file changed, +82/-0.
+
+git rev-parse HEAD at RED time: 89c23d9
+
+Command: docker compose run --rm crystalium pytest \
+  mcp-server/tests/test_recall_starvation.py::TestSmallKFetchWidth -v
+
+Result: FAILED (1 failed in 3.16s)
+
+  AssertionError: fresh crystal must be returned at k=3; got {'n3', 'n2', 'n1'}
+  assert 'fresh' in {'n1', 'n2', 'n3'}
+
+Captured log: `candidates=5, filtered=3, evicted=0, k=3` — confirms fresh WAS
+a real candidate (among the 5 committed crystals) that seam 3's k-gate
+truncated OUT, for exactly the mechanism vigil's F-V1 describes: at k=3 the
+graph/completion arms' seed window (`dense_ranking[:k]`, len 3) is narrow
+enough to trigger the mock's noise-injection branch (`len(seed_ids) <= 3`),
+giving n1..n4 a third arm (graph+completion) that outranks fresh's own
+two-arm (sparse+dense) baseline — hand-computed RRF scores confirm
+n1=0.0489 > n2=0.0481 > n3=0.0474 > n4=0.0466 > fresh=0.0328, so fresh lands
+5th and is excluded from the top-3 slice. This is red for the right reason
+(a genuine candidate truncated by the k-gate under narrow arm membership),
+not a setup/import artefact.
+
+Implemented immediately after (seam 3b, `fetch_width = max(k,
+FETCH_WIDTH_FLOOR)` applied to both `seed_ids` and `completion_seeds` under
+the flag) — the same test goes GREEN; see the patch-round-2 commits.

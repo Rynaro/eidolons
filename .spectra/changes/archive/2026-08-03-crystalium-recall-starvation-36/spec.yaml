@@ -1,0 +1,638 @@
+schema: eidolons/change-spec.v1
+change_id: crystalium-recall-starvation-36
+tier: full
+maker: vivi
+checker: vigil
+target: crystalium — recall relevance-primary composition + k cap + cold-start importance (fix Rynaro/crystalium#36, ships v1.9.0)
+
+problem: >
+  `crystalium.recall` returns records ordered and selected entirely without reference
+  to the query. The hybrid BM25 + dense + graph arms fuse into an RRF relevance ranking
+  (`rrf_merge`, `retrieve.py:53-80`, called at `retrieve.py:339`), but that ranking only
+  decides which crystals get *fetched* into `all_candidates` / `filtered_ids` — the full
+  filtered set, however large, is handed to `Composer.compose()`
+  (`retrieve.py:488-492,500`), whose signature takes no `k` and no relevance
+  (`composer.py:179`) and whose sole ordering key is
+  `_eviction_key(rec) -> (importance, last_access, id)` (`composer.py:122-134`).
+  `_ComposerRecord` does not even carry a relevance field. Meanwhile every
+  episodic/procedural/semantic commit writes `"importance": 0.0` literally
+  (`episodic.py:176,191,262`; `procedural.py:149,193`; `semantic.py:233,287,380`)
+  despite each layer being handed an `importance_fn` in its constructor that it never
+  calls — and a crystal's only routes off 0.0 are the post-composition access loop
+  (which runs only for records that already survived eviction) or the idle-gated Dream
+  sweep. The three mechanisms compose into a closed starvation loop (issue #36): a
+  freshly committed crystal is pinned at importance 0.0, loses every eviction round to
+  any older record with accumulated history regardless of topic, and can never earn the
+  access event that would raise its importance. `k` is not a cap at all (it only sizes
+  `candidate_k = max(k*3, 10)` and the graph seed set), so `k=3` and `k=15` produce
+  identical result sets; and `CrystalSummary.score` is declared `Optional[float] = None`
+  and never passed at its single construction site, so ranking is not even inspectable
+  from the client. Net: `commit` is silently write-only storage.
+
+decision:
+  selected: relevance-primary flag-gated composition (O1 + top-k gate + seam-3b fetch-width floor)
+  scores: { H-E-prime: 85.5, H-E: 85.0, H-A: 77.0, H-B: 72.5, H-D: 70.5, H-C: 60.0 }  # H-E-prime (top-k gate + relevance-primary key, DP-1=O1) selected/ratified; rest scored solid-to-weak, see spec.md Rejected Alternatives table
+  rejected:
+    - >-
+      O3-gate-only (H-E, 85.0 elite, within 0.6 pts of selected): rejected — fixes #36
+      only probabilistically (the dense arm surfaces topically-weak neighbours into the
+      top-k, and on slot overflow Pass-1 eviction still pops the rank-1 importance-0.0
+      fresh crystal before a rank-5 stale one); AC-004 is unprovable under it; retained
+      only as an emergency fallback if the composer change proved unshippable.
+    - >-
+      C-flag-default-off (H-B, 72.5 solid): rejected — violates mission P0-1 (the fix
+      must hold by default); its earn-it-on eval cannot even measure the behaviour, since
+      the retrieval_gate corpus never triggers eviction.
+    - >-
+      budget-scaling (DP-3b options B/C): rejected — mechanically blocked, not merely
+      unconventional: two independent hard validators (`schemas.py:245` `le=3500`, and
+      `schemas/recall-result.v1.json`'s `maximum: 3500`) plus the P0-9 assertion at
+      `composer.py:269-272` make a scaled budget raise `ValidationError` inside
+      `recall()`.
+    - >-
+      legacy-unclamped-importance (DP-4 bare option A, the planner's provisional rec):
+      rejected — the measured legacy-scorer cold start (0.525) would be a *permanent*
+      starvation inversion under `evb_enabled=False` (no Dream write-back there, so the
+      commit-time value is durable), ranking above a proven-useful 0.403 record; a
+      documented caveat is not a guard.
+    - >-
+      doc-caveat-instead-of-fetch-width-guard (DP-R1 option (a), post-verification):
+      rejected — a recommendation string cannot fire; it would be the release's only
+      defence on a MAJOR finding (F-V1: fresh crystal not returned at k=1/k=3 in the
+      default configuration).
+  safety_default: >-
+    `Config.recall_relevance_primary` defaults `true` (the fix is on-by-default per
+    mission P0-1); `recall_relevance_primary: false` is the one-line config revert,
+    live in the same release, restoring pre-1.9.0 composition byte-identically — chosen
+    over a no-flag design specifically so the highest-impact risk (an unknown real
+    corpus regressing) has a cheap, immediate mitigation (DP-2 ruling B).
+
+safety_invariant: >
+  Flag-off (`recall_relevance_primary: false`) restores pre-fix retrieval
+  byte-identically and never caps at `k`. With the flag on, `[:k]` is the only consumer
+  of the caller's `k` — fetch/seed width is floored at `max(k, FETCH_WIDTH_FLOOR=10)`
+  so a small `k` cannot shrink the ranking universe.
+  `COLD_START_IMPORTANCE_CEILING = 0.30` bounds every commit-time `utility.importance`
+  value, mechanically (not by comment), so the legacy scorer's unclamped cold start
+  (0.525) can never invert the ranking.
+  `evicted_count`'s meaning is never redefined: it keeps counting only token-budget
+  evictions; `k`-truncation is counted separately in `budget.truncated_count` /
+  `explain.truncated_by_k`, both derived from the *performed* slice, never from
+  pre-slice intent, so `k_applied <= k_requested` holds by construction.
+  The oversized-summary advisory is advisory-only (never a rejection) and
+  exception-safe — any tokenizer exception skips it silently and never fails or delays
+  a commit (fail-open).
+
+invariants:
+  - flag-gates-three-seams-plus-fetch-width-as-one-unit   # recall_relevance_primary reverts seams 3+3b+4+5 together (C-1, C-12); score/budget/explain/k-clamp/commit-side changes stay live in both modes
+  - k-response-cap-not-ranking-universe   # the [:k] response slice is the only consumer of caller k; arm seeding uses fetch_width = max(k, FETCH_WIDTH_FLOOR=10) (DP-R1/C-12, seam 3b)
+  - slice-derived-diagnostics-never-intent   # truncated_count/k_applied computed from the performed slice, not pre-slice intent (DP-R3/C-14); k_applied <= k_requested holds by construction
+  - cold-start-ceiling-0.30   # COLD_START_IMPORTANCE_CEILING named constant clamps min(importance_fn(...), 0.30) at every commit-time call site (DP-4/C-3)
+  - utility-importance-only-never-memory-dynamics   # initial_importance() writes utility.importance only; memory_dynamics stays Dream's writer, never touched at commit (DP-4a)
+  - no-backfill   # existing 0.0-importance rows are untouched; rescued only by D1's relevance ranking, never by a migration (DP-4b, mission P0-3)
+  - execution-0.5-special-case   # execution.py's hardcoded 0.5 stays untouched, one-line comment marking it a deliberate currently-active-work privilege above the 0.30 ceiling (DP-4d)
+  - evicted-count-meaning-preserved   # evicted_count keeps its exact pre-existing meaning (token-budget drops only); k-truncation counted only in budget.truncated_count / explain.truncated_by_k (DP-7)
+  - schema-strict-budget-loose-explain   # recall-result.v1.json declares budget strictly (five fields, additionalProperties false) and explain loosely (additionalProperties true, diagnostic/unstable) (DP-X)
+  - no-t2-promotion-promise   # TIER_VIOLATION advice names the procedural fallback but never states or implies T2->semantic promotion; T2 always stays candidate per gate.py G2 (C-9, mission P0-4)
+  - red-first-evidence-on-record   # C-5-mandated criteria (plus AC-031 per C-12) demonstrated failing before the fix, with failing output recorded in the verify artefact
+
+known_gaps:
+  - >-
+    flag-off-k-applied-intent-derived (F-V10, NOTE): with `recall_relevance_primary:
+    false`, `budget.k_applied` is the one field still derived from intent
+    (`min(k_requested, len(before))`) rather than a performed slice, because no slice
+    runs in that mode. Not a criterion failure — frozen AC-017 binds "any recall in any
+    configuration" and the current value satisfies it (the pre-patch flag-off value did
+    not); `truncated_count` stays honest (0) in both modes. Recorded so `k_applied`
+    under flag-off is never misread as a returned-record count.
+  - >-
+    flag-off-ordering-nondeterminism (F-V11, NOTE): flag-off recall ordering is
+    run-to-run non-deterministic at both the pre-fix and shipped commits, traced to the
+    narrow-seed graph arm (`seed_ids = dense_ranking[:k]` concentrates the walk) and
+    Kuzu `neighbor_expand` flakiness. Pre-existing, untouched by this patch, and
+    *reduced* by it — the flag-on column is now bit-stable across repeats via seam 3b.
+    Violates no criterion; worth its own issue alongside the unweighted-RRF follow-up.
+  - >-
+    AC-017-verify-prose-contradiction (F-V12, NOTE): `spec.criteria.md`'s AC-017 VERIFY
+    text asserts both "true by construction" and "Attack D must turn this node RED" —
+    the two cannot both hold, and the shipped, ruled-correct by-construction design
+    (`k_applied = min(k_requested, len(before))`) makes the RED claim false, as the
+    final pre-tag attack-D re-run measured (AC-017 stayed GREEN; a separate attack D′
+    proved the node is a live gate on the arithmetic it actually claims). Text-only
+    defect in the criteria file's prose, not the implementation; fix at the next legal
+    `ramza-freeze --amend --reason`, not a release blocker.
+  - >-
+    unweighted-rrf-root-deferred: the deeper pre-existing root that lets an unweighted
+    3-arm graph neighbour outvote a 2-arm exact lexical match in RRF fusion is not fixed
+    in this release (it touches fusion at every `k` and needs eval evidence). Opened as
+    a follow-up issue per DP-R1's ruling; explicitly out of scope here.
+
+files_touched:
+  - path: mcp-server/src/crystalium/aetheryte/retrieve.py
+    change: >-
+      edit — seams 1, 2, 3, 3b: `rrf_merge_scored()` sibling to `rrf_merge()`;
+      `relevance_score`/`relevance_rank` added to `_ComposerRecord.__slots__` and
+      `__init__`; `filtered_ids` truncated to `k` under the flag; `FETCH_WIDTH_FLOOR =
+      10` named constant and `fetch_width = max(k, FETCH_WIDTH_FLOOR)` for arm-seeding
+      uses of raw `k`; `score=` raw-RRF population at the `CrystalSummary` construction
+      site (both flag modes); `RecallResult.budget` assembly and `k_applied` /
+      `truncated_by_k` added to `explain`, both derived from the performed slice;
+      `recall()` docstring rewritten for the new ordering/budget contract.
+  - path: mcp-server/src/crystalium/composer.py
+    change: >-
+      edit — seams 4, 5, and the D3 sentinel: `_eviction_key` becomes
+      `(getattr(rec, "relevance_score", 0.0), importance, last_access, id)` ascending
+      under the flag; `composed.records` emitted in descending `relevance_score` with
+      `id` ascending tiebreak under the flag; `Composer.__init__` gains
+      `recall_relevance_primary: bool | None = None` falling back to
+      `config.recall_relevance_primary` (C-16); module docstring and the
+      `_eviction_key` docstring rewritten.
+  - path: mcp-server/src/crystalium/server.py
+    change: >-
+      edit — `k` clamped to `[1,100]` with fallback-to-10 for a non-coercible value at
+      `_handle_recall`; `recall_relevance_primary` wired explicitly at both `Aetheryte(`
+      and `Composer(` construction sites; `crystalium.recall` tool description
+      documents the ordering contract; `crystalium.commit` tool description enumerates
+      `_VALID_PROVENANCE_SOURCES` (DX-1); oversized-summary advisory wired at the commit
+      path using the composer's hardened module-level tokenizer, exception-safe (C-4).
+  - path: mcp-server/src/crystalium/importance.py
+    change: >-
+      edit (pre-existing file, not new — see note in final summary) — adds the named
+      constant `COLD_START_IMPORTANCE_CEILING = 0.30` and the shared
+      `initial_importance(importance_fn, utility, now)` helper
+      (`min(importance_fn(stub, now=now), COLD_START_IMPORTANCE_CEILING)`); the
+      pre-existing legacy `importance_score()` is untouched.
+  - path: mcp-server/src/crystalium/schemas.py
+    change: >-
+      edit — `RecallResult` gains an always-present `budget` field carrying
+      `total_cap`, `slots`, `k_requested`, `k_applied`, `truncated_count`.
+  - path: mcp-server/src/crystalium/enforcement.py
+    change: >-
+      edit — `TierViolation`'s advice string (raised at `TIER_VIOLATION`) rewritten to
+      name the procedural-candidate fallback, state that caller identity is host/env-set
+      at server start, and explicitly deny T2->semantic promotion (C-9); `reason_code`
+      stays `"TIER_VIOLATION"`.
+  - path: mcp-server/src/crystalium/config.py
+    change: >-
+      edit — `Config.recall_relevance_primary: bool = True` with `from_yaml`/`from_env`/
+      `from_dict` plumbing in the existing per-faculty-bool convention.
+  - path: mcp-server/src/crystalium/layers/episodic.py
+    change: >-
+      edit — the two non-merge `"importance": 0.0` sites (utility-write, committed-result
+      echo) call `initial_importance()` / echo its computed value; the dedup-merge echo
+      site is left reading the merged-into crystal's stored `importance` (a `0.0`
+      fallback on lookup failure), per the D1 adjudication.
+  - path: mcp-server/src/crystalium/layers/procedural.py
+    change: >-
+      edit — both `"importance": 0.0` sites (utility-write, committed-result echo) call
+      `initial_importance()` / echo its computed value.
+  - path: mcp-server/src/crystalium/layers/semantic.py
+    change: >-
+      edit — the two non-merge `"importance": 0.0` sites call `initial_importance()` /
+      echo its computed value; the dedup-merge echo site is left reading the
+      merged-into crystal's stored `importance`, per the D1 adjudication.
+  - path: mcp-server/src/crystalium/layers/execution.py
+    change: >-
+      edit — no behaviour change; one-line comment on the existing hardcoded `0.5`
+      marking it a deliberate "currently active work" privilege, intentionally above
+      the 0.30 cold-start ceiling and distinct from `initial_importance()` (DP-4d).
+  - path: mcp-server/src/crystalium/__main__.py
+    change: >-
+      edit — `k` normalisation at the CLI verb shares `normalize_k` (imported from
+      `server`) so the CLI entry point clamps/falls back identically to the MCP handler
+      (C-11); `--k` changed from a `click` `int` type to `str` so the fallback path can
+      run before click's own type coercion would reject it.
+  - path: schemas/recall-result.v1.json
+    change: >-
+      edit — adds `budget` strictly (all five fields enumerated, `additionalProperties:
+      false` on the sub-object) and the previously-missing `explain` loosely
+      (`type: object`, `additionalProperties: true`, described as diagnostic/unstable);
+      filename stays `v1` (additive only) (DP-X).
+  - path: mcp-server/tests/test_recall_starvation.py
+    change: >-
+      new — the issue-#36 regression suite; one test class per acceptance-criteria
+      group (`TestIssue36Regression`, `TestKIsACap`, `TestRelevanceBeatsImportance`,
+      `TestScorePopulated`, `TestOrdering`, `TestLegacyPath`, `TestColdStartImportance`,
+      `TestBudgetSurfaced`, `TestKClamp`, `TestOversizedSummary`, `TestDX`,
+      `TestSchemaRoundTrip`, `TestSmallKFetchWidth`), covering AC-001..AC-032; imports
+      `jsonschema` unconditionally (never the skip-on-ImportError helper) per C-7.
+  - path: mcp-server/tests/test_composer.py
+    change: >-
+      edit — `_Rec` test stub gains a `relevance_score` attribute (read via
+      `getattr(..., 0.0)` by the implementation so existing stubs without it still
+      sort); adds relevance-primary eviction tests; the four
+      `TestG6EvictionDeterministic` tests and `TestTotalCap` stay green unmodified as
+      the equal-relevance case; its manual `Config.__new__` helper gets the new field
+      (C-8).
+  - path: mcp-server/tests/test_rrf.py
+    change: >-
+      edit — adds `test_rrf_merge_scored_matches_rrf_merge` asserting
+      `[cid for cid, _ in rrf_merge_scored(r)] == rrf_merge(r)`; no existing test
+      modified.
+  - path: mcp-server/tests/test_config.py
+    change: >-
+      edit — adds `recall_relevance_primary` coverage (default `True`, `from_env`,
+      `from_dict`) in the existing retrieval-defaults block style.
+  - path: mcp-server/tests/test_aetheryte.py
+    change: >-
+      edit — manual `Config.__new__` helper gets the new field (C-8); existing recall
+      assertions re-checked under truncation and the `evicted_count == 0` empty-store
+      pin.
+  - path: mcp-server/tests/test_dream_worker.py
+    change: edit — manual `Config.__new__` helper gets the new field (C-8).
+  - path: mcp-server/tests/test_dream_scheduler.py
+    change: edit — manual `Config.__new__` helper gets the new field (C-8).
+  - path: mcp-server/tests/test_dedup_merge.py
+    change: >-
+      edit — merge-echo path exercised (a crash would surface); per the D1 adjudication
+      the existing `status == "merged"` assertion is unmodified and the merged echo's
+      `importance` value itself remains unasserted (recommended follow-up, not a
+      blocker).
+  - path: mcp-server/tests/test_write_conflict.py
+    change: edit — same merge-echo path as `test_dedup_merge.py`; `status == "merged"` assertion only.
+  - path: mcp-server/tests/test_diagnosability.py
+    change: >-
+      edit — `TestRecallExplain` checked against the new `explain` keys (`k_applied`,
+      `truncated_by_k`); `test_commit_good_summary_no_advisory` (clean-path
+      byte-identity, DP-8) stays green and is one of the nodes run directly in the
+      frozen VERIFY batch for AC-023.
+  - path: mcp-server/tests/test_schemas.py
+    change: >-
+      edit — `TestSchemaFilesAreValidJson` continues to parse
+      `recall-result.v1.json` now that it carries the new `budget`/`explain`
+      properties (DP-X); the round-trip validation itself lives in
+      `test_recall_starvation.py::TestSchemaRoundTrip` per C-7.
+  - path: CHANGELOG.md
+    change: >-
+      edit — new `## [1.9.0]` block above `## [1.8.1]`: `### Fixed` (relevance-primary
+      composition, fetch-width decoupling, `k` as a real cap + clamp, non-zero
+      cold-start importance, schema drift) and `### Added` (`CrystalSummary.score`,
+      `RecallResult.budget`, `Config.recall_relevance_primary`, the oversized-summary
+      advisory, the DX strings).
+  - path: evals/BENCH-NOTES.md
+    change: >-
+      edit — §W5(i) updated with the before/after `retrieval-gate` JSON and a one-line
+      note that the metric shift is caused by `k` becoming a real cap (C-6).
+  - path: mcp-server/pyproject.toml
+    change: >-
+      edit — `version = "1.9.0"` (the single source `install.sh:71-75` greps; its
+      hardcoded `"1.8.0"` grep-failure fallback is explicitly left alone).
+
+test_harness:
+  runner: >-
+    Container-first pytest via `make test` -> `docker compose run --rm crystalium
+    pytest mcp-server/tests/ -v` (Makefile:27-28); `make test-fast` skips
+    `@pytest.mark.slow` model-download and eval-gate tests; the new regression suite
+    (`test_recall_starvation.py`) carries no `@pytest.mark.slow` marker and must run
+    under `make test-fast`.
+  slow_gates: >-
+    `@pytest.mark.slow`, invoked explicitly: `test_retrieval_gate.py`,
+    `test_evb_gate.py`, `test_forgetting_gate.py`, `test_prefetch_gate.py`,
+    `test_dream_gate.py` — all five ran and passed inside the full `make test` run per
+    both verification attestations (Step 2, then R1), even though the spec's own
+    printed slow-gate command block omits `test_dream_gate.py` (a documentation gap,
+    discharged in fact by `make test`, per C-6).
+  eval_gate: >-
+    `python -m evals retrieval-gate` (`evals/retrieval_gate.py`) run before and after on
+    the branch (C-6); both JSON outputs recorded (`eval-before.json`, `eval-after.json`)
+    and independently reproduced exact by the checker on a second run; a flipped
+    `completion_pass`/`context_pass` is a checker finding, never a test edit — none
+    flipped.
+  red_first: >-
+    C-5/C-12: AC-001, AC-002, AC-004, AC-005, AC-010 (and AC-031 per C-12) demonstrated
+    RED at the pre-fix baseline before the fix landed, with failing output recorded in
+    `red-evidence.txt` and independently reproduced by the checker via a scratch git
+    worktree, both as a collection-level `ImportError` and, under symbol-only shims, as
+    a behavioural failure for the semantically correct reason on every C-5-mandated AC.
+  requires_real_daemon: true   # docker; make test and the retrieval-gate eval both execute inside the crystalium docker-compose service, not on the host interpreter
+
+acceptance_checks:
+  - id: AC-001
+    form: event-driven
+    given: >-
+      a store holding four high-importance crystals whose summaries do not contain the
+      query tokens, plus one freshly committed crystal whose summary contains three
+      distinctive low-frequency tokens, with `Config.slots["episodic"]` reduced so the
+      candidate set overflows the slot
+    when: >-
+      `Aetheryte.recall()` is called with the same scope and a query composed of those
+      three distinctive tokens
+    then: the system shall include the freshly committed crystal's id in `result.records`
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestIssue36Regression::test_fresh_distinctive_crystal_is_returned`
+      — C-5 RED-first at `af24493`.
+
+  - id: AC-002
+    form: event-driven
+    given: a store holding eight crystals that all match the query, whose summaries fit within the slot budget
+    when: "`Aetheryte.recall()` is called with `k=5`"
+    then: the system shall return exactly five records
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestKIsACap::test_k5_returns_five_when_five_fit`
+      — C-5 RED-first at `af24493`.
+
+  - id: AC-003
+    form: state-driven
+    given: "`Config.recall_relevance_primary` is enabled"
+    when: "`Aetheryte.recall()` returns for any store or query"
+    then: "the system shall satisfy `len(result.records) <= k`"
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestKIsACap::test_never_exceeds_k`
+      parameterised over `k in (1,3,5,10,15)`.
+
+  - id: AC-004
+    form: event-driven
+    given: >-
+      a store holding one irrelevant crystal at `utility.importance = 0.9` plus one
+      query-relevant crystal at `utility.importance = 0.0`, with a slot cap admitting
+      only one of them
+    when: "`Aetheryte.recall()` is called with a query matching only the relevant crystal"
+    then: the system shall return the relevant crystal rather than the high-importance one
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestRelevanceBeatsImportance::test_relevant_zero_importance_survives_eviction`
+      — C-5 RED-first; provable only under DP-1 O1.
+
+  - id: AC-005
+    form: ubiquitous
+    given: any non-empty recall result in the default configuration
+    when: "the caller inspects any returned `CrystalSummary`"
+    then: the system shall expose a non-null `score`
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestScorePopulated::test_score_is_not_none`
+      — C-5 RED-first at `af24493`.
+
+  - id: AC-006
+    form: optional-feature
+    given: "`Config.recall_relevance_primary` is set to `False`"
+    when: "`Aetheryte.recall()` returns a non-empty result"
+    then: the system shall still expose a non-null `score` on every record
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestScorePopulated::test_score_populated_when_flag_off`
+      — DP-5 "both modes".
+
+  - id: AC-007
+    form: event-driven
+    given: >-
+      a default-configuration fixture of four candidate records carrying relevance 0.9,
+      0.5, 0.1 and 0.05, routed to one slot whose cap is small enough to force at least
+      one eviction
+    when: "`Aetheryte.recall()` returns the surviving records"
+    then: the system shall emit them in non-increasing `score` order
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestOrdering::test_evicting_slot_emits_descending_score`
+      — DP-6; strengthened per DP-R2/C-13. The fixture MUST evict: Pass 1 reassembles an
+      evicting slot from `remaining`, which is sorted *ascending* by eviction key, so
+      without seam 5 an evicting slot emits worst-relevance-first. Gate proof: attack E
+      (delete the seam-5 output sort) must turn this node RED — it stayed green against
+      the previous non-evicting fixture (`verification.md` F-V2).
+
+  - id: AC-008
+    form: optional-feature
+    given: "`Config.recall_relevance_primary` is set to `False`"
+    when: "`Aetheryte.recall()` runs against a fixture that overflows a slot"
+    then: the system shall reproduce the pre-fix composition result set
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestLegacyPath::test_flag_off_restores_prefix_behaviour`
+      — C-1; load-bearing because DP-2 landed B.
+
+  - id: AC-009
+    form: optional-feature
+    given: "`Config.recall_relevance_primary` is set to `False`"
+    when: "`Aetheryte.recall()` is called with a `k` smaller than the candidate count"
+    then: the system shall return more than `k` records
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestLegacyPath::test_flag_off_does_not_cap_at_k`
+      — pins C-1's "seam 3 is inside the flag" boundary.
+
+  - id: AC-010
+    form: event-driven
+    given: "a caller committing a well-formed crystal under the default `evb_enabled=True` configuration"
+    when: "`crystalium.commit` returns successfully"
+    then: the system shall report an `importance` strictly greater than 0.0
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestColdStartImportance::test_commit_importance_nonzero`
+      parameterised over `episodic`, `procedural`, `semantic` — C-5 RED-first; DP-4c.
+
+  - id: AC-011
+    form: state-driven
+    given: "`evb_enabled` is set to `False` so the legacy scorer is active"
+    when: a caller commits a well-formed crystal
+    then: the system shall report an `importance` no greater than 0.30
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestColdStartImportance::test_legacy_scorer_clamped_to_ceiling`
+      — C-3; the clamp that makes DP-4=C differ from bare A.
+
+  - id: AC-012
+    form: state-driven
+    given: "`evb_enabled` is set to `True` so the EVB scorer is active"
+    when: "a caller commits a crystal with `novelty_at_write = 0.5`"
+    then: the system shall report an `importance` equal to the unclamped `importance_fn` value
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestColdStartImportance::test_evb_path_unclamped`
+      — C-3; proves the ceiling never binds on the default path.
+
+  - id: AC-013
+    form: unwanted-behavior
+    given: a caller writing an execution-layer checkpoint
+    when: the checkpoint is persisted
+    then: the system shall leave its `importance` at 0.5
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestColdStartImportance::test_execution_layer_importance_unchanged`
+      — DP-4d.
+
+  - id: AC-014
+    form: event-driven
+    given: a crystal committed in-session that has been surfaced by one recall
+    when: a second recall for the same query runs
+    then: the system shall report a `utility.access_count` of at least 1 for that crystal
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestColdStartImportance::test_in_session_reinforcement_closes_the_loop`
+      — asserts the existing loop at `retrieve.py:544-551` now fires for a fresh crystal.
+
+  - id: AC-015
+    form: ubiquitous
+    given: any recall result in any configuration
+    when: the caller reads the response
+    then: >-
+      the system shall expose `result.budget` carrying `total_cap`, `slots`,
+      `k_requested`, `k_applied`, `truncated_count`
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_budget_object_present_with_five_fields`
+      — DP-3c; always-on, both modes.
+
+  - id: AC-016
+    form: event-driven
+    given: "a store whose filtered candidate count exceeds `k` in the default configuration"
+    when: "`Aetheryte.recall()` returns"
+    then: >-
+      the system shall report `budget.truncated_count` equal to the count of candidates
+      actually removed by the `k` slice
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_truncated_count_derived_from_real_slice`
+      — DP-7; strengthened per DP-R3/C-14. The oracle asserts the identity
+      `len(result.records) + budget.truncated_count == <filtered candidate count before
+      the slice>`, so a counter derived from pre-slice intent cannot pass: under attack D
+      (delete `filtered_ids = filtered_ids[:k]`, keep the counter) the shipped object
+      reported five drops that never happened while the old arithmetic oracle stayed
+      green (`verification.md` F-V3). Attack D must turn this node RED.
+
+  - id: AC-017
+    form: unwanted-behavior
+    given: any recall in any configuration
+    when: "the `budget` object is assembled"
+    then: "the system shall report a `budget.k_applied` no greater than `budget.k_requested`"
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_k_applied_never_exceeds_k_requested`
+      — strengthened per DP-R3/C-14; `k_applied = min(k_requested, len(before))` makes
+      this true by construction. Under attack D the shipped object reported
+      `k_requested=15, k_applied=20` while every oracle stayed green (`verification.md`
+      F-V3). Attack D must turn this node RED. [Frozen text as-is; the final pre-tag
+      re-verification found this node stays GREEN under attack D by design and recorded
+      the contradiction as F-V12 — see known_gaps.] The `evicted_count` field-meaning
+      pin previously carried by this ID is preserved verbatim as AC-032.
+
+  - id: AC-018
+    form: event-driven
+    given: "a caller passing `explain=true`"
+    when: "`Aetheryte.recall()` returns"
+    then: "the system shall include `k_applied` together with `truncated_by_k` in `result.explain`"
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_explain_carries_k_keys`
+      — DP-3c.
+
+  - id: AC-019
+    form: ubiquitous
+    given: any recall result
+    when: the composer has assembled the working set
+    then: "the system shall satisfy `result.total_tokens <= 3500`"
+    verify: >-
+      `pytest mcp-server/tests/test_composer.py::TestTotalCap` (existing, unmodified)
+      plus `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_total_cap_invariant_holds`
+      — DP-3b, P0-9.
+
+  - id: AC-020
+    form: unwanted-behavior
+    given: a caller passing a numeric `k` outside the range 1 to 100
+    when: the recall request is normalised
+    then: the system shall clamp `k` into the range 1 to 100
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestKClamp::test_numeric_k_clamped`
+      parameterised over `0`, `-3`, `500` at both `server._handle_recall` and the CLI
+      verb — DP-3d.
+
+  - id: AC-021
+    form: unwanted-behavior
+    given: >-
+      a caller passing a non-coercible `k` such as the string `"garbage"`
+    when: the recall request is normalised
+    then: the system shall fall back to the default `k` of 10 without raising
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestKClamp::test_non_coercible_k_falls_back_to_default`
+      — C-11.
+
+  - id: AC-022
+    form: event-driven
+    given: a caller committing a crystal whose summary tokenises above the destination layer's slot cap
+    when: "`crystalium.commit` returns successfully"
+    then: the system shall attach a `summary_size` advisory naming the token count together with the slot cap
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestOversizedSummary::test_oversized_summary_advisory`
+      — DP-8.
+
+  - id: AC-023
+    form: unwanted-behavior
+    given: a caller committing a crystal whose summary fits its destination slot
+    when: "`crystalium.commit` returns successfully"
+    then: the system shall omit the `summary_size` advisory from the result dict
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestOversizedSummary::test_fitting_summary_has_no_advisory`
+      plus the existing `test_diagnosability.py::TestSummaryQualityGate::test_commit_good_summary_no_advisory`
+      — DP-8 clean-path byte-identity.
+
+  - id: AC-024
+    form: unwanted-behavior
+    given: a tokenizer that raises on the supplied summary
+    when: "`crystalium.commit` processes that summary"
+    then: the system shall complete the commit without an error
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestOversizedSummary::test_tokenizer_exception_skips_advisory`
+      with a monkeypatched raising tokenizer — C-4.
+
+  - id: AC-025
+    form: ubiquitous
+    given: "the `crystalium.commit` tool manifest"
+    when: "a client reads the `provenance` property description"
+    then: "the system shall name every member of `server._VALID_PROVENANCE_SOURCES`"
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestDX::test_commit_description_lists_provenance_sources`
+      — asserts against the runtime frozenset, so the test cannot pass by matching a
+      list the implementation also hardcodes.
+
+  - id: AC-026
+    form: event-driven
+    given: a T2 caller attempting a semantic commit
+    when: "`TierViolation` is raised"
+    then: the system shall include the string `procedural` in the advice
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestDX::test_tier_violation_advice_names_procedural_fallback`
+      — DX-2.
+
+  - id: AC-027
+    form: unwanted-behavior
+    given: a T2 caller attempting a semantic commit
+    when: "`TierViolation` is raised"
+    then: the system shall omit any claim that a procedural candidate is promoted to semantic
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestDX::test_advice_makes_no_promotion_promise`
+      asserting the advice contains neither `promoted to semantic` nor `auto-promot` —
+      C-9, mission P0-4.
+
+  - id: AC-028
+    form: ubiquitous
+    given: "a live `RecallResult` produced by `Aetheryte.recall()`"
+    when: "its `model_dump` is validated against `schemas/recall-result.v1.json`"
+    then: the system shall produce a document that satisfies the published schema
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestSchemaRoundTrip::test_plain_result_validates`
+      — DP-X, C-7; imports `jsonschema` unconditionally, never `pytest.skip`.
+
+  - id: AC-029
+    form: event-driven
+    given: "a live `RecallResult` produced with `explain=true`"
+    when: "its `model_dump` is validated against `schemas/recall-result.v1.json`"
+    then: the system shall produce a document that satisfies the published schema
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestSchemaRoundTrip::test_explain_result_validates`
+      — DP-X, C-7.
+
+  - id: AC-030
+    form: state-driven
+    given: the full pytest suite runs against the fixed build
+    when: the suite completes
+    then: the system shall report zero failures
+    verify: "`make test` (`docker compose run --rm crystalium pytest mcp-server/tests/ -v`) exits 0."
+
+  - id: AC-031
+    form: event-driven
+    given: >-
+      a store holding topically-unrelated crystals plus one freshly committed crystal
+      carrying three distinctive low-frequency tokens, with `Config.recall_relevance_primary`
+      enabled
+    when: "`Aetheryte.recall()` is called with `k=3` and a query composed of those three distinctive tokens"
+    then: the system shall include the freshly committed crystal's id in `result.records`
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestSmallKFetchWidth::test_fresh_crystal_returned_at_k3`
+      — new per DP-R1/C-12; pins seam 3b (`fetch_width = max(k, FETCH_WIDTH_FLOOR)`).
+      Demonstrated RED at `323229f` before the seam-3b commit. The flag-off column of
+      the four-cell probe is unchanged (AC-009 still holds).
+
+  - id: AC-032
+    form: unwanted-behavior
+    given: "a recall whose candidates are dropped only by the `k` slice rather than by the token budget"
+    when: the result is assembled
+    then: the system shall leave `evicted_count` at 0
+    verify: >-
+      `pytest mcp-server/tests/test_recall_starvation.py::TestBudgetSurfaced::test_evicted_count_excludes_k_truncation`
+      — DP-7; relocated verbatim from revision 2.0.0's AC-017 when that ID took the
+      `k_applied` invariant. Pins `evicted_count`'s existing meaning (token-budget
+      evictions only).

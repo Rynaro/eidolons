@@ -1,0 +1,19 @@
+{
+  "axes": {
+    "multihop_f1": {
+      "flat": 0.1212121212121212,
+      "completion": 0.17647058823529413,
+      "both": 0.17647058823529413
+    },
+    "context_rank": {
+      "flat": 2,
+      "context": 2,
+      "both": 4
+    }
+  },
+  "graph_ok": true,
+  "completion_pass": true,
+  "context_pass": false,
+  "gate_pass": true,
+  "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+}
