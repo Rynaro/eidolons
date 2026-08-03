@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **Roster: CRYSTALIUM v1.9.0** (ESL change `crystalium-recall-starvation-36`, tier full; fixes crystalium#36). Recall was silently write-only for fresh crystals: composition ranked slot survival by `(importance, last_access, id)` with query relevance never participating, commits hardcoded `importance: 0.0`, and `k` never capped the response. v1.9.0 makes relevance decisive (`recall_relevance_primary`, default on, off = pre-1.9.0 behavior), makes `k` a real cap with fetch width floored at 10, starts fresh commits at a clamped non-zero importance (ceiling 0.30), populates `CrystalSummary.score`, and surfaces a `budget` diagnostics object. Dual-roster bump (`roster/mcps.yaml` + `roster/index.yaml`) with image index digest, archive integrity, and provenance recorded; per deliberation DP-R5 the shipped image was probed at its digest and asserted to carry mcp SDK 1.29.0 (<2) **before** the digest entered the roster (mcp pinned `>=1.2.0,<2` upstream in crystalium#40; 2.x migration tracked in crystalium#39).
+
 ## [2.14.1] — 2026-07-29 — a hook must find its project from wherever the session stands
 
 ### Fixed

@@ -162,10 +162,20 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.8.1"
+      latest: "1.9.0"
       pins:
-        stable: "1.8.1"
+        stable: "1.9.0"
       releases:
+        "1.9.0":
+          # Recall is no longer write-only storage (crystalium#36): query relevance
+          # is decisive in composition (Config.recall_relevance_primary, default on;
+          # off restores pre-1.9.0 behavior), k is a real response cap with fetch
+          # width floored at 10, fresh commits start at a clamped non-zero
+          # importance (ceiling 0.30), score + budget diagnostics surfaced.
+          # mcp SDK pinned >=1.2.0,<2 (crystalium#40; 2.x migration: crystalium#39).
+          # 9 tools (MCP surface unchanged; recall/commit results gain fields).
+          digest: "sha256:784d21487450796d6e2a0dc8af4713aba60b8996806cbd53436389cfbeaed32c"
+          released_at: "2026-08-03T04:42:06Z"
         "1.8.1":
           # Recall no longer crashes on cl100k special-token strings in a stored
           # summary (crystalium#32). 9 tools (MCP surface unchanged).
