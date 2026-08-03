@@ -1,12 +1,105 @@
 {
   "mcpServers": {
     "junction": {
+      "command": "/home/rynaro/.eidolons/cache/junction@0.4.0/junction",
       "args": [
         "mcp",
         "serve"
-      ],
-      "command": "junction",
-      "type": "stdio"
+      ]
+    },
+    "crystalium": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--label",
+        "eidolons.project=eidolons",
+        "-v",
+        "/home/rynaro/.crystalium/eidolons:/root/.crystalium/eidolons",
+        "-e",
+        "CRYSTALIUM_DATA_DIR=/root/.crystalium/eidolons",
+        "-e",
+        "CRYSTALIUM_CALLER_TIER=T1",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/crystalium@sha256:784d21487450796d6e2a0dc8af4713aba60b8996806cbd53436389cfbeaed32c",
+        "python",
+        "-m",
+        "crystalium",
+        "serve"
+      ]
+    },
+    "tonberry": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--user",
+        "1000:1000",
+        "--label",
+        "eidolons.project=eidolons",
+        "-v",
+        "/home/rynaro/workspace/oss/agents/eidolons:/workspace:z",
+        "-w",
+        "/workspace",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/tonberry@sha256:55dd2fed08070461e1f3b92c303128a0ae1f3c1b62165fd07d0c327e7b1f94f9",
+        "serve"
+      ]
+    },
+    "atlas-aci": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--read-only",
+        "--label",
+        "eidolons.project=eidolons",
+        "-v",
+        "/home/rynaro/workspace/oss/agents/eidolons:/repo:ro",
+        "-v",
+        "/home/rynaro/workspace/oss/agents/eidolons/.atlas/memex:/memex",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/atlas-aci@sha256:e2542ef8d569882c560065f0bcaed9ef2a7398e7e61765e25b142a3c93ec7cf7",
+        "serve",
+        "--repo",
+        "/repo",
+        "--memex-root",
+        "/memex"
+      ]
+    },
+    "atomos": {
+      "command": "docker",
+      "args": [
+        "run",
+        "--rm",
+        "-i",
+        "--user",
+        "1000:1000",
+        "--label",
+        "eidolons.project=eidolons",
+        "-v",
+        "/home/rynaro/workspace/oss/agents/eidolons:/workspace:z",
+        "-w",
+        "/workspace",
+        "--cap-drop",
+        "ALL",
+        "--security-opt",
+        "no-new-privileges",
+        "ghcr.io/rynaro/atomos@sha256:b3f67b4ef64230ebe91aa37efea14e386f178950a2750e0c26c8d29d7ea4a639",
+        "serve"
+      ]
     }
   }
 }
