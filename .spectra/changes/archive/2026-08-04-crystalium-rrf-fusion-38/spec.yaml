@@ -1,0 +1,754 @@
+schema: eidolons/change-spec.v1
+change_id: crystalium-rrf-fusion-38
+tier: full
+maker: vivi
+checker: vigil
+target: crystalium — weighted RRF fusion + base-arm seeding + arm-order determinism (fix Rynaro/crystalium#38, ships v1.10.0)
+
+problem: >
+  `Aetheryte.recall()` fuses up to four ranked lists with `rrf_merge_scored`
+  (`retrieve.py:61-88`), which sums `1/(60+rank)` across arms with no per-arm weight. A
+  record's fused score therefore grows with the *number* of arms that mention it,
+  regardless of how well any single arm fits the query (P1). The extra arms are not
+  independent evidence: `seed_ids = dense_ranking[:fetch_width]` (`:377`) seeds graph
+  expansion and `completion_seeds = seed_ids or sparse_ranking[:fetch_width]` (`:397`)
+  seeds the completion walk from the same set, so the dense arm votes once directly and
+  twice more through its own neighbourhood while the sparse arm seeds nothing (P2). And
+  neither derived arm has a deterministic rank order at all: `neighbor_expand` returns
+  `set[str]` (`graph.py:205,221,256`) which `retrieve.py:383` iterates directly, and
+  `decaying_walk` scores a set comprehension (`graph.py:279-284`) which `:405` sorts by
+  score only, so every graph and completion rank — and every fused score and surfaced
+  `CrystalSummary.score` touching them — varies with `PYTHONHASHSEED` (P3). P3 also
+  explains #36's F-V6 unreproducible BENCH-NOTES figure, which had no mechanism on record.
+  Measured on the shipped retrieval-gate fixture at `ef42967`: `spoke1`, which matches the
+  query on no lexical token at all, outranks the exact lexical match at fused rank 0 —
+  P1 inverting a real corpus, not a constructed one. v1.9.0's `FETCH_WIDTH_FLOOR = 10`
+  guards P1's symptom at small `k` without touching the fusion; FORGE's own DP-R1 ruling
+  said so and ordered this follow-up.
+
+decision:
+  selected: weighted RRF with a correlated-family merge (D2) + query-conditional sparse boost (D3) + base-arm seeding (D4) + consumer-side arm-order determinism (D5)
+  scores: { H-B: 81.5, H-A: 72.5, H-D: 65.5, H-E: 60.5, H-C: 59.0 }  # planner explore scores, rev 1.1.0 — SUPERSEDED BY MEASUREMENT: H-A was re-scored 61.5 -> 72.5 when a modelling error was found, then measured-REFUTED outright (measurement.md: gate_pass=false at 6/6 hash seeds); FORGE ratified H-B on the measurement, not on these scores
+  rejected:
+    - >-
+      H-A static per-arm down-weighting (72.5 after re-score, the closest rival):
+      rejected on MEASUREMENT — at `w_graph=0.35 / w_comp=0.25` the shipped retrieval
+      gate collapses `multihop_f1.completion` 0.4615 -> 0.3077 with `gate_pass=false`,
+      unanimous at 6/6 `PYTHONHASHSEED` values. Mechanism measured: `spoke2`'s only vote
+      is the completion arm, so down-weighting that arm alone evicts it from the top-10
+      (`0.25/62 = 0.004032`). Anomaly B adds an independent structural argument — records
+      at or above seed rank are barred from both derived arms, so H-A cannot demote the
+      record class the issue names. Both the planner's model and the checker's
+      counter-model were wrong about the dense column; the true one is mixed
+      (`spoke1 = 17`, `spoke2 = ABSENT`).
+    - >-
+      `fusion_weight_derived = 0.95` (DP-2's documented-band candidate): rejected —
+      measured FLAKY, not merely worse. `spoke2`'s sole vote is `w_d/(60+r)` where `r` is
+      the hash-nondeterministic completion rank; 0.95 passes 6/7 seeds and goes RED at
+      `PYTHONHASHSEED=5`, 0.90 fails deterministically, 1.00 passes 7/7. Values below 1.0
+      remain legal config but leave the documented band, and no test, doc or CHANGELOG
+      line may present 0.95 as a "precision dial". Any value below 1.0 also forfeits the
+      D2 identity property; any value above 1.0 re-creates P1.
+    - >-
+      all-statuses selectivity denominator (DP-9 option (a), the checker's original
+      prescription): rejected — FORGE ruled (b), active-only on both ends tracking
+      `recall_active_only`, on the planner's aging argument: under P0-5 the deprecated
+      rows are lexical near-duplicates of the target itself, so all-statuses lets records
+      the caller never sees dilute the very signal they duplicate. (a) additionally
+      carries a second decay path — `bm25_search` applies `LIMIT candidate_k` with no
+      status predicate, so deprecated rows consume fetch slots, can trip the censoring
+      branch to `w_sparse = 1.0`, and can crowd active hits out of the candidate set
+      entirely (opened as F-D).
+    - >-
+      consumer-side per-seed union in `retrieve.py` as a workaround for anomaly A:
+      rejected BY NAME by FORGE (DP-8). Anomaly A is a store-layer defect
+      (`graph.py:205-256` wraps the whole seed loop in one `try`, so Kuzu's
+      cursor-exhaustion raise aborts expansion after the first seed); patching around it
+      in the consumer would mask a high-severity store bug behind a caller-side loop and
+      make F-A harder to see. D5's two consumer-side sorts ship; `storage/graph.py` is a
+      hard scope fence, verified empty-diff.
+    - >-
+      corpus-scaled `FETCH_WIDTH_FLOOR` (DP-6 option (a)): rejected — the floor is a
+      stability device, and scaling it with corpus size makes the ranking universe a
+      function of unrelated commits, destroying reproducibility for the deterministic
+      eval gates this change depends on. The measurement named the real target instead:
+      `dense_ranking` held exactly 30 of 31 crystals and it is `candidate_k`, not the
+      seed-width floor, that cut `spoke2` out of the dense arm. Opened as D-4.
+    - >-
+      tie-break-neutral fusion-gate fixture (would have converted AC-138/AC-139 from
+      INDETERMINATE to green): DECLINED by the maker and ratified by the checker. Measured
+      cost: AC-125's unanimity 7/7 -> ~2/7. AC-125 is one of AC-136's frozen six, so a red
+      AC-125 flips `recall_weighted_fusion` to `False` mechanically — i.e. it would ship
+      unweighted fusion with the measured P1 inversion live, in exchange for greening two
+      criteria that are explicitly permitted to be indeterminate. The diagnostic variant
+      was measured across 14 seeds and preserved as knowledge, not shipped as fixture.
+  safety_default: >-
+    `Config.recall_weighted_fusion` defaults `true`, subsumed by
+    `recall_relevance_primary` (`self._weighted = bool(recall_weighted_fusion and
+    recall_relevance_primary)`), so `recall_weighted_fusion: false` is a one-line revert
+    to v1.9.0 fusion, seeding and `score` magnitudes. The default is not a judgement:
+    AC-136 makes it mechanical — any red among AC-121, AC-122, AC-123, AC-124, AC-125,
+    AC-133 ships `False` and returns the change to FORGE. D5's determinism fixes sit
+    deliberately OUTSIDE the flag, because gating a determinism fix leaves the flag-off
+    path irreproducible.
+
+safety_invariant: >
+  Flag-off (`recall_weighted_fusion: false`) restores v1.9.0 fusion; flag-off on
+  `recall_relevance_primary` restores pre-1.9.0 retrieval byte-identically, and weighting
+  is subsumed under it so #36's frozen AC-008/AC-009 are never reached by this change.
+  The selectivity numerator and denominator are drawn from the SAME population on both the
+  layer axis and the status axis — `N_scoped` counted over `target_layers`, status
+  population resolved by `recall_active_only` and applied to BOTH ends. AC-142's two
+  assertions are complementary, not redundant: the invariant `n_sparse <= n_scoped`
+  catches a mixed population, and `w_sparse == 1.0` catches the reverse mismatch, which
+  satisfies the invariant and would otherwise pass unseen.
+  The preliminary fusion that produces `seed_ids` reads base arms only (invariant I-1), so
+  a derived arm can never influence its own seeds.
+  `rrf_merge` / `rrf_merge_scored` bodies are untouched and `test_rrf.py`'s pre-existing
+  classes stay byte-identical, so their continued green is a real non-regression signal.
+  Every attack in the plan carries a falsifiability precondition that must go green first
+  (AC-139 for AC-138, AC-141 for AC-140); an attack whose precondition is not green is
+  recorded INDETERMINATE and returned to FORGE, never resolved by an implementer.
+
+invariants:
+  - weighted-fusion-subsumed-by-relevance-primary   # self._weighted = recall_weighted_fusion AND recall_relevance_primary; None-sentinel at both production sites (server.py:548, __main__.py:340); AC-120 pins it (DP-4)
+  - legacy-rrf-functions-untouched   # rrf_merge/rrf_merge_scored bodies unchanged, weighted_rrf_merge_scored added beside them; test_rrf.py TestRrfMerge byte-identical (AC-106, C-1 fence)
+  - derived-family-is-one-voter   # graph+completion collapsed by min-rank into derived_ranking before fusion; a candidate in both contributes exactly one term (AC-107); identity holds bitwise when completion is off (AC-108/AC-135)
+  - population-parity-both-axes   # selectivity numerator and denominator share layer scope AND status population; n_scoped over target_layers, status per recall_active_only, applied to both ends (DP-3/DP-9, AC-134/AC-142)
+  - no-status-predicate-on-bm25-search   # active-only numerator computed WITHIN sparse_ranking for weight purposes only; bm25_search is shared and stays untouched (DP-9, verified empty-diff)
+  - prelim-reads-base-arms-only   # invariant I-1: the seeding fusion never reads graph_ranking or completion_ranking, so derived arms cannot influence their own seeds (AC-114)
+  - fetch-width-unchanged   # fetch_width = max(k, FETCH_WIDTH_FLOOR=10) is untouched; D4 changed seed COMPOSITION, never seed COUNT (AC-115); #36 seam 3b intact
+  - determinism-outside-the-flag   # D5's sorted(neighbour_ids) and (-score, id) completion sort ship ungated — gating a determinism fix would leave the flag-off path irreproducible
+  - store-layer-untouched   # storage/graph.py and storage/relational.py both empty-diff; anomaly A routed to F-A, no consumer-side workaround (DP-8 rejected it by name)
+  - falsifiability-precondition-per-attack   # AC-139 gates AC-138, AC-141 gates AC-140; a precondition that is not green makes its attack INDETERMINATE and returns it to FORGE, never weakened by the implementer
+  - oracle-must-differ-not-merely-hold   # standing rule earned by R-7 firing three times in review; a criterion must be shown to differ across the implementations it claims to distinguish
+  - red-first-evidence-on-record   # RED-first demonstrations recorded in red-evidence.txt before the fix, including AC-131's remediated id pair found by a 201-candidate search
+
+known_gaps:
+  - >-
+    AC-138 / AC-139 INDETERMINATE (criteria-legal, attribution corrected): C-2 requires the
+    floor-10 and floor-1000 rank distributions to be disjoint; measured `{1,1,1}` vs
+    `{1,1,1}` (reverted) and `{0,0,0}` vs `{0,0,0}` (fixed) across seeds 0-2. They overlap,
+    so AC-139 is INDETERMINATE — which is not green — and AC-138 is unfalsifiable and NOT
+    claimed as discharged. The attribution is a MEASURED mechanism, not a borrowed excuse:
+    the floor channel IS live, but an id-ascending tiebreak (`"N1" < "target"`) masks it at
+    the final rank. Neither criterion is among AC-136's six, so the shipped default is
+    untouched. Exactly the outcome DP-8's [RISK] and C-2 pre-registered.
+  - >-
+    F-A / anomaly A (high, follow-up, MUST be opened before the tag): `graph.py:205-256`
+    wraps the whole `for seed_id in seed_ids` loop in one `try`, and Kuzu raises at cursor
+    exhaustion, so `neighbor_expand(seeds)` is equivalent to `neighbor_expand([seeds[0]])`;
+    `decaying_walk` passes `list(frontier)` from a set, so WHICH seed survives is
+    hash-random. This is membership nondeterminism, which D5's ordering fixes do not touch —
+    all of #38's measurements were taken on a one-seed expansion. Checker's correction,
+    recorded: fixing F-A alone will NOT unblock AC-138/AC-139, because their indeterminacy
+    is caused by the tiebreak mask, not by anomaly A.
+  - >-
+    F-B / anomaly B (med, follow-up): `neighbor_expand` filters `if neighbor_id not in
+    seed_ids` and `decaying_walk` seeds `visited = set(seed_ids)`, so a record at or above
+    seed rank can never receive graph or completion credit. Consequence of record: #38's
+    own acceptance sketch — competitors at dense ranks 1-3 that ALSO carry derived votes —
+    describes a configuration the code cannot produce, confirmed unbuildable by the
+    measurement. The shipped fixture carries a better and real instance of the same class
+    (spoke1 outranking hub).
+  - >-
+    F-C / anomaly C — the retrieval gate's fixture is confounded and its isolation
+    docstring is false (med-high, follow-up): measured edge counts flat 2 / context 2 /
+    completion 142 / both 142, because `server.py:522,535` ties `link_cooccurrence` to
+    `config.recall_completion`, so the flag under test changes the commit-time graph;
+    `recent_crystal_ids` resolves to the 5 first-committed crystals because the fixture
+    stamps an identical `_T0`. Binding interpretation rule (C-5): AC-124 is a
+    NON-REGRESSION TRIPWIRE, never a retrieval-quality claim, until F-C lands.
+  - >-
+    F-V9 (NOTE) — AC-125's unweighted arm is now partly tiebreak-driven: after the fixture
+    was enlarged, at seeds where the completion lottery loses the arm's `target_rank != 0`
+    is delivered by `"N1" < "target"` at an exact `1/61` score tie rather than by the
+    phantom collecting two derived votes. AC-125's THEN still holds and the A/B still
+    isolates the flag — the WEIGHTED arm's rank-0 remains genuinely boost-driven, which is
+    the half carrying the fusion claim — but the gate's negative half is partly an
+    alphabetical artifact. Deliberate and disclosed; belongs to the follow-up that revisits
+    this fixture.
+  - >-
+    release-image `__version__` probe (pre-existing, blocks the digest not the merge):
+    `crystalium.__version__` resolves to `1.4.0` from stale baked-venv dist metadata, on
+    this branch AND on `ef42967`. The image must be rebuilt and probed so `__version__`
+    reports `1.10.0` before its digest enters the roster — the DP-R5 guard pattern from the
+    #36 release train.
+  - >-
+    D-1 cross-layer rank blocking (med-high, deferred by DP-5 with evidence landed):
+    `retrieve.py:326-360` appends per layer over `_ALL_LAYERS`, so with `layers=None` an
+    episodic hit always precedes every semantic hit regardless of BM25 score; the inversion
+    fires at `j >= 1`. Arm-internal, so the sparse boost cannot correct it. AC-126's
+    `cross_layer` axis is the evidence; the gate lands before the fix.
+
+files_touched:
+  - path: mcp-server/src/crystalium/aetheryte/retrieve.py
+    change: >-
+      edit — D1/D2/D3/D4/D5: `weighted_rrf_merge_scored()` added beside the untouched
+      `rrf_merge`/`rrf_merge_scored`; min-rank derived-family merge producing
+      `derived_ranking`; per-recall weight resolution with search-space-local,
+      status-parity selectivity; `seed_ids` taken from a base-arm preliminary fusion
+      instead of `dense_ranking[:fetch_width]` (invariant I-1); `sorted(neighbour_ids)`
+      and `(-score, id)` completion sort, both outside the flag; `explain.fusion`
+      assembly. `fetch_width`, the per-layer append loop and `FETCH_WIDTH_FLOOR`'s
+      constant nature are untouched; `_is_active` is moved, not modified.
+  - path: mcp-server/src/crystalium/config.py
+    change: >-
+      edit — four fields: `recall_weighted_fusion` (default `True`),
+      `fusion_weight_dense`, `fusion_weight_derived` (default `1.0`, comment recording the
+      measured cliff 0.90 fail / 0.95 red at seed 5 / 1.00 pass 7/7),
+      `fusion_sparse_boost_alpha` (default `1.0`); `_env_bool`/`_env_float` in `from_env`
+      plus the matching `_from_dict` `bool_field` and `float_field` allowlist entries —
+      the allowlists are the silent-YAML-failure surface AC-127 parameterises over.
+  - path: mcp-server/src/crystalium/server.py
+    change: >-
+      edit — `None`-sentinel `Aetheryte(...)` wiring at the production construction site
+      (`:548`); manifest description states `score` is a WEIGHTED fusion value, replacing
+      the unqualified "raw hybrid-retrieval RRF value" (AC-128, DP-7).
+  - path: mcp-server/src/crystalium/__main__.py
+    change: edit — `None`-sentinel `Aetheryte(...)` wiring at the second production construction site (`:340`).
+  - path: mcp-server/src/crystalium/__init__.py
+    change: edit — `_FALLBACK_VERSION` refreshed; legal only because the Assemble-phase scope re-declaration added this path as the 13th glob (vigil A-3).
+  - path: mcp-server/pyproject.toml
+    change: edit — version `1.9.0` -> `1.10.0` (minor; additive and flag-gated, no public schema removed).
+  - path: evals/fusion_gate.py
+    change: >-
+      NEW — the deterministic weighted-vs-unweighted A/B gate (AC-125) over a real
+      `GraphStore`, carrying the `cross_layer` axis (AC-126) and hosting the AC-138/AC-139
+      floor-inflation pair. The only variable between arms is the flag.
+  - path: evals/__main__.py
+    change: edit — `fusion-gate` subcommand registered alongside the existing gate entrypoints.
+  - path: evals/BENCH-NOTES.md
+    change: >-
+      edit — F-V6's non-reproducible `context_rank` figure annotated as run-varying
+      (AC-137), naming BOTH mechanisms per C-11: P3's ordering nondeterminism, fixed here,
+      and anomaly A's membership nondeterminism, which is not.
+  - path: CHANGELOG.md
+    change: >-
+      edit — `[1.10.0]` block: weighted fusion and its defaults, the derived-family merge,
+      `score` now a WEIGHTED value, the two determinism fixes with the note that
+      graph/completion ordering was previously hash-seed-dependent, the four config fields,
+      the revert path, and a "Known limitations" entry scoping the determinism fix to
+      consumer-side ordering (C-10).
+  - path: mcp-server/tests/test_fusion_weighting.py
+    change: NEW — the Layer-2 real-stack/mocked-arm suite plus the Layer-3 guard-vs-cure pair; covers AC-101..AC-103, AC-113..AC-120, AC-129, AC-131, AC-135, AC-140, AC-141, AC-142.
+  - path: mcp-server/tests/test_fusion_gate.py
+    change: NEW — pytest wrapper over the new eval gate (AC-125, AC-126), template `test_retrieval_gate.py`.
+  - path: mcp-server/tests/test_rrf.py
+    change: >-
+      edit — additive only; new classes for the weighted function, the derived-family merge
+      and the weight helper (AC-104/105/107/108/112/132/134). `TestRrfMerge` is
+      byte-identical and the file's only deletion is the import line — that byte-identity
+      is the non-regression signal AC-106 exists to read.
+  - path: mcp-server/tests/test_config.py
+    change: edit — `TestFusionConfig`, parameterised over the four new fields crossed with both `crystalium.yaml` and the `CRYSTALIUM_*` environment variable (AC-127).
+  - path: mcp-server/tests/ (5 Config.__new__ helpers)
+    change: >-
+      edit — the new Config fields assigned in all five manual helpers in the same commit
+      that adds them (`test_aetheryte.py:42`, `test_composer.py:82`,
+      `test_dream_worker.py:34`, `test_dream_scheduler.py:41`,
+      `test_recall_starvation.py:82`). #36's C-8 enumerated four; the planner's audit found
+      the fifth, which #36 itself had added after writing that condition.
+  - path: mcp-server/src/crystalium/storage/relational.py
+    change: >-
+      DECLARED, UNTOUCHED — correct and verified empty-diff. DP-3 ruled the existing
+      bounded `count_for_export(project, layers=target_layers)` supplies `N_scoped`, so no
+      new public `RelationalStore` method was added; DP-9 forbids any status predicate on
+      the shared `bm25_search`.
+  - path: schemas/recall-result.v1.json
+    change: >-
+      DECLARED, UNTOUCHED — correct and required by AC-129. The top level is
+      `additionalProperties: false` (the trap #36 hit) but `explain` is deliberately loose,
+      so `explain.fusion` validates with no schema edit.
+
+test_harness:
+  runner: >-
+    Container-first. `make test` = `docker compose run --rm crystalium pytest
+    mcp-server/tests/ -v`; a real daemon is required for the graph and vector stores.
+  eval_gate: >-
+    `python -m evals retrieval-gate` (AC-124 non-regression tripwire, AC-133 context axis)
+    and `python -m evals fusion-gate` (AC-125 A/B, AC-126 cross-layer, AC-138/AC-139 floor
+    inflation). `eval-before.json` MUST be captured before any code change; the threshold
+    is the measured baseline, never a modelled figure from `spec.md`.
+  multi_run_protocol: >-
+    C-2 — every real-`GraphStore` rank criterion is evaluated across multiple
+    `PYTHONHASHSEED` values, and a split verdict is RED and a finding, never a retry.
+    Distributions that overlap where C-2 requires disjointness make the criterion
+    INDETERMINATE, which is not green.
+  red_first: >-
+    RED-first demonstrations recorded in `red-evidence.txt` at `ef42967` before the fix.
+    AC-131's originally recorded pair proved irreproducible at review — reverting D5 did
+    not change the fused order anywhere in `PYTHONHASHSEED` 0..4, the exact window AC-131's
+    frozen VERIFY names; divergence first appeared at seed 6 and recurred at 9, 15, 17, 18.
+    That made attack D unable to redden AC-131, turning AC-130 RED (F-V1). Widening the
+    window was NOT legal (it would amend a frozen criterion, forbidden by C-15), so the
+    remedy was new fixture ids selected by MEASUREMENT: 201 candidate >=4-distinct
+    UUID-shaped sets swept, 65 of which disagree inside 0..4 under this test's exact
+    completion-score scheme. The selected ids are pinned as
+    `test_fusion_weighting.py::_DETERMINISM_IDS`, and the observed disagreeing seed pair
+    required by AC-131's frozen text is (0, 1), reproduced by the checker seed for seed.
+  requires_real_daemon: true   # docker; make test, the retrieval gate and the fusion gate all execute inside the crystalium container
+
+# Mechanically distilled from the frozen `spec.criteria.md`
+# (sha256 e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded, amended 4x).
+# The criteria file remains authoritative; each `verify` below is that block's VERIFY line,
+# with the per-criterion rationale and measurement tables left in the criteria file.
+acceptance_checks:
+- id: AC-101
+  form: event-driven
+  given: the sketch fixture with `recall_relevance_primary` enabled together with the weighted
+  when: '`Aetheryte.recall()` is called with `k=10`'
+  then: the system shall return the target crystal's id as `result.records[0].id`
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestIssue38Sketch::test_target_is_fusion_rank_1`
+    — must be demonstrated RED at `ef42967`. Asserts fusion rank 1, not membership; membership is what
+    the v1.9.0 fetch-width floor already provides. Non-floor-borne-ness is AC-138/AC-139''s job, not
+    this node''s.'
+- id: AC-102
+  form: event-driven
+  given: the sketch fixture in the default configuration
+  when: '`Aetheryte.recall()` is called once per value of `k` drawn from 1, 3, 5, 10, 25'
+  then: the system shall return the target crystal's id as `result.records[0].id` at every one of those
+    values
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestIssue38Sketch::test_rank_1_is_k_independent`
+    parameterised over `k in (1,3,5,10,25)` — the issue''s "should win fusion at ANY k".'
+- id: AC-103
+  form: unwanted-behavior
+  given: the sketch fixture with the weighted fusion path disabled
+  when: '`Aetheryte.recall()` is called with `k=10`'
+  then: the system shall return an id other than the target's as `result.records[0].id`
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestIssue38Sketch::test_unweighted_path_ranks_target_below_first`
+    — the gate''s own gate. If this node cannot go red, AC-101 is passing for some reason other than
+    the fix.'
+- id: AC-104
+  form: ubiquitous
+  given: any ranking set in which every arm weight is 1.0
+  when: '`weighted_rrf_merge_scored` is called on it'
+  then: the system shall produce the same `(id, score)` multiset that `rrf_merge_scored` produces for
+    the same input
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestWeightedRrf::test_unit_weights_match_legacy_scores`
+    over the existing `test_rrf.py` fixture corpus, **plus the discordant fixture `[["b"], ["a"]]`,
+    plus an intra-list-duplicate fixture such as `[["a", "b", "a"]]`**. The duplicate fixture is required
+    by vigil B-4: `rrf_merge_scored` accumulates one term *per occurrence* (`retrieve.py:82-86`, and
+    its docstring blesses the case — "Duplicates within a single list are allowed but unusual"), so
+    `weighted_rrf_merge_scored` must do the same or this criterion is green only because the shipped
+    corpus happens to contain no intra-list duplicate. §D1''s docstring must state the per-occurrence
+    rule explicitly. **AMENDED (vigil F4/A-11):** revision 1.0.0 asserted "the same id sequence", which
+    contradicts AC-105''s deliberate id-ascending tie-break. Measured counterexample: `[["b"],["a"]]`
+    -> legacy `[''b'',''a'']` (insertion order), weighted-at-1.0 `[''a'',''b'']` (id ascending) — while
+    the score multiset is identical. Revision 1.0.0 was green only because every tie in the shipped
+    corpus happens to be insertion-order-concordant. The unverifiable "at most one derived arm present"
+    clause is also dropped: the function takes `list[tuple[list[str], float]]` and has no notion of
+    a derived arm.'
+- id: AC-105
+  form: ubiquitous
+  given: two candidates whose weighted fusion scores are exactly equal
+  when: '`weighted_rrf_merge_scored` orders them'
+  then: the system shall place the lexicographically smaller id first
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestWeightedRrf::test_exact_tie_breaks_by_id_ascending`
+    with the arms supplied in both possible orders — an insertion-order tie-break is not stable under
+    P3.'
+- id: AC-106
+  form: state-driven
+  while: '`mcp-server/tests/test_rrf.py`''s pre-existing test classes remain byte-identical to their
+    state at `ef42967`'
+  when: the test file is executed against the fixed build
+  then: the system shall report zero failures among those pre-existing tests
+  verify: '`pytest mcp-server/tests/test_rrf.py -k "TestRrfMerge"` plus `git diff ef42967 -- mcp-server/tests/test_rrf.py`
+    showing additions only — pins that `rrf_merge`/`rrf_merge_scored` were not modified.'
+- id: AC-107
+  form: event-driven
+  given: a candidate that appears in both the graph ranking and the completion ranking
+  when: the derived-family merge produces `derived_ranking`
+  then: the system shall include that candidate exactly once in `derived_ranking`
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestDerivedFamily::test_candidate_in_both_arms_appears_once`
+    asserting the emitted position equals the candidate''s minimum rank across the two arms.'
+- id: AC-108
+  form: optional-feature
+  where: the completion ranking supplied to the merge is empty, leaving exactly one derived arm
+  when: '`weighted_rrf_merge_scored` runs with every weight at 1.0'
+  then: the system shall produce scores equal to the unweighted three-arm fusion to within 1e-15
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestDerivedFamily::test_single_derived_arm_is_identity`
+    — the identity property recorded in `spec.md` §D2. **AMENDED (vigil A-9):** revision 1.0.0''s WHERE
+    named `Config.recall_completion`, which is inoperative at a pure-function boundary — the function
+    has no Config access. The Config-level counterpart is now AC-135.'
+- id: AC-109
+  form: event-driven
+  given: a store in which the query's BM25 conjunction matches a number of crystals far below both the
+    fetch cap and the count of crystals in the searched layers, counted over the same status population
+    as the numerator (AC-142)
+  when: the sparse arm weight is resolved for that recall
+  then: the system shall report a sparse arm weight strictly greater than 1.0
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_selective_query_boosts_sparse_arm`
+    on the pure weight helper, plus `result.explain["fusion"]["w_sparse"]` on the real stack.'
+- id: AC-110
+  form: event-driven
+  given: a query whose sparse ranking length reaches the fetch cap
+  when: the sparse arm weight is resolved for that recall
+  then: the system shall report a sparse arm weight of exactly 1.0
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_censored_sparse_arm_is_neutral`
+    — a censored count cannot evidence selectivity.'
+- id: AC-111
+  form: unwanted-behavior
+  given: a query for which the sparse arm returns no candidates
+  when: the sparse arm weight is resolved for that recall
+  then: the system shall complete the resolution without raising
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_empty_sparse_arm_does_not_raise`
+    parameterised over searched-layer sizes 0 and 1 — guards the zero-division and negative-selectivity
+    edges.'
+- id: AC-112
+  form: ubiquitous
+  given: any combination of sparse-arm length, fetch cap, searched-layer crystal count (over the AC-142
+    population) and configured alpha
+  when: the sparse arm weight is resolved
+  then: the system shall report a value within the closed interval from 1.0 to 1.0 plus the configured
+    alpha
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_weight_is_bounded` over a parameterised
+    grid including degenerate inputs. Note this criterion is a bound, not a correctness oracle — vigil
+    F5 demonstrated an inverted weight sitting comfortably inside it; AC-134 is the oracle that catches
+    that.'
+- id: AC-113
+  form: event-driven
+  given: a record present in the sparse ranking but positioned outside the dense ranking's first `fetch_width`
+    entries
+  when: the graph expansion seed set is assembled
+  then: the system shall include that record's id in the seed set
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestSeeding::test_sparse_only_record_becomes_a_seed`
+    asserting against the ids passed to the mocked `neighbor_expand` — issue item 2.'
+- id: AC-114
+  form: unwanted-behavior
+  given: a recall in which the graph ranking is non-empty
+  when: the preliminary fused order used for seeding is computed
+  then: the system shall exclude every ranking other than the sparse ranking together with the dense
+    ranking
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestSeeding::test_prelim_reads_base_arms_only`
+    — invariant I-1; a derived arm feeding its own seeds is a feedback loop.'
+- id: AC-115
+  form: ubiquitous
+  given: any recall in the default configuration
+  when: the graph expansion seed set is assembled
+  then: the system shall pass no more than `fetch_width` seed ids to the expansion
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestSeeding::test_seed_count_bounded_by_fetch_width`
+    parameterised over `k in (1,3,10,50)` — pins that D4 changed seed *composition*, never seed *count*.'
+- id: AC-116
+  form: ubiquitous
+  given: any non-empty recall result on the weighted path
+  when: the caller reads a returned `CrystalSummary`
+  then: the system shall expose a `score` equal to that record's weighted fused value
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestScoreSemantics::test_score_is_the_weighted_fusion_value`
+    comparing against the pure function recomputed on the same arms — keeps `rrf_score_by_id` the single
+    source of truth (#36 seam 1).'
+- id: AC-117
+  form: event-driven
+  given: a caller passing `explain=true` on the weighted path
+  when: '`Aetheryte.recall()` returns'
+  then: the system shall include a `fusion` object in `result.explain` carrying the three arm weights
+    together with the selectivity inputs that produced them
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestExplain::test_explain_carries_fusion_object`
+    asserting key presence plus consistency with the surfaced scores. The object must name the searched-layer
+    crystal count actually used as the selectivity denominator **together with the status population
+    that count was drawn from** (AC-134''s and AC-142''s diagnostic surface) — vigil G-2: revision 1.1.0
+    surfaced the denominator''s value but nothing asserted its population, which is how the status-axis
+    defect stayed invisible.'
+- id: AC-118
+  form: event-driven
+  given: a default-configuration fixture routed to one slot whose cap forces at least one eviction
+  when: '`Aetheryte.recall()` returns the surviving records on the weighted path'
+  then: the system shall emit them in non-increasing `score` order
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestOrdering::test_weighted_scores_emit_descending`
+    — re-asserts #36 AC-007''s contract under weighted scores; the eviction-forcing fixture is mandatory
+    (#36 F-V2).'
+- id: AC-119
+  form: optional-feature
+  where: '`Config.recall_weighted_fusion` is set to `False`'
+  when: '`Aetheryte.recall()` runs against the sketch fixture whose mocked arms are id-ascending with
+    pairwise-distinct completion scores'
+  then: the system shall reproduce the fused id order that `ef42967` produces for the same arms
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestFlagOff::test_weighted_off_reproduces_v190_fusion`
+    against an order captured from `ef42967` under those same fixture conditions. **AMENDED (vigil A-2):**
+    revision 1.0.0''s reference was "an order captured from `ef42967`", which for any set-derived graph
+    arm is exactly the hash-seed-dependent artifact P3 exists to disprove — an oracle that cannot exist.
+    The id-ascending/distinct-scores precondition makes the captured order well-defined under both `ef42967`''s
+    unsorted iteration and D5''s `sorted()`, which is required because §Rollback deliberately places
+    D5 OUTSIDE the flag.'
+- id: AC-120
+  form: optional-feature
+  where: '`Config.recall_relevance_primary` is set to `False` while `Config.recall_weighted_fusion`
+    is left `True`'
+  when: '`Aetheryte.recall()` runs against the sketch fixture'
+  then: the system shall produce the unweighted fused order
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestFlagOff::test_relevance_primary_off_subsumes_weighting`
+    — pins D7''s subsumption so the half-gated mode #36 DP-R4(iii) closed cannot reappear as an emergent
+    property. Note (vigil A-10) that this path also narrows `fetch_width` to bare `k`, since the shipped
+    line is `max(k, FETCH_WIDTH_FLOOR) if self.recall_relevance_primary else k`; the fixture must therefore
+    hold both differences fixed, not one.'
+- id: AC-121
+  form: state-driven
+  while: the 32 frozen criteria of change `crystalium-recall-starvation-36` are evaluated against the
+    fixed build
+  when: their VERIFY batch completes
+  then: the system shall report zero failures across all 32
+  verify: '`pytest mcp-server/tests/test_recall_starvation.py -v` exiting 0 with the test count asserted
+    at 32, **plus `pytest mcp-server/tests/test_composer.py::TestTotalCap` (required by #36 AC-019)
+    and `pytest mcp-server/tests/test_diagnosability.py::TestSummaryQualityGate` (required by #36 AC-023)**.
+    **AMENDED (vigil A-7):** revision 1.0.0 named one file for a 32-criteria claim, so its own VERIFY
+    could not discharge its own THEN.'
+- id: AC-122
+  form: state-driven
+  while: the F-V1 four-cell probe runs on the real embedding stack with a fresh store per cell
+  when: the flag-on column completes for every `k` drawn from 1, 3, 5, 10
+  then: the system shall return the freshly committed crystal in every one of those four cells
+  verify: 'the probe script recorded in `verification.md`, re-run per #36 DP-R4(ii); interleaving cells
+    in one store is invalid (#36 verification, F-V1 note). This criterion scopes the probe to the flag-on
+    column (four cells); `spec.md` revision 1.1.0 §Acceptance Criteria was corrected to match (vigil
+    A-5).'
+- id: AC-123
+  form: state-driven
+  while: the full pytest suite runs against the fixed build
+  when: the suite completes
+  then: the system shall report zero failures
+  verify: '`make test` (`docker compose run --rm crystalium pytest mcp-server/tests/ -v`) exits 0.'
+- id: AC-124
+  form: event-driven
+  given: '`eval-before.json` captured from `python -m evals retrieval-gate` before any code change'
+  when: the same gate is re-run against the fixed build
+  then: the system shall report a `multihop_f1.completion` value no lower than the recorded baseline
+  verify: '`python -m evals retrieval-gate` diffed against `eval-before.json`; `completion_pass` must
+    also remain `true`. The threshold is the measured baseline, never any modelled number in `spec.md`
+    (evidence gap G-1). **AMENDED (vigil A-1):** this criterion is now explicitly scoped to the multi-hop
+    axis only; the gate''s second axis is guarded separately by AC-133, because `gate_pass = (completion_ok
+    and graph_ok) or context_ok` cannot surface a context-axis degradation on its own.'
+- id: AC-125
+  form: event-driven
+  given: the new fusion eval gate running a weighted arm together with an unweighted arm over identical
+    corpora
+  when: '`python -m evals fusion-gate` completes'
+  then: the system shall report the target at fused rank 0 in the weighted arm while reporting it at
+    a rank greater than 0 in the unweighted arm
+  verify: '`python -m evals fusion-gate` with `gate_pass` true, plus `pytest mcp-server/tests/test_fusion_gate.py`
+    — an A/B whose only variable is the flag, per the honest-ablation discipline in `evals/retrieval_gate.py`.
+    The gate uses a real `GraphStore`, which is what makes it a legal host for AC-138/AC-139.'
+- id: AC-126
+  form: event-driven
+  given: an eval fixture committing query-matching crystals to more than one layer
+  when: the fusion gate runs against it
+  then: the system shall report the target crystal's rank within the sparse arm for each layer
+  verify: '`python -m evals fusion-gate` emitting a `cross_layer` axis — the evidence DP-5 defers its
+    decision to; the shipped `retrieval_gate.py` commits every crystal to `episodic`, so no existing
+    gate can observe this axis.'
+- id: AC-127
+  form: ubiquitous
+  given: each of the four new fusion configuration fields
+  when: a value for it is supplied through its documented source
+  then: the system shall resolve that value onto the `Config` instance
+  verify: '`pytest mcp-server/tests/test_config.py::TestFusionConfig` parameterised over the four fields
+    crossed with both `crystalium.yaml` and the `CRYSTALIUM_*` environment variable — the YAML half
+    is the one that silently fails when `_from_dict`''s `bool_field`/`float_field` allowlists are not
+    extended.'
+- id: AC-128
+  form: ubiquitous
+  given: the `crystalium.recall` tool manifest
+  when: a client reads the `score` field's description
+  then: the system shall state that the value is a weighted fusion score
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestDX::test_manifest_describes_weighted_score`
+    asserting the description no longer reads `raw hybrid-retrieval RRF value` unqualified, plus a matching
+    CHANGELOG entry for 1.10.0.'
+- id: AC-129
+  form: ubiquitous
+  given: a live `RecallResult` produced with `explain=true` on the weighted path
+  when: its `model_dump` is validated against `schemas/recall-result.v1.json`
+  then: the system shall produce a document that satisfies the published schema
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestSchemaRoundTrip::test_explain_with_fusion_validates`
+    importing `jsonschema` unconditionally — the top level declares `additionalProperties: false` (the
+    trap #36 hit) while `explain` is deliberately loose, so this must pass with no schema edit.'
+- id: AC-130
+  form: state-driven
+  while: the checker executes attacks A, B, C, D, F and G of `spec.md` §Test Plan Layer 5
+  when: each attack is applied to the fixed build in turn
+  then: the system shall turn every one of those six attacks' named criteria red
+  verify: '`verification.md` recording per-attack observed status against the expected column; a green
+    attack on any of the six is a finding, per "a gate that cannot fail on the defect it names is not
+    a gate". **AMENDED (vigil F2):** revision 1.0.0 folded attack E into this criterion with the expected
+    outcome "nothing changes", which is unfalsifiable on the Layer-2 mock the Terminology block mandates.
+    Attack E is now AC-138 with its own falsifiability precondition, AC-139.'
+- id: AC-131
+  form: state-driven
+  while: the same recall is executed in separate processes started with different `PYTHONHASHSEED` values,
+    over a derived-arm fixture holding at least four distinct ids of the crystal UUID shape
+  when: every process completes against identical store contents
+  then: the system shall produce byte-identical fused id orders across all of them
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestDeterminism::test_fused_order_is_hash_seed_independent`
+    spawning subprocesses over `PYTHONHASHSEED` values 0 through 4. **AMENDED (vigil F3):** revision
+    1.0.0 pinned seeds 0 and 1 over a three-id arm and left the id shape unstated, so its mandatory
+    RED-first demonstration was decided by fixture strings rather than by the defect. Measured (CPython
+    set-iteration order, ten seeds): at n=2 the plain-`n1,n2` style gives seed0 == seed1; at n=3 vigil
+    measured UUID-shaped ids identical under seeds 0 and 1, and my own re-measurement with different
+    UUID strings found them differing — the disagreement is itself the evidence that small-n discrimination
+    is string-specific. At n>=4 all three id styles differ under seeds 0 and 1 and yield 8-10 distinct
+    orders over ten seeds. The implementer MUST record, in `verification.md`, the fixture''s literal
+    ids together with the observed disagreeing seed pair from 0..4 that establishes RED at `ef42967`.'
+- id: AC-132
+  form: ubiquitous
+  given: any ranking set with every arm weight at 1.0 in which no two candidates hold exactly equal
+    fused scores
+  when: '`weighted_rrf_merge_scored` is called on it'
+  then: the system shall produce the same id sequence that `rrf_merge_scored` produces for the same
+    input
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestWeightedRrf::test_unit_weights_match_legacy_order_when_tie_free`
+    with a tie-freeness assertion in the fixture builder — **NEW (vigil F4)**; carries the order half
+    of revision 1.0.0''s AC-104, correctly restricted to the domain where the two tie-break rules cannot
+    diverge.'
+- id: AC-133
+  form: event-driven
+  given: '`eval-before.json` captured from `python -m evals retrieval-gate` before any code change'
+  when: the same gate is re-run against the fixed build
+  then: the system shall report a `context_rank.context` value no worse than the recorded baseline
+  verify: '`python -m evals retrieval-gate` diffed against `eval-before.json` on the context axis —
+    **NEW (vigil A-1)**. **Proxy note (vigil B-2):** `recall_context_match` defaults **False** (`config.py:202`,
+    "stays OFF — no rank lift in the discriminating gate"), so the shipped arm is `comp`, and `retrieval_gate.run()`
+    exports `context_rank` for the `flat`/`context`/`both` arms only — the shipped arm''s `ctx_rank`
+    is not an exported metric at all. This criterion therefore guards a **proxy** arm, which is legitimate
+    because the fusion weight is arm-independent (the same `w_sparse` is resolved whatever `recall_context_match`
+    is set to), but it must not be read as a guard on shipped behaviour. The exposure is concrete: `w_sparse`
+    near 1.97 roughly doubles the hub''s sparse term while `ctx_match` ("acme login session token guide")
+    does not satisfy the conjunctive query at all and gains nothing, so the context axis can degrade
+    while `gate_pass` stays true. A `None` baseline (the crystal absent from the result) is treated
+    as the worst value.'
+- id: AC-134
+  form: unwanted-behavior
+  given: a layer-filtered recall whose BM25 conjunction matches every crystal in the searched layer
+  when: the sparse arm weight is resolved for that recall
+  then: the system shall report a sparse arm weight of exactly 1.0
+  verify: '`pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_layer_saturating_query_gets_no_boost`
+    plus a real-stack `layers=[''procedural'']` case asserting `result.explain["fusion"]["w_sparse"]
+    == 1.0` — **NEW (vigil F5)**. Must be demonstrated RED against a global-`N` denominator: with 5
+    procedural crystals all matched inside a 10 005-crystal store, the global reading resolves `w_sparse
+    = 1.9995` — a near-maximal boost for a maximally non-selective query — and every criterion of revision
+    1.0.0 survived it, AC-112 included. This is the criterion that forces the denominator to be counted
+    over `target_layers`, consistent with how `cap` already multiplies through `len(target_layers)`.
+    It closes the **layer** axis only; the **status** axis is AC-142, and the two together are the full
+    statement of "numerator and denominator must be drawn from the same population".'
+- id: AC-135
+  form: optional-feature
+  where: '`Config.recall_completion` is set to `False` with `fusion_sparse_boost_alpha` set to 0.0 and
+    every arm weight left at 1.0'
+  when: '`Aetheryte.recall()` runs against the sketch fixture'
+  then: the system shall reproduce the fused id order that `ef42967` produces for the same arms
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestIdentity::test_path_level_identity_with_completion_off`
+    — **NEW (vigil A-9)**. **Reseeding precondition (vigil B-3), which the fixture MUST assert rather
+    than assume:** neutralising `alpha` and the arm weights does not neutralise **D4**, which lives
+    inside the same flag — with every weight at 1.0, `prelim = fuse(sparse, dense)` is still not `dense_ranking`,
+    so `seed_ids` genuinely differs from `ef42967`''s. The identity holds only because the sketch fixture''s
+    `prelim[:fetch_width]` is **set-equal** to `dense_ranking[:fetch_width]` (the order differs, the
+    membership does not, so expansion returns the same neighbours). The fixture must assert that set-equality
+    explicitly; without it this criterion inherits exactly the fixture-dependence F2 and F3 were repaired
+    for, and it is scoped to fixtures where that precondition holds. §D2''s identity property and R-2''s
+    mitigation ("bounds it to `recall_completion=True`") are claims about the shipped *path*, which
+    also carries D3''s boost, D4''s reseeding and D5''s re-ordering; AC-108 pins only the pure function.
+    Neutralising alpha isolates the derived-family merge, which is what R-2 actually asserts. The AC-119
+    fixture preconditions (id-ascending arms, distinct completion scores) apply here too.'
+- id: AC-136
+  form: state-driven
+  while: any of AC-121, AC-122, AC-123, AC-124, AC-125 or AC-133 is red on the implementation branch
+  when: the shipped default of `Config.recall_weighted_fusion` is decided
+  then: the system shall ship that flag defaulting to `False`
+  verify: 'the release checklist in `verification.md` records the verdict of all six named criteria
+    beside the shipped default; a `True` default alongside any red verdict blocks the tag and returns
+    the change to FORGE — **NEW (vigil F6)**. Revision 1.0.0''s contingency bound only AC-124/125, leaving
+    a red non-regression gate (a strictly more serious signal) with no mechanical rule, which is how
+    a gate declared "mechanical, never discretionary" becomes discretionary. Revision 1.2.0 adds **AC-133**
+    (vigil B-2): it was introduced for precisely the silent-degradation reason that motivates the contingency,
+    so leaving it outside the list reproduced the F6 defect one criterion over. AC-140 is **not** in
+    the list **pending FORGE''s explicit ruling on DP-4(ii)** (vigil C-2). Revision 1.2.0 excluded it
+    on the spec''s own reasoning; "the issue''s literal acceptance bar is red and the flag still ships
+    ON" is a call the deliberating authority must make on the record, not one a spec may assume. Until
+    DP-4(ii) is ruled, this criterion''s list is the five of revision 1.1.0 plus AC-133.'
+- id: AC-137
+  form: event-driven
+  given: '`evals/BENCH-NOTES.md`''s recorded `context_rank` figure that #36''s F-V6 found non-reproducible'
+  when: this change lands
+  then: the system shall carry that figure either corrected or annotated as run-varying
+  verify: '`git diff` on `evals/BENCH-NOTES.md` showing the F-V6 figure changed or annotated, with the
+    annotation naming P3 as the mechanism — **NEW (vigil A-8)**. P3 supplies the explanation F-V6 lacked,
+    so this change is the one that can retire the artifact rather than leave a known-wrong committed
+    number standing.'
+- id: AC-138
+  form: unwanted-behavior
+  given: the Layer-3 real-`GraphStore` fixture of AC-125 with the fusion fix present
+  when: '`FETCH_WIDTH_FLOOR` is raised to 1000'
+  then: the system shall leave the target crystal at fused rank 0
+  verify: '`python -m evals fusion-gate` with the fetch-width floor overridden to 1000, target rank
+    unchanged at 0 — **NEW (vigil F2)**, replacing revision 1.0.0''s attack-E clause inside AC-130.
+    This node is only meaningful once AC-139 has established that the floor has a live channel in this
+    fixture; recording a PASS here without AC-139 green is recording an unfalsifiable result. **Scope
+    (vigil G-1):** this pair probes floor *inflation* only. Because the host gate runs `k=10` and `fetch_width
+    = max(k, FLOOR)`, *lowering* the floor is inert here; the guard-vs-cure question is AC-140/AC-141''s.'
+- id: AC-139
+  form: event-driven
+  given: the same Layer-3 real-`GraphStore` fixture with the fusion fix reverted to `ef42967` behaviour
+  when: '`FETCH_WIDTH_FLOOR` is raised to 1000'
+  then: the system shall change the target crystal's fused rank relative to the same fixture at the
+    shipped floor of 10
+  verify: '`python -m evals fusion-gate` run twice on the reverted build, floor 10 versus floor 1000,
+    with the two target ranks recorded and asserted different — **NEW (vigil F2)**. Probes floor inflation
+    only; see AC-138''s scope note and AC-140/AC-141 for the removal direction (vigil G-1). This is
+    the falsifiability precondition for AC-138: it proves the floor actually reaches the result in this
+    fixture, so AC-138''s "nothing changes" carries information instead of being a no-op by construction.
+    If AC-139 cannot go green, the fixture is seed-insensitive and AC-138 must be moved, not weakened.'
+- id: AC-140
+  form: event-driven
+  given: the Layer-3 real-`GraphStore` fixture of AC-141 with the fusion fix present and `FETCH_WIDTH_FLOOR`
+    set to 1
+  when: '`Aetheryte.recall()` is called once per value of `k` drawn from 1, 3, 5'
+  then: the system shall return the target crystal's id as `result.records[0].id` at every one of those
+    values
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestGuardVsCure::test_target_survives_floor_removal_at_small_k`
+    parameterised over `k in (1,3,5)` with the floor monkeypatched to 1 — **NEW (vigil G-1)**. This
+    is the change''s thesis test and the issue''s literal acceptance bar ("without relying on the fetch-width
+    floor"). It MUST run at Layer 3 or on the AC-125 eval gate with a real `GraphStore`: on the Layer-2
+    seed-independent mock the Terminology block mandates, lowering the floor is a no-op by construction
+    and this criterion would repeat the F2 tautology in the opposite direction. Its expected mechanism
+    is **D4, not the weighting**: at `fetch_width = 1`, base-arm fused seeding makes `seed_ids = [target]`
+    (the target holds two base arms against each competitor''s one, so it leads `prelim` at every `w_sparse`
+    from 1.0 to 2.0 — modelled), whereas `ef42967`''s `dense_ranking[:1]` seeds the top dense *competitor*
+    and walks its neighbourhood instead. **A red AC-140 is not a defect to be patched away** — it is
+    the finding that this change is layered on the v1.9.0 guard rather than replacing it, and it goes
+    to FORGE as DP-1 input. Whether it *also* flips the shipped default is **DP-4(ii)**, open for FORGE
+    (vigil C-2); this criterion does not presume the answer.'
+- id: AC-141
+  form: event-driven
+  given: the same Layer-3 real-`GraphStore` fixture with the fusion fix reverted to `ef42967` behaviour
+    and `FETCH_WIDTH_FLOOR` set to 1
+  when: '`Aetheryte.recall()` is called with `k` set to 1'
+  then: the system shall return an id other than the target's as `result.records[0].id`
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestGuardVsCure::test_reverted_build_needs_the_floor_at_k1`
+    — **NEW (vigil G-1)**; the falsifiability precondition for AC-140, standing to it exactly as AC-139
+    stands to AC-138. It proves the floor''s channel is live in this fixture at small `k`, so that AC-140''s
+    green carries information rather than being a no-op. This is #36''s F-V1 k=1 cell reproduced: at
+    `323229f`, before seam 3b, the fresh crystal was not returned at `k` of 1 or 3. If AC-141 cannot
+    go **green**, the fixture is not floor-sensitive and AC-140 must be **moved, not weakened** — note
+    the convention, harmonised with AC-139 in revision 1.3.0 (vigil C-1): AC-141''s own THEN asserts
+    that the *reverted* build puts some other id first, so the precondition is satisfied when **AC-141
+    itself is green**, exactly as for AC-139.'
+- id: AC-142
+  form: event-driven
+  given: a searched layer holding some active crystals together with some deprecated ones, where the
+    query's BM25 conjunction matches every crystal in that layer regardless of status
+  when: the sparse arm weight is resolved for that recall
+  then: the system shall report a sparse-arm count no greater than the searched-layer count that produced
+    it
+  verify: '`pytest mcp-server/tests/test_fusion_weighting.py::TestSparseWeight::test_mixed_status_population_agrees`
+    on a store seeded with N active plus M deprecated matching crystals, asserting **both** `explain["fusion"]["n_sparse"]
+    <= explain["fusion"]["n_scoped"]` **and** `w_sparse == 1.0`, in that test. The two assertions are
+    **complementary, not oracle-plus-redundancy** — each catches a mismatch direction the other cannot
+    (see the complementarity table below). **AMENDED in revision 1.3.0 (vigil H-1)** — see the discriminating-power
+    table below. Must be demonstrated RED against a mixed-population implementation. The defect it catches:
+    `bm25_search` applies **no status predicate** (`relational.py:493-541`) over an FTS index whose
+    triggers carry every row including deprecated ones (`relational.py:75-88`), so `n_sparse` counts
+    inactive crystals; `recall_active_only` (default `True`, `config.py:225`) removes them only at `retrieve.py:482-505`,
+    long after the weight is resolved; while the natural denominator is active-only (the existing helper
+    is literally `count_active_by_scope_key`). Numerator and denominator then come from different populations,
+    the ratio inflates, and `w_sparse` decays monotonically toward 1.0 as deprecated rows accumulate
+    — which under P0-5 ("write-new, never hard-delete") they do **by design**. The headline feature
+    would die silently in exactly the long-lived stores it exists for, with no error, no log line and
+    no explain anomaly, and every fixture among AC-101..AC-139 is a fresh store. **Why the THEN asserts
+    the invariant rather than the weight (vigil H-1, R-7''s third occurrence).**'

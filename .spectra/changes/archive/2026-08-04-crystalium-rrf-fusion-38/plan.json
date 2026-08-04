@@ -1,0 +1,227 @@
+{
+  "schema": "junction/plan.v1",
+  "plan_id": "crystalium-rrf-fusion-38",
+  "tier": "full",
+  "planner": "ramza",
+  "maker": "vivi",
+  "checker": "vigil",
+  "status": "assembled",
+  "target": {
+    "repo": "Rynaro/crystalium",
+    "commit": "ef42967",
+    "from_version": "1.9.0",
+    "to_version": "1.10.0",
+    "issue": "https://github.com/Rynaro/crystalium/issues/38"
+  },
+  "criteria": {
+    "count": 42,
+    "ids": "AC-101..AC-142",
+    "frozen_sha256": "e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded",
+    "amend_chain": [
+      "132b25df1392",
+      "7e4c0807d768",
+      "59244291378b",
+      "b17f209a8944",
+      "e644052e868d"
+    ],
+    "normative_clause_digest": "689ec372b3e895e6ad6abc08d6eba9710c34401b5dafc15a42c323f5e20da058"
+  },
+  "stories": [
+    {
+      "id": "S-1",
+      "title": "deterministic arm ordering",
+      "days": 0.5,
+      "risk": "P0",
+      "land": "first, alone",
+      "criteria": [
+        "AC-105",
+        "AC-131"
+      ]
+    },
+    {
+      "id": "S-2",
+      "title": "weighted_rrf_merge_scored + derived-family merge",
+      "days": 1,
+      "risk": "P0",
+      "criteria": [
+        "AC-104",
+        "AC-105",
+        "AC-106",
+        "AC-107",
+        "AC-108",
+        "AC-132"
+      ]
+    },
+    {
+      "id": "S-3",
+      "title": "query-conditional weight resolution",
+      "days": 1,
+      "risk": "P1",
+      "criteria": [
+        "AC-109",
+        "AC-110",
+        "AC-111",
+        "AC-112",
+        "AC-134",
+        "AC-142"
+      ]
+    },
+    {
+      "id": "S-4",
+      "title": "wire fusion + seeding into Aetheryte.recall",
+      "days": 1.5,
+      "risk": "P0",
+      "criteria": [
+        "AC-101",
+        "AC-102",
+        "AC-103",
+        "AC-113",
+        "AC-114",
+        "AC-115",
+        "AC-116",
+        "AC-118",
+        "AC-140",
+        "AC-141"
+      ]
+    },
+    {
+      "id": "S-5",
+      "title": "config surface + gating",
+      "days": 0.5,
+      "risk": "P1",
+      "criteria": [
+        "AC-119",
+        "AC-120",
+        "AC-127"
+      ]
+    },
+    {
+      "id": "S-6",
+      "title": "diagnosability (explain.fusion)",
+      "days": 0.5,
+      "risk": "P2",
+      "criteria": [
+        "AC-117",
+        "AC-129"
+      ]
+    },
+    {
+      "id": "S-7",
+      "title": "eval gates + non-regression",
+      "days": 2,
+      "risk": "P0",
+      "criteria": [
+        "AC-121",
+        "AC-122",
+        "AC-123",
+        "AC-124",
+        "AC-125",
+        "AC-126",
+        "AC-130",
+        "AC-133",
+        "AC-136",
+        "AC-137",
+        "AC-138",
+        "AC-139"
+      ]
+    }
+  ],
+  "declared_scope": [
+    "mcp-server/src/crystalium/aetheryte/retrieve.py",
+    "mcp-server/src/crystalium/config.py",
+    "mcp-server/src/crystalium/server.py",
+    "mcp-server/src/crystalium/__main__.py",
+    "mcp-server/src/crystalium/__init__.py",
+    "mcp-server/src/crystalium/storage/relational.py",
+    "mcp-server/tests/*",
+    "evals/fusion_gate.py",
+    "evals/__main__.py",
+    "evals/BENCH-NOTES.md",
+    "schemas/recall-result.v1.json",
+    "CHANGELOG.md",
+    "mcp-server/pyproject.toml"
+  ],
+  "decision_points": [
+    {
+      "id": "DP-1",
+      "q": "weighting mechanism",
+      "rec": "(b) family-merge + query-conditional sparse boost",
+      "evidence": "MODELLED \u2014 blocked on real-stack measurement",
+      "open": true
+    },
+    {
+      "id": "DP-2",
+      "q": "fusion_weight_derived default",
+      "rec": "1.0",
+      "evidence": "MODELLED; identity property is model-independent",
+      "open": true
+    },
+    {
+      "id": "DP-3",
+      "q": "selectivity signal source",
+      "rec": "(a) search-space-relative",
+      "evidence": "source-verified",
+      "open": true
+    },
+    {
+      "id": "DP-4",
+      "q": "flag surface + default state",
+      "rec": "(a) new flag, default ON, contingent on AC-121..125+133",
+      "evidence": "source-verified",
+      "open": true
+    },
+    {
+      "id": "DP-4(ii)",
+      "q": "does a red AC-140 flip the shipped default?",
+      "rec": "(a) no \u2014 route to DP-1",
+      "evidence": "product call for FORGE",
+      "open": true
+    },
+    {
+      "id": "DP-5",
+      "q": "cross-layer rank blocking",
+      "rec": "(c) defer fix, land evidence",
+      "evidence": "source-verified; no gate can observe it today",
+      "open": true
+    },
+    {
+      "id": "DP-6",
+      "q": "FETCH_WIDTH_FLOOR corpus scaling",
+      "rec": "(b) defer, surface fetch_width",
+      "evidence": "reasoned",
+      "open": true
+    },
+    {
+      "id": "DP-7",
+      "q": "surfaced score semantics",
+      "rec": "(a) weighted value + explain",
+      "evidence": "source-verified",
+      "open": true
+    },
+    {
+      "id": "DP-8",
+      "q": "graph/completion determinism",
+      "rec": "(a) consumer-side sort",
+      "evidence": "MEASURED (4 seeds, 4 orders)",
+      "open": true
+    },
+    {
+      "id": "DP-9",
+      "q": "selectivity denominator status population",
+      "rec": "(b) active-only",
+      "evidence": "recorded maker/checker disagreement; either ruling lands with no amend",
+      "open": true
+    }
+  ],
+  "gates": {
+    "rightsize": "full (5)",
+    "complexity": "human_loop (10)",
+    "confidence": "AUTO_PROCEED (86)",
+    "critic": "vigil, 3 rounds, APPROVE-FOR-ASSEMBLE",
+    "refine_cycles": "3 of 3 (cap reached)",
+    "lint": "clean",
+    "ears_lint": "clean 42",
+    "freeze": "verified",
+    "verify_emit": "pass"
+  }
+}

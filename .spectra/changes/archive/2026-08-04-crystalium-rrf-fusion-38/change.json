@@ -1,0 +1,18 @@
+{
+  "esl_version": "1.1",
+  "change_id": "crystalium-rrf-fusion-38",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "vigil",
+  "acceptance_checks": [],
+  "spec_ref": "https://github.com/Rynaro/crystalium/issues/38",
+  "created_at": "2026-08-03",
+  "drift_checked": true,
+  "archive_path": "archive/2026-08-04-crystalium-rrf-fusion-38",
+  "has_code": true,
+  "memory_preflight": {
+    "ran": true,
+    "records": 3
+  }
+}
