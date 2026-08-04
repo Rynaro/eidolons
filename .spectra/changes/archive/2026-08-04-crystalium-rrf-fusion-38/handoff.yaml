@@ -1,0 +1,77 @@
+schema: eidolons/change-spec.v1
+change_id: crystalium-rrf-fusion-38
+tier: full
+maker: vivi
+checker: vigil
+planner: ramza
+status: assembled
+target: crystalium — weighted RRF fusion + fused-order arm seeding + arm-order determinism (fix Rynaro/crystalium#38, ships v1.10.0)
+target_repo: Rynaro/crystalium
+target_commit: ef42967
+target_version: "1.9.0"
+next_version: "1.10.0"
+upstream_issue: https://github.com/Rynaro/crystalium/issues/38
+predecessor: crystalium-recall-starvation-36
+
+artifacts:
+  spec: spec.md
+  criteria: spec.criteria.md
+  critique: critique.md
+  plan_state: ../../plans/crystalium-rrf-fusion-38.state.json
+integrity:
+  method: sha256
+  spec_md: "f2e7fb5676841b748e3720dc5b607de05ce3635ea2a835fd7d178fe1ec0b6881"
+  spec_criteria_md: "e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded"
+  frozen_criteria_hash: e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded
+  amend_chain: [132b25df1392, 7e4c0807d768, 59244291378b, b17f209a8944, e644052e868d]
+  normative_clause_digest: 689ec372b3e895e6ad6abc08d6eba9710c34401b5dafc15a42c323f5e20da058
+
+next_hop:
+  actor: forge
+  performative: REQUEST
+  reason: nine decision points remain open by design; none may be pre-bound by the implementer
+  blocking_input:
+    - id: real-stack-retrieval-gate-measurement
+      owner: coordinator
+      consumed_by: DP-1, DP-2
+      note: >
+        Every figure in spec.md section D2 is modelled. FORGE must not rule DP-1 or DP-2
+        before this lands. No acceptance criterion depends on its outcome.
+
+problem_summary: >
+  rrf_merge_scored fuses arms UNWEIGHTED, so a record seen by many weak arms outranks one
+  ranked first by the single arm that fits the query (P1). The extra arms are not independent
+  evidence: graph and completion are both seeded from dense_ranking, so the dense arm votes
+  three times (P2). And neither derived arm has a deterministic rank order at all —
+  neighbor_expand returns a set and decaying_walk scores a set comprehension, so every graph
+  and completion rank varies with PYTHONHASHSEED (P3), which also explains issue #36's
+  unreproducible F-V6 BENCH-NOTES figure. v1.9.0's FETCH_WIDTH_FLOOR is a guard on P1's
+  symptom at small k, not a cure; FORGE's own DP-R1 ruling said so and ordered this follow-up.
+
+design:
+  D1: weighted_rrf_merge_scored — new pure function; rrf_merge/rrf_merge_scored untouched
+  D2: graph + completion collapsed into ONE derived voter by min-rank (correlation correction)
+  D3: query-conditional sparse weight from search-space-local selectivity; numerator and
+      denominator MUST be drawn from the same population (layer axis AND status axis)
+  D4: graph/completion seeded from a base-arm (sparse+dense) preliminary fusion, not dense alone
+  D5: deterministic arm ordering (two consumer-side sorts; no storage API change)
+  D6: "four config fields"
+  D7: "subsumption under recall_relevance_primary"
+  D8: "explain.fusion diagnostic (n_scoped + n_scoped_status)"
+
+stories: [S-1 determinism, S-2 pure fusion, S-3 weight resolution, S-4 wiring, S-5 config, S-6 diagnosability, S-7 eval gates]
+land_first: S-1
+criteria_count: 42
+criteria_ids: AC-101..AC-142
+non_regression: "#36 AC-001..AC-032 remain in force, re-asserted by AC-121"
+
+thesis_test:
+  id: AC-140
+  claim: "cure, not guard — target holds fusion rank 0 at k in {1,3,5} with FETCH_WIDTH_FLOOR=1"
+  precondition: AC-141 (reverted build, floor=1, k=1, target NOT first) must be green first
+  predicted_mechanism: D4 reseeding, not the weighting — pre-registered so it can be wrong
+  if_red: a finding about the change's nature; routes to DP-1, does not auto-flip the flag (DP-4(ii))
+
+standing_rule: >
+  An oracle must be shown to DIFFER across the implementations it claims to distinguish, not
+  merely to hold on the correct one. R-7 fired three times in this campaign.

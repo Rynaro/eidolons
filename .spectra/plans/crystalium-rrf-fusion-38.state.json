@@ -1,0 +1,336 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "crystalium-rrf-fusion-38",
+  "created_at": "2026-08-03T17:42:37Z",
+  "tier": "full",
+  "phase": "DONE",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "R",
+    "T",
+    "R",
+    "T",
+    "R",
+    "T",
+    "A",
+    "DONE"
+  ],
+  "rightsize": {
+    "score": 5,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 8,
+      "new_dep": false,
+      "public_api": true,
+      "migration": false,
+      "security": false,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 3,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 10,
+      "dims": {
+        "scope": 2,
+        "ambiguity": 3,
+        "dependencies": 2,
+        "risk": 3
+      },
+      "verdict": "human_loop",
+      "at": "2026-08-03T17:47:38Z",
+      "label": "crystalium-rrf-fusion-38 scope"
+    },
+    {
+      "rubric": "explore",
+      "total": 61.5,
+      "dims": {
+        "alignment": 7,
+        "correctness": 3,
+        "maintainability": 8,
+        "performance": 9,
+        "simplicity": 9,
+        "risk": 2,
+        "innovation": 3
+      },
+      "verdict": "weak",
+      "at": "2026-08-03T17:49:25Z",
+      "label": "H-A static per-arm weights only (down-weight graph+completion)"
+    },
+    {
+      "rubric": "explore",
+      "total": 81.5,
+      "dims": {
+        "alignment": 9,
+        "correctness": 9,
+        "maintainability": 8,
+        "performance": 8,
+        "simplicity": 6,
+        "risk": 7,
+        "innovation": 8
+      },
+      "verdict": "solid",
+      "at": "2026-08-03T17:49:25Z",
+      "label": "H-B correlated-family merge + query-conditional sparse boost"
+    },
+    {
+      "rubric": "explore",
+      "total": 59,
+      "dims": {
+        "alignment": 8,
+        "correctness": 6,
+        "maintainability": 5,
+        "performance": 6,
+        "simplicity": 3,
+        "risk": 3,
+        "innovation": 9
+      },
+      "verdict": "weak",
+      "at": "2026-08-03T17:49:25Z",
+      "label": "H-C score-space fusion (normalized BM25/dense, abandon RRF)"
+    },
+    {
+      "rubric": "explore",
+      "total": 65.5,
+      "dims": {
+        "alignment": 5,
+        "correctness": 7,
+        "maintainability": 6,
+        "performance": 9,
+        "simplicity": 8,
+        "risk": 6,
+        "innovation": 5
+      },
+      "verdict": "weak",
+      "at": "2026-08-03T17:49:25Z",
+      "label": "H-D base-arm rank-1 protection invariant (constraint not weight)"
+    },
+    {
+      "rubric": "explore",
+      "total": 60.5,
+      "dims": {
+        "alignment": 4,
+        "correctness": 3,
+        "maintainability": 9,
+        "performance": 8,
+        "simplicity": 9,
+        "risk": 8,
+        "innovation": 4
+      },
+      "verdict": "weak",
+      "at": "2026-08-03T17:49:25Z",
+      "label": "H-E fused-order seeding only (fusion untouched)"
+    },
+    {
+      "rubric": "confidence",
+      "total": 82.5,
+      "dims": {
+        "pattern_match": 88,
+        "requirement_clarity": 88,
+        "decomposition_stability": 82,
+        "constraint_compliance": 72
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-08-03T18:02:35Z",
+      "label": "crystalium-rrf-fusion-38 spec v1.0.0 (pre-deliberation)"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 1,
+      "total": 3.4,
+      "min": 2,
+      "dims": {
+        "clarity": 4,
+        "completeness": 3,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 2
+      },
+      "verdict": "fail",
+      "at": "2026-08-03T18:15:11Z",
+      "label": "vigil independent critique — crystalium-rrf-fusion-38 spec v1.0.0"
+    },
+    {
+      "rubric": "explore",
+      "total": 72.5,
+      "dims": {
+        "alignment": 7,
+        "correctness": 7,
+        "maintainability": 8,
+        "performance": 9,
+        "simplicity": 9,
+        "risk": 5,
+        "innovation": 3
+      },
+      "verdict": "solid",
+      "at": "2026-08-03T18:29:45Z",
+      "label": "H-A static per-arm weights (RE-SCORED rev1.1.0: eval-gate refutation withdrawn per vigil F1)"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 1,
+      "total": 4,
+      "min": 4,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 4
+      },
+      "verdict": "pass",
+      "at": "2026-08-03T18:30:12Z",
+      "label": "AUTHOR refine-pass self-gate, cycle 1 (rev 1.1.0) — NOT a critique; vigil re-scores independently at delta re-critique"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 2,
+      "total": 3.8,
+      "min": 3,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 3
+      },
+      "verdict": "fail",
+      "at": "2026-08-03T18:39:02Z",
+      "label": "vigil delta re-critique round 2 — spec rev 1.1.0 (39 criteria)"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 2,
+      "total": 4,
+      "min": 4,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 4
+      },
+      "verdict": "pass",
+      "at": "2026-08-03T18:48:32Z",
+      "label": "AUTHOR refine-pass self-gate, cycle 2 (rev 1.2.0) — NOT a critique; vigil re-scores independently at final delta"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 2,
+      "total": 3.8,
+      "min": 3,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 3
+      },
+      "verdict": "fail",
+      "at": "2026-08-03T18:53:51Z",
+      "label": "vigil delta re-critique round 3 — spec rev 1.2.0 (42 criteria)"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 3,
+      "total": 4,
+      "min": 4,
+      "dims": {
+        "clarity": 4,
+        "completeness": 4,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 4
+      },
+      "verdict": "pass",
+      "at": "2026-08-03T18:59:43Z",
+      "label": "AUTHOR refine-pass self-gate, cycle 3 of 3 (rev 1.3.0) — NOT a critique; vigil scores independently"
+    },
+    {
+      "rubric": "refine",
+      "cycle": 3,
+      "total": 4.4,
+      "min": 4,
+      "dims": {
+        "clarity": 4,
+        "completeness": 5,
+        "actionability": 4,
+        "efficiency": 5,
+        "testability": 4
+      },
+      "verdict": "pass",
+      "at": "2026-08-03T19:03:15Z",
+      "label": "vigil TERMINAL delta re-critique round 4 — spec rev 1.3.0 (42 criteria)"
+    },
+    {
+      "rubric": "confidence",
+      "total": 86,
+      "dims": {
+        "pattern_match": 90,
+        "requirement_clarity": 90,
+        "decomposition_stability": 86,
+        "constraint_compliance": 78
+      },
+      "verdict": "AUTO_PROCEED",
+      "at": "2026-08-03T19:07:43Z",
+      "label": "crystalium-rrf-fusion-38 spec v1.4.0 ASSEMBLED (3 critique rounds closed, APPROVE-FOR-ASSEMBLE; DP-1..DP-9 open by design)"
+    }
+  ],
+  "amendments": [
+    {
+      "prev": "132b25df1392456ccce6a261bad62003c1177859ea650417f6fed1a034f9d119",
+      "new": "7e4c0807d7684ad821d00f39c98d562d1acd453f9147f4dc9e19918f76d64802",
+      "reason": "vigil REVISE critique (refine rubric fail, total 3.4, testability 2): F4 amends AC-104 to score-multiset equality (its id-sequence THEN contradicted AC-105's id-ascending tie-break; counterexample [[b],[a]] reproduced) and adds AC-132 for the tie-free order half; F2 removes the tautological attack-E clause from AC-130 and replaces it with AC-138 plus its falsifiability precondition AC-139 at a real-GraphStore layer where FETCH_WIDTH_FLOOR has a live channel; F3 amends AC-131 to mandate >=4 distinct UUID-shaped derived-arm ids, seeds 0..4, and a recorded observed disagreeing seed pair; F5 adds AC-134, which goes RED on a global-N denominator (a layer-saturating query resolved w_sparse=1.9995 and passed all 31 prior criteria) and forces the denominator to be counted over target_layers; F6 adds AC-136 binding the flag-default contingency to AC-121/122/123 as well as AC-124/125; A-1 scopes AC-124 to the multi-hop axis and adds AC-133 for the context axis; A-2 amends AC-119 with reference-capture preconditions because its prior oracle was the hash-seed-dependent artifact P3 disproves; A-7 extends AC-121's VERIFY to the two extra test files #36 AC-019/AC-023 require; A-8 adds AC-137 to retire the F-V6 BENCH-NOTES figure; A-9 fixes AC-108's inoperative Config WHERE clause and adds AC-135 for the path-level identity R-2 leans on. 31 -> 39 criteria; none removed.",
+      "at": "2026-08-03T18:25:48Z"
+    },
+    {
+      "prev": "7e4c0807d7684ad821d00f39c98d562d1acd453f9147f4dc9e19918f76d64802",
+      "new": "59244291378b79d668781befa42200a58315ba29b0cd7885cab01a0e07fe0137",
+      "reason": "vigil delta re-critique round 2 (F1-F6 CLOSED by re-measurement; refine cycle-2 bar failed, 3.8, testability 3): G-1 adds AC-140, the change's thesis test — with FETCH_WIDTH_FLOOR=1 the target holds rank 0 at k in {1,3,5} — plus AC-141, its falsifiability precondition (reverted build, floor=1, k=1, target NOT rank 0, reproducing #36 F-V1). Reproduced the floor table: fetch_width=max(k,FLOOR) makes floor LOWERING live only at k<10 and inert at k>=10, and the host gate runs k=10, so AC-138/139 probed the dead direction; both now carry scope notes. DEVIATION FROM PRESCRIPTION, deliberate: vigil proposed AC-140 as a parameterisation of AC-102, which is Layer 2, where the seed-independent mock the Terminology block mandates makes floor changes a no-op by construction — landing it there would repeat the F2 tautology in the opposite direction, so AC-140/141 are pinned to Layer 3 / the AC-125 real-GraphStore gate. G-2 adds AC-142, a population-agreement oracle for the selectivity denominator's STATUS axis: bm25_search applies no status predicate (relational.py:493-541) over an FTS index whose triggers carry deprecated rows (:75-88), while the natural denominator is active-only (count_active_by_scope_key :1019) and _is_active runs only at :482, after fusion at :424 — so w_sparse decays monotonically to 1.0 as deprecated rows accumulate, which under P0-5 they do by design, killing the headline feature silently in long-lived stores while every fixture among AC-101..AC-139 is a fresh store. AC-142 is written population-neutral so it holds under either resolution of the new DP-9 and goes RED only on the mixed implementation; AC-109/112/117/134 amended to carry the status axis. B-1 corrects the change manifest, which declared 7 amended blocks for revision 1.1.0 when 17 plus a Terminology deletion had changed; the header now carries a three-revision manifest. B-2 records AC-133's proxy nature (recall_context_match defaults False; the shipped arm's ctx_rank is not an exported metric) and adds AC-133 to AC-136's contingency. B-3 makes AC-135's reseeding set-equality an asserted fixture precondition rather than a silent dependency. B-4 adds an intra-list-duplicate fixture to AC-104. 39 -> 42 criteria; none removed.",
+      "at": "2026-08-03T18:48:32Z"
+    },
+    {
+      "prev": "59244291378b79d668781befa42200a58315ba29b0cd7885cab01a0e07fe0137",
+      "new": "b17f209a89442a35f4f508af6becf53563f7158234ce476ae0f0e1e15e353a75",
+      "reason": "vigil final delta re-critique round 3 (both round-2 deviations UPHELD — vigil withdrew their own AC-140 prescription after checking its premise, and ruled the DP-9 active-only argument stronger than their all-statuses position; refine cycle-2 bar failed again on testability 3). H-1 BLOCKING, accepted: AC-142 — the sole oracle for G-2 — could not fail on the defect it names. Its saturating fixture was chosen to keep DP-9 neutrality, and that neutrality destroyed it: under the MIXED population the numerator exceeds the denominator, 1-n/N goes negative, and the clamp mandated by D3 (mandatory because AC-112 requires the [1,1+alpha] bound) floors it to 0, returning w_sparse=1.0 — identical to both pure populations. Reproduced across every fixture shape the GIVEN admits (N/M = 100/50, 10/5, 5/5, 50/200: 1.0 under all three implementations), so revision 1.2.0's closing sentence 'only the mixed implementation gives a non-zero boost' was FALSE. This is R-7's third occurrence. Repair: AC-142's THEN now asserts the population-agreement INVARIANT (sparse-arm count no greater than the searched-layer count that produced it), which discriminates on the identical fixtures — all-statuses 150<=150 holds, active-only 100<=100 holds, mixed 150<=100 VIOLATED — while staying DP-9-neutral; observability already exists via revision 1.2.0's AC-117 explain.fusion population surface. Wording refinement recorded: vigil's literal fix was a compound THEN, so the discriminating half became the normative clause and the non-discriminating w_sparse==1.0 check is retained in VERIFY as a companion regression assertion (one criterion, one assertion). Non-saturating fixtures were verified unusable: at 1 active + 50 deprecated the three implementations give 1.66/1.99/1.49, so the two pure populations disagree and no value assertion can be DP-9-neutral. C-1: AC-141's escape hatch now reads 'cannot go green', harmonised with AC-139's convention for the structurally identical role. C-2: AC-140's exclusion from AC-136's contingency is no longer the spec's assumption but FORGE's explicit DP-4(ii) ruling; AC-136 records its list as pending that ruling. 42 -> 42 criteria; amended AC-136, AC-141, AC-142; none added, none removed.",
+      "at": "2026-08-03T18:59:43Z"
+    },
+    {
+      "prev": "b17f209a89442a35f4f508af6becf53563f7158234ce476ae0f0e1e15e353a75",
+      "new": "e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded",
+      "reason": "Assemble-phase correction of vigil terminal note N-2, on an APPROVE-FOR-ASSEMBLE verdict against b17f209a8944. GUIDANCE-ONLY: the normative GIVEN/WHEN/WHILE/WHERE/THEN clauses of all 42 blocks are BYTE-IDENTICAL to revision 1.3.0, proven mechanically — sha256 of the extracted clause lines is 689ec372b3e895e6ad6abc08d6eba9710c34401b5dafc15a42c323f5e20da058 both before and after this edit. Substance: revision 1.3.0 labelled AC-142's w_sparse==1.0 check 'a companion non-discriminating regression check'. That label was WRONG and understated the criterion, as vigil found by enumerating every population pairing; I reproduced all four before accepting. At the saturating fixture (N=100 active, M=50 deprecated): all-statuses 150/150 invariant holds, w=1.0 (correct); active-only 100/100 holds, w=1.0 (correct); MIXED 150/100 invariant VIOLATED, w=1.0 — caught by the invariant ALONE; REVERSE (active numerator against all-statuses denominator) 100/150 invariant HOLDS, w=1.3333 — caught by the WEIGHT ALONE. The reverse mismatch is precisely the error an implementer makes by filtering one end of DP-9's ruling and forgetting the other. The two assertions are therefore COMPLEMENTARY, each covering a mismatch direction the other cannot, and together covering all four pairings; neither is redundant. VERIFY now requires both explicitly and carries the four-row complementarity table so verification.md cannot transcribe the wrong label. The wording note is corrected to say the compound-THEN split was a grammar split, not a demotion in importance. Rationale for amending rather than carrying a note: the refine cap (3/3) bars further refine CYCLES via ramza-gate refine, not amendments via ramza-freeze — the two gates are independent — and shipping a known-wrong label into the checker handoff would be the documented-caveat-standing-in-for-a-fix pattern this campaign rejects. Instrument used is the tamper-evident one; the approval-basis hash is named above so the delta is auditable in one diff. 42 -> 42 criteria; none added, amended-normative none, removed none.",
+      "at": "2026-08-03T19:07:43Z"
+    }
+  ],
+  "declared_scope": [
+    "mcp-server/src/crystalium/aetheryte/retrieve.py",
+    "mcp-server/src/crystalium/config.py",
+    "mcp-server/src/crystalium/server.py",
+    "mcp-server/src/crystalium/__main__.py",
+    "mcp-server/src/crystalium/__init__.py",
+    "mcp-server/src/crystalium/storage/relational.py",
+    "mcp-server/tests/*",
+    "evals/fusion_gate.py",
+    "evals/__main__.py",
+    "evals/BENCH-NOTES.md",
+    "schemas/recall-result.v1.json",
+    "CHANGELOG.md",
+    "mcp-server/pyproject.toml"
+  ],
+  "criteria_sha256": "e644052e868db47b49c7daedba904e9f53b67d401c81bde0b5e2887ffcb2fded",
+  "critic": {
+    "author": "vivi",
+    "checker": "vigil",
+    "at": "2026-08-03T19:03:15Z"
+  },
+  "scope_declared_at": "2026-08-03T18:29:45Z",
+  "criteria_frozen_at": "2026-08-03T18:02:35Z"
+}

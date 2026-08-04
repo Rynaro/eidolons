@@ -1,0 +1,18 @@
+{
+  "envelope_version": "2.0",
+  "from": {
+    "eidolon": "idg"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(promotion): archived change \"crystalium-rrf-fusion-38\" ready for CRYSTALIUM Semantic promotion.",
+  "context_delta": {
+    "archive_path": "archive/2026-08-04-crystalium-rrf-fusion-38",
+    "change_id": "crystalium-rrf-fusion-38",
+    "intent": "promotion",
+    "spec_ref": "https://github.com/Rynaro/crystalium/issues/38",
+    "summary": "Verified + archived spec; route to mcp__crystalium__ingest (Semantic layer). tonberry does not call crystalium."
+  }
+}

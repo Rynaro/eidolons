@@ -1,0 +1,417 @@
+RED-first evidence — crystalium-rrf-fusion-38
+maker: vivi
+worktree: /tmp/claude-1000/-home-rynaro-workspace-oss-agents-eidolons/4ed34180-fd36-46d6-8ac0-6149caadaa26/scratchpad/crystalium-impl
+branch: fix/rrf-fusion-38
+base: ef42967 (v1.9.0, clean)
+
+This file records the maker's own RED-first demonstrations. It is NOT
+verification.md (that is vigil's independent, fresh-context artifact per
+ESL discipline) — it exists so the checker does not have to re-derive these
+from scratch.
+
+REMEDIATION NOTICE (2026-08-03): vigil's first verification pass (FAIL,
+AC-130 red) found F-V1 (BLOCKING), F-V2/F-V3/F-V4 (MAJOR) and F-V5/F-V6/F-V7
+(minor) against the maker's original artifacts. This file has been REWRITTEN
+in place to reflect the remediation — the AC-131 and AC-134 sections below
+describe the CORRECTED fixtures, and the AC-138/AC-139 section describes the
+CORRECTED root-cause attribution (the original attribution to anomaly A
+ALONE was wrong and has been retracted here, from `evals/fusion_gate.py`'s
+docstring, and from `test_fusion_gate.py`). Nothing in `src/` changed as
+part of this remediation; every fix is test/eval/docs, inside the already
+declared globs.
+
+================================================================================
+AC-101 / AC-103 — sketch-fixture RED-first (Layer 2, mocked arms)
+================================================================================
+
+VERIFY: pytest mcp-server/tests/test_fusion_weighting.py::TestIssue38Sketch
+
+Fixture (test_fusion_weighting.py::_build_sketch_fixture): target has the
+sketch's three distinctive tokens (BM25 rank 1, sole hit); dense_ranking =
+[N1, N2, N3, target, D4..D10] (target at dense rank 4); graph_ranking =
+completion_ranking = [N1, N2, N3] via a MagicMock whose return_value ignores
+its seed_ids argument (Terminology fixture-shape mandate, vigil F2).
+
+AC-103 IS the RED-first proof for AC-101: with recall_weighted_fusion=False
+against the IDENTICAL fixture, ef42967's unweighted 4-arm rrf_merge_scored
+places spoke-equivalent competitors (N1/N2/N3, each carrying dense+graph+
+completion = 3 arms) ahead of target (sparse+dense = 2 arms):
+
+  N1  = 3/61  = 0.049180
+  N2  = 3/62  = 0.048387
+  N3  = 3/63  = 0.047619
+  target = 1/61 + 1/64 = 0.032018   -> fused rank 3 (0-indexed)
+
+This is exactly what AC-103 asserts (`result.records[0].id != target`) and
+what AC-101 flips to rank 0 on the weighted path (measured, not modelled —
+see the pytest run below). Both pass green in the current implementation:
+
+  test_target_is_fusion_rank_1                    PASSED
+  test_rank_1_is_k_independent[1,3,5,10,25]        PASSED (5/5)
+  test_unweighted_path_ranks_target_below_first    PASSED  <- the RED-first node
+
+(vigil re-ran and confirmed all of the above independently; no finding here.)
+
+================================================================================
+AC-131 — hash-seed determinism (fused order, mocked derived arms)
+[REWRITTEN per vigil F-V1 — BLOCKING, AC-130 red via this criterion]
+================================================================================
+
+VERIFY: pytest mcp-server/tests/test_fusion_weighting.py::TestDeterminism
+
+**What vigil found.** With D5's two `sorted()` calls reverted (attack D),
+the ORIGINAL fixture ids —
+
+  11111111-1111-4111-8111-111111111111
+  22222222-2222-4222-8222-222222222222
+  33333333-3333-4333-8333-333333333333
+  44444444-4444-4444-8444-444444444444
+
+— give a fused order that is byte-identical across `PYTHONHASHSEED` 0
+through 4 (the exact window AC-131's own frozen VERIFY text names), and
+first diverges at seed 6 (`vigil verification.md` §F-V1, reproduced
+independently below). AC-131's frozen text requires "the observed
+disagreeing seed pair from 0..4 that establishes RED" — no such pair exists
+for those four ids, so attack D could not redden AC-131 and AC-130 (which
+requires all six mandated attacks to redden their named node) went RED. The
+maker's original claim in this file ("PYTHONHASHSEED=0: ... differs from
+PYTHONHASHSEED=1 ... different fused scores") was TRUE of the raw
+`graph_ranking` arm order (`3241` vs `3142`) but FALSE of its consequence —
+the derived-family min-rank merge collapses most of that variance back onto
+the fixed `completion_ranking` order, and the FUSED order these four ids
+produce is identical at seeds 0 and 1. That was a real error, not a
+rewording; it is why AC-130 was red and this section is rewritten rather
+than merely corrected in place.
+
+**Remediation.** AC-131's frozen text mandates the seed window 0..4 (it is
+NOT legal to widen it — that would require amending a frozen criterion,
+forbidden by C-15). The remedy is therefore new fixture ids selected by
+MEASURING, over many candidate >=4-distinct-UUID-shaped sets, which ones
+disagree somewhere inside seeds 0..4 on the D5-reverted build — search
+script and full sweep output live in the session scratchpad
+(`search_ac131_ids.py` / `search_ac131_ids2.py`, 201 candidates, 65 of which
+disagree inside 0..4 under the exact completion-score scheme this test
+uses). Selected ids (test_fusion_weighting.py::_DETERMINISM_IDS):
+
+  fb6f38da-ed29-429d-8db1-b7c4772f4dd2
+  ef087731-8b91-4b7e-a603-f8e82aadd84c
+  d8fb6b35-c1ac-472c-b518-9777e389a9b4
+  82445783-adf6-4972-b00c-f667bd06e315
+
+Measured directly against the real implementation (docker, not the search
+script's Python replica) via `verify_script.py`, one process per seed:
+
+  SHIPPED (D5 present) build, PYTHONHASHSEED 0..4 — byte-identical every run:
+    seed 0: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+    seed 1: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+    seed 2: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+    seed 3: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+    seed 4: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+  -> AC-131's own THEN (byte-identical fused order) confirmed GREEN, 5/5.
+
+  D5-REVERTED (attack D) build, same ids, same seeds:
+    seed 0: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]
+    seed 1: [fb6f38da..., d8fb6b35..., ef087731..., 82445783...]   <- DIVERGES from seed 0
+    seed 2: [fb6f38da..., ef087731..., d8fb6b35..., 82445783...]   (== seed 0)
+    seed 3: [fb6f38da..., d8fb6b35..., ef087731..., 82445783...]   (== seed 1)
+    seed 4: [fb6f38da..., ef087731..., 82445783..., d8fb6b35...]   <- diverges a THIRD way
+
+**RECORDED DISAGREEING SEED PAIR (AC-131's own required record): seeds 0
+and 1.** Re-running `pytest ...::TestDeterminism` against the D5-reverted
+build with these ids fails exactly there:
+
+  AssertionError: seed 1 diverged:
+    ['fb6f38da...', 'd8fb6b35...', 'ef087731...', '82445783...']
+    != ['fb6f38da...', 'ef087731...', 'd8fb6b35...', '82445783...']
+
+Attack D now reddens AC-131 as required. AC-130's THEN ("the system shall
+turn every one of those six attacks' named criteria red") is met on all six
+mandated rows. Both directions verified: shipped build green (5/5 identical,
+confirmed above AND via `pytest mcp-server/tests/test_fusion_weighting.py
+::TestDeterminism -v` -> PASSED), reverted build red at the recorded pair
+(confirmed via a temporary two-line revert of D5 in this worktree, re-run,
+then `git checkout --` restore — `git status --porcelain` empty before and
+after, nothing left uncommitted).
+
+Claim scope (C-3, binding, unchanged): AC-131 green licenses ONLY "the
+fused order is hash-seed-independent given FIXED arm contents" — never "the
+graph and completion arms are deterministic on the real stack" (that claim
+is FALSE; see the AC-138/AC-139 section below for the measured reason).
+
+================================================================================
+AC-134 — layer-saturating query, global-vs-scoped denominator
+[REWRITTEN per vigil F-V2 — MAJOR, real-stack node was non-discriminating]
+================================================================================
+
+VERIFY: pytest mcp-server/tests/test_rrf.py::TestSparseWeight::test_layer_saturating_query_gets_no_boost
+        pytest mcp-server/tests/test_fusion_weighting.py::TestExplain::test_layer_saturating_query_real_stack
+
+Pure-function RED-first (test_rrf.py, UNCHANGED, still valid): 5 procedural
+crystals, all 5 matched (n_sparse=5), searched-layer-local N_scoped=5 ->
+correct: w_sparse == 1.0. Global-store denominator (the defect this AC
+forecloses), N_scoped=10005 -> w_sparse == 1.9995 -- demonstrated via
+`resolve_sparse_weight(5, 5, 30, 10_005, 1.0)` -> 1.9995 != 1.0.
+
+**What vigil found.** The ORIGINAL real-stack companion inserted ONLY the 5
+matched procedural crystals — no other-layer population at all — so a
+layer-scoped denominator (5) and a GLOBAL denominator (also 5, since there
+was nothing else in the store) were numerically indistinguishable. Deleting
+`layers=target_layers` from both `count_for_export` call sites left the
+node GREEN (vigil verified this directly). The node could not fail on the
+defect it names — a fixture gap, not a code defect (the shipped
+implementation was already correct).
+
+**Remediation.** Added 95 unrelated episodic filler crystals (unmatched by
+the query) to the same store, so the two denominators diverge: scoped
+(procedural-only) = 5, global (whole-store) = 100. Re-ran the SAME mutation
+vigil applied (both `count_for_export` calls stripped of `layers=`) against
+this new fixture, via a temporary edit + `git checkout --` restore (tree
+clean before and after):
+
+  AssertionError: assert 1.95 == 1.0
+    fusion["w_sparse"]
+
+`1.95` is `1 + 1.0 * (1 - 5/100)` — matches vigil's own independently
+computed value (`verification.md` §F-V2 measured `1.0 -> 1.95` on their own
+100-crystal counterfactual) exactly. The node now reddens on the named
+defect. Also added, per vigil's sub-note: an assertion that
+`explain.fusion.n_scoped_layers == ["procedural"]`, so a future
+global-denominator mutant cannot report `n_scoped=100` beside
+`n_scoped_layers=["procedural"]` without ALSO failing that assertion (the
+mutation above fails both).
+
+================================================================================
+AC-142 — mixed active/deprecated status population
+================================================================================
+
+VERIFY: pytest mcp-server/tests/test_fusion_weighting.py::TestSparseWeight::test_mixed_status_population_agrees
+
+Fixture: 5 active + 3 deprecated crystals in one semantic-layer store, all
+8 matching the query regardless of status. Correct (DP-9(b)) implementation:
+n_sparse (population-resolved numerator, active-only) = 5,
+n_scoped (active-only denominator) = 5 -> invariant n_sparse <= n_scoped
+holds, w_sparse == 1.0. arm_sizes.sparse (RAW, unfiltered) = 8 (C-6/C-7).
+
+RED-first against the MIXED implementation named in the criterion (all-
+statuses numerator = 8, active-only denominator = 5): 8 <= 5 is FALSE ->
+invariant VIOLATED. Confirmed by hand per the DP-3/D3 formula
+(`resolve_sparse_weight(8, 8, cap, 5, 1.0)` -- using the RAW/mixed numerator
+against the active-only denominator gives `1 - 8/5` which the mandatory
+clamp floors to selectivity 0 -- so a mixed implementation reads `w_sparse
+== 1.0` too (spec.md's H-1 finding: the weight alone does not discriminate;
+this is exactly why AC-142's normative THEN is the population-agreement
+INVARIANT, not the weight -- the invariant IS what turns red on the mixed
+implementation: n_sparse=8 > n_scoped=5). vigil re-verified this
+independently (no finding).
+
+================================================================================
+AC-140 / AC-141 — guard-vs-cure (Layer 3, real GraphStore)
+================================================================================
+
+VERIFY: pytest mcp-server/tests/test_fusion_weighting.py::TestGuardVsCure
+
+Fixture (_build_guard_fixture): target = 3 distinctive BM25 tokens (sole
+sparse hit), dense_hits = ["N1","N2","N3","target"] (target at dense rank
+4). ONE real graph edge, N1 -> N2 (single LINKS_TO edge, real KuzuDB).
+
+AC-141 (falsifiability precondition, reverted build, FETCH_WIDTH_FLOOR=1,
+k=1): seed_ids = dense_ranking[:1] = ["N1"] (legacy seeds from dense
+directly). N1's real out-edge to N2 fires (N2 not a seed) -> N2 gets a
+2nd (graph) arm: N2 = 1/62 (dense rank 2) + 1/61 (graph rank 1) = 0.032522.
+target = 1/61 (sparse) + 1/64 (dense rank 4) = 0.032018. N2 > target ->
+records[0].id == "N2", NOT target. PASSED (precondition satisfied).
+
+AC-140 (thesis test, fixed build, same floor=1, k in {1,3,5}): seed_ids =
+prelim[:fetch_width] (base-arm fusion). target holds sparse+dense (2 arms)
+against every competitor's 1, so target leads prelim at every w_sparse in
+[1, 1+alpha] regardless of k -- and at k in {3,5}, N2 (the only edge
+destination) is ITSELF among the seeds, so the N1->N2 edge self-excludes
+(N2 cannot vote for itself). Target holds fused rank 0 at every k tested.
+
+  test_target_survives_floor_removal_at_small_k[1,3,5]   PASSED (3/3)
+  test_reverted_build_needs_the_floor_at_k1               PASSED
+
+C-2 multi-run protocol (>= 5 independent runs, PYTHONHASHSEED 0-4, unanimity
+required): re-ran the full TestGuardVsCure class 5 times, one per
+PYTHONHASHSEED value. 4/4 tests green, unanimously, at every seed:
+
+  PYTHONHASHSEED=0: 4 passed
+  PYTHONHASHSEED=1: 4 passed
+  PYTHONHASHSEED=2: 4 passed
+  PYTHONHASHSEED=3: 4 passed
+  PYTHONHASHSEED=4: 4 passed
+
+vigil independently re-ran this pair too (5 seeds, `verification.md` §Step
+8) and confirmed the SAME verdict and the SAME predicted mechanism (D4
+reseeding, not the weighting) — no finding.
+
+AC-140/AC-141 are GREEN with C-2 confidence. This fixture does not use the
+completion arm (recall_completion=False), so it is NOT exposed to the
+hash-random frontier-set issue described in the AC-138/AC-139 section below
+-- only the graph channel is used, iterating an ORDERED LIST (seed_ids as
+given), which is deterministic regardless of PYTHONHASHSEED.
+
+================================================================================
+AC-125 / AC-126 — fusion-gate eval (Layer 3, real GraphStore, real corpus)
+================================================================================
+
+VERIFY: python -m evals fusion-gate
+        pytest mcp-server/tests/test_fusion_gate.py
+
+Fixture (evals/fusion_gate.py::_build_fixture, ENLARGED per F-V4 remediation
+— see the AC-138/AC-139 section below for why): target = sole BM25 hit
+(rank 1), deliberately NOT in the dense arm at all. N1/N2/N3 = dense ranks
+1-3, no lexical match, each carrying an edge to phantom node Z. 12 filler
+competitors (F1..F12, dense ranks 4-15, no lexical match, no graph edges)
+were ADDED during remediation so `dense_ranking` holds 15 ids (was 3) --
+this is what gives AC-138/AC-139's floor probe a live channel; it does not
+change AC-125/AC-126's own mechanism (N1 alone, tied with target, already
+keeps target off rank 0 on the reverted build via the id-ascending
+tiebreak, independent of vote count -- see below).
+
+C-2 multi-run protocol, re-run AFTER the fixture enlargement (8 runs:
+PYTHONHASHSEED 0-7):
+
+  gate_pass:  True x8    (8/8 unanimous)
+  weighted target_rank:    0 x8   (8/8 unanimous)
+  unweighted target_rank:  1 x8   (8/8 unanimous)
+
+AC-125/AC-126 GREEN with C-2 confidence, unregressed by the F-V4 fixture
+enlargement.
+
+================================================================================
+AC-138 / AC-139 — fetch-width-floor INFLATION pair
+[CORRECTED ATTRIBUTION per vigil F-V4 — MAJOR]
+================================================================================
+
+VERIFY: python -m evals fusion-gate --floor 1000 [--reverted]
+
+**The original attribution in this file, in `evals/fusion_gate.py`'s
+docstring, and in `test_fusion_gate.py` was WRONG and is retracted here.**
+It claimed "the floor changes nothing at all... not merely the tail, never
+the head" — true of the ORIGINAL 3-id (reverted) / 5-id (fixed) fixture,
+which held fewer ids than FETCH_WIDTH_FLOOR=10 and so had no tail to cut —
+but the conclusion was overstated: "given anomaly A, seed_ids[0] is
+INVARIANT to FETCH_WIDTH_FLOOR" was presented as a general fact about this
+gate's mechanism, when it was only a fact about that one undersized fixture.
+
+**What vigil found (verification.md §Step 7 / F-V4).** Intercepting the
+real `seed_ids` argument confirmed the original fixture's lists were
+byte-identical at floor=10 and floor=1000 on both builds — the floor
+literally had no tail to cut, full stop. The blocker was in-scope fixture
+cardinality (`evals/fusion_gate.py` is a declared glob), not anomaly A.
+
+**Remediation and what it established.** Enlarged the fixture to 15 dense
+ids (12 fillers added, see the AC-125/AC-126 section above). Re-intercepted
+`neighbor_expand`/`decaying_walk`'s actual arguments and return values
+(scripts `intercept_seed_ids.py` / `intercept_v2.py`, session scratchpad):
+
+  floor=10,   seed=0, reverted: decaying_walk(10-elem set) -> {"Z": 0.5}   (succeeds)
+  floor=1000, seed=0, reverted: decaying_walk(15-elem set) -> {}           (fails)
+
+This is a REAL, measured difference — the floor's channel is LIVE, and the
+original "no tail" claim was wrong as a general statement. `target`'s FINAL
+RANK, however, did not move for `N1`-tied-with-`target` reasons (id-
+ascending tiebreak — see below), so a further diagnostic fixture (ids
+renamed so every competitor sorts AFTER "target", closing that tiebreak)
+was built and measured across 14 seeds (0-12, unset) — NOT shipped, kept
+only as measurement:
+
+  seed:            0  1  2  3  4  5  6  7  8  9 10 11 12 unset
+  floor=10 rank:   0  0  1  0  1  0  0  0  1  1  0  1  0  0
+  floor=1000 rank: 0  0  1  0  1  0  0  0  0  1  0  1  0  0
+                                         ^^ seed 8 diverges: 1 vs 0
+
+Seed 8 (in this 14-point run) proves the channel is live end-to-end (not
+just at the seed_ids argument, but in the final rank) — floor=10 and
+floor=1000 give DIFFERENT ranks at that one seed; the other 13 sampled
+points (0-7, 9-12, unset) agree across both floors. But the two floors'
+OUTCOME SETS still overlap ({0,1} vs {0,1}), not disjoint, across the full
+sample. Per C-2, AC-139 requires disjoint distributions; an overlap is
+INDETERMINATE regardless of individual-seed divergence.
+
+That diagnostic (tie-break-neutral) fixture was NOT shipped because it
+regressed AC-125's own reliability (measured 7/7 -> ~2/7 unanimous across
+seeds — `N1` losing its free tiebreak win means the phantom node must
+actually EARN 2 votes every time, which it does not). AC-125 is in AC-136's
+contingency six; AC-138/AC-139 are not. Reliability was kept on the
+criterion the shipped default depends on.
+
+**Final measurement, on the SHIPPED fixture** (uppercase ids — `N1` reliably
+wins its tie with `target` regardless of vote count), C-2 protocol, 7 runs:
+
+  floor=10,   reverted, target_rank:   1  1  1  1  1  1  1   (7/7 unanimous)
+  floor=1000, reverted, target_rank:   1  1  1  1  1  1  1   (7/7 unanimous, IDENTICAL to floor=10)
+  floor=10,   fixed,    target_rank:   0  0  0  0  0  0  0   (7/7 unanimous)
+  floor=1000, fixed,    target_rank:   0  0  0  0  0  0  0   (7/7 unanimous, IDENTICAL to floor=10)
+
+**Verdict, corrected: AC-139 remains INDETERMINATE, AC-138 remains
+unfalsifiable-not-discharged — same disposition as before remediation, but
+now for the CORRECT, measured reason.** The floor has a real, confirmed-live
+effect on the derived arms' intermediate mechanics (vote count, and even
+final rank at some individual seeds on a diagnostic variant); on the fixture
+that actually ships, that effect is masked by a DELIBERATE reliability
+trade-off (N1's tiebreak win, kept so AC-125 — a contingency-six criterion —
+stays 8/8 unanimous), not by anomaly A capping the floor's channel to zero.
+Landing F-A (the store-side anomaly-A fix) would NOT by itself flip this
+xfail, because the blocker on the shipped fixture is the tiebreak design
+choice, not anomaly A. This correction has been propagated to
+`evals/fusion_gate.py`'s module + `run_floor_probe` docstrings and to
+`test_fusion_gate.py::TestFetchWidthFloorInflation`'s docstring and xfail
+reason string — all three artifacts vigil named.
+
+Per AC-139's own escape-hatch text ("If AC-139 cannot go green, the fixture
+is seed-insensitive and AC-138 must be moved, not weakened"): neither is
+claimed as discharged. Both remain BLOCKED for the checker, per C-14 ("any
+deviation ... returns to FORGE before the tag -- no implementer judgement
+call"). Neither AC-138 nor AC-139 is in AC-136's contingency six, so this
+does not affect the shipped default.
+
+Note: AC-140/AC-141 (the REMOVAL-direction pair, and per FORGE's own words
+"the actual thesis test") are NOT affected by any of this -- they use only
+the deterministic graph channel (completion off) at a floor small enough
+that anomaly A's single-seed limitation is a non-issue (there is only one
+seed to begin with). See the AC-140/AC-141 section above: fully green, C-2
+confirmed, independently re-verified by vigil.
+
+================================================================================
+AC-124 pre-check (C-5 protocol)
+================================================================================
+
+See eval-before-seed{0,1,5}.json (captured against the CLEAN, UNMODIFIED
+/home/rynaro/workspace/oss/agents/crystalium checkout at ef42967, never
+against this worktree) and eval-after-seed{0,1,5}.json (captured against
+this branch). Raw numbers in the final report. vigil independently re-ran
+this at 3 seeds per side and confirmed the same values, plus AC-133's
+context-axis companion (no finding).
+
+================================================================================
+Other vigil findings addressed in this remediation (not test-oracle changes)
+================================================================================
+
+F-V3 (anomaly C missing from BENCH-NOTES, C-11 binding condition): a
+paragraph naming `link_cooccurrence`'s commit-time confound, the 2-vs-142
+edge-count measurement, the `created_at`-tie histogram, and a link to
+follow-up F-C was added to `evals/BENCH-NOTES.md`, immediately after the
+crystalium#38 P3/anomaly-A paragraph this file already carried.
+
+F-V5 (CHANGELOG described a red AC-140 that measured green): reworded
+CHANGELOG `[1.10.0]`'s "Known limitations" bullet to state what AC-140
+actually demonstrated (target holds rank 0 at k in {1,3,5} with the floor
+lowered to 1, C-2-unanimous across 5 seeds) rather than the prior
+(evidence-contradicting) "layered on top of, rather than a replacement
+for" framing.
+
+F-V6 (placeholder follow-up-issue references): CHANGELOG and BENCH-NOTES
+now name the canonical deliberation.md labels (F-A, D-1) instead of a bare
+"a follow-up issue" — this remediation does not file GitHub issues (out of
+scope for a code/test/docs pass), so a real issue number is not
+substituted; the internal label is at least traceable to deliberation.md
+§7's follow-up-issue table.
+
+F-V7 (n_sparse vs arm_sizes.sparse silent divergence): a one-line note
+added to CHANGELOG's `explain.fusion` bullet stating the two fields are
+deliberately different and will diverge on any store with deprecated rows.
+
+F-V8 (pre-existing stash entry): informational only, not touched (matches
+vigil's own disposition — "I left it untouched").
