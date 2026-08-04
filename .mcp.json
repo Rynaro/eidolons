@@ -25,7 +25,7 @@
         "ALL",
         "--security-opt",
         "no-new-privileges",
-        "ghcr.io/rynaro/crystalium@sha256:784d21487450796d6e2a0dc8af4713aba60b8996806cbd53436389cfbeaed32c",
+        "ghcr.io/rynaro/crystalium@sha256:27b61cb5e7ca912feae4479a49db7d7cb73ce419cb39e387e18fc51eba4b5015",
         "python",
         "-m",
         "crystalium",
