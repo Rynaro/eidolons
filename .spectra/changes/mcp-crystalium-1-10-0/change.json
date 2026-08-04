@@ -1,0 +1,12 @@
+{
+  "esl_version": "1.1",
+  "change_id": "mcp-crystalium-1-10-0",
+  "status": "proposed",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": "https://github.com/Rynaro/crystalium/releases/tag/v1.10.0",
+  "created_at": "2026-08-04",
+  "has_code": false
+}
