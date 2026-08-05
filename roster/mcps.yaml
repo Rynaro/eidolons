@@ -163,10 +163,21 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.0.0"
+      latest: "2.0.1"
       pins:
-        stable: "2.0.0"
+        stable: "2.0.1"
       releases:
+        "2.0.1":
+          # Fix-forward for a defect that shipped in 2.0.0: the tool rename
+          # updated telemetry's READ side but missed the WRITE sites, so every
+          # recall double-wrote to tool_calls under both the stale and the
+          # canonical key, and Dream's _orient() counted the orphaned stream.
+          # Swept all 8 inner record_call sites — 3 deleted as pure duplicates,
+          # 5 repointed and KEPT (they record outcomes the dispatcher cannot
+          # observe). Also the first pytest coverage of the hand-rolled
+          # jsonschema input validation introduced in 1.12.0.
+          digest: "sha256:a493af20d0f99991c4d1d453a6b4da4e097a40e2b95b4e73ebf5024942c12f3c"
+          released_at: "2026-08-05T20:23:22Z"
         "2.0.0":
           # BREAKING (crystalium#35/#33): the server now advertises
           # single-segment tool names, so the host finally exposes
