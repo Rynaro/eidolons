@@ -7,7 +7,7 @@
 #   wiring_mode: transport — MCP registered in .mcp.json only; never injected
 #   into agent tools: allowlists (e.g. junction, a project-level bus).
 catalogue_version: "1.2"
-updated_at: "2026-08-04"
+updated_at: "2026-08-05"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -162,10 +162,26 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.10.0"
+      latest: "1.11.0"
       pins:
-        stable: "1.10.0"
+        stable: "1.11.0"
       releases:
+        "1.11.0":
+          # Open-issues sweep (crystalium#56), closing #41/#43/#46/#47/#50/#51/
+          # #53/#54. Headline: neighbor_expand cursor-exhaustion repair (#41) —
+          # multi-seed graph expansion was aborting at the FIRST seed, so the
+          # graph arm was ~90% dead and its membership was hash-random rather
+          # than query-derived, silently degrading every fusion computation
+          # that voted on it since 1.10.0. The retrieval-gate probe is
+          # deconfounded and now declares itself "inconclusive" instead of
+          # scoring over an empty dense arm. Two prior *measured* claims are
+          # corrected as a result: the DP-2 fusion_weight_derived "cliff" was
+          # an artifact of the graph bug (post-fix a 3-weight x 7-seed sweep
+          # is fully degenerate, no cliff); recall_completion's earned-ON
+          # figures were confounded and re-measure multihop_f1 0.3077 ->
+          # 0.4615. 9 tools (MCP surface unchanged).
+          digest: "sha256:b92ed6b3bb6997bb38905d9691d5dca3b27d0c312deba97e7a21a808999d39ef"
+          released_at: "2026-08-05T13:14:36Z"
         "1.10.0":
           # Fusion is no longer rank-blind (crystalium#38): graph+completion
           # collapse into ONE derived voter (min-rank family merge, weight 1.0 —
@@ -235,6 +251,13 @@ mcps:
           # for out-of-band memory pre-flight (GAP-2) + index Redactor fix.
           digest: "sha256:778167053c55cea71c1f6d7a12f8a11d904c00715aaa72ac47aec90b3d3fdf2f"
           released_at: "2026-06-11T00:00:00Z"
+        "1.5.0":
+          # Backfill (2026-08-05): the image was published and pullable at
+          # ghcr.io/rynaro/crystalium:1.5.0, but this catalogue entry was
+          # skipped by oversight — never a deliberate un-list — leaving it
+          # unreachable via `eidolons mcp use crystalium 1.5.0` until now.
+          digest: "sha256:cb2d1f461bed79796fcec1cbca109d002c9b2396e93c30a6c4caf99ba45b39e8"
+          released_at: "2026-06-22T18:57:47Z"
         "1.5.1":
           # Multi-arch index (linux/amd64 + linux/arm64). Harness-agnostic
           # provenance.source coercion in crystalium.commit (+ created_at
