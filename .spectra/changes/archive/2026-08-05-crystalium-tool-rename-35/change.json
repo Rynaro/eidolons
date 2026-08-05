@@ -1,0 +1,13 @@
+{
+  "esl_version": "1.1",
+  "change_id": "crystalium-tool-rename-35",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [],
+  "spec_ref": ".spectra/changes/crystalium-tool-rename-35/spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-08-05-crystalium-tool-rename-35",
+  "has_code": true
+}
