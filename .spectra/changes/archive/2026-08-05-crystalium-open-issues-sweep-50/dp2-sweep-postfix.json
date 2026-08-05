@@ -1,0 +1,716 @@
+[
+ {
+  "weight": 0.9,
+  "seed": "0",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "1",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "2",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "3",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "4",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "5",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.9,
+  "seed": "UNSET",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.9
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "0",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "1",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "2",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "3",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "4",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "5",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 0.95,
+  "seed": "UNSET",
+  "instances": 4,
+  "distinct_instance_values": [
+   0.95
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 2
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "0",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "1",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "2",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "3",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "4",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "5",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ },
+ {
+  "weight": 1.0,
+  "seed": "UNSET",
+  "instances": 4,
+  "distinct_instance_values": [
+   1.0
+  ],
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 3
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+   "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+   }
+  },
+  "git_sha": "b355470"
+ }
+]

@@ -1,0 +1,268 @@
+ Network crystalium-w1-graph_default Creating 
+ Network crystalium-w1-graph_default Created 
+ Volume crystalium-w1-graph_crystalium_data Creating 
+ Volume crystalium-w1-graph_crystalium_data Created 
+ Container crystalium-w1-graph-crystalium-run-564ea1955196 Creating 
+ Container crystalium-w1-graph-crystalium-run-564ea1955196 Created 
+FFFFF.F                                                                  [100%]
+=================================== FAILURES ===================================
+__ TestNeighborExpandMultiSeed.test_multi_seed_expansion_is_union_minus_seeds __
+
+self = <test_storage_graph.TestNeighborExpandMultiSeed object at 0x7f046e4eec60>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046cbeaab0>
+
+    def test_multi_seed_expansion_is_union_minus_seeds(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """expand(S) == (union of expand([s]) for s in S) - set(S).
+    
+        Not the naive union: graph.py:251's seed-exclusion filter stands
+        (#42 is REPORT, out of scope here), so the correct identity
+        subtracts the seed set. No seed-to-seed edge in this fixture.
+        """
+        tmp_graph_store.add_node("ms-a", "semantic")
+        tmp_graph_store.add_node("ms-b", "semantic")
+        tmp_graph_store.add_node("ms-x", "semantic")
+        tmp_graph_store.add_node("ms-y", "semantic")
+        tmp_graph_store.add_node("ms-shared", "semantic")
+        tmp_graph_store.add_edge("ms-a", "ms-x", "LINKS_TO")
+        tmp_graph_store.add_edge("ms-a", "ms-shared", "LINKS_TO")
+        tmp_graph_store.add_edge("ms-b", "ms-y", "LINKS_TO")
+        tmp_graph_store.add_edge("ms-b", "ms-shared", "LINKS_TO")
+    
+        seeds = ["ms-a", "ms-b"]
+        multi = tmp_graph_store.neighbor_expand(seeds, depth=1)
+    
+        per_seed_union: set[str] = set()
+        for seed in seeds:
+            per_seed_union |= tmp_graph_store.neighbor_expand([seed], depth=1)
+        expected = per_seed_union - set(seeds)
+    
+>       assert multi == expected
+E       AssertionError: assert {'ms-shared', 'ms-x'} == {'ms-shared', 'ms-x', 'ms-y'}
+E         
+E         Extra items in the right set:
+E         'ms-y'
+E         Use -v to get more diff
+
+mcp-server/tests/test_storage_graph.py:153: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['ms-a', 'ms-b']
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['ms-a']
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['ms-b']
+_ TestNeighborExpandMultiSeed.test_edgeless_first_seed_does_not_abort_later_seeds _
+
+self = <test_storage_graph.TestNeighborExpandMultiSeed object at 0x7f046cbe6660>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046cc773e0>
+
+    def test_edgeless_first_seed_does_not_abort_later_seeds(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """An edge-less FIRST seed must not zero out later seeds' neighbours.
+    
+        Scout-measured at 56c8510: expand([e0, s1, s2]) == [] even though s1
+        and s2 have real out-edges — worse than "explores one seed", it is
+        "aborts at the first cursor exhaustion, whatever that seed yielded".
+        """
+        tmp_graph_store.add_node("efs-e0", "semantic")  # no out-edges
+        tmp_graph_store.add_node("efs-s1", "semantic")
+        tmp_graph_store.add_node("efs-s2", "semantic")
+        tmp_graph_store.add_node("efs-n1", "semantic")
+        tmp_graph_store.add_node("efs-n2", "semantic")
+        tmp_graph_store.add_edge("efs-s1", "efs-n1", "LINKS_TO")
+        tmp_graph_store.add_edge("efs-s2", "efs-n2", "LINKS_TO")
+    
+        result = tmp_graph_store.neighbor_expand(
+            ["efs-e0", "efs-s1", "efs-s2"], depth=1
+        )
+    
+>       assert result != set()
+E       assert set() != set()
+E         
+E         Both sets are equal
+
+mcp-server/tests/test_storage_graph.py:177: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['efs-e0', 'efs-s1', 'efs-s2']
+__ TestNeighborExpandMultiSeed.test_multi_seed_differs_from_first_seed_alone ___
+
+self = <test_storage_graph.TestNeighborExpandMultiSeed object at 0x7f046cbe5fd0>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046e04f860>
+
+    def test_multi_seed_differs_from_first_seed_alone(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """expand(seeds) != expand([seeds[0]]) on a discriminating fixture.
+    
+        Directly negates CHANGELOG.md's recorded symptom
+        neighbor_expand(seeds) == neighbor_expand([seeds[0]]).
+        """
+        tmp_graph_store.add_node("df-a", "semantic")
+        tmp_graph_store.add_node("df-b", "semantic")
+        tmp_graph_store.add_node("df-only-a", "semantic")
+        tmp_graph_store.add_node("df-only-b", "semantic")
+        tmp_graph_store.add_edge("df-a", "df-only-a", "LINKS_TO")
+        tmp_graph_store.add_edge("df-b", "df-only-b", "LINKS_TO")
+    
+        seeds = ["df-a", "df-b"]
+        multi = tmp_graph_store.neighbor_expand(seeds, depth=1)
+        first_only = tmp_graph_store.neighbor_expand([seeds[0]], depth=1)
+    
+>       assert multi != first_only
+E       AssertionError: assert {'df-only-a'} != {'df-only-a'}
+E         
+E         Both sets are equal
+
+mcp-server/tests/test_storage_graph.py:199: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['df-a', 'df-b']
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['df-a']
+_______ TestNeighborExpandMultiSeed.test_depth_2_chain_returns_both_hops _______
+
+self = <test_storage_graph.TestNeighborExpandMultiSeed object at 0x7f046e04f980>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046dfb1520>
+
+    def test_depth_2_chain_returns_both_hops(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """A plain chain a -> b -> c, no self-loops: depth=2 from [a] is {b, c}.
+    
+        N-4: at 56c8510 the chained-pattern query binds every hop to the
+        same Cypher variable `b` (pattern.replace('()', '(b:Crystal)')
+        rewrites every '()'), matching only self-loops -- this fixture has
+        none, so pre-fix this returns set() (or a caught binder error),
+        never {"dc-b", "dc-c"}.
+        """
+        tmp_graph_store.add_node("dc-a", "semantic")
+        tmp_graph_store.add_node("dc-b", "semantic")
+        tmp_graph_store.add_node("dc-c", "semantic")
+        tmp_graph_store.add_edge("dc-a", "dc-b", "LINKS_TO")
+        tmp_graph_store.add_edge("dc-b", "dc-c", "LINKS_TO")
+    
+        result = tmp_graph_store.neighbor_expand(["dc-a"], depth=2)
+    
+>       assert result == {"dc-b", "dc-c"}
+E       AssertionError: assert set() == {'dc-b', 'dc-c'}
+E         
+E         Extra items in the right set:
+E         'dc-b'
+E         'dc-c'
+E         Use -v to get more diff
+
+mcp-server/tests/test_storage_graph.py:222: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['dc-a']
+_____ TestNeighborExpandMultiSeed.test_decaying_walk_is_hashseed_invariant _____
+
+self = <test_storage_graph.TestNeighborExpandMultiSeed object at 0x7f046cbea0c0>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046cee63c0>
+
+    def test_decaying_walk_is_hashseed_invariant(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """decaying_walk must be identical under PYTHONHASHSEED 0 and 5.
+    
+        graph.py:278 passes list(frontier) from a `set`, whose iteration
+        order is per-process hash-randomised. The hop-2 frontier below has
+        two members (dw-s1, dw-s2), each with a distinct hop-2 neighbour --
+        exactly the shape that exposes both the hash-random order AND the
+        first-seed-abort defect: pre-fix, only one branch is ever explored,
+        regardless of which PYTHONHASHSEED landed it first. Invoked twice
+        (PYTHONHASHSEED=0 and =5) by AC-217's VERIFY line; this single
+        assertion must hold under both.
+        """
+        tmp_graph_store.add_node("dw-seed", "semantic")
+        tmp_graph_store.add_node("dw-s1", "semantic")
+        tmp_graph_store.add_node("dw-s2", "semantic")
+        tmp_graph_store.add_node("dw-n1", "semantic")
+        tmp_graph_store.add_node("dw-n2", "semantic")
+        tmp_graph_store.add_edge("dw-seed", "dw-s1", "LINKS_TO")
+        tmp_graph_store.add_edge("dw-seed", "dw-s2", "LINKS_TO")
+        tmp_graph_store.add_edge("dw-s1", "dw-n1", "LINKS_TO")
+        tmp_graph_store.add_edge("dw-s2", "dw-n2", "LINKS_TO")
+    
+        scores = tmp_graph_store.decaying_walk(["dw-seed"], max_hops=2, decay=0.5)
+    
+>       assert scores == {
+            "dw-s1": 0.5,
+            "dw-s2": 0.5,
+            "dw-n1": 0.25,
+            "dw-n2": 0.25,
+        }
+E       AssertionError: assert {'dw-s1': 0.5...'dw-n1': 0.25} == {'dw-s1': 0.5...'dw-n2': 0.25}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Right contains 1 more item:
+E         {'dw-n2': 0.25}
+E         Use -v to get more diff
+
+mcp-server/tests/test_storage_graph.py:250: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['dw-seed']
+2026-08-04 22:34:26 [warning  ] neighbor_expand_error          error='Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().' seed_ids=['dw-s1', 'dw-s2']
+_____ TestAllEdgesCursor.test_all_edges_emits_no_rel_error_on_healthy_path _____
+
+self = <test_storage_graph.TestAllEdgesCursor object at 0x7f046cbeade0>
+tmp_graph_store = <crystalium.storage.graph.GraphStore object at 0x7f046cbe69f0>
+
+    def test_all_edges_emits_no_rel_error_on_healthy_path(
+        self, tmp_graph_store: GraphStore
+    ) -> None:
+        """A fully healthy all_edges() call must log no all_edges_rel_error.
+    
+        At 56c8510, `graph.py:333-339`'s `is None` check never fires (kuzu
+        raises instead of returning None), so exhaustion always raises into
+        the per-rel `except`, which logs `all_edges_rel_error` on *every*
+        rel type queried -- even when every sub-query succeeded.
+        """
+        tmp_graph_store.add_node("aen-a", "semantic")
+        tmp_graph_store.add_node("aen-b", "semantic")
+        tmp_graph_store.add_edge("aen-a", "aen-b", "LINKS_TO")
+        tmp_graph_store.add_edge("aen-a", "aen-b", "CITES")
+    
+        with capture_logs() as logs:
+            edges = tmp_graph_store.all_edges()
+    
+        assert len(edges) == 2
+        rel_error_events = [e for e in logs if e.get("event") == "all_edges_rel_error"]
+>       assert rel_error_events == []
+E       AssertionError: assert [{'rel': 'CIT...': 'warning'}] == []
+E         
+E         Left contains 3 more items, first extra item: {'rel': 'CITES', 'error': 'Runtime exception: No more tuples in QueryResult, Please check hasNext() before calling getNext().', 'event': 'all_edges_rel_error', 'log_level': 'warning'}
+E         Use -v to get more diff
+
+mcp-server/tests/test_storage_graph.py:391: AssertionError
+=========================== short test summary info ============================
+FAILED mcp-server/tests/test_storage_graph.py::TestNeighborExpandMultiSeed::test_multi_seed_expansion_is_union_minus_seeds
+FAILED mcp-server/tests/test_storage_graph.py::TestNeighborExpandMultiSeed::test_edgeless_first_seed_does_not_abort_later_seeds
+FAILED mcp-server/tests/test_storage_graph.py::TestNeighborExpandMultiSeed::test_multi_seed_differs_from_first_seed_alone
+FAILED mcp-server/tests/test_storage_graph.py::TestNeighborExpandMultiSeed::test_depth_2_chain_returns_both_hops
+FAILED mcp-server/tests/test_storage_graph.py::TestNeighborExpandMultiSeed::test_decaying_walk_is_hashseed_invariant
+FAILED mcp-server/tests/test_storage_graph.py::TestAllEdgesCursor::test_all_edges_emits_no_rel_error_on_healthy_path
+6 failed, 1 passed in 0.54s
+
+
+================================================================
+APPENDED RED-CHECK EVIDENCE (AC-233, AC-250) — reproduced by the
+orchestrator after the checker found these missing from the file.
+Method: revert ONLY the source file under test to 56c8510 in its
+own worktree, run the new test, restore. Tree left clean.
+================================================================
+mcp-server/tests/test_retrieve_hoist_floor.py:324: AssertionError
+----------------------------- Captured stdout call -----------------------------
+2026-08-05 01:09:49 [info     ] recall_ok                      after_compose=1 caller_tier=T1 candidates=1 evicted=0 filtered=1 k=1 layers=['episodic', 'semantic', 'procedural', 'execution'] query_len=17
+2026-08-05 01:09:49 [info     ] tool_call                      latency_ms=9.91 op=recall overflow=False result=ok tier=T1 tool=crystalium.recall
+=========================== short test summary info ============================
+FAILED mcp-server/tests/test_retrieve_hoist_floor.py::TestFloorLink::test_candidate_k_follows_fetch_width_floor
+1 failed, 4 passed in 3.44s
+
+>       assert len(rows) == 1
+E       assert 0 == 1
+E        +  where 0 = len([])
+
+mcp-server/tests/test_storage_relational.py:483: AssertionError
+=========================== short test summary info ============================
+FAILED mcp-server/tests/test_storage_relational.py::TestRecentCrystalIds::test_recent_crystal_ids_ties_break_by_id_ascending
+FAILED mcp-server/tests/test_storage_relational.py::TestRecentCrystalIds::test_created_at_index_exists_and_is_idempotent
+2 failed, 1 passed in 0.19s
+

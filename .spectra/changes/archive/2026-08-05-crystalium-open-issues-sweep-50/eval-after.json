@@ -1,0 +1,947 @@
+[
+ {
+  "seed": "0",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "0",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "0",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "0",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "0",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "0",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "1",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "2",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "3",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "4",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "5",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 5
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "fusion-gate-run",
+  "cmd": "fusion-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "fusion-floor-weighted-10",
+  "cmd": "fusion-gate --floor 10",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "fusion-floor-weighted-1000",
+  "cmd": "fusion-gate --floor 1000",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 0,
+   "retrieved": [
+    "target",
+    "target-sem"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "fusion-floor-reverted-10",
+  "cmd": "fusion-gate --floor 10 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "fusion-floor-reverted-1000",
+  "cmd": "fusion-gate --floor 1000 --reverted",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "target_rank": 1,
+   "retrieved": [
+    "Z",
+    "target"
+   ],
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   }
+  }
+ },
+ {
+  "seed": "unset",
+  "gate": "retrieval-gate",
+  "cmd": "retrieval-gate",
+  "git_sha": "f4c0d5e",
+  "label": "after",
+  "output": {
+   "axes": {
+    "multihop_f1": {
+     "flat": 0.30769230769230765,
+     "completion": 0.4615384615384615,
+     "both": 0.4615384615384615
+    },
+    "context_rank": {
+     "flat": 2,
+     "context": 2,
+     "both": 4
+    }
+   },
+   "graph_ok": true,
+   "completion_pass": true,
+   "context_pass": false,
+   "gate_pass": true,
+   "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)"
+  }
+ }
+]

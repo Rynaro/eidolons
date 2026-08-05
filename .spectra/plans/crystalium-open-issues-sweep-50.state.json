@@ -1,0 +1,42 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "crystalium-open-issues-sweep-50",
+  "created_at": "2026-08-04T00:00:00Z",
+  "tier": "full",
+  "tier_source": "esl change.json (pre-decided upstream; ramza-rightsize deliberately NOT re-run on this hop)",
+  "phase": "C",
+  "phases_done": [
+    "C"
+  ],
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [],
+  "amendments": [
+    {
+      "prev": "28b0b50949e9ae3ac09f3cf884d9ac42c4ba942d51ab88c247c0125d76750048",
+      "new": "f7cabb52066e84970356f7d232af62b6827ba2c19eb80eb15fc76031e17c1b1c",
+      "reason": "A-1 DP-2 control must run on the retrieval gate (fusion fixture cannot express the cliff; instance-readback, not kwarg-readback, or the check is a tautology). A-2 deconfounded protocol 7->14 records (two runs per seed): measured run-to-run nondeterminism at fixed PYTHONHASHSEED means the hash seed is the wrong axis. A-3 AC-248 evaluates on the merged tree, not the W3 worktree, which lacks W1's graph fix and yields a superseded retraction.",
+      "at": "2026-08-05T01:08:43Z"
+    }
+  ],
+  "notes": "Spec-authoring hop only. Scope/Explore were performed upstream by ATLAS (scout) and FORGE (triage); this state records the criteria freeze so post-execution edits are tamper-evident.",
+  "criteria_sha256": "f7cabb52066e84970356f7d232af62b6827ba2c19eb80eb15fc76031e17c1b1c",
+  "criteria_frozen_at": "2026-08-04T22:24:09Z",
+  "declared_scope": [
+    "mcp-server/src/crystalium/storage/graph.py",
+    "mcp-server/tests/test_storage_graph.py",
+    "mcp-server/tests/test_fusion_gate.py",
+    "mcp-server/src/crystalium/aetheryte/retrieve.py",
+    "mcp-server/tests/test_retrieve_hoist_floor.py",
+    "evals/retrieval_gate.py",
+    "mcp-server/src/crystalium/config.py",
+    "mcp-server/src/crystalium/server.py",
+    "mcp-server/tests/test_retrieval_gate.py",
+    "mcp-server/src/crystalium/storage/relational.py",
+    "mcp-server/tests/test_storage_relational.py",
+    "CHANGELOG.md",
+    "mcp-server/pyproject.toml",
+    "mcp-server/src/crystalium/__init__.py"
+  ],
+  "scope_declared_at": "2026-08-04T22:24:32Z"
+}
