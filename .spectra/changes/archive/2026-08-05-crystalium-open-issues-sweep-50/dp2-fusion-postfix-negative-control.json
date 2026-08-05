@@ -1,0 +1,821 @@
+[
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "0"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "1"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "2"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "3"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "4"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "5"
+ },
+ {
+  "weight": 0.9,
+  "injected_values": [
+   0.9,
+   0.9
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "UNSET"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "0"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "1"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "2"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "3"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "4"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "5"
+ },
+ {
+  "weight": 0.95,
+  "injected_values": [
+   0.95,
+   0.95
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "UNSET"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "0"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "1"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "2"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "3"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "4"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "5"
+ },
+ {
+  "weight": 1.0,
+  "injected_values": [
+   1.0,
+   1.0
+  ],
+  "injection_reached_code": true,
+  "output": {
+   "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+     "target",
+     "target-sem"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+     "Z",
+     "target"
+    ],
+    "cross_layer": {
+     "episodic": 0,
+     "semantic": 0
+    }
+   },
+   "gate_pass": true,
+   "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+   },
+   "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+  },
+  "seed": "UNSET"
+ }
+]

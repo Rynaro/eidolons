@@ -1,11 +1,13 @@
 {
   "esl_version": "1.1",
   "change_id": "release-nexus-2-15-0",
-  "status": "proposed",
+  "status": "archived",
   "tier": "trivial",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": null,
+  "drift_checked": true,
+  "archive_path": "archive/2026-08-05-release-nexus-2-15-0",
   "has_code": false
 }
