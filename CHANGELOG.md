@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+
+- **Roster: CRYSTALIUM v2.0.0 — BREAKING tool rename** (ESL change `mcp-crystalium-2-0-0`, tier full; fixes crystalium#35 and crystalium#33). The server now advertises single-segment tool names, so the host finally exposes `mcp__crystalium__recall` rather than the double-prefixed `mcp__crystalium__crystalium_recall` every prior server build actually advertised. **Consumer impact is near-zero**: all eight nexus agent grants reference the glob `mcp__crystalium__*`, which is rename-transparent, so no agent file changes anywhere in the roster; the roughly two dozen skill files that already referenced the short form (written against the *intended* surface rather than the server's actual one) were silently broken before this release and now work. Dispatch additionally accepts the legacy `crystalium.<tool>` / `crystalium_<tool>` forms for one deprecation window, emitting a `WARN` on each use rather than failing outright. `roster/mcps.yaml`'s `exposes_tools.list` is corrected in the same change: it carried 8 short names that had never actually resolved against a live server, and it omitted `graph_export` entirely — the list is now the true 9-tool surface (`recall`, `commit`, `ingest`, `update`, `skill_invoke`, `plan_checkpoint`, `plan_replan`, `session_end`, `graph_export`). v2.0.0 also sets `isError: true` on the server's own error path (payload text unchanged) and resyncs a telemetry SLO key that would otherwise have silently read an empty bucket after the rename. Dual-roster bump (`roster/mcps.yaml` + `roster/index.yaml`) with OCI index digest `sha256:64cf7aec…` (linux/amd64 + linux/arm64), released 2026-08-05T18:14:21Z, archive integrity and provenance recorded.
+- **Roster: CRYSTALIUM v1.12.0 also recorded** — the mcp SDK 2.x migration (crystalium#39) taken as a deliberate stepping stone *without* the breaking tool rename above: verified wire-identical to v1.11.0 against a golden capture, so v1.12.0 is the pin for anyone who wants the SDK migration without the v2.0.0 surface change. Image index digest `sha256:f4ef80c7…`, released 2026-08-05T18:17:43Z.
+
 ## [2.15.0] — 2026-08-05 — the graph arm was mostly dead, and the measurements said otherwise
 
 ### Changed

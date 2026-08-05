@@ -158,14 +158,36 @@ mcps:
         - mcp__crystalium__plan_checkpoint
         - mcp__crystalium__plan_replan
         - mcp__crystalium__session_end
+        - mcp__crystalium__graph_export
     source:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "1.11.0"
+      latest: "2.0.0"
       pins:
-        stable: "1.11.0"
+        stable: "2.0.0"
       releases:
+        "2.0.0":
+          # BREAKING (crystalium#35/#33): the server now advertises
+          # single-segment tool names, so the host finally exposes
+          # mcp__crystalium__recall etc. instead of the double-prefixed
+          # mcp__crystalium__crystalium_recall the pre-2.0 server actually
+          # advertised. exposes_tools.list above is corrected to the true
+          # 9-name surface (it was missing graph_export, and the other 8
+          # entries never resolved before this release). Also sets
+          # isError: true on the server's own error path (payload text
+          # unchanged) and resyncs a telemetry SLO key that would otherwise
+          # have silently read an empty bucket after the rename.
+          digest: "sha256:64cf7aecc34dd2526e89b718916b1f295cce8df9b8f907dfcd5428c7cef961fe"
+          released_at: "2026-08-05T18:14:21Z"
+        "1.12.0":
+          # mcp SDK 2.x migration (crystalium#39) — a deliberate stepping
+          # stone: takes the SDK 2.x upgrade WITHOUT the breaking
+          # single-segment tool rename (that lands in 2.0.0). Verified
+          # wire-identical to 1.11.0 against a golden capture. 9 tools
+          # (MCP surface unchanged; dotted names still advertised).
+          digest: "sha256:f4ef80c7d1dfa828bed88624dc8e34a216a7bc3fb10410755bffff03357164f5"
+          released_at: "2026-08-05T18:17:43Z"
         "1.11.0":
           # Open-issues sweep (crystalium#56), closing #41/#43/#46/#47/#50/#51/
           # #53/#54. Headline: neighbor_expand cursor-exhaustion repair (#41) —
