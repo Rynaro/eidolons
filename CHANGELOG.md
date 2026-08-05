@@ -8,6 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.16.1] — 2026-08-05 — the checker catches what the maker cannot see
+
 ### Changed
 
 - **Roster: CRYSTALIUM v2.0.1** (ESL change `mcp-crystalium-2-0-1`, tier lite; upstream Rynaro/crystalium#60). Patch fix-forward for a defect that shipped in 2.0.0 and was caught by an independent post-release check rather than by the release gates: the #35 tool rename updated telemetry's READ side but missed its WRITE sites, so every recall double-wrote to `tool_calls` under both the stale `crystalium.recall` key and the canonical `recall`, and Dream's `_orient()` counted the orphaned duplicate stream — the two staleness bugs cancelled out, which is why nothing went red. The fix swept all eight inner `record_call` sites and deliberately did **not** blanket-delete them: three were pure duplicates and removed, five were repointed and KEPT because they record outcomes the outer dispatcher structurally cannot observe (a verifier failure that returns without raising, the semantic promotion gate returning `pending`, and `update`'s target layer, which that tool's schema does not carry). Also lands the first pytest coverage of the hand-rolled `jsonschema` input validation introduced in 1.12.0 — parametrized over all nine tools derived from `build_tool_manifest()`, asserting `isError`, the message prefix, and zero side effects. Dual-roster bump with image index digest `sha256:a493af20…`.
