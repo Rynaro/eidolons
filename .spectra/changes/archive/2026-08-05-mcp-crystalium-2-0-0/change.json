@@ -1,11 +1,13 @@
 {
   "esl_version": "1.1",
   "change_id": "mcp-crystalium-2-0-0",
-  "status": "proposed",
+  "status": "archived",
   "tier": "full",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": ".spectra/changes/mcp-crystalium-2-0-0/spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-08-05-mcp-crystalium-2-0-0",
   "has_code": false
 }

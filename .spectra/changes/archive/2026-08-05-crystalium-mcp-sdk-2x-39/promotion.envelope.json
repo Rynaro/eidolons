@@ -1,0 +1,18 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "idg"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "INFORM(promotion): archived change \"crystalium-mcp-sdk-2x-39\" ready for CRYSTALIUM Semantic promotion.",
+  "context_delta": {
+    "archive_path": "archive/2026-08-05-crystalium-mcp-sdk-2x-39",
+    "change_id": "crystalium-mcp-sdk-2x-39",
+    "intent": "promotion",
+    "spec_ref": ".spectra/changes/crystalium-mcp-sdk-2x-39/spec.md",
+    "summary": "Verified + archived spec; route to mcp__crystalium__ingest (Semantic layer). tonberry does not call crystalium."
+  }
+}
