@@ -163,10 +163,39 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.0.1"
+      latest: "2.1.0"
       pins:
-        stable: "2.0.1"
+        stable: "2.1.0"
       releases:
+        "2.1.0":
+          # Recall result ORDER and MEMBERSHIP change by design (#45 #44 #42).
+          # #45: arms fetched per layer and appended layer-major, so a record
+          # that was the best BM25 match GLOBALLY could only reach rank
+          # n_layers. Replaced with a score-space merge (one global fetch for
+          # all-layers; filtered for single-layer; global+post-filter with a
+          # per-layer starvation backstop for a strict subset). #44: deprecated
+          # rows consumed fetch slots and starved active hits at DEFAULT
+          # deployment (recall_active_only defaults True and both entrypoints
+          # pass it through) — each individually censored-and-dirty fetch now
+          # widens at most once, caller-side, no bm25_search signature/SQL
+          # change. #42: seed exclusion is now explicit policy with an opt-in
+          # relaxation, threaded through all five enforcing sites; the flag
+          # DEFAULTS OFF because S-1's multi-hop-F1 trigger has no honest
+          # instrument (the available fixture has no seed-to-seed edge and so
+          # could not have detected a regression either way).
+          digest: "sha256:b6e0da3ff98aea99e2721c2a4c3e18e26d0203165d4e1c9a782e35af4a31ff71"
+          released_at: "2026-08-06T23:12:05Z"
+        "2.0.2":
+          # Falsifiability batch — ZERO production-behaviour change (tests,
+          # evals and comment-only config text). Adds the first test that
+          # exercises the stdio entrypoint (#57: a server that crashed on
+          # `serve` previously passed 972/976 green), replaces the `cross_layer`
+          # axis that could not fail because it measured bm25_search directly
+          # and pinned both values at 0 (#52), and lands falsifiable gates for
+          # #47 (candidate_k truncation), #55 (weight discrimination) and #48
+          # (floor sensitivity).
+          digest: "sha256:ce21b9b58f05ce5715537ac7aa0ee4acef36f55e9a423a7473c0fbe0eb5d95d7"
+          released_at: "2026-08-06T15:22:41Z"
         "2.0.1":
           # Fix-forward for a defect that shipped in 2.0.0: the tool rename
           # updated telemetry's READ side but missed the WRITE sites, so every
