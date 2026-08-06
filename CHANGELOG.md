@@ -8,12 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.17.0] — 2026-08-06 — a gate that cannot fail is not a gate
+
+The residual-eight campaign closed all eight remaining open issues on `Rynaro/crystalium` across two releases. Four of the eight did **not** close the way the plan assumed, and each says so with the measurement attached — two WONTFIX-with-rationale, two split closures where one half is retired and the other discharged.
+
 ### Changed
 - **CRYSTALIUM pinned to 2.1.0** (`roster/mcps.yaml` + `roster/index.yaml`, one commit — crystalium is dual-rostered and skew-guarded). Two releases land together:
   - **2.0.2** — falsifiability batch, zero production-behaviour change. First test that exercises the stdio entrypoint (a server that crashed on `serve` previously passed 972/976 green); replaces the `cross_layer` axis that could not fail because it measured `bm25_search` directly and pinned both values at 0; adds falsifiable gates for `candidate_k` truncation, weight discrimination and floor sensitivity.
   - **2.1.0** — recall result **order and membership change by design**. Score-space merge replaces layer-major append (a record that was the best BM25 match globally could only reach rank `n_layers`); status-aware sparse top-up for deprecated-starved fetches, live at default deployment; seed exclusion becomes explicit policy with an opt-in relaxation that **defaults off**.
   - Index digests resolved from the **ghcr registry**, not from release notes: `2.1.0` `sha256:b6e0da3f…`, `2.0.2` `sha256:ce21b9b5…` (both OCI indexes, amd64+arm64).
   - `archive_sha256` for both computed as the sha256 of the **uncompressed tar with the `<name>-<version>/` prefix**, with the method validated first by reproducing the already-recorded 2.0.1 value (`307d2d22…`) via two independent routes that agree.
+- ESL bookkeeping: the #35/#39 campaign change records were archived (`.spectra/changes/archive/`). Internal lifecycle records; no consumer-visible surface.
 
 
 ## [2.16.1] — 2026-08-05 — the checker catches what the maker cannot see
