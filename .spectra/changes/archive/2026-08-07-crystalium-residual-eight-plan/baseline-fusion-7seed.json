@@ -1,0 +1,211 @@
+[
+{"seed":"0","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"1","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"2","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"3","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"4","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"5","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}},
+{"seed":"unset","rc":0,"result":{
+  "weighted": {
+    "target_rank": 0,
+    "retrieved": [
+      "target",
+      "target-sem"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "unweighted": {
+    "target_rank": 1,
+    "retrieved": [
+      "Z",
+      "target"
+    ],
+    "cross_layer": {
+      "episodic": 0,
+      "semantic": 0
+    }
+  },
+  "gate_pass": true,
+  "cross_layer": {
+    "episodic": 0,
+    "semantic": 0
+  },
+  "verdict": "weighted fusion holds target at fused rank 0; unweighted does not"
+}}]

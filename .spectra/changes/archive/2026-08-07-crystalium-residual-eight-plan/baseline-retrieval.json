@@ -1,0 +1,34 @@
+{"mode":"CRYSTALIUM_SKIP_SLOW=1","rc":0,"result":{
+  "axes": null,
+  "graph_ok": null,
+  "completion_pass": null,
+  "context_pass": null,
+  "gate_pass": null,
+  "verdict": "inconclusive",
+  "reason": "embeddings unavailable (CRYSTALIUM_SKIP_SLOW or model unreachable) \u2014 dense arm would be empty in every arm; refusing to emit numbers (crystalium#54, N-5)"
+}}
+{"mode":"default-no-skip-slow","rc":0,"result":{
+  "axes": {
+    "multihop_f1": {
+      "flat": 0.30769230769230765,
+      "completion": 0.4615384615384615,
+      "both": 0.4615384615384615
+    },
+    "context_rank": {
+      "flat": 2,
+      "context": 2,
+      "both": 2
+    }
+  },
+  "graph_ok": true,
+  "completion_pass": true,
+  "context_pass": false,
+  "gate_pass": true,
+  "verdict": "completion lifts multi-hop F1; context_match does NOT lift context rank \u2014 flip only the winning flag(s)",
+  "edge_counts": {
+    "flat": 2,
+    "comp": 2,
+    "ctx": 2,
+    "both": 2
+  }
+}}

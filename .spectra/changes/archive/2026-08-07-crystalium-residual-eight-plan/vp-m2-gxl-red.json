@@ -1,0 +1,25 @@
+{
+ "axes": null,
+ "expected_blocked_rank": 3,
+ "liveness": {
+  "candidate_k": 15,
+  "corpus_per_layer": 3,
+  "dense_arm_size": 0,
+  "edge_count": 0,
+  "global_bm25_rank0": "sem-target",
+  "k": 5,
+  "node_count": 4,
+  "sparse_arm_size": 4
+ },
+ "run_nonce": "f4edb01a-ea1b-48b2-8626-983b8715bbc4",
+ "sparse_ranking": [
+  "ep1",
+  "ep2",
+  "ep3",
+  "sem-target"
+ ],
+ "sparse_ranking_provenance": "bm25_search_spy",
+ "target_rank": 3,
+ "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9",
+ "verdict": "measured"
+}

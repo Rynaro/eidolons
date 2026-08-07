@@ -1,0 +1,210 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "crystalium-residual-eight-plan",
+  "created_at": "2026-08-05T21:18:59Z",
+  "tier": "full",
+  "phase": "A",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "A"
+  ],
+  "rightsize": {
+    "score": 5,
+    "computed_tier": "full",
+    "inputs": {
+      "files_est": 3,
+      "new_dep": false,
+      "public_api": true,
+      "migration": false,
+      "security": false,
+      "novel": true,
+      "stakes": "high"
+    }
+  },
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "complexity",
+      "total": 12,
+      "dims": {
+        "scope": 3,
+        "ambiguity": 3,
+        "dependencies": 3,
+        "risk": 3
+      },
+      "verdict": "human_loop",
+      "at": "2026-08-05T21:24:50Z"
+    },
+    {
+      "rubric": "explore",
+      "total": 55.5,
+      "dims": {
+        "alignment": 6,
+        "correctness": 7,
+        "maintainability": 5,
+        "performance": 4,
+        "simplicity": 7,
+        "risk": 5,
+        "innovation": 2
+      },
+      "verdict": "weak",
+      "at": "2026-08-05T21:25:24Z",
+      "label": "H-A issue-by-issue serial"
+    },
+    {
+      "rubric": "explore",
+      "total": 84,
+      "dims": {
+        "alignment": 9,
+        "correctness": 9,
+        "maintainability": 9,
+        "performance": 8,
+        "simplicity": 6,
+        "risk": 8,
+        "innovation": 8
+      },
+      "verdict": "solid",
+      "at": "2026-08-05T21:25:24Z",
+      "label": "H-B gate-first two-phase shared rig"
+    },
+    {
+      "rubric": "explore",
+      "total": 44,
+      "dims": {
+        "alignment": 4,
+        "correctness": 3,
+        "maintainability": 3,
+        "performance": 8,
+        "simplicity": 8,
+        "risk": 2,
+        "innovation": 3
+      },
+      "verdict": "weak",
+      "at": "2026-08-05T21:25:24Z",
+      "label": "H-C single mega-PR"
+    },
+    {
+      "rubric": "explore",
+      "total": 38.5,
+      "dims": {
+        "alignment": 3,
+        "correctness": 2,
+        "maintainability": 4,
+        "performance": 8,
+        "simplicity": 7,
+        "risk": 1,
+        "innovation": 2
+      },
+      "verdict": "weak",
+      "at": "2026-08-05T21:25:24Z",
+      "label": "H-D fix-first gate-later"
+    },
+    {
+      "rubric": "explore",
+      "total": 74,
+      "dims": {
+        "alignment": 6,
+        "correctness": 8,
+        "maintainability": 7,
+        "performance": 9,
+        "simplicity": 9,
+        "risk": 8,
+        "innovation": 4
+      },
+      "verdict": "solid",
+      "at": "2026-08-05T21:25:24Z",
+      "label": "H-E narrow-and-close"
+    },
+    {
+      "rubric": "confidence",
+      "total": 84.75,
+      "dims": {
+        "pattern_match": 88,
+        "requirement_clarity": 78,
+        "decomposition_stability": 85,
+        "constraint_compliance": 88
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-08-05T21:35:41Z"
+    }
+  ],
+  "amendments": [
+    {
+      "prev": "eb0492ff1ac778499f89c8f4c70b1c919fbd9e3a83c83da630f022890da8908e",
+      "new": "a40c0d421b115871d33b74cb2188e2a194efecd980456019fccc89f1eeba4e51",
+      "reason": "amend-01: discharges Kupo REJECT (K-B1..K-B16, K-N1..K-N21) under FORGE rulings D1-D9; 30 criteria REPLACED, 2 STRUCK (AC-319/AC-320), 5 ADDED (AC-325b/354/355/356/365); K-B15 stdout-contamination re-plumbs every jq criterion onto evals/results artifacts",
+      "at": "2026-08-05T23:21:21Z"
+    },
+    {
+      "prev": "a40c0d421b115871d33b74cb2188e2a194efecd980456019fccc89f1eeba4e51",
+      "new": "7e680dc63f87439dbfc2dec0220b8df51aa2b33fe776550a18b20f54cfeb05c9",
+      "reason": "amend-01 rev2: EARS-lint conformance pass (ramza-ears-lint green, 42 criteria); no semantic change to any criterion, block shape only",
+      "at": "2026-08-05T23:23:50Z"
+    },
+    {
+      "prev": "7e680dc63f87439dbfc2dec0220b8df51aa2b33fe776550a18b20f54cfeb05c9",
+      "new": "f385f39bbabb6ee7371afd8815ef2de0e18905a0048d2f4000813edf219b0d9f",
+      "reason": "amend-02: K-B17 VP-M1 could not fail (C-2 seed set provably excludes seed 8, the sole divergent point; fused rank pinned against derived variation; evidence from a reverted variant) + K-B18 pre-#41 claim in shipped source (git-dated 56c8510 2026-08-03 vs cab9b73 2026-08-04) + K-N22 global rule (f) positive-capability-before-routing-negative; AC-313/AC-321 replaced, AC-322 amended, AC-357/358/359 added, S-14 added",
+      "at": "2026-08-05T23:34:01Z"
+    },
+    {
+      "prev": "f385f39bbabb6ee7371afd8815ef2de0e18905a0048d2f4000813edf219b0d9f",
+      "new": "b6be3ad585cd74dfbda107249d4505c8dac13f2f85bd09aa18182988184d3d94",
+      "reason": "amend-03: discharges Kupo pass-2 ACCEPT-WITH-AMENDMENTS (K-C1..K-C6 blocking, K-C-N1..K-C-N15 non-blocking, K-N14 carry-over) plus two FORGE-fidelity gaps and two post-dispatch coordinator inputs (FORGE fence ALLOW + composition overrule; AC-306 key mismatch). Global rules (g) artifact-freshness / (h) checkout-hygiene / (i) producer-named artifact contracts; S-15 added; AC-357 control moved to a distinct-phantom fixture with three-branch routing; AC-374/375/376/377/378/379/380/381 added; 15 replaced, 6 amended; 63 criteria in force",
+      "at": "2026-08-06T00:29:29Z"
+    },
+    {
+      "prev": "b6be3ad585cd74dfbda107249d4505c8dac13f2f85bd09aa18182988184d3d94",
+      "new": "50803a00359409ddc6765477f782af62a151228f247ad619db0144948a783c40",
+      "reason": "amend-03 rev2: self-attack pass. AC-332 part 0 could not fail on a bad shard (jq -e over multiple files exits on the LAST input; measured) -> jq -s -e all(); AC-321 referenced $CRYSTALIUM_GATE_NONCE which no chain exports (would have reddened every run) -> $NONCE + one-nonce-per-measurement clause in rule (g). No other semantic change.",
+      "at": "2026-08-06T00:33:13Z"
+    },
+    {
+      "prev": "50803a00359409ddc6765477f782af62a151228f247ad619db0144948a783c40",
+      "new": "73419a70483787532c079449fed643cd8b2bf57764f7c2b53a0e67550f2bc00e",
+      "reason": "amend-04: node-selector resolution + the AC-382 collection-sweep gate. Applied by the orchestrator as a MECHANICAL correction (no criterion semantics changed): 7 selectors addressed nodes as file.py::func while every implementer used classes, so they were FALSE REDS that could not resolve; bare -k rejected (measured: matches 2 nodes, does not pin identity). AC-305/311/315/358 selectors replaced with exact class-qualified ids; AC-382 ADDED as step 0 of both release checklists; AC-332 replaced (length == 5 could fail for having MORE evidence); AC-381 replaced (its fence anchor 'never a status predicate on the shared' never existed - the comment wraps across two lines, measured 0 hits at the fence's own origin commit b7f1a47). AC-382 itself accumulated 4 defects, each found by RUNNING it (RC-1 phantom BLOCKERs, RC-2 passed at 5% coverage because docker compose run ate the loop's stdin, RC-3 wave ownership inferred from file existence, RC-4 parametrize brackets). 64 criteria in force. BACKFILLED at record-close: this amendment was applied to disk on 2026-08-06 but never chained here, so criteria_sha256 pointed at amend-03 rev2 and excluded the criteria the checker actually ran against.",
+      "at": "2026-08-06T19:16:00Z",
+      "backfilled_at": "2026-08-07",
+      "checker_review": "exercised, not formally recorded: the v2.1.0 checker independently reproduced AC-382's RC-4 fix and red-checked it live (fabricated node id -> 1 BLOCKER, exit 1), and reported AC-381 green; amend-04's own header carried 'checker: kupo (pending)'"
+    }
+  ],
+  "declared_scope": [
+    "mcp-server/src/crystalium/aetheryte/retrieve.py",
+    "mcp-server/src/crystalium/storage/graph.py",
+    "mcp-server/src/crystalium/config.py",
+    "mcp-server/tests/*",
+    "evals/*",
+    "CHANGELOG.md",
+    "mcp-server/pyproject.toml",
+    "mcp-server/src/crystalium/__init__.py",
+    "mcp-server/src/crystalium/server.py",
+    "mcp-server/src/crystalium/__main__.py",
+    ".spectra/changes/crystalium-residual-eight-plan/*"
+  ],
+  "scope_amendments": [
+    {
+      "at": "2026-08-07",
+      "added": [
+        "mcp-server/src/crystalium/server.py",
+        "mcp-server/src/crystalium/__main__.py"
+      ],
+      "reason": "Found by the record-close drift check, which had never been run and returned MISMATCH on its first execution. Both files changed in b7f1a47..d243789 without appearing in declared_scope or in FORGE D2's site table (which enumerates graph.py only). Both are required consequences of in-scope changes: they wire #42's new recall_seed_derived_credit config flag into the two production entry points, and widen _NullGraphStore's signatures to match graph.py's new params. declared_scope was frozen 2026-08-05T21:35:48Z, BEFORE FORGE D2 and K-B2 defined #42's threading; the declaration was never widened to match a design that legitimately grew. Verified before widening, not after: test_weight_discrimination.py:235 asserts the flag arrives on the instance by readback, _NullGraphStore is exercised by 7 test files, and AC-361 reports 0 wire differences vs v2.0.2. Additive-only: no criterion, threshold or assertion changed.",
+      "escalated": true,
+      "record": ".spectra/changes/crystalium-residual-eight-plan/drift-resolution.md"
+    }
+  ],
+  "criteria_sha256": "73419a70483787532c079449fed643cd8b2bf57764f7c2b53a0e67550f2bc00e",
+  "critic": {
+    "author": "ramza",
+    "checker": "kupo",
+    "at": "2026-08-05T21:35:30Z"
+  },
+  "scope_declared_at": "2026-08-05T21:35:48Z",
+  "criteria_frozen_at": "2026-08-05T21:35:48Z"
+}

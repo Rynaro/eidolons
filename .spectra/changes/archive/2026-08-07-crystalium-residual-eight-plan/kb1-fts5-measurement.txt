@@ -1,0 +1,20 @@
+K-B1 empirical settlement — FTS5 implicit-AND
+Measured: 2026-08-05, container `docker compose run --rm crystalium`, sqlite3 3.46.1
+Command: CREATE VIRTUAL TABLE t USING fts5(s); rows = ['alpha only','alpha beta gamma delta','beta only','alpha beta']
+
+  MATCH '"alpha" "beta"'                     -> ['alpha beta gamma delta', 'alpha beta']   (2 rows)
+  MATCH '"alpha" "beta" "gamma" "delta"'     -> ['alpha beta gamma delta']                 (1 row)
+
+'alpha only' (one term of the query) matched NEITHER query.
+
+CONCLUSION: relational.py:190-202's implicit-AND docstring is CORRECT in the pinned build.
+A crystal carrying a strict SUBSET of the query terms does not match at all.
+
+CONSEQUENCE: spec.md:253-264's G-XL fixture ("N weakly-matching crystals (one query term
+each)") yields an EMPTY episodic sparse arm. sparse_ranking == ["sem-target"], the sole
+non-empty arm, so target_rank == 0 => AC-310 RED as written => STOP S-3 fires at link 2 of
+the 5-link critical path. Kupo K-B1 is CONFIRMED by execution, not just by docstring.
+
+The fixture must instead make every filler match ALL query terms, deriving rank separation
+from BM25 term-frequency / document-length normalisation. "RED by construction" is thereby
+downgraded to a claim requiring MEASUREMENT before W-45 may proceed.

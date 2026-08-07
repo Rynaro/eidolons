@@ -5,3 +5,10 @@
 {"rubric":"confidence","total":82.5,"dims":{"pattern_match":85,"requirement_clarity":80,"decomposition_stability":75,"constraint_compliance":90},"verdict":"VALIDATE","at":"2026-07-05T00:17:33Z","label":"stage2-assemble"}
 {"rubric":"complexity","total":10,"dims":{"scope":3,"ambiguity":2,"dependencies":3,"risk":2},"verdict":"human_loop","at":"2026-07-07T16:54:30Z"}
 {"rubric":"confidence","total":84,"dims":{"pattern_match":80,"requirement_clarity":78,"decomposition_stability":88,"constraint_compliance":90},"verdict":"VALIDATE","at":"2026-07-07T16:58:18Z"}
+{"rubric":"complexity","total":12,"dims":{"scope":3,"ambiguity":3,"dependencies":3,"risk":3},"verdict":"human_loop","at":"2026-08-05T21:24:50Z"}
+{"rubric":"explore","total":55.5,"dims":{"alignment":6,"correctness":7,"maintainability":5,"performance":4,"simplicity":7,"risk":5,"innovation":2},"verdict":"weak","at":"2026-08-05T21:25:24Z","label":"H-A issue-by-issue serial"}
+{"rubric":"explore","total":84,"dims":{"alignment":9,"correctness":9,"maintainability":9,"performance":8,"simplicity":6,"risk":8,"innovation":8},"verdict":"solid","at":"2026-08-05T21:25:24Z","label":"H-B gate-first two-phase shared rig"}
+{"rubric":"explore","total":44,"dims":{"alignment":4,"correctness":3,"maintainability":3,"performance":8,"simplicity":8,"risk":2,"innovation":3},"verdict":"weak","at":"2026-08-05T21:25:24Z","label":"H-C single mega-PR"}
+{"rubric":"explore","total":38.5,"dims":{"alignment":3,"correctness":2,"maintainability":4,"performance":8,"simplicity":7,"risk":1,"innovation":2},"verdict":"weak","at":"2026-08-05T21:25:24Z","label":"H-D fix-first gate-later"}
+{"rubric":"explore","total":74,"dims":{"alignment":6,"correctness":8,"maintainability":7,"performance":9,"simplicity":9,"risk":8,"innovation":4},"verdict":"solid","at":"2026-08-05T21:25:24Z","label":"H-E narrow-and-close"}
+{"rubric":"confidence","total":84.75,"dims":{"pattern_match":88,"requirement_clarity":78,"decomposition_stability":85,"constraint_compliance":88},"verdict":"VALIDATE","at":"2026-08-05T21:35:41Z"}

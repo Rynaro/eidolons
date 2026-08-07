@@ -1,0 +1,59 @@
+### VP-B5 HEAD
+b7f1a477b4a0bda2c2ecd7c3383d036e316c5abc
+b7f1a47
+
+### VP-B1 make test
+mcp-server/tests/test_trust_propagation.py::TestLayerCeilingMap::test_ceiling_enforcement[T3-episodic-False] PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_summarizer_with_t3_source_is_blocked PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_pure_t1_summarization_succeeds PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_t2_source_poisons_to_t2 PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_t2_is_within_procedural_ceiling PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_conflict_lww_supersedes_and_records PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_off_is_byte_identical_no_conflict PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_near_duplicate_not_a_conflict PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_near_duplicate_echoes_existing_importance PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_cli.py: 2 warnings
+tests/test_commit_cli.py: 5 warnings
+tests/test_deploy_modes.py: 1 warning
+tests/test_diagnosability.py: 5 warnings
+tests/test_ingest_cli.py: 10 warnings
+tests/test_ingest_handler.py: 4 warnings
+tests/test_recall_starvation.py: 3 warnings
+tests/test_roundtrip_handoff.py: 8 warnings
+tests/test_server.py: 1 warning
+  /app/mcp-server/src/crystalium/storage/relational.py:318: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    conn.execute(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====== 998 passed, 2 skipped, 1 xfailed, 39 warnings in 848.76s (0:14:08) ======
+### VP-B1 exit: 
+
+### VP-B2 make test-ci
+mcp-server/tests/test_trust_propagation.py::TestLayerCeilingMap::test_ceiling_enforcement[T3-episodic-False] PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_summarizer_with_t3_source_is_blocked PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_pure_t1_summarization_succeeds PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_t2_source_poisons_to_t2 PASSED [ 99%]
+mcp-server/tests/test_trust_propagation.py::TestTrustPropagationSummarization::test_t2_is_within_procedural_ceiling PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_conflict_lww_supersedes_and_records PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_off_is_byte_identical_no_conflict PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_near_duplicate_not_a_conflict PASSED [ 99%]
+mcp-server/tests/test_write_conflict.py::test_near_duplicate_echoes_existing_importance PASSED [100%]
+
+=============================== warnings summary ===============================
+tests/test_cli.py: 2 warnings
+tests/test_commit_cli.py: 5 warnings
+tests/test_deploy_modes.py: 1 warning
+tests/test_diagnosability.py: 5 warnings
+tests/test_ingest_cli.py: 10 warnings
+tests/test_ingest_handler.py: 4 warnings
+tests/test_recall_starvation.py: 3 warnings
+tests/test_roundtrip_handoff.py: 8 warnings
+tests/test_server.py: 1 warning
+  /app/mcp-server/src/crystalium/storage/relational.py:318: DeprecationWarning: The default datetime adapter is deprecated as of Python 3.12; see the sqlite3 documentation for suggested replacement recipes
+    conn.execute(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+====== 994 passed, 6 skipped, 1 xfailed, 39 warnings in 299.41s (0:04:59) ======
+### VP-B2 exit: 

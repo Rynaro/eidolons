@@ -1,0 +1,32 @@
+[
+ {
+  "asserted_ac": "AC-312 (C-XL-2)",
+  "axis": "term coverage / arm liveness -- the K-B1 axis",
+  "command": "cd MAIN && docker compose run --rm crystalium pytest mcp-server/tests/test_cross_layer_gate.py::TestLiveness::test_liveness_all_conjuncts_green -v",
+  "exit_code": 1,
+  "gate": "cross-layer",
+  "output_tail": "mcp-server/tests/test_cross_layer_gate.py::TestLiveness::test_liveness_all_conjuncts_green FAILED [100%]\n\n=================================== FAILURES ===================================\n________________ TestLiveness.test_liveness_all_conjuncts_green ________________\n\n    def test_liveness_all_conjuncts_green(self, tmp_path: Path) -> None:\n        result = run(data_root=str(tmp_path / \"xl-gate-liveness\"))\n        liveness = result[\"liveness\"]\n        assert liveness[\"edge_count\"] == 0, liveness\n        assert liveness[\"node_count\"] == 4, liveness\n        assert liveness[\"dense_arm_size\"] == 0, liveness\n>       assert liveness[\"sparse_arm_size\"] == liveness[\"corpus_per_layer\"] + 1, liveness\nE       AssertionError: {'corpus_per_layer': 3, 'candidate_k': 15, 'k': 5, 'sparse_arm_size': 3, ...}\nE       assert 3 == (3 + 1)\n\nmcp-server/tests/test_cross_layer_gate.py:93: AssertionError\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_cross_layer_gate.py::TestLiveness::test_liveness_all_conjuncts_green\n============================== 1 failed in 2.53s ===============================",
+  "perturbation_patch": "--- a/evals/cross_layer_gate.py\t2026-08-05 22:44:08.521199101 -0300\n+++ b/evals/cross_layer_gate.py\t2026-08-05 22:44:08.511290616 -0300\n@@ -167,10 +167,11 @@\n     \"\"\"All four `_XL_QUERY_TERMS` exactly once, padded with `label`-prefixed\n     non-query nonce tokens to `total_tokens` (spec.amend-01.md Sec B.2.1 --\n     \"per-filler unique\", so no two fillers ever share a padding token).\"\"\"\n-    pad_count = total_tokens - len(_XL_QUERY_TERMS)\n+    terms = _XL_QUERY_TERMS[:-1] if label == \"ep1\" else _XL_QUERY_TERMS\n+    pad_count = total_tokens - len(terms)\n     assert pad_count >= 0, (label, total_tokens)\n     padding = [f\"{label}pad{i:02d}\" for i in range(pad_count)]\n-    return \" \".join([*_XL_QUERY_TERMS, *padding])\n+    return \" \".join([*terms, *padding])\n \n \n def _sem_target_summary() -> str:\n",
+  "restore": {
+   "command": "cd MAIN && git apply -R <perturbation_patch above, saved to a tmp .patch file>  # verified: git apply --check passes, and the restored file is byte-identical (diff -q) to the pre-perturbation source",
+   "exit_code": 0
+  },
+  "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9",
+  "unit": "W-G-XL"
+ },
+ {
+  "asserted_ac": "AC-312 (C-XL-2), rule (g) chain",
+  "axis": "term coverage / arm liveness -- the K-B1 axis",
+  "command": "cd MAIN && rm -f evals/results/cross-layer-gate.json && docker compose run --rm -e CRYSTALIUM_GATE_NONCE=\"$NONCE\" -e CRYSTALIUM_TREE_SHA=\"$TREE\" crystalium /app/.venv/bin/python -c \"import evals.cross_layer_gate as m; m.emit(m.run(), '/app/evals/results/cross-layer-gate.json')\" && jq -e --arg n \"$NONCE\" --arg t \"$TREE\" '(type==\"object\") and (.run_nonce==$n) and (.tree_sha==$t) and (.target_rank|type==\"number\") and (.expected_blocked_rank|type==\"number\") and (.liveness.corpus_per_layer|type==\"number\") and (.expected_blocked_rank==.liveness.corpus_per_layer) and (.expected_blocked_rank==3) and (.target_rank==.expected_blocked_rank) and (.sparse_ranking|type==\"array\") and (.sparse_ranking_provenance==\"bm25_search_spy\") and ((.sparse_ranking|length)==.liveness.sparse_arm_size) and (.liveness.sparse_arm_size==(.liveness.corpus_per_layer+1)) and (.liveness.global_bm25_rank0==\"sem-target\") and (.liveness.node_count==4) and (.liveness.edge_count==0) and (.liveness.dense_arm_size==0) and (.verdict==\"measured\")' evals/results/cross-layer-gate.json",
+  "exit_code": 1,
+  "gate": "cross-layer",
+  "output_tail": "false\n--- artifact (evals/results/cross-layer-gate.json) ---\n{\n \"axes\": null,\n \"liveness\": {\n  \"candidate_k\": 15,\n  \"corpus_per_layer\": 3,\n  \"dense_arm_size\": 0,\n  \"edge_count\": 0,\n  \"global_bm25_rank0\": \"sem-target\",\n  \"k\": 5,\n  \"node_count\": 4,\n  \"sparse_arm_size\": 3\n },\n \"run_nonce\": \"281c3010-761f-46e6-95fd-8ceb899d4dc8\",\n \"tree_sha\": \"17671273b223947be3eb23d25011afaeb201b9b9\",\n \"verdict\": \"confounded\"\n}",
+  "perturbation_patch": "--- a/evals/cross_layer_gate.py\t2026-08-05 22:44:08.521199101 -0300\n+++ b/evals/cross_layer_gate.py\t2026-08-05 22:44:08.511290616 -0300\n@@ -167,10 +167,11 @@\n     \"\"\"All four `_XL_QUERY_TERMS` exactly once, padded with `label`-prefixed\n     non-query nonce tokens to `total_tokens` (spec.amend-01.md Sec B.2.1 --\n     \"per-filler unique\", so no two fillers ever share a padding token).\"\"\"\n-    pad_count = total_tokens - len(_XL_QUERY_TERMS)\n+    terms = _XL_QUERY_TERMS[:-1] if label == \"ep1\" else _XL_QUERY_TERMS\n+    pad_count = total_tokens - len(terms)\n     assert pad_count >= 0, (label, total_tokens)\n     padding = [f\"{label}pad{i:02d}\" for i in range(pad_count)]\n-    return \" \".join([*_XL_QUERY_TERMS, *padding])\n+    return \" \".join([*terms, *padding])\n \n \n def _sem_target_summary() -> str:\n",
+  "restore": {
+   "command": "cd MAIN && git apply -R <perturbation_patch above, saved to a tmp .patch file>  # verified: git apply --check passes, and the restored file is byte-identical (diff -q) to the pre-perturbation source",
+   "exit_code": 0
+  },
+  "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9",
+  "unit": "W-G-XL"
+ }
+]

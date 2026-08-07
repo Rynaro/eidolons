@@ -1,0 +1,43 @@
+{
+  "commit1_sha": "9f8a838d4f0b3570bdafa5e159649101a7c1092c",
+  "commit2_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+  "node": "mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits",
+  "recorded_at": "2026-08-06T15:40:00Z",
+  "recorded_by": "vivi (W-44 maker)",
+  "prefix_summary": "AC-345 characterisation, D7 two-commit shape. Commit 1 (9f8a838, tests only, retrieve.py untouched -- the pre-#44 tree) adds test_prefix_baseline_starves_active_hits and test_topup_recovers_active_hits with no xfail markers: on that tree AC-345 (starvation) is GREEN and AC-346 (recovery) is RED -- a candidate_k=15 single-layer (semantic) corpus of 15 deprecated rows (tf=6, no padding) strictly outranking one active target (tf=1, 16 padding tokens) under recall_active_only=True (production parity, config.py's default) causes a plain k=candidate_k bm25_search fetch to return the 15 deprecated rows exclusively; the active target never reaches result.records. Commit 2 (fb28c4f) lands the retrieve.py caller-side status-blind top-up AND the @pytest.mark.xfail(strict=True, reason=\"pre-#44 starvation characterisation; XPASS = starvation regression (#44)\") marker on AC-345's node in the SAME commit: post-fix AC-345 reports XFAIL (not PASS, not FAIL) because the top-up now recovers the target, so the node's own body assertion (target NOT in retrieved) fails as expected under the strict marker; AC-346 reports PASS on the identical corpus.",
+  "runs": [
+    {
+      "part": "i) commit-1 characterisation (AC-345 on the recorded pre-fix SHA)",
+      "tree_sha": "9f8a838d4f0b3570bdafa5e159649101a7c1092c",
+      "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits -v",
+      "exit_code": 0,
+      "outcome": "PASSED",
+      "output_tail": "mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits PASSED [100%]\n\n============================== 1 passed in 2.34s ==============================="
+    },
+    {
+      "part": "i-companion) AC-346 on the SAME commit-1 tree, expected RED (no top-up exists yet)",
+      "tree_sha": "9f8a838d4f0b3570bdafa5e159649101a7c1092c",
+      "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits -v",
+      "exit_code": 1,
+      "outcome": "FAILED",
+      "output_tail": "E       AssertionError: []\nE       assert 'active-target' in []\n\nmcp-server/tests/test_sparse_status_topup.py:197: AssertionError\n----------------------------- Captured stdout call -----------------------------\n2026-08-06 15:33:56 [info     ] recall_ok                      after_compose=0 caller_tier=T1 candidates=15 evicted=0 filtered=0 k=5 layers=['semantic'] query_len=39\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits\n========================= 1 failed, 1 passed in 2.47s =========================="
+    },
+    {
+      "part": "ii) the sentinel on the release tree (AC-345 post-fix, must report XFAIL)",
+      "tree_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+      "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits -v -rxX",
+      "exit_code": 0,
+      "outcome": "XFAIL",
+      "output_tail": "mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits XFAIL [100%]\n\n=========================== short test summary info ============================\nXFAIL mcp-server/tests/test_sparse_status_topup.py::test_prefix_baseline_starves_active_hits - pre-#44 starvation characterisation; XPASS = starvation regression (#44)\n============================== 1 xfailed in 2.56s =============================="
+    },
+    {
+      "part": "ii-companion) AC-346 on the release tree, expected GREEN",
+      "tree_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+      "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits -v",
+      "exit_code": 0,
+      "outcome": "PASSED",
+      "output_tail": "mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits PASSED [100%]\n\n============================== 1 passed in 2.48s ==============================="
+    }
+  ],
+  "note_on_checker_replay": "Part (i)'s checker-facing VERIFY (spec.criteria.amend-03.md AC-345) does a detached checkout of commit1_sha inside /home/rynaro/workspace/oss/agents/crystalium under rule (h) (dirty-tree refusal, recorded original, unconditional restore). This worktree (fix/sparse-status-blind-44) shares the same object database as that path (git worktree), so commit1_sha/commit2_sha both resolve there without a fetch."
+}
