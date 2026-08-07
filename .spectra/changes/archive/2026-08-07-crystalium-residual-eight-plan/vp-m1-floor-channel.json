@@ -1,0 +1,753 @@
+{
+  "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+  "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9",
+  "seeds": [
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "0",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "1",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "2",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "3",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "4",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "5",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "6",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "7",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "8",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "9",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "10",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "11",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "12",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    },
+    {
+      "channel_live": false,
+      "fixture": "shipped",
+      "fixture_phantom_targets": [
+        "Z"
+      ],
+      "floor_high": 1000,
+      "floor_low": 10,
+      "high": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 1000,
+        "floor_applied_readback": 1000,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "low": {
+        "derived": [
+          "Z"
+        ],
+        "fixture": "shipped",
+        "fixture_phantom_targets": [
+          "Z"
+        ],
+        "floor": 10,
+        "floor_applied_readback": 10,
+        "retrieved": [
+          "Z",
+          "target"
+        ],
+        "self_check_ok": true,
+        "target_rank": 1
+      },
+      "probe_calls": 2,
+      "probe_symbol": "vp_m1_probe",
+      "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+      "seed": "unset",
+      "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+    }
+  ],
+  "channel_live": false,
+  "seed_set": [
+    "0",
+    "1",
+    "2",
+    "3",
+    "4",
+    "5",
+    "6",
+    "7",
+    "8",
+    "9",
+    "10",
+    "11",
+    "12",
+    "unset"
+  ],
+  "seed_set_covers_divergent_point": true,
+  "divergent_point_known": "8",
+  "positive_control": {
+    "channel_live": true,
+    "fixture": "distinct_phantom",
+    "fixture_phantom_targets": [
+      "zzz1",
+      "zzz2",
+      "zzz3"
+    ],
+    "floor_high": 1000,
+    "floor_low": 2,
+    "high": {
+      "derived": [
+        "zzz1",
+        "zzz2",
+        "zzz3"
+      ],
+      "fixture": "distinct_phantom",
+      "fixture_phantom_targets": [
+        "zzz1",
+        "zzz2",
+        "zzz3"
+      ],
+      "floor": 1000,
+      "floor_applied_readback": 1000,
+      "retrieved": [
+        "zzz1",
+        "zzz2"
+      ],
+      "self_check_ok": true,
+      "target_rank": -1
+    },
+    "low": {
+      "derived": [
+        "zzz1"
+      ],
+      "fixture": "distinct_phantom",
+      "fixture_phantom_targets": [
+        "zzz1",
+        "zzz2",
+        "zzz3"
+      ],
+      "floor": 2,
+      "floor_applied_readback": 2,
+      "retrieved": [
+        "zzz1",
+        "target"
+      ],
+      "self_check_ok": true,
+      "target_rank": 1
+    },
+    "probe_calls": 2,
+    "probe_symbol": "vp_m1_probe",
+    "run_nonce": "74f6db4a-fc36-4e70-b6f4-0cc06e2c0c55",
+    "seed": "0",
+    "tree_sha": "17671273b223947be3eb23d25011afaeb201b9b9"
+  }
+}

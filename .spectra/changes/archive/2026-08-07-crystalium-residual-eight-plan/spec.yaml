@@ -1,0 +1,176 @@
+schema: eidolons/change-spec.v1
+change_id: crystalium-residual-eight-plan
+tier: full
+maker: ramza
+checker: kupo
+target: crystalium — the residual eight open issues (#42 #44 #45 #47 #48 #52 #55 #57), shipped as v2.0.2 (gates + entrypoint) and v2.1.0 (recall order and membership)
+
+problem: >
+  After #36 (v1.9.0) and #38 (v1.10.0) shipped, eight issues remained open against
+  crystalium, and they were not eight independent defects. Three were REAL production
+  defects in recall (#45 cross-layer rank blocking — per-layer append order dominates the
+  fused ranking; #44 the sparse candidate set is status-blind, so deprecated rows consume
+  budget that active rows never get; #42 seeds are structurally excluded from both derived
+  arms, so a seed can never be credited by its own neighbourhood). The other five were
+  claims about GATES rather than about the product: #52's `cross_layer` axis could not fail
+  because it measured `bm25_search` directly rather than the fused ranking; #48's AC-138/139
+  were unfalsifiable on the shipped fusion-gate fixture; #47 and #55 asserted properties
+  (corpus scaling belongs to `candidate_k`; a fusion-weight-discriminating band) that no
+  shipped gate discriminated; #57 had no test exercising `run_stdio`/`run_http` at all — a
+  server that cannot start would have passed the entire suite. The unifying failure is the
+  campaign's own recurring species: a gate that cannot fail on the defect it names. Fixing
+  the three real defects without first making the gates falsifiable would have produced
+  green evidence that proved nothing.
+
+decision: >
+  H-B (gate-first two-phase shared rig) was selected over four alternatives at the explore
+  gate (84 vs 74/55.5/44/38.5). Phase 1 (v2.0.2) builds the shared corpus rig and lands the
+  five gate/entrypoint units in parallel on independent worktrees, so that every gate is
+  falsifiable BEFORE any behavioural fix is measured against it. Phase 2 (v2.1.0) lands the
+  three real recall defects strictly serially on `retrieve.py` (W-45 -> W-44 -> W-42),
+  because they touch overlapping code and a parallel merge would make attribution
+  impossible. Every unit carries maker red-evidence (a perturbation that reddens the gate
+  plus a restore that returns it to green), and an identity-distinct checker re-breaks the
+  batch on axes the maker never used. Two issues close as dispositions rather than fixes:
+  #47 WONTFIX-with-rationale plus a gate, and #55's band formally unsupported. #48 closes
+  as a FORGE-ruled SPLIT — AC-138/139 RETIRED against the shipped fixture (the mechanism
+  they measured was deleted by #41), AC-322 DISCHARGED on a purpose-built distinct-phantom
+  fixture.
+
+safety_invariant: >
+  No behavioural change may ride in on a gate-only release. AC-331 pins
+  `mcp-server/src/` to an EMPTY diff for the whole of Phase 1 — the v2.0.2 batch is tests,
+  eval rig and documentation only. Phase 2's three fixes are each individually revertible
+  and each gated by a criterion that was proven falsifiable in Phase 1. The default for
+  #42's new capability is OFF (`recall_seed_derived_credit = False`, FORGE ruling), so
+  v2.1.0 changes no recall result unless a caller opts in.
+
+invariants:
+  - Every criterion must be executed against BOTH a passing and a failing input before it
+    is trusted. A criterion is not sound because it was carefully written.
+  - Maker != checker on every gate; the checker must re-break on an axis the maker's own
+    red-evidence never touched, proven by patch-diff against `red-evidence-*.json`.
+  - Global rule (g) artifact-freshness — every jq criterion reads a producer-named artifact
+    stamped with a per-measurement nonce, never stdout (K-B15 stdout contamination).
+  - Global rule (f) positive-capability-before-routing-negative — a criterion asserting a
+    thing does NOT happen must be paired with a control proving the mechanism can happen.
+  - Any criterion that greps SOURCE PROSE must normalise comment line-wrapping first
+    (promoted from AC-381's broken fence anchor; every fence comment in this codebase wraps).
+  - AC-382 runs as step 0 of BOTH release checklists, before any other criterion executes.
+
+known_gaps:
+  - "#44 censoring-signal coverage: no criterion connects #44's own censoring-signal
+    recompute to an observable outcome on any of its 3 widen sites. AC-377 is the only
+    criterion checking the post-widen signal and its fixture runs with
+    `recall_active_only=False`, so it never exercises #44's widen at all. Found by the
+    v2.1.0 checker while red-checking; reported as a negative result before it pivoted to
+    an axis that does flip a gate. Tracked as crystalium#63."
+  - "`compare_wire.py` stamps a sentinel over excluded keys regardless of value, and its
+    presence guard tests `\"version\" not in si`, which a `null` satisfies — so a null
+    version or null commit id reports WIRE IDENTICAL. Proven live by poisoning a capture.
+    The v2.1.0 verification used a shape-guard-first wrapper; the guard was never landed
+    into the comparator itself. Tracked as crystalium#64."
+  - "The archived golden wire capture is `golden-wire-v1.11.0.json`, which predates the
+    v2.0.0 tool-rename and isError changes. AC-361 initially FAILED against it with 11
+    differences that were all deliberate, shipped, CHANGELOG-documented v2.0.0 behaviour.
+    Re-baselining to v2.0.2 was ruled non-blocking for this tag. Tracked as crystalium#65."
+  - "CI's other three jobs (conformance suite, JSON schema validation, install.sh
+    idempotency) were not reproduced locally during the v2.1.0 runner-minutes outage. They
+    ran green post-merge on `main` — CLOSED, see verification.post_merge_ci."
+  - "D8's checker perturbation table contained 3 replay rows (G-XL, G-WD, G-FLOOR) that
+    were same-mechanism replays of red-checks the makers had already executed. D8 was
+    itself the fix for a defective perturbation table (K-B9). The checker avoided it only
+    by verifying each axis empirically before committing."
+
+files_touched:
+  - mcp-server/src/crystalium/aetheryte/retrieve.py
+  - mcp-server/src/crystalium/storage/graph.py
+  - mcp-server/src/crystalium/config.py
+  - mcp-server/tests/*
+  - evals/*
+  - CHANGELOG.md
+  - mcp-server/pyproject.toml
+  - mcp-server/src/crystalium/__init__.py
+  # Added 2026-08-07 by the record-close drift check (verdict 1 = MISMATCH, escalated).
+  # #42's config flag has to reach the two production entry points, and _NullGraphStore
+  # has to match graph.py's new signatures. Justified on evidence BEFORE the scope was
+  # widened; see drift-resolution.md, which is the control on this amendment.
+  - mcp-server/src/crystalium/server.py
+  - mcp-server/src/crystalium/__main__.py
+  - .spectra/changes/crystalium-residual-eight-plan/*
+
+test_harness: >
+  Shared corpus rig (W-RIG, 36 tests) with a verdict classifier that returns NO NUMBERS on
+  a confounded axis, plus per-unit gates. Suite is run in two modes because they are not
+  the same measurement: `make test` (docker compose, bind mount `.:/app` shadowing the
+  image) and `make test-ci` (also compose). CI itself runs `docker run` against the BAKED
+  image with a different PYTHONPATH — a bind-mounted run cannot detect a packaging or
+  baked-source defect, so CI's literal invocation was reproduced separately and the baked
+  source ASSERTED (version, `_FALLBACK_VERSION`, the `recall_seed_derived_credit` default
+  and the presence of `sparse_topup`) before any green was accepted.
+
+criteria:
+  ref: spec.criteria.md
+  amendment_chain:
+    - spec.criteria.amend-01.md
+    - spec.criteria.amend-02.md
+    - spec.criteria.amend-03.md
+    - spec.criteria.amend-04.md
+  sha256_chain:
+    - eb0492ff1ac778499f89c8f4c70b1c919fbd9e3a83c83da630f022890da8908e  # spec.criteria.md
+    - 7e680dc63f87439dbfc2dec0220b8df51aa2b33fe776550a18b20f54cfeb05c9  # amend-01 rev2
+    - f385f39bbabb6ee7371afd8815ef2de0e18905a0048d2f4000813edf219b0d9f  # amend-02 (fully superseded by 03/04)
+    - 50803a00359409ddc6765477f782af62a151228f247ad619db0144948a783c40  # amend-03 rev2
+    - 73419a70483787532c079449fed643cd8b2bf57764f7c2b53a0e67550f2bc00e  # amend-04 (criteria of record)
+  criteria_sha256: 73419a70483787532c079449fed643cd8b2bf57764f7c2b53a0e67550f2bc00e
+  resolution_rule: >
+    Last definition wins across the chain in file order; AC-319 and AC-320 are STRUCK
+    (K-B6, FORGE D4 — the 1-ULP red-check for a harness that was never built). 66 criteria
+    defined, 2 struck, 64 in force. amend-02 is fully superseded: every criterion it
+    defined is redefined by amend-03 or amend-04.
+  in_force_count: 64
+
+verification:
+  checker_verdict: APPROVE
+  checker_report: checker-report-v2.1.0.md
+  checker_identity: independent (maker=ramza, checker=kupo — maker != checker holds)
+  note: >
+    The v2.1.0 checker's original verdict was REJECT on two blocking items (AC-382's
+    collection sweep producing 2 spurious BLOCKERs; AC-361's 11 wire differences). Both
+    were resolved and then INDEPENDENTLY RE-REPRODUCED by the checker with its own
+    commands and its own comparator — not by re-reading the coordinator's artifacts — in
+    the re-verification addendum. Both REJECTs withdrawn.
+  suites:
+    - "make test    -> 1097 passed, 4 skipped, 1 xfailed, EXIT=0 (867.02s)"
+    - "make test-ci -> 1093 passed, 8 skipped, 1 xfailed, EXIT=0 (331.74s)"
+    - "CI literal invocation (docker run, baked image) -> 1093 passed, 8 skipped, 1 xfailed, EXIT=0"
+  red_checks:
+    v2_0_2: checker-redcheck.json (6 verified entries; 5 mandated + 1 optional)
+    v2_1_0: checker-redcheck-v2.1.0.json (3 axis-independent gates, each reddened and restored)
+  post_merge_ci: >
+    Both crystalium workflows green on `main` after the #62 merge at 2026-08-06T23:08:40Z
+    (CI 4m37s run 31129929697; EIIS + ECL Conformance 1m55s run 31129929723). This
+    discharges the sole open follow-up condition stated in ci-reproduction-v2.1.0.md.
+
+outcome:
+  releases:
+    - version: 2.0.2
+      commit: ff4fb5d
+      merged_pr: 61
+      image_digest: sha256:ce21b9b58f05ce5715537ac7aa0ee4acef36f55e9a423a7473c0fbe0eb5d95d7
+    - version: 2.1.0
+      commit: d243789
+      merged_pr: 62
+      tagged_at: 2026-08-06T23:12:02Z
+  issues_closed: [42, 44, 45, 47, 48, 52, 55, 57]
+  closing_comments: closing-comments/
+  roster: >
+    Published in the nexus by PR #545 (both roster/mcps.yaml and roster/index.yaml in one
+    commit — crystalium is dual-rostered and skew-guarded), released as nexus v2.17.0
+    (#546) with integrity metadata (#547), local wiring re-pinned to 2.1.0 (#548).
+  stated_deviation: >
+    release-digests.md records ONE roster bump to the final campaign version instead of the
+    plan's per-batch chain. v2.0.2 and v2.1.0 landed minutes apart in the same session and
+    no external consumer could pin 2.0.2 in the interval; the 2.0.2 index digest was
+    captured from the ghcr registry at the moment it was authoritative so it is never
+    reconstructed from memory later. Recorded as a deviation rather than absorbed silently.

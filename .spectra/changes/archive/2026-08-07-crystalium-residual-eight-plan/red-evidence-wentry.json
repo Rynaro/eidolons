@@ -1,0 +1,28 @@
+[
+  {
+    "gate": "test_serve_stdio_handshake",
+    "axis": "RC-1 / AC-302 \u2014 startup crash surfaced (raise NameError at top of run_stdio)",
+    "perturbation_patch": "diff --git a/mcp-server/src/crystalium/server.py b/mcp-server/src/crystalium/server.py\nindex 44d7142..8754224 100644\n--- a/mcp-server/src/crystalium/server.py\n+++ b/mcp-server/src/crystalium/server.py\n@@ -1003,6 +1003,7 @@ def _resolved_mcp_sdk_version() -> str:\n \n async def run_stdio(config: Config) -> None:\n     \"\"\"Start the CRYSTALIUM MCP server over stdio (the default transport).\"\"\"\n+    raise NameError(\"red-check\")\n     server, scheduler = _build_server(config)\n     scheduler.start()\n     log.info(\n",
+    "command": "docker compose run --rm crystalium env CRYSTALIUM_SKIP_SLOW=1 pytest mcp-server/tests/test_server_entrypoint.py -v",
+    "tree_sha": "b7f1a477b4a0bda2c2ecd7c3383d036e316c5abc",
+    "exit_code": 1,
+    "output_tail": "E               File \"/usr/local/lib/python3.12/asyncio/runners.py\", line 195, in run\nE                 return runner.run(main)\nE                        ^^^^^^^^^^^^^^^^\nE               File \"/usr/local/lib/python3.12/asyncio/runners.py\", line 118, in run\nE                 return self._loop.run_until_complete(task)\nE                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nE               File \"/usr/local/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete\nE                 return future.result()\nE                        ^^^^^^^^^^^^^^^\nE               File \"/app/mcp-server/src/crystalium/server.py\", line 1006, in run_stdio\nE                 raise NameError(\"red-check\")\nE             NameError: red-check\nE             \nE           assert None is not None\n\nmcp-server/tests/test_server_entrypoint.py:235: AssertionError\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_server_entrypoint.py::test_serve_stdio_handshake\n============================== 1 failed in 3.35s ===============================\n\n",
+    "restore": {
+      "command": "docker compose run --rm crystalium env CRYSTALIUM_SKIP_SLOW=1 pytest mcp-server/tests/test_server_entrypoint.py -v",
+      "exit_code": 0
+    }
+  },
+  {
+    "gate": "test_serve_stdio_handshake",
+    "axis": "RC-2 / AC-303 \u2014 handshake genuinely parsed (assert a non-existent tool name in tools/list result)",
+    "perturbation_patch": "--- a/mcp-server/tests/test_server_entrypoint.py\n+++ b/mcp-server/tests/test_server_entrypoint.py\n@@ -267,7 +267,7 @@\n         # single-segment tool name (v2.0.0 / crystalium#35) \u2014 never a guessed\n         # or hardcoded-from-memory dotted legacy name.\n         names = {t[\"name\"] for t in tools}\n-        assert \"recall\" in names, (\n+        assert \"definitely_not_a_real_tool_red_check\" in names, (\n             f\"expected tool 'recall' among tools/list names, got {sorted(names)} -- \"\n             f\"server stderr:\\n{srv.stderr_text()}\"\n         )\n",
+    "command": "docker compose run --rm crystalium env CRYSTALIUM_SKIP_SLOW=1 pytest mcp-server/tests/test_server_entrypoint.py -v",
+    "tree_sha": "b7f1a477b4a0bda2c2ecd7c3383d036e316c5abc",
+    "exit_code": 1,
+    "output_tail": "    \n            # Proves the handshake response was genuinely PARSED into structured\n            # tool descriptors (name-bearing dicts), not merely that the process\n            # didn't crash. \"recall\" is read as a real, currently-shipped\n            # single-segment tool name (v2.0.0 / crystalium#35) \u2014 never a guessed\n            # or hardcoded-from-memory dotted legacy name.\n            names = {t[\"name\"] for t in tools}\n>           assert \"definitely_not_a_real_tool_red_check\" in names, (\n                f\"expected tool 'recall' among tools/list names, got {sorted(names)} -- \"\n                f\"server stderr:\\n{srv.stderr_text()}\"\n            )\nE           AssertionError: expected tool 'recall' among tools/list names, got ['commit', 'graph_export', 'ingest', 'plan_checkpoint', 'plan_replan', 'recall', 'session_end', 'skill_invoke', 'update'] -- server stderr:\nE             \nE           assert 'definitely_not_a_real_tool_red_check' in {'commit', 'graph_export', 'ingest', 'plan_checkpoint', 'plan_replan', 'recall', ...}\n\nmcp-server/tests/test_server_entrypoint.py:270: AssertionError\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_server_entrypoint.py::test_serve_stdio_handshake\n============================== 1 failed in 3.79s ===============================\n\n",
+    "restore": {
+      "command": "docker compose run --rm crystalium env CRYSTALIUM_SKIP_SLOW=1 pytest mcp-server/tests/test_server_entrypoint.py -v",
+      "exit_code": 0
+    }
+  }
+]

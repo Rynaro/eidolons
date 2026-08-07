@@ -1,0 +1,127 @@
+{
+  "note": "VP-M7 (spec.amend-01.md 2B, verification-plan.amend-01.md): explain.fusion.{n_sparse_cap, selectivity, w_sparse, arm_sizes} pre/post per Option-A path. 'pre' captured on tree_sha 973ab73 (retrieve.py at HEAD, pre-W-45) via the G-XL fixture (evals/cross_layer_gate.py, layers=None); 'post' captured on the W-45 fix, on both the SAME G-XL fixture (default path) and the K-N12 60-episodic/15-semantic fixture (mcp-server/tests/test_retrieve_layer_merge.py) for the single-layer and strict-subset paths, which do not exist as distinct code paths pre-fix.",
+  "pre_fix": {
+    "tree_sha": "973ab73756987b84522fd80ed7f32b66e6ccd0c3",
+    "fixture": "G-XL (evals/cross_layer_gate.py), layers=None",
+    "default_path": {
+      "path": "default (layers=None)",
+      "target_rank": 3,
+      "n_sparse_cap": 60,
+      "selectivity": 0.0,
+      "w_sparse": 1.0,
+      "arm_sizes": {
+        "sparse": 4,
+        "dense": 0,
+        "graph": 0,
+        "completion": 0,
+        "derived": 0
+      },
+      "raw_n_sparse": null,
+      "sparse_fetch_shape": null
+    }
+  },
+  "post_fix": {
+    "fixture_default_path": "G-XL (evals/cross_layer_gate.py), layers=None",
+    "default_path_on_gxl_fixture": {
+      "path": "default (layers=None)",
+      "target_rank": 0,
+      "n_sparse_cap": 60,
+      "selectivity": 0.0,
+      "w_sparse": 1.0,
+      "arm_sizes": {
+        "sparse": 4,
+        "dense": 0,
+        "graph": 0,
+        "completion": 0,
+        "derived": 0
+      },
+      "raw_n_sparse": 4,
+      "sparse_fetch_shape": "global"
+    },
+    "fixture_all_paths": "K-N12 fixture (test_retrieve_layer_merge.py._build_starved_subset_fixture): E=60 episodic (TF=6) all strictly better than S=15 semantic (14 TF=1 fillers + 1 TF=3 target)",
+    "all_paths_on_kn12_fixture": {
+      "default": {
+        "layers_arg": null,
+        "n_sparse_cap": 60,
+        "selectivity": 0.0,
+        "w_sparse": 1.0,
+        "raw_n_sparse": 60,
+        "sparse_fetch_shape": "global",
+        "arm_sizes": {
+          "sparse": 60,
+          "dense": 0,
+          "graph": 0,
+          "completion": 0,
+          "derived": 0
+        },
+        "fetches": [
+          {
+            "fetch": "head",
+            "k_requested": 60,
+            "n_returned": 60
+          }
+        ]
+      },
+      "single_layer": {
+        "layers_arg": [
+          "semantic"
+        ],
+        "n_sparse_cap": 15,
+        "selectivity": 0.0,
+        "w_sparse": 1.0,
+        "raw_n_sparse": 15,
+        "sparse_fetch_shape": "single-layer",
+        "arm_sizes": {
+          "sparse": 15,
+          "dense": 0,
+          "graph": 0,
+          "completion": 0,
+          "derived": 0
+        },
+        "fetches": [
+          {
+            "fetch": "head",
+            "k_requested": 15,
+            "n_returned": 15
+          }
+        ]
+      },
+      "strict_subset": {
+        "layers_arg": [
+          "semantic",
+          "procedural"
+        ],
+        "n_sparse_cap": 60,
+        "selectivity": 0.0,
+        "w_sparse": 1.0,
+        "raw_n_sparse": 60,
+        "sparse_fetch_shape": "global+backstop",
+        "arm_sizes": {
+          "sparse": 15,
+          "dense": 0,
+          "graph": 0,
+          "completion": 0,
+          "derived": 0
+        },
+        "fetches": [
+          {
+            "fetch": "head",
+            "k_requested": 60,
+            "n_returned": 60
+          },
+          {
+            "fetch": "backstop:semantic",
+            "k_requested": 15,
+            "n_returned": 15
+          },
+          {
+            "fetch": "backstop:procedural",
+            "k_requested": 15,
+            "n_returned": 0
+          }
+        ]
+      }
+    }
+  },
+  "d3_reversal_check": "REVERSAL CONDITION NOT TRIGGERED. On the strict-subset path (the global cap's worst case), the K-N12 fixture's global head IS censored (raw_n_sparse=60 == n_sparse_cap=60) and selectivity correctly pins to 0.0 -- but this is the CORRECT behaviour the censoring guard exists to produce (retrieve.py:256's 'raw_n_sparse >= cap' branch), not a pathology: the #38 boost is correctly suppressed on a fetch that WAS globally censored (C-7/DP-9). The reversal trigger is 'selectivity pinned to 0.0 on REALISTIC fixtures' as a pathology INDEPENDENT of genuine censoring; AC-377's own uncensored case (ii) demonstrates selectivity > 0 (0.667 in that fixture) on the SAME 2-layer subset path once the global fetch is not censored, proving the D3 boost channel remains live under Option A -- it is not permanently pinned to 0.0 by the global cap's mere existence."
+}

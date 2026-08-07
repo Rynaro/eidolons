@@ -1,0 +1,44 @@
+[
+  {
+    "gate": "AC-347 (unwanted-behavior) -- explain.fusion.sparse_topup counter honesty",
+    "axis": "delete the top-up bm25_search call, keep the widened_fetches counter increment -- proves AC-346 (recovery) fails through the DATA when the actual widen doesn't happen, not merely because a counter says it should have",
+    "perturbation_patch_verbatim": "diff --git a/mcp-server/src/crystalium/aetheryte/retrieve.py b/mcp-server/src/crystalium/aetheryte/retrieve.py\nindex b836fb3..97e0f64 100644\n--- a/mcp-server/src/crystalium/aetheryte/retrieve.py\n+++ b/mcp-server/src/crystalium/aetheryte/retrieve.py\n@@ -654,7 +654,9 @@ class Aetheryte:\n                 storage surface. Records it into the SAME per-fetch capture\n                 W-45 built (`sparse_fetches` / `explain.fusion.fetches[]`) and\n                 appends the F-V3-derived entry to `widened_fetches`.\"\"\"\n-                wide_hits = self.relational.bm25_search(query, layer_filter=layer_filter, k=k_wide)\n+                # RC-1/AC-347 red-check perturbation: the actual call is\n+                # DELETED; the counter below is left in place regardless.\n+                wide_hits: list[dict[str, Any]] = []\n                 _record_sparse_fetch(f\"{label}:topup\", k_wide, wide_hits)\n                 widened_fetches.append({\n                     \"fetch\": label,",
+    "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits -v",
+    "tree_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+    "exit_code": 1,
+    "output_tail": ">       assert fixture[\"target_id\"] in retrieved, retrieved\nE       AssertionError: []\nE       assert 'active-target' in []\n\nmcp-server/tests/test_sparse_status_topup.py:204: AssertionError\n----------------------------- Captured stdout call -----------------------------\n2026-08-06 16:01:18 [info     ] recall_ok                      after_compose=0 caller_tier=T1 candidates=15 evicted=0 filtered=0 k=5 layers=['semantic'] query_len=39\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_sparse_status_topup.py::test_topup_recovers_active_hits\n============================== 1 failed in 2.56s ===============================",
+    "restore": {
+      "command": "git checkout -- mcp-server/src/crystalium/aetheryte/retrieve.py",
+      "exit_code": 0,
+      "verified_by": "git status --porcelain empty; git rev-parse HEAD == fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6; re-ran test_topup_recovers_active_hits -> PASSED, 1 passed in 3.54s"
+    }
+  },
+  {
+    "gate": "AC-379 part 1 + part 2 (event-driven) -- FORGE-mandated subset-composition node",
+    "axis": "simulate the REJECTED head-only composition (RAMZA's original maker choice, overruled by FORGE's fence-amend Ruling 2) by disabling ONLY the per-layer backstop's own widen -- the head-widen block is left fully intact -- proving head-only is near-inert on the K-N12 strict-subset regime exactly as the fence-amend ruling predicted (a widened global head returns mostly excluded-layer rows the post-filter discards; the deprecated-censored backstop, the actual starvation locus, is never widened)",
+    "perturbation_patch_verbatim": "diff --git a/mcp-server/src/crystalium/aetheryte/retrieve.py b/mcp-server/src/crystalium/aetheryte/retrieve.py\nindex b836fb3..c7295fc 100644\n--- a/mcp-server/src/crystalium/aetheryte/retrieve.py\n+++ b/mcp-server/src/crystalium/aetheryte/retrieve.py\n@@ -785,7 +785,11 @@ class Aetheryte:\n                         # touch raw_n_sparse_signal/cap_signal (composition_\n                         # ruling item 6 -- the censoring signal stays the\n                         # head's alone).\n-                        if len(layer_hits) >= candidate_k:\n+                        # RC-2/AC-379 red-check perturbation: simulate the\n+                        # REJECTED head-only composition by disabling ONLY the\n+                        # backstop's own widen (the head-widen block above is\n+                        # left intact) -- \"if False and\" never fires.\n+                        if False and len(layer_hits) >= candidate_k:\n                             n_inactive_layer = sum(1 for hit in layer_hits if not _is_active(hit))\n                             if n_inactive_layer:\n                                 k_wide = min(candidate_k + n_inactive_layer, HARD_TOPUP_CEILING)",
+    "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_subset_status_topup_recovers_active_hits mcp-server/tests/test_sparse_status_topup.py::test_topup_counter_matches_observed_calls -v",
+    "tree_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+    "exit_code": 1,
+    "output_tail": "FAILED mcp-server/tests/test_sparse_status_topup.py::test_subset_status_topup_recovers_active_hits\nFAILED mcp-server/tests/test_sparse_status_topup.py::test_topup_counter_matches_observed_calls\n============================== 2 failed in 3.49s ===============================\n\ntest_topup_counter_matches_observed_calls failure detail:\nE       AssertionError: ({'fired': False, 'widened_fetches': []}, [(None, 60), ('semantic', 15), ('procedural', 15)])\nE       assert []\n(positive-capability assertion: 'at least one widen actually happened on this fixture' -- correctly fails when head-only leaves the backstop's starvation unrecovered)",
+    "restore": {
+      "command": "git checkout -- mcp-server/src/crystalium/aetheryte/retrieve.py",
+      "exit_code": 0,
+      "verified_by": "git status --porcelain empty; git rev-parse HEAD == fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6; re-ran both nodes -> 2 passed in 2.70s"
+    }
+  },
+  {
+    "gate": "AC-356 (event-driven) -- flag-off inertness / fence breach condition 8 detector",
+    "axis": "delete the recall_active_only flag-off early return inside _is_active, so status is checked regardless of the flag -- simulates fence breach condition 8 ('the top-up issuing any additional bm25_search call when recall_active_only is False') and proves the negative-control node actually detects it rather than passing vacuously",
+    "perturbation_patch_verbatim": "diff --git a/mcp-server/src/crystalium/aetheryte/retrieve.py b/mcp-server/src/crystalium/aetheryte/retrieve.py\nindex b836fb3..2177545 100644\n--- a/mcp-server/src/crystalium/aetheryte/retrieve.py\n+++ b/mcp-server/src/crystalium/aetheryte/retrieve.py\n@@ -596,8 +596,10 @@ class Aetheryte:\n             # response applies -- population parity by construction, never a\n             # second divergent definition (fence-amend breach condition 4).\n             def _is_active(crystal: dict[str, Any]) -> bool:\n-                if not self.recall_active_only:\n-                    return True\n+                # RC-3/AC-356 red-check perturbation: the flag-off early\n+                # return is DELETED, so status is checked regardless of\n+                # `recall_active_only` -- simulates fence breach condition 8\n+                # (top-up firing when the flag is off).\n                 if crystal.get(\"status\", \"active\") != \"active\":\n                     return False\n                 temporal = crystal.get(\"temporal\") or {}",
+    "command": "cd <crystalium worktree fix/sparse-status-blind-44> && docker compose run --rm crystalium pytest mcp-server/tests/test_sparse_status_topup.py::test_topup_inert_when_active_only_off -v",
+    "tree_sha": "fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6",
+    "exit_code": 1,
+    "output_tail": "assert len(calls) == 1, calls\nE       AssertionError: [('semantic', 15), ('semantic', 30)]\nE       assert 2 == 1\nE        +  where 2 = len([('semantic', 15), ('semantic', 30)])\n\nmcp-server/tests/test_sparse_status_topup.py:386: AssertionError\n----------------------------- Captured stdout call -----------------------------\n2026-08-06 16:05:03 [debug    ] tokenizer_backend              backend=tiktoken_cl100k_base\n2026-08-06 16:05:03 [info     ] recall_ok                      after_compose=1 caller_tier=T1 candidates=16 evicted=0 filtered=1 k=5 layers=['semantic'] query_len=39\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_sparse_status_topup.py::test_topup_inert_when_active_only_off\n============================== 1 failed in 2.38s ===============================",
+    "restore": {
+      "command": "git checkout -- mcp-server/src/crystalium/aetheryte/retrieve.py",
+      "exit_code": 0,
+      "verified_by": "git status --porcelain empty; git rev-parse HEAD == fb28c4fcaf88800538160d7b4ee5c9f3c9db8cf6; re-ran test_topup_inert_when_active_only_off -> PASSED, 1 passed in 2.30s"
+    }
+  }
+]

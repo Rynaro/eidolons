@@ -1,0 +1,35 @@
+[
+  {
+    "gate": "AC-351 (unwanted-behavior) -- default-flip red-check, W-42, crystalium#42",
+    "unit": "test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T1]",
+    "axis": "flip GraphStore.neighbor_expand's own default parameter value (exclude_seeds: bool = True -> False) -- the maker's own axis, per spec.criteria.amend-01.md AC-351's VERIFY text ('flip the default in graph.py's neighbor_expand signature')",
+    "perturbation_patch_verbatim": "diff --git a/mcp-server/src/crystalium/storage/graph.py b/mcp-server/src/crystalium/storage/graph.py\nindex 00d5bf9..7d289d3 100644\n--- a/mcp-server/src/crystalium/storage/graph.py\n+++ b/mcp-server/src/crystalium/storage/graph.py\n@@ -241,7 +241,7 @@ class GraphStore:\n         seed_ids: list[str],\n         depth: int = 1,\n         rel_filter: str | None = None,\n-        exclude_seeds: bool = True,\n+        exclude_seeds: bool = False,\n     ) -> set[str]:\n         \"\"\"Expand from *seed_ids* up to *depth* hops along *rel_filter* edges.\n \n",
+    "command": "cd <crystalium worktree fix/seed-exclusion-relax-42> && docker compose run --rm crystalium pytest mcp-server/tests/test_storage_graph.py -v -k \"exclude_seeds_default_is_byte_identical and T1\"",
+    "tree_sha": "8a3dca6e9ca86d6c88458b0f54d0be474bed5f90",
+    "exit_code": 1,
+    "output_tail": "        if topology == \"T1\":\n            seeds = _build_t1(tmp_graph_store)\n            result = tmp_graph_store.neighbor_expand(seeds, depth=1)\n>           assert result == {\"t1-n1\"}\nE           AssertionError: assert {'t1-n1', 't1-s2'} == {'t1-n1'}\nE             \nE             Extra items in the left set:\nE             't1-s2'\nE             \nE             Full diff:\nE               {\nE                   't1-n1',\nE             +     't1-s2',\nE               }\n\nmcp-server/tests/test_storage_graph.py:461: AssertionError\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T1]\n======================= 1 failed, 36 deselected in 0.12s =======================",
+    "restore": {
+      "command": "git checkout -- mcp-server/src/crystalium/storage/graph.py",
+      "exit_code": 0,
+      "verified_by": "git status --porcelain empty; git rev-parse HEAD == 8a3dca6e9ca86d6c88458b0f54d0be474bed5f90; re-ran test_exclude_seeds_default_is_byte_identical (all 4 topologies) -> 4 passed in 0.33s"
+    }
+  },
+  {
+    "gate": "AC-354 (event-driven) -- checker red-check (D8, axis-distinct: per-site wiring), W-42, crystalium#42",
+    "unit": "test_storage_graph.py::test_exclude_seeds_false_expected_sets (T1, T2, T3, T3-variant) + test_exclude_seeds_default_is_byte_identical (T1, T2, T3, T3-variant)",
+    "axis": "sever ONE threading site only: make graph.py:272's subtraction ('if exclude_seeds: hop_ids -= original_seeds') unconditional again ('hop_ids -= original_seeds'), ignoring the exclude_seeds flag at that site alone -- the D8-mandated checker perturbation, converting the K-B2 dominant site into the sharpest instrument (per-site wiring proven, not merely 'a change happened somewhere')",
+    "perturbation_patch_verbatim": "diff --git a/mcp-server/src/crystalium/storage/graph.py b/mcp-server/src/crystalium/storage/graph.py\nindex 00d5bf9..2c44863 100644\n--- a/mcp-server/src/crystalium/storage/graph.py\n+++ b/mcp-server/src/crystalium/storage/graph.py\n@@ -296,8 +296,7 @@ class GraphStore:\n             hop_ids = self._neighbor_expand_one_hop(\n                 frontier, rel_filter, exclude_input=exclude_seeds\n             )\n-            if exclude_seeds:\n-                hop_ids -= original_seeds\n+            hop_ids -= original_seeds\n             result_ids |= hop_ids\n             new_frontier = hop_ids - visited\n             if not new_frontier:",
+    "command": "cd <crystalium worktree fix/seed-exclusion-relax-42> && docker compose run --rm crystalium pytest mcp-server/tests/test_storage_graph.py -v -k \"exclude_seeds_false_expected_sets\" ; docker compose run --rm crystalium pytest mcp-server/tests/test_storage_graph.py -v -k \"exclude_seeds_default_is_byte_identical\"",
+    "tree_sha": "8a3dca6e9ca86d6c88458b0f54d0be474bed5f90",
+    "exit_code": 1,
+    "asserted_ac": "AC-354",
+    "cross_check_ac350_exit_code": 0,
+    "output_tail": "AC-354 (exclude_seeds_false_expected_sets):\n>           assert scores == {\"t3v-s2\": 0.5}\nE           AssertionError: assert {} == {'t3v-s2': 0.5}\nE             \nE             Right contains 1 more item:\nE             {'t3v-s2': 0.5}\nE             \nE             Full diff:\nE             + {}\nE             - {\nE             -     't3v-s2': 0.5,\nE             - }\n\nmcp-server/tests/test_storage_graph.py:518: AssertionError\n=========================== short test summary info ============================\nFAILED mcp-server/tests/test_storage_graph.py::test_exclude_seeds_false_expected_sets[T1]\nFAILED mcp-server/tests/test_storage_graph.py::test_exclude_seeds_false_expected_sets[T2]\nFAILED mcp-server/tests/test_storage_graph.py::test_exclude_seeds_false_expected_sets[T3-variant]\n================== 3 failed, 1 passed, 33 deselected in 0.31s ==================\n\nAC-350 (exclude_seeds_default_is_byte_identical), SAME perturbation applied:\nmcp-server/tests/test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T1] PASSED [ 25%]\nmcp-server/tests/test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T2] PASSED [ 50%]\nmcp-server/tests/test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T3] PASSED [ 75%]\nmcp-server/tests/test_storage_graph.py::test_exclude_seeds_default_is_byte_identical[T3-variant] PASSED [100%]\n======================= 4 passed, 33 deselected in 0.33s =======================",
+    "note": "T1 and T2 (the D8-mandated minimum) both go RED as required. T3-variant ALSO reds under this perturbation (same topology class as T1: a seed reachable from another seed at hop 1, discovered inside the SAME neighbor_expand call whose original_seeds equals the outer seed set) -- this is additional, not contradictory, evidence; D8 names T1+T2 as the minimum bar, not a ceiling. T3 (the decaying-walk case over the T2 graph) stays green because the seed S2 it must preserve is discovered at hop 2, inside a NESTED neighbor_expand([\"M\"], ...) call whose own original_seeds is {\"M\"} -- S2 is never a member of that inner original_seeds set, so the severed (now-unconditional) subtraction still does not remove it. AC-350 (True-branch byte-identity) stays fully GREEN throughout, exactly as D8 requires: the checker's perturbation only breaks the opt-in False-branch wiring at graph.py:272, never the default True-branch behaviour.",
+    "restore": {
+      "command": "git checkout -- mcp-server/src/crystalium/storage/graph.py",
+      "exit_code": 0,
+      "verified_by": "git status --porcelain empty; git rev-parse HEAD == 8a3dca6e9ca86d6c88458b0f54d0be474bed5f90; re-ran test_storage_graph.py -k exclude_seeds -> 8 passed in 0.54s"
+    }
+  }
+]

@@ -1,0 +1,23 @@
+{
+ "derived_only_rank": 0,
+ "liveness": {
+  "arms": {
+   "dense_count": 1,
+   "expected_dense": 1,
+   "expected_sparse": 2,
+   "sparse_count": 2
+  },
+  "graph": {
+   "edge_count": 1,
+   "expected_edge_count": 1,
+   "expected_node_count": 3,
+   "node_count": 3
+  }
+ },
+ "p1_recreated": true,
+ "recall_seed_derived_credit": true,
+ "run_nonce": "78b124aa-4304-4513-b879-a4a892ef8fa1",
+ "tree_sha": "8a3dca6e9ca86d6c88458b0f54d0be474bed5f90",
+ "two_base_arm_rank": 1,
+ "w_derived": 100.0
+}
