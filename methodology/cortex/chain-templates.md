@@ -16,7 +16,9 @@ Relocated out of the EIDOLONS.md always-loaded region per R-021/R-022
 
 | Template | Steps | When |
 |----------|-------|------|
+| **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi | Unfamiliar code + a live failure + a build (widest pipeline) |
 | **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
+| **diagnose-then-plan-then-fix** | VIGIL → RAMZA → Vivi | A live failure that needs a spec before the patch |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
 | **ship-fast** | RAMZA → Vivi | Known terrain, scoped feature |
 | **direct-implementation-bypass** | ATLAS → Vivi (skip RAMZA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |
@@ -24,6 +26,23 @@ Relocated out of the EIDOLONS.md always-loaded region per R-021/R-022
 | **forensic-then-fix** | VIGIL → Vivi | Bug with reproduction + verified patch suggestion |
 | **failed-attempt-recovery** | (prior coder failure) → VIGIL → Vivi | Conversation shows prior coder Reflect-exhaustion |
 | **decision-only** | FORGE | No code touching; deliberation emitting verdict + assumptions |
+
+### Specificity, and where it stops deciding
+
+The kernel takes the matching template with the **most** `requires_classes`.
+Before `chain-three-class` there was no three-class debugger template, so a
+"diagnose it, spec it, fix it" prompt fell back to two-class **ship-fast** and
+the **diagnosis step was silently dropped** — a planner received a failure
+nobody had root-caused.
+
+Equal-specificity matches are resolved by jq's *stable* sort, i.e. by
+declaration order in `roster/routing.yaml` — an artifact, not a decision.
+Seven such pairs exist among the two-class templates and are pinned (not
+endorsed) by `cli/tests/routing_chains.bats`. `scout-diagnose-plan-fix` exists
+specifically so that adding `diagnose-then-plan-then-fix` did not create an
+eighth: it covers the union of that pair's classes, keeping specificity
+decisive. **Adding a template means re-running that suite** — a new collision
+fails it rather than quietly letting line order choose in production.
 
 Gilgamesh (generalist, fallback-only) never appears in a chain template —
 it lives solely in Dispatch Protocol Step-2(a) (no specialist scores ≥ τ,

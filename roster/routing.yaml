@@ -238,11 +238,44 @@ signals:
 # Selected when ≥2 capability classes co-trigger. `requires_classes` lists the
 # capability classes whose presence selects this template; the kernel picks the
 # most specific (longest requires_classes) matching template.
+#
+# TIE-BREAK NOTE (chain-three-class): the kernel does `sort_by(-spec) | .[0]`,
+# and jq's sort is STABLE — so two templates of equal specificity that both
+# match are resolved by nothing more principled than which one is declared
+# first in this file. That is not a rule anyone chose; it is an artifact.
+#
+# This list is NOT globally closed under union: 7 equal-specificity pairs among
+# the pre-existing 2-class templates have no more-specific entry covering their
+# union, and are still decided by file order (e.g. decide-then-implement vs
+# ship-fast on a reasoner+planner+coder prompt). Those predate this change and
+# are left alone deliberately — resolving them means choosing semantics for
+# each, not adding a mechanism.
+#
+# What IS guaranteed: adding `diagnose-then-plan-then-fix` would itself have
+# created an 8th such pair (against plan-before-build, on a
+# scout+debugger+planner+coder prompt), so `scout-diagnose-plan-fix` is added
+# alongside it to cover that union and keep specificity decisive.
+# `cli/tests/routing_chains.bats` PINS the unresolved set to exactly those 7 —
+# a new template that introduces an 8th ambiguity fails the suite.
 chains:
+  - name: scout-diagnose-plan-fix
+    steps: ["atlas", "vigil", "ramza", "vivi"]
+    requires_classes: ["scout", "debugger", "planner", "coder"]
+    when: "Unfamiliar code + a live failure + a build (widest pipeline)"
+    # Exists to keep the set intersection-closed: without it, plan-before-build
+    # and diagnose-then-plan-then-fix both match a scout+debugger+planner+coder
+    # prompt at specificity 3 and file order silently picks the winner.
   - name: plan-before-build
     steps: ["atlas", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]
     when: "Unfamiliar code + multi-component change"
+  - name: diagnose-then-plan-then-fix
+    steps: ["vigil", "ramza", "vivi"]
+    requires_classes: ["debugger", "planner", "coder"]
+    when: "A live failure that needs a spec before the patch"
+    # Without this, a diagnose+plan+fix prompt fell back to the 2-class
+    # `ship-fast` and the DIAGNOSIS STEP WAS SILENTLY DROPPED — the router
+    # handed a planner a failure nobody had root-caused yet.
   - name: decide-then-implement
     steps: ["forge", "ramza", "vivi"]
     requires_classes: ["reasoner", "coder"]

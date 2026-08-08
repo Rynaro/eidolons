@@ -348,6 +348,37 @@ suites:
       category: guard-clarify
       prompt: "thoughts?"
       expect: { decision: clarify }
+    # ── multi-class chains (ESL change `chain-three-class`) ─────────────────────
+    # Pre-change, every N-C0x prompt below fell back to a 2-class template and
+    # dropped a step — most often the DIAGNOSIS, handing a planner a failure
+    # nobody had root-caused.
+    - id: N-C01
+      category: chain-multiclass
+      prompt: "diagnose the flaky test, plan the fix and implement it"
+      expect: { decision: chain, selected: [vigil, ramza, vivi] }
+    - id: N-C02
+      category: chain-multiclass
+      prompt: "figure out why the sync command hangs, then spec and build the fix"
+      expect: { decision: chain, selected: [vigil, ramza, vivi] }
+    - id: N-C03
+      category: chain-multiclass
+      prompt: "debug the broken install path, draft an approach, then implement"
+      expect: { decision: chain, selected: [vigil, ramza, vivi] }
+    - id: N-C04
+      category: chain-multiclass
+      # widest pipeline; also the pair that would otherwise have been decided by
+      # declaration order alone
+      prompt: "map the worker, diagnose the timeout, spec a fix and implement it"
+      expect: { decision: chain, selected: [atlas, vigil, ramza, vivi] }
+    # guard — a 2-class debugger prompt must NOT be inflated into the 3-class
+    # chain: N-015 above already pins "the build broke after the last merge" to
+    # [vigil, vivi], so it serves as that guard and is not repeated here.
+    - id: N-C06
+      category: chain-multiclass
+      # guard: planner+coder without failure context stays on ship-fast
+      prompt: "spec the caching layer and implement it"
+      expect: { decision: chain, selected: [ramza, vivi] }
+
     - id: N-G05
       category: guard-trance
       # TRANCE stays gated: a large surface alone never escalates the tier
