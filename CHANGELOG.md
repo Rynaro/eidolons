@@ -23,7 +23,8 @@ audit the module, diagnose the failure, fix it and document it
 
 ### Added
 - **`scout-diagnose-fix`** (`ATLAS → VIGIL → Vivi → IDG`, `requires_classes: [scout, debugger, coder]`). Ends in `idg` for the same reason `plan-before-build` and `scout-diagnose-plan-fix` do — it supersedes entries carrying a trailing scriber step, and losing it would trade one silent step-drop for another.
-- Recall coverage `N-C07`–`N-C09`, and two `routing_chains.bats` route pins.
+- Recall coverage `N-C07`–`N-C12`, and four `routing_chains.bats` route pins.
+- **`make schema` now parses every live ESL change record** (`cli/src/check_change_specs.sh`). Found because this change's own `spec.yaml` was not valid YAML — and had shipped that way through four checker rounds. Nothing in the repo read the file, so its acceptance criteria were mechanically invisible while `change.json` carried `acceptance_checks: []`. Archived records are excluded by a depth-1 glob: the two predecessors in this lineage have the identical defect and are recorded, not rewritten.
 
 ### Changed
 - **The unresolved order-dependent tie set moves 5 → 4.** `scout-diagnose-fix` resolves `audit-without-touching` vs `forensic-then-fix` outright, since `{scout,debugger,coder} ⊆ {coder,debugger,scout,scriber}` at strictly greater specificity. It adds none: both its unions with the other spec-3 templates are `{scout,debugger,planner,coder}`, already covered at spec 4. Verified with the corrected subset audit rather than asserted.

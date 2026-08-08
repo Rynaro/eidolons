@@ -77,17 +77,17 @@ Verified with the corrected subset audit, not asserted.
 
 ## Verification approach
 
-Both new assertions were **falsified by mutation** before being trusted:
+Every assertion this change adds is **falsified by mutation** before being
+trusted. The mutation set is enumerated, counted and scored in exactly one
+place — the table in `verification.md`. It is deliberately **not** duplicated
+here: it was duplicated across four files and diverged three ways (4 / 8 / 10)
+before round 5 caught it, and a number restated in four places is a number that
+will rot in three.
 
-| Mutation | Test that must go red | Result |
-|---|---|---|
-| delete `scout-diagnose-fix` | scout-step route | **RED** ✓ |
-| delete `scout-diagnose-fix` | read-only-pair route | **RED** ✓ |
-| delete `scout-diagnose-fix` | ambiguity pin (set returns to 5) | **RED** ✓ |
-| drop **only** the trailing `idg` | read-only-pair route | **RED** ✓ |
-
-The last one matters most: it is the mutation that would reintroduce a silent
-step-drop, and it is caught.
+The load-bearing rows are the ones that would reintroduce a *silent* step-drop:
+dropping only the trailing `idg`, dropping only `forge`, and the checker's
+count-neutral gaming attack. All three are caught by the coverage **set** pin
+alone — nothing else in the repo sees them.
 
 ## Residual — disclosed
 

@@ -89,6 +89,91 @@ list**, which pins `vigil`-before-`forge` for free — an argument `spec.md` mak
 at length and nothing enforced. Falsified: the reversed roster now goes red in
 both bats *and* the recall suite.
 
+## Checker round 4 — **REJECT** (numbers this round's own additions invalidated)
+
+The behaviour is settled. The checker ran **thirteen ordering mutations** across
+both new templates — full reversals, `forge` moved off its slot, and a swap of
+only the last two steps — and every one went RED in `routing_chains.bats` *and*
+in the recall suite. It also established, two ways, that eval grading is
+order-sensitive **by construction**: `cli/src/eval.sh:163` compares `.selected`
+with jq array equality rather than as a set, and six reordering-only mutations
+each dropped the suite below 102/102 with zero membership change. A bonus the
+record can now claim: asserting the full ordered join makes a within-class
+substitution (`vivi` → `apivr`) a string change, so both new templates are
+pinned against substitution as a side effect.
+
+What it rejected on was **four stale numbers**, each invalidated by round 4's
+own *additions* — so round 4's sweep, which grepped for the removed *term*,
+structurally could not reach them:
+
+| where | said | tree |
+|---|---|---|
+| `verification.md` AC-6 | self-test 99 tasks | **102** |
+| `spec.yaml` AC-6 evidence | self-test 99 tasks | **102** |
+| `spec.yaml` `files_touched` | `N-C07..N-C09` | **N-C07..N-C12** |
+| `CHANGELOG.md` Added | `N-C07`–`N-C09`, **two** route pins | **N-C07–N-C12**, **four** |
+
+AC-7 was updated to 1718 in the same evidence table while AC-6 beside it was
+left at 99 — the fourth consecutive round in which a correction reached some
+places and not others. The lesson that generalises past "grep the removed term":
+a *deletion* leaves a searchable string behind, an *addition* leaves nothing to
+grep for. Numbers have to be re-derived from the tree, not swept for.
+
+## Round 5 found what four rounds of review had not: this record never parsed
+
+`spec.yaml` **was not valid YAML**, and had shipped that way since it was
+written. `yq` fails it at line 62: a multi-line **plain** scalar whose
+continuation sits at the same indent as its key, so YAML reads the continuation
+as a new key and demands a `:`. Fixed by converting the affected `invariants`
+and `anti_scope` entries to folded block scalars (`- >`).
+
+Nothing in the repo read the file. `make schema` covered `schemas/*.json` and
+`roster/index.yaml` only. So every acceptance criterion in this record was
+mechanically invisible to every tool — while `change.json` carried
+`acceptance_checks: []`. **The criteria could not be read from either file by
+any tool**, which is why four rounds of review never tripped on it: every
+checker read the YAML with their eyes, and it renders fine to a human.
+
+It is not a one-off. Sweeping every `spec.yaml` under `.spectra/changes`
+(16 at the time of writing), exactly two others fail — `chain-three-class` and
+`routing-recall-gap`, the two **direct predecessor records in this lineage**,
+both archived 2026-08-08. Same root cause, different trigger: all three write a
+multi-line **plain** scalar as a list entry. This one breaks on indentation; the
+other two break on an embedded `: ` in a continuation line (`draft of the
+chains: header comment`, `maintenance contract: when`), which is why their
+parser message differs. A block scalar (`- >`) is immune to both. Three
+consecutive routing records shipped an unparseable spec — that is a missing
+gate, not three typos.
+
+Closed the class rather than the instance: `cli/src/check_change_specs.sh`, wired
+into `make schema`. Falsified before being trusted — GREEN on the fixed tree, RED
+when this `spec.yaml` is reverted to its HEAD form, and RED again under an
+independent synthetic break, so it is not keyed to one line number. Archived
+records are excluded by a **depth-1 glob** rather than a name filter; they are
+frozen history and are recorded here rather than rewritten to satisfy a gate
+added after they shipped.
+
+**Two more found by the same sweep, both the round-4 defect class, neither on
+the checker's list.**
+
+*The mutation count was stated in four files and diverged three ways.*
+`spec.yaml` said **4**, `acceptance-criteria.md` said **8**, `verification.md`'s
+table enumerated **10**. Each was correct when written and none was updated as
+the table grew. Fixed by deleting the number from the three files that merely
+*referenced* the table: the count now lives only where the mutations are
+actually enumerated. A number restated in four places is a number that will rot
+in three — and the round-4 rejection was four instances of exactly that.
+
+*`AC-8` was two different criteria.* `acceptance-criteria.md` already carried an
+**AC-8** ("the coverage guard cannot be paid off"), which existed in that file
+**only** — it was absent from `spec.yaml`'s `acceptance_checks` and had no row
+in the evidence table below, so a load-bearing criterion had no recorded
+verification. Round 5 initially reused the id for the new parse gate, which
+collided; the parse gate is now **AC-9**, and AC-8 has been added to both
+`spec.yaml` and the evidence table with the gaming attack as its evidence.
+Caught by re-reading every criterion in all four files rather than the ones
+being edited.
+
 ## The systemic finding this exposed
 
 Running the coverage check against **shipped v2.19.1** gives **30 violations
@@ -112,8 +197,10 @@ recommendation.
 | **AC-3** | **PASS (restated)** | All-subsets route differential vs `db82fb2`: **6 of 57 change, 51 identical**. Every changed subset **gains coverage of a class that triggered it**, and **no subset loses coverage of a triggered class**. Every template's step list is **byte-identical** — but four templates *lose subsets* to the new entries (`forensic-then-fix`, `audit-without-touching`, `decide-then-implement`, `scout-diagnose-plan-fix`), so none of them can be described as "unchanged". `public` 15/15; `N-015` still `[vigil, vivi]` |
 | **AC-4** | **PASS** | corrected subset audit: **5 → 4**, set difference is exactly `audit-without-touching\|forensic-then-fix\|coder+debugger+scout+scriber`; no new pair |
 | **AC-5** | **PASS — 10/10 mutations red** | table below |
-| **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **99 tasks** |
-| **AC-7** | **PASS** | `bats cli/tests/` → **1718/1718**, 0 failures, 7 skipped (counted against the plan, not read off the tail) |
+| **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **102 tasks** |
+| **AC-7** | **PASS** | `bats cli/tests/` → **1718/1718**, 0 failures, 7 skipped. Counted against the plan (`1..1718`) *and* against `grep -c '^@test'` = **1718**, not read off the tail |
+| **AC-8** | **PASS** | the guard cannot be paid off: the checker's count-neutral gaming attack (M9), a same-class count-neutral trade, and a gap-fill-only variant all go RED. Previously listed in `acceptance-criteria.md` only — absent from `spec.yaml` and from this table until round 5 |
+| **AC-9** | **PASS** | `spec.yaml` parses (invariants 5 · anti_scope 3 · acceptance_checks 9 · files_touched 10). Gate RED on the HEAD form **and on both triggers of the class** — same-indent continuation ("could not find expected `:`") and embedded `": "` continuation ("mapping values are not allowed"), the latter being what the two archived predecessors produce. Control: byte-identical text as a block scalar passes, so it keys on the defect, not on the edit |
 
 Suites: recall **83/83**, public **15/15**, `routing_chains.bats` **14/14**.
 
@@ -182,6 +269,14 @@ trusting the prior record's description of the gap.
 - A three-class scout+debugger+coder prompt now receives an `idg` step it did
   not explicitly ask for — the same trade `plan-before-build` has always made,
   stated rather than hidden.
+- **Three templates have no exact-`selected` assertion anywhere**, so their step
+  ORDER is unpinned: `plan-before-build`, `decide-then-implement` and
+  `audit-without-touching` all stay green under total reversal. Pre-existing and
+  untouched by this change — every template it *does* touch is pinned as a full
+  ordered list, which the checker confirmed by reversing each one (13 mutations,
+  all RED in bats *and* the suite). Recorded rather than fixed: substituting a
+  same-class member is a legitimate roster choice, not a defect class, and this
+  change has been rejected four times for growing.
 
 ## Note on the strength of this record's drift check
 

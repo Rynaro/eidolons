@@ -50,17 +50,21 @@ safety_invariant: >
   and that is now covered by scout-diagnose-decide-fix rather than denied.
 
 invariants:
-  - Adds NO new ambiguity. Both unions with the other spec-3 templates are
+  - >
+    Adds NO new ambiguity. Both unions with the other spec-3 templates are
     {scout,debugger,planner,coder}, already covered by scout-diagnose-plan-fix
     at spec 4. It RESOLVES a pre-existing tie (audit-without-touching vs
     forensic-then-fix at coder+debugger+scout+scriber), so the unresolved set
     moves 5 -> 4. Verified by the corrected subset audit, not by assertion.
-  - A test written alongside the data it checks passes trivially. Both new
+  - >
+    A test written alongside the data it checks passes trivially. Both new
     assertions were falsified by mutation before being trusted, including a
     mutation that removes ONLY the trailing idg.
-  - STATED AS MEASURED: the four remaining order-dependent ties are unchanged
+  - >
+    STATED AS MEASURED: the four remaining order-dependent ties are unchanged
     and still resolved by declaration order. Nothing here claims otherwise.
-  - STEP-DROPS ARE SYSTEMIC, NOT AN EDGE CASE. Chain selection matches one
+  - >
+    STEP-DROPS ARE SYSTEMIC, NOT AN EDGE CASE. Chain selection matches one
     template per class combination; there are 57 subsets and 11 templates, so
     most subsets fall back to a lower-specificity entry that omits a triggered
     class. Measured class-coverage violations: 30 at v2.19.1, 24 here. This
@@ -69,15 +73,18 @@ invariants:
     by a count — a count with a ceiling was the first form and a checker paid
     it off, trading a fixed violation against a smuggled one at constant total.
     A set has no exchange rate.
-  - PAIR COUNTING CANNOT SEE A ROUTE FLIP. The ambiguity pin measures pairs and
+  - >
+    PAIR COUNTING CANNOT SEE A ROUTE FLIP. The ambiguity pin measures pairs and
     stayed green while a route changed. A route-level all-subsets check is the
     companion it needed.
 
 anti_scope:
-  - Do NOT resolve the four remaining ties; each needs a semantic decision per
+  - >
+    Do NOT resolve the four remaining ties; each needs a semantic decision per
     pair, not a mechanism.
   - No change to the selection algorithm, the form predicates, or the signals.
-  - The [scout, coder] combination ("explore the module and implement the
+  - >
+    The [scout, coder] combination ("explore the module and implement the
     change" -> dispatch vivi, no chain) is a DIFFERENT gap, unmeasured by this
     change, and is recorded as a residual rather than fixed.
 
@@ -86,8 +93,10 @@ files_touched:
   - cli/tests/routing_chains.bats           # route pins, corrected pinned set,
                                             # route-level coverage SET pin
   - EIDOLONS.md                             # cortex template-count sentence
-  - evals/routing-suite.yaml                # N-C07..N-C09
+  - evals/routing-suite.yaml                # N-C07..N-C12
   - methodology/cortex/chain-templates.md   # deep cortex table re-sync
+  - cli/src/check_change_specs.sh           # NEW: parse gate for live ESL specs
+  - Makefile                                # wires that gate into `make schema`
   - CHANGELOG.md
   - VERSION                                 # 2.19.1 -> 2.20.0
   - .spectra/changes/chain-scout-debug-fix/ # this record
@@ -119,13 +128,41 @@ acceptance_checks:
   - id: AC-5
     check: every new assertion goes RED under a mutation that breaks what it guards
     evidence: >
-      4/4 mutations red incl. idg-removal, baseline green; PLUS the route-level
-      coverage set pin and the targeted-combination test both go red when
-      scout-diagnose-decide-fix is deleted (the mutation that reintroduces the
-      FORGE drop the checker found).
+      EVERY row of the mutation table in verification.md is RED, baseline green.
+      That table is the single place the mutation set is enumerated and counted;
+      this line deliberately does not restate the count, because it was restated
+      in four files and diverged three ways (4 / 8 / 10) before round 5 caught
+      it. Load-bearing rows: the idg-only removal, the forge-only drop, and the
+      checker's count-neutral gaming attack — the last three are caught by the
+      coverage SET pin alone.
   - id: AC-6
     check: lint / schema / cortex token budget / suite self-test clean
-    evidence: all exit 0; budget 836/850; self-test 99 tasks
+    evidence: all exit 0; budget 836/850; self-test 102 tasks
   - id: AC-7
     check: full bats suite green, counted against the plan
     evidence: see verification.md
+  - id: AC-8
+    check: >
+      the coverage guard CANNOT BE PAID OFF. Pinning a count let a checker trade
+      a fixed violation against a smuggled one at constant total; the guard pins
+      the SET, which has no exchange rate.
+    evidence: >
+      the checker's own count-neutral gaming attack replayed against this tree
+      goes RED (M9 in verification.md's mutation table), as does a same-class
+      count-neutral trade and a gap-fill-only variant.
+  - id: AC-9
+    check: >
+      this record's own spec.yaml parses, and the gate that now checks it goes
+      RED on the defect it names
+    evidence: >
+      GREEN on the fixed tree; RED when this spec.yaml is reverted to its HEAD
+      form (line 62, "could not find expected ':'"). Falsified against BOTH
+      triggers of the defect class, not just the one this record hit: an
+      appended continuation indented level with its key goes RED with that same
+      message, and an appended continuation carrying an embedded ": " goes RED
+      with "mapping values are not allowed in this context" — the message the
+      two archived predecessors produce. CONTROL: the byte-identical text as a
+      block scalar ('- >') passes, so the gate keys on the defect and not on
+      the added text. archive/ is excluded structurally by the depth-1 glob
+      rather than a name filter; the known-bad archived specs are recorded in
+      verification.md rather than rewritten.

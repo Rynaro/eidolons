@@ -212,7 +212,7 @@ _actual_ambiguous_pairs() {
 # It pins the SET, not a count. The first version was a count with a ceiling,
 # and a checker PAID IT OFF: adding a plausible gap-fill template (−1) while
 # dropping the trailing `idg` from `plan-before-build` (+1) held the total at 24,
-# kept all twelve tests and 99/99 evals green, and shipped a live step-drop —
+# kept every test and eval green, and shipped a live step-drop —
 # `"explore the module, spec the change, implement it and document it"` lost its
 # docs step with the whole repo green. Widening the metric to (subset,class)
 # pairs does not help; it went 33 → 31 under the same attack. Any aggregate
