@@ -127,3 +127,29 @@ the correct steady state — so its Step-2(a) predicate is deliberately untouche
 - The AC-6 work-intent discriminator is a heuristic. It is fail-open in both
   directions: no match → historical silent path; false match → one extra
   clarification line. It never selects an Eidolon.
+
+### Known residual — no three-class chain template
+
+Found while re-routing the prompt that opened this change ("… Diagnose,
+Digest, Plan and Fix it"). Post-change it now scores **three** classes —
+`vigil` 0.8 (debugger, via the new `diagnose`), `ramza` 0.8 (planner),
+`vivi` 0.8 (coder) — where pre-change VIGIL scored 0 and the debugger
+intent was invisible. That is the intended recall gain.
+
+But `roster/routing.yaml`'s `chains:` has no template whose
+`requires_classes` covers *debugger + planner + coder*, so template selection
+falls back to the most specific 2-class match. `ship-fast`
+(`planner, coder`) and `forensic-then-fix` (`debugger, coder`) both have
+specificity 2, and `sort_by(-spec)` is a stable sort — so **declaration order
+in the file silently decides the winner**. `ship-fast` is declared first and
+takes it; the diagnosis step is dropped from the chain.
+
+Deliberately **not** fixed here. Adding a template changes routing for prompts
+this change has not measured, and the recall suite's guard set does not cover
+multi-class chain selection. Two separable follow-ups:
+
+1. Add a `diagnose-then-plan-then-fix` template (`vigil, ramza, vivi`) with
+   recall-suite coverage for 3-class prompts.
+2. Make the specificity tie-break explicit rather than order-dependent —
+   an equal-specificity tie between two templates is currently resolved by
+   nothing more principled than which line comes first.
