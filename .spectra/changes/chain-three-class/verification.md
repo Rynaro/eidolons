@@ -62,12 +62,22 @@ same wrong expression that computed the actual side.
 
 ## Residual — disclosed, not fixed
 
-- **Reasoner drop.** `"why is the deploy broken and what should we build instead"`
-  previously selected `decide-then-implement` (`forge → ramza → vivi`) and now
-  selects `diagnose-then-plan-then-fix` (`vigil → ramza → vivi`), dropping
-  FORGE. Root-causing before deliberating is defensible when a live failure is
+- **Reasoner drop.** Witness that reproduces on the shipped tree:
+  `"compare the two designs, diagnose the flaky test, spec the fix and implement it"`
+  → `diagnose-then-plan-then-fix` (`vigil → ramza → vivi`), FORGE dropped;
+  parent `13013ae` gave `decide-then-implement` (`forge → ramza → vivi`).
+  Root-causing before deliberating is defensible when a live failure is
   present, so this is accepted — but it is the same class of step-drop the
-  change removes, and is recorded here rather than left for a later checker.
+  change removes, and is recorded rather than left for a later checker.
+
+  *An earlier revision of this bullet cited
+  `"why is the deploy broken and what should we build instead"`. A checker
+  found that prompt no longer demonstrates what the bullet claims — the
+  round-1 `read_only_question` signal matched `"is the"` inside "why **is
+  the** deploy broken" and knocked the coder to 0.30, so it dispatched to
+  `vigil` alone with no chain at all. The cited witness was showing something
+  worse than the text described. It is replaced with one that reproduces; the
+  signal defect that caused it is fixed separately (form-gating).*
 - **`scout+debugger+coder`** still selects `forensic-then-fix`, dropping the
   scout step.
 - **Five order-dependent ties remain** among the 2-class templates.

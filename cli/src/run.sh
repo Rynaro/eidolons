@@ -212,9 +212,41 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
            + (if .named then 0.5 else 0 end))
   })) as $s1
 # Step 1b — confidence signals (+ --prior-failure context).
+#
+# FORM PREDICATES (routing-recall-gap round 2). Two signals need to know
+# something about the SHAPE of the prompt, not just which phrases occur in it.
+# Presence-matching alone made both of them wrong in the same way: a phrase that
+# is decisive at the head of a question ("which ", "is the") is meaningless
+# inside a subordinate clause, so `fix the bug where the retry count is the
+# wrong type` was penalised as if it were a question and fell below tau. Two
+# independent checkers measured that regression at 18/18 and 12/12 imperative
+# work requests turned into `clarify`, with the routing suite green throughout.
+#
+#   is_question  — interrogative FORM: the prompt ends in '?', or its FIRST word
+#                  is an interrogative opener. Head position is what makes a
+#                  question a question; a mid-sentence "is the" is not.
+#   has_path     — a path/file token is present (contains '/' with a letter, or
+#                  a dotted filename). Used to implement the scope rescue the
+#                  Step-2 predicate's S5 already has, which Step 1 previously
+#                  lacked — see roster/routing.yaml `unbounded_scope_qualified`.
+#
+# A signal opts in with `requires_question_form: true` / `skip_if_path: true`.
+# Absent keys ⇒ unchanged behaviour, so every other signal is untouched.
+| (($prompt | ascii_downcase | gsub("^\\s+|\\s+$";"")) ) as $p_trim
+| (($p_trim | endswith("?"))
+   or (($p_trim | split(" ") | .[0] // "")
+       | IN("which","what","where","when","who","whom","whose","why","how",
+            "is","are","was","were","am","do","does","did","can","could",
+            "should","would","will","have","has","had","isn't","aren't",
+            "doesn't","don't","didn't","shouldn't","couldn't"))) as $is_question
+| ([ $prompt | split(" ")[]
+     | select((test("[A-Za-z]") and test("/"))
+              or test("^[A-Za-z0-9_.-]+\\.[A-Za-z0-9]+$")) ] | length > 0) as $has_path
 | ([ $R.signals[]
      | select((.match as $m | any($m[]; . as $mp | hasword($prompt; $mp)))
-              or (.id == "prior_apivr_failure" and $ctx.prior_failure)) ]) as $fired
+              or (.id == "prior_apivr_failure" and $ctx.prior_failure))
+     | select((.requires_question_form // false) | not or $is_question)
+     | select((.skip_if_path // false) | not or ($has_path | not)) ]) as $fired
 | (([ $fired[] | .boost | to_entries[] ]
      | group_by(.key)
      | map({key: .[0].key, value: (map(.value) | add)})

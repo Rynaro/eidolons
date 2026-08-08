@@ -526,20 +526,29 @@ ${ecm_block}"
     prompt_lc="$(printf '%s' "${PROMPT:-}" | tr '[:upper:]' '[:lower:]')"
     prompt_norm=" $(printf '%s' "$prompt_lc" | tr -c 'a-z0-9' ' ') "
 
-    # (1) Conversational deny-list wins outright — never nag on an
-    # acknowledgement, however many work-ish words it happens to contain.
-    case "$prompt_norm" in
-      *" thanks "*|*" thank you "*|*" how are you "*|*" sounds good "*|*" looks good "*\
-      |*" makes sense "*|*" got it "*|*" i see "*|*" never mind "*|*" nevermind "*\
-      |*" hello "*|*" hi "*|*" hey "*|*" yep "*|*" yeah "*|*" nice "*|*" cool "*)
-        return 0 ;;
-    esac
-
-    # (2) Whole-word work intent. Bare interrogatives (how/what/where/why) are
-    # deliberately NOT here: on their own they are as likely to be conversation
-    # as work, and a genuine "how does X work" now routes to ATLAS anyway.
+    # WORK INTENT DECIDES, and it is checked FIRST.
+    #
+    # A previous revision put a conversational deny-list ahead of this and let
+    # it win outright. That silenced the most common turn shape in an agent
+    # session — acknowledge, then instruct:
+    #     "thanks! now bump the timeout to 30 seconds"          -> SILENT
+    #     "cool, next: teach the loader to accept YAML anchors" -> SILENT
+    # re-opening the exact dead-end this branch exists to close, reachable by
+    # prefixing "thanks". The defect was structural: no work-verb list can
+    # rescue a prompt when the deny-list returns before it is consulted.
+    #
+    # Inverting the order makes the deny-list redundant — none of the
+    # acknowledgements it held contain a work verb — so it is deleted rather
+    # than kept as decoration. `wrong` and `error` are deliberately absent
+    # below: both are common in ordinary chat ("nothing wrong with that",
+    # "human error, no biggie"), and a genuine failure report reaches VIGIL
+    # through the kernel rather than arriving on this branch at all.
+    #
+    # Bare interrogatives (how/what/where/why) are absent for the same reason:
+    # alone they are as likely to be conversation as work, and a real
+    # "how does X work" now routes to ATLAS.
     local _work_intent_re
-    _work_intent_re=' (add|added|adding|adds|build|building|builds|built|bump|change|changes|changing|check|clean|cleanup|code|configure|create|crash|crashes|debug|deploy|diagnose|document|error|extend|fail|failed|failing|fails|fix|fixed|fixes|fixing|handle|harden|implement|implementing|improve|install|investigate|make|migrate|optimise|optimize|patch|profile|refactor|remove|rename|revert|review|rewrite|silence|spec|split|stub|support|swap|teach|test|testing|tests|trace|update|updating|upgrade|wire|write|broke|broken|wrong|hangs|delete|drop|disable|enable|expose|extract|merge|move|rid|validate) '
+    _work_intent_re=' (add|added|adding|adds|build|building|builds|built|bump|change|changes|changing|check|clean|cleanup|code|configure|create|crash|crashes|debug|delete|deploy|diagnose|disable|document|drop|enable|expose|extend|extract|fail|failed|failing|fails|fix|fixed|fixes|fixing|give|handle|harden|implement|implementing|improve|install|investigate|make|merge|migrate|move|need|optimise|optimize|patch|profile|refactor|remove|rename|revert|review|rewrite|rid|silence|spec|split|stub|support|swap|teach|test|testing|tests|trace|update|updating|upgrade|validate|want|wire|write|broke|broken|hangs) '
     if [[ ! "$prompt_norm" =~ $_work_intent_re ]]; then
       return 0   # conversational / trivial → historical silent path
     fi

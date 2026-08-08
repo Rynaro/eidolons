@@ -34,10 +34,15 @@ decision: >
   ever stops being able to fail.
 
 safety_invariant: >
-  No precision regression: the pre-existing `public` suite stays 15/15. Read-only
-  intent never reaches a write-capable Eidolon, the named-refusal reroute still
-  fires, and a genuinely empty prompt still clarifies — pinned by guards
-  N-G01..N-G05. Gilgamesh's Step-2(a) predicate and the frozen generalist-eidolon
+  No precision regression: the pre-existing `public` suite stays 15/15, the
+  named-refusal reroute still fires, and a genuinely empty prompt still
+  clarifies. Read-only intent reaching a write-capable Eidolon is now MEASURED
+  rather than asserted (guards N-G01, N-G06/G07/G10/G15..G17), and imperative
+  work carrying a subordinate interrogative clause is pinned as MUST-ROUTE
+  (N-G11..N-G14). The round-1 wording — "read-only intent never reaches a
+  write-capable Eidolon ... pinned by guards N-G01..N-G05" — was falsified by a
+  checker (3/24 -> 15/24) and is retracted: five guards, of which one was
+  read-only, could not support it. Gilgamesh's Step-2(a) predicate and the frozen generalist-eidolon
   S1..S5 vectors are UNTOUCHED; all 11 frozen predicate fixtures resolve to their
   contracted routes.
 
@@ -48,9 +53,16 @@ invariants:
   - A benchmark authored from the implementation's own vocabulary is a tautology
     wearing a percentage. The recall suite carries a maintenance contract: when
     it regresses, widen the LEXICON — never reword the prompt.
-  - Unbounded mutation scope must never auto-route to a coder on a bare verb
-    match; this mirrors the Step-2 predicate's existing S5 bounded-scope
-    judgement into Step 1.
+  - Unbounded mutation scope must never auto-route to a coder/executor. Step 1
+    now implements BOTH halves of the Step-2 predicate's S5 rule: a repo-wide
+    phrase is never rescued, while a generic quantifier bounded by a PATH token
+    is (kernel `skip_if_path`). An earlier revision claimed to mirror S5 while
+    implementing only the punitive half; that claim was false and is retracted.
+  - A read-only QUESTION must never be answered by an edit. This is gated on
+    interrogative FORM (kernel `requires_question_form`), not on phrase
+    presence: an earlier revision presence-matched "is the"/"which" anywhere and
+    vetoed ordinary imperatives carrying a subordinate clause — two independent
+    checkers measured 18/18 and 12/12 correct dispatches turning into clarify.
 
 anti_scope:
   - No change to the raw->score curve, tau_standard, or the chain templates.
@@ -60,10 +72,11 @@ anti_scope:
     (subsequently closed by change `chain-three-class`, v2.19.0).
 
 files_touched:
-  - roster/routing.yaml              # widened lexicons + unbounded_scope signal
+  - roster/routing.yaml              # widened lexicons + scope/question signals
+  - cli/src/run.sh                   # form predicates: requires_question_form, skip_if_path
   - cli/src/harness_hook.sh          # work-intent clarify injection
   - cli/src/eval.sh                  # --suite recall
-  - evals/routing-suite.yaml         # the 49-task adversarial recall suite
+  - evals/routing-suite.yaml         # the adversarial recall suite + precision/axis guards
   - scripts/verify-recall-mutation.sh # the "can this gate fail" check (new file)
   - cli/tests/harness.bats           # AC-6 both branches
   - cli/tests/eval.bats              # suite total derived, not hardcoded
@@ -75,7 +88,7 @@ files_touched:
 acceptance_checks:
   - id: AC-1
     check: recall >= 80% on the adversarial suite
-    evidence: 49/49 = 100%
+    evidence: recall arm 69/69 = 100%
   - id: AC-2
     check: MISS rate (selected == []) <= 10%
     evidence: 0%
@@ -83,20 +96,21 @@ acceptance_checks:
     check: no precision regression on the public suite
     evidence: 15/15 unchanged
   - id: AC-4
-    check: read-only never routes to a writer; refusal reroute survives
-    evidence: guards N-G01..N-G05
+    check: read-only QUESTIONS never route to a writer, AND imperatives carrying a
+      subordinate interrogative clause still do (both directions measured)
+    evidence: guards N-G01, N-G06/G07/G10, N-G11..N-G20; 14/14 clause-imperatives route
   - id: AC-5
     check: the gate CAN fail — recall collapses against the pre-change lexicons
-    evidence: 16.3% vs v2.17.0 (ceiling 20%), scripts/verify-recall-mutation.sh
+    evidence: recall arm 8.2% vs v2.17.0 (ceiling 20%), scripts/verify-recall-mutation.sh
   - id: AC-6
     check: clarify is observable on work intent, silent on conversation
-    evidence: 3 tests in cli/tests/harness.bats
+    evidence: cli/tests/harness.bats corpora — 12/12 conversational silent, 6/6 courtesy-prefixed work requests surface
   - id: AC-7
     check: lint / schema / bash 3.2 / cortex token budget
     evidence: all exit 0; budget 836/850; macOS CLI-tests job green
   - id: AC-8
     check: full bats suite green, counted against the plan
-    evidence: bats cli/tests/ -> 1703/1703 after fixing 4 self-inflicted regressions
+    evidence: bats cli/tests/ -> full suite green, 0 failures (counted against the plan; see verification.md)
 
 released_as: v2.18.0
 merge_commits:

@@ -234,9 +234,25 @@ signals:
     # harness hook now surfaces the clarification on a work-intent prompt, it is
     # visible rather than silent. Implementing the rescue needs conditional
     # signals, which is a kernel change, not a data change.
-    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "everywhere", "everywhere it appears", "all call sites", "project-wide", "repo-wide", "every file"]
-    boost: { vivi: -0.25, apivr: -0.25, kupo: -0.25 }
-    note: "unbounded mutation scope → do not route a LONE verb match to a coder/executor (punitive half of predicate S5; no limiter rescue)"
+    # SPLIT into two tiers (round 2). A single tier could not be right for both
+    # "refactor across the entire codebase" (genuinely repo-wide) and "rename
+    # the symbol at all call sites in cli/src/run.sh" (one named file). At -0.4
+    # the second was suppressed; at -0.25 `localized_micro_task`'s +0.15
+    # cancelled most of it and repo-wide renames went BACK to the ≤2-file
+    # executor at 0.70 — measured 5/7 by a checker. Tiering fixes the class.
+    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "everywhere", "everywhere it appears", "project-wide", "repo-wide"]
+    boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
+    note: "REPO-WIDE mutation scope → never auto-route to a coder/executor; no rescue (mirrors predicate S5 with no LIMITER present)"
+  - id: unbounded_scope_qualified
+    # The rescuable tier: a generic quantifier that a PATH can bound. This is
+    # the limiter/path rescue predicate S5 has had all along and Step 1 lacked —
+    # the earlier note admitted the gap; `skip_if_path` closes it instead.
+    #   "rename the symbol at all call sites in cli/src/run.sh"  -> path -> route
+    #   "point the import at the new module path in every file"  -> none -> clarify
+    skip_if_path: true
+    match: ["all call sites", "every file", "all the call sites", "in every module"]
+    boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
+    note: "generic quantifier with NO path to bound it → treat as unbounded; a path token rescues it (predicate S5 limiter/path rule)"
   - id: read_only_question
     # Precision guard (found by the checker on `routing-recall-gap`): widening
     # the coder/scriber lexicons made bare words match inside INTERROGATIVES.
@@ -248,9 +264,26 @@ signals:
     # still allowed to reach ATLAS (read-only), FORGE (deliberation), VIGIL
     # (a failure question) and RAMZA (a requirements question). -0.5 drops a
     # lone match (0.8) to 0.3, well under tau.
+    # GATED ON INTERROGATIVE FORM (round 2). Presence-matching alone was wrong:
+    # "is the" / "which" / "what happens" occur constantly inside SUBORDINATE
+    # clauses of ordinary imperatives — "fix the bug where the retry count is
+    # the wrong type" — and the -0.5 vetoed even a raw=2 coder score. Two
+    # independent checkers measured 18/18 and 12/12 work requests regressing
+    # from a correct dispatch to `clarify`, invisible to a green suite.
+    # `requires_question_form` makes the kernel apply this ONLY when the prompt
+    # is actually a question (ends in '?' or opens with an interrogative), which
+    # is also why the match list no longer needs to enumerate every opener —
+    # `did` / `have we` / `were` / `am I` / `isn't` / `how do I` are all covered
+    # by form, and were the "new class" the first fix missed.
     # NOTE: "should we ..." is deliberately NOT matched — penalising the coder
     # there would make the decide-then-implement chain unreachable.
-    match: ["which ", "what does", "what happens", "what files", "where do ", "where does the", "when did", "when does", "who is", "who will", "does the", "does this", "is the", "are the", "can i ", "how many", "how much"]
+    # With the form gate doing the real work, the match list is deliberately
+    # GENERIC — ubiquitous function words, so it fires on essentially any
+    # English question. Enumerating openers here was what let `did` / `have we`
+    # / `am I` / `isn't` slip through as a "new class"; a closed phrase list can
+    # always be walked around, whereas interrogative form cannot.
+    requires_question_form: true
+    match: ["the", "a", "an", "we", "i", "it", "this", "that", "there", "any", "anything"]
     boost: { vivi: -0.5, apivr: -0.5, kupo: -0.5, idg: -0.5 }
     note: "read-only interrogative → never hand a question to a writer on a bare verb match"
   - id: localized_micro_task

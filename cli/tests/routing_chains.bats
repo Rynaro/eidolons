@@ -116,26 +116,28 @@ _actual_ambiguous_pairs() {
   # The equality-based helper could not see this: a template duplicating an
   # existing requires_classes always ties (no C can be a strict superset inside
   # their own union), yet all assertions stayed green while the live route
-  # flipped. Feed the corrected helper a roster carrying a duplicate and assert
-  # it surfaces — this is the falsifying case for the ambiguity pin itself.
-  local _tmp="$BATS_TEST_TMPDIR/dup.yaml"
-  yq -o=json '.chains' "$EIDOLONS_ROOT/roster/routing.yaml" \
-    | jq '. + [{name:"rival-plan-before-build", steps:["idg","kupo"],
-                requires_classes:["scout","planner","coder"]}]' > "$_tmp"
-  run jq -r '
-    [ .[] | {name, req: (.requires_classes | sort)} ] as $t
-    | [ range(0; $t|length) as $i
-        | range($i+1; $t|length) as $j
-        | select(($t[$i].req|length) == ($t[$j].req|length))
-        | (($t[$i].req + $t[$j].req) | unique) as $u
-        | select([ $t[]
-                   | select(((.req - $u) == [])
-                            and ((.req|length) > ($t[$i].req|length))) ]
-                 | length == 0)
-        | "\($t[$i].name)|\($t[$j].name)" ]
-    | sort | .[]' "$_tmp"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"plan-before-build|rival-plan-before-build"* ]]
+  # flipped to idg>kupo.
+  #
+  # This test calls _actual_ambiguous_pairs() against a DOCTORED ROSTER rather
+  # than re-implementing the predicate inline. The first version inlined a copy,
+  # which meant it asserted a property of its own frozen expression and gave the
+  # real helper zero protection — a checker confirmed it stayed green when the
+  # helper was reverted to the equality form. Pointing EIDOLONS_ROOT at a temp
+  # tree keeps exactly one copy of the predicate under test.
+  local _root="$BATS_TEST_TMPDIR/duproot"
+  mkdir -p "$_root/roster"
+  yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" \
+    | jq '.chains += [{name:"rival-plan-before-build", steps:["idg","kupo"],
+                       requires_classes:["scout","planner","coder"]}]' \
+    | yq -P '.' > "$_root/roster/routing.yaml"
+
+  local _saved="$EIDOLONS_ROOT"
+  EIDOLONS_ROOT="$_root"
+  local _out
+  _out="$(_actual_ambiguous_pairs)"
+  EIDOLONS_ROOT="$_saved"
+
+  [[ "$_out" == *"plan-before-build|rival-plan-before-build"* ]]
 }
 
 @test "chains: adding diagnose-then-plan-then-fix did NOT introduce a tie with plan-before-build" {

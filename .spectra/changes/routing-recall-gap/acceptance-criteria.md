@@ -41,7 +41,7 @@ corpus authored independently of the trigger lexicons:
 | **AC-3** | No precision regression: all 15 existing `public` routing-suite tasks still pass | `eidolons eval routing` = 15/15 |
 | **AC-4** | Read-only intent never routes to a write-capable Eidolon; the named-refusal reroute still fires | guard tasks in the recall suite |
 | **AC-5** | **The gate can fail.** The recall suite scored against the *pre-change* `roster/routing.yaml` MUST report < 20 % recall | mutation check, recorded in `verification.md` |
-| **AC-6** | `decision == "clarify"` injects the `clarification_request` into the host instead of returning silently | `cli/tests/harness_hook.bats` |
+| **AC-6** | `decision == "clarify"` injects the `clarification_request` into the host instead of returning silently | `cli/tests/harness.bats` |
 | **AC-7** | `make lint` clean, `make schema` green, bash 3.2 compatible (no bash-4 constructs) | CI parity |
 | **AC-8** | Full bats suite green | `make test` |
 

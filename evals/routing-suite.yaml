@@ -415,6 +415,59 @@ suites:
       prompt: "what happens when the migrate step runs?"
       expect: { decision: clarify }
 
+    # ── PRECISION GUARDS, interrogative FORM vs subordinate clause ─────────────
+    # Round-2 regression pins. The first `read_only_question` fix presence-
+    # matched phrases anywhere in the prompt, so ordinary imperatives carrying a
+    # subordinate "which"/"is the"/"what happens" were vetoed: two independent
+    # checkers measured 18/18 and 12/12 correct dispatches turning into
+    # `clarify`, with this suite green throughout because not one recall task
+    # contains a subordinate clause. These pin the AXIS — imperative-with-clause
+    # must route, question-form must not — rather than the found examples.
+    - id: N-G11
+      category: guard-clause
+      prompt: "fix the bug where the retry count is the wrong type"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G12
+      category: guard-clause
+      prompt: "implement the flag which the installer reads at startup"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G13
+      category: guard-clause
+      prompt: "document what happens when the queue overflows"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: N-G14
+      category: guard-clause
+      prompt: "optimize the path where the cache is the bottleneck"
+      expect: { decision: dispatch, selected: [vivi] }
+    # question FORM — openers absent from any phrase list, caught by form alone
+    - id: N-G15
+      category: guard-readonly
+      prompt: "have we ever had to migrate this config before?"
+      expect: { decision: clarify }
+    - id: N-G16
+      category: guard-readonly
+      prompt: "isn't the changelog entry generated automatically?"
+      expect: { decision: clarify }
+    - id: N-G17
+      category: guard-readonly
+      prompt: "did anyone update the changelog for this release?"
+      expect: { decision: clarify }
+    # unbounded vs path-bounded scope (the S5 limiter/path rescue)
+    - id: N-G18
+      category: guard-unbounded
+      # localized_micro_task (+0.15) must NOT carry a repo-wide rename to Kupo
+      prompt: "rename the helper everywhere"
+      expect: { decision: clarify }
+    - id: N-G19
+      category: guard-unbounded
+      prompt: "rename the config key repo-wide"
+      expect: { decision: clarify }
+    - id: N-G20
+      category: guard-unbounded
+      # a generic quantifier BOUNDED by a path must still route
+      prompt: "fix the typo in the import path in every file under cli/src/ui"
+      expect: { decision: dispatch, selected: [kupo] }
+
     - id: N-G05
       category: guard-trance
       # TRANCE stays gated: a large surface alone never escalates the tier

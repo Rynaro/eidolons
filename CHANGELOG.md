@@ -8,11 +8,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-## [2.19.1] — 2026-08-08 — what the checker found
+## [2.19.1] — 2026-08-08 — what the checker found, twice
 
-Two independent checkers were dispatched to close the ESL records for `routing-recall-gap` (v2.18.0) and `chain-three-class` (v2.19.0). **Both rejected.** maker ≠ checker is mechanically enforced here and it earned its keep: every finding below was produced by *running* the shipped code, and none of it was visible to the gates that shipped with it.
+Two independent checkers were dispatched to close the ESL records for `routing-recall-gap` (v2.18.0) and `chain-three-class` (v2.19.0). **Both rejected. Then both rejected the remediation.** maker ≠ checker is mechanically enforced here and it earned its keep twice over: every finding was produced by *running* the shipped code, and none of it was visible to the gates that shipped with it.
 
-The shared root cause is one sentence: **both changes asserted precision over guard sets that were structurally incapable of failing.** That is the same defect `routing-recall-gap` was written to remove, committed twice more by the change that removed it.
+Round 1's root cause: **both changes asserted precision over guard sets that were structurally incapable of failing** — the same defect `routing-recall-gap` was written to remove, committed twice more by the change that removed it.
+
+Round 2's is sharper, and worth stating because it is easy to repeat: **fixing a checker's counterexamples is not fixing the defect.** Every round-1 fix passed the exact prompts it had been handed and broke a class those prompts did not contain — a phrase-matching signal was made to approximate "is this a question", and turned 18/18 ordinary work requests into `clarify` behind a green suite. Two of the three defects could not be fixed in data at all; they needed the kernel to understand prompt *form*.
+
+### Added — kernel form predicates (`cli/src/run.sh`)
+
+Signals can now declare two conditions. Absent keys mean unchanged behaviour, so every other signal is untouched.
+
+- **`requires_question_form`** — apply only when the prompt IS a question (ends in `?`, or opens with an interrogative). Head position is what makes a question a question; a mid-sentence "is the" is not. This also dissolves the "new class" problem: `did` / `have we` / `were` / `am I` / `isn't` / `how do I` are covered by form, whereas a closed opener list can always be walked around by inventing another opener.
+- **`skip_if_path`** — suppress a signal when a path/file token is present. This implements the **S5 limiter/path rescue** that v2.19.1's first draft declared impossible and documented as a permanent limitation. It isn't; the honest-limit paragraph is gone because the rescue exists.
+
+### Fixed — routing precision
+
+- **Read-only questions no longer route to writers, and imperatives are no longer suppressed.** `"which port does the server listen on?"` → clarify; `"fix the bug where the retry count is the wrong type"` → `vivi`. Both directions are now pinned (`N-G11`–`N-G20`), which is what the earlier guard set could not do: 44 of its 49 tasks were imperative work requests and exactly one was read-only, making it sensitive to lexicon *removal* and blind to lexicon *addition*.
+- **Repo-wide scope split from path-bounded scope.** A single tier could not be right for both `"refactor across the entire codebase"` and `"rename the symbol at all call sites in cli/src/run.sh"`. At −0.4 the second was suppressed; at −0.25 `localized_micro_task` (+0.15) cancelled most of it and repo-wide renames went **back** to the ≤2-file executor at 0.70. Two tiers fix the class: repo-wide is never rescued, a generic quantifier is rescued by a path.
+- **The hook's conversational deny-list is deleted.** It ran *first* and won outright, so `"thanks! now bump the timeout to 30 seconds"` was **silent** — the dead-end this whole change exists to close, reachable by prefixing "thanks". Work intent now decides and is checked first, which makes the deny-list redundant rather than merely reordered.
+
+### Fixed — chain ambiguity ledger
+
+- **The ambiguity pin tested set-equality where the kernel uses subset**, and its expected list was generated with that same expression, so both sides were wrong identically and the gate passed while proving nothing. True count **5**, not 7; the parent had **6**, not 9. Independently confirmed by a checker's own all-subsets model and a 250-roster fuzz (0 disagreements).
+- **v2.19.0 also resolved a pre-existing tie and never said so** (`ship-fast` vs `forensic-then-fix`), moving the set 6 → 5.
+- **The pin was blind to duplicate class sets**; the subset form closes it automatically. The regression test now calls the real helper against a doctored roster instead of re-implementing the predicate inline — the first version asserted a property of its own frozen copy and gave the helper zero protection.
+- **`scout-diagnose-plan-fix` dropped the scriber step** (it supersedes `plan-before-build`, which ends in `idg`). Now ends `… → Vivi → IDG`.
+- v2.19.0's entry below is annotated in place where it carried the false count.
 
 ### Fixed — routing precision (`routing-recall-gap` findings)
 
@@ -45,8 +68,8 @@ The kernel picks the matching template with the most `requires_classes`. There s
 
 ### Added
 - **`diagnose-then-plan-then-fix`** (`VIGIL → RAMZA → Vivi`, `requires_classes: [debugger, planner, coder]`) — a live failure that needs a spec before the patch.
-- **`scout-diagnose-plan-fix`** (`ATLAS → VIGIL → RAMZA → Vivi`, four classes). This exists for a specific reason: jq's `sort_by` is **stable**, so two equal-specificity templates that both match are resolved by *declaration order in the file* — an artifact, not a decision. Adding the three-class template alone would have collided with `plan-before-build` on a scout+debugger+planner+coder prompt and created an eighth such tie. This entry covers that union so **specificity stays decisive**.
-- **`cli/tests/routing_chains.bats`** — pins the multi-class routes and, more importantly, **pins the ambiguity set**: a template added later that introduces a new equal-specificity collision fails the suite instead of letting line order quietly pick a winner in production. All six assertions were falsified by mutation before being trusted (delete the template → red; add a colliding template → red; bogus step member → red; delete the tie cover → red).
+- **`scout-diagnose-plan-fix`** (`ATLAS → VIGIL → RAMZA → Vivi`, four classes). This exists for a specific reason: jq's `sort_by` is **stable**, so two equal-specificity templates that both match are resolved by *declaration order in the file* — an artifact, not a decision. Adding the three-class template alone would have collided with `plan-before-build` on a scout+debugger+planner+coder prompt and created ~~an eighth~~ **a sixth** such tie. This entry covers that union so **specificity stays decisive**. **[CORRECTED in 2.19.1 — "eighth" followed from the same set-equality miscount; and the shipped steps are `ATLAS → VIGIL → RAMZA → Vivi → IDG`, the trailing scriber step having been restored in 2.19.1.]**
+- **`cli/tests/routing_chains.bats`** — pins the multi-class routes and, more importantly, **pins the ambiguity set**: a template added later that introduces a new equal-specificity collision fails the suite instead of letting line order quietly pick a winner in production. Falsified by mutation before being trusted — delete the template → red; add a colliding template → red; bogus step member → red; delete the tie cover → red; add a duplicate class set → red. **[CORRECTED in 2.19.1: this sentence originally read "all six assertions" while listing four mutations. Five mutations are on record; the "pre-existing routes unchanged" assertion has none.]**.
 - Recall-suite coverage `N-C01`–`N-C04`, `N-C06` (`chain-multiclass`).
 
 ### Changed

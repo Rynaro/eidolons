@@ -24,66 +24,89 @@ change was written to remove on the recall axis. AC-5 proved the suite was
 sensitive to lexicon *removal*; nothing in it was sensitive to lexicon
 *addition*.
 
-## Remediation (shipped as v2.19.1)
+## Remediation round 1 — **also REJECTED**
 
-- **New `read_only_question` signal** (−0.5 to coder/executor/scriber only, so
-  ATLAS/FORGE/VIGIL/RAMZA still receive questions). `port` → `port the`.
-  Result on the checker's counterexamples: **0/12** reach a writer.
-- **`unbounded_scope` penalty −0.4 → −0.25**, which actually implements the
-  "lone verb match" the note claimed: 0.8 → 0.55 (clarify), 0.9 → 0.65
-  (routes), 0.97 → 0.72 (routes). `everywhere` added to the match list.
-- **The false S5 claim is replaced with an honest limit.** The signal table is
-  presence-matched and cannot express S5's limiter∧path conjunction, so Step 1
-  implements only the punitive half. A bounded ask carrying a generic-scope
-  phrase may still clarify — a conservative failure, and now a visible one.
-- **Discriminator rewritten to whole-word matching** over a
-  punctuation-normalised prompt, with an explicit conversational deny-list
-  checked first.
-- **Guards now measure the precision axis**: `N-G06`–`N-G10` (read-only
-  interrogatives; bounded vs unbounded scope). **`N-042` reworded** — it had
-  *expected* a repo-wide rename to reach Kupo, i.e. the suite was blessing the
-  exact case `unbounded_scope` exists to catch, cancelling the signal.
-- **AC-6 tests are corpora now**, both directions: 10 conversational prompts
-  must stay silent, 8 real work requests must surface.
-- **`verify-recall-mutation.sh` scores the recall arm only.** Guards pass in
-  both worlds by design, so they put a rising floor under the mutated score;
-  growing the guard set 5 → 10 pushed it 16.6 % → 22 % and tripped the gate.
-  Raising the ceiling would have been the gate-that-cannot-fail defect
-  committed by the script that exists to prevent it. Default ref pinned to
-  `v2.17.0`.
+The first remediation fixed the three findings *as reported* and introduced
+three new defects of the same species. The checker's verdict on it is the most
+useful sentence in this record: **"the fix tracks the published examples, not
+the class."**
 
-## Evidence after remediation
+| # | New defect introduced by round 1 | Measured |
+|---|---|---|
+| 1 | `read_only_question` presence-matched anywhere, so ordinary imperatives carrying a subordinate `which` / `is the` / `what happens` were vetoed | **18/18** and (independently) **12/12** correct dispatches → `clarify` |
+| 2 | `unbounded_scope` weakened to −0.25 let `localized_micro_task` (+0.15) carry repo-wide renames back to Kupo at 0.70 | **5/7** probes |
+| 3 | The conversational deny-list was checked FIRST and won outright, so a courtesy prefix silenced real work: `"thanks! now bump the timeout to 30 seconds"` | **5/5** silent |
+
+All three were invisible to a 59/59 suite, because the guards added in round 1
+were the checker's own example prompts rather than the axis they belong to.
+
+## Remediation round 2 — fixing the class
+
+Two of the three needed a **kernel** change, which is why round 1 could not get
+there with data alone.
+
+- **`requires_question_form` (kernel).** `read_only_question` now applies only
+  when the prompt IS a question — ends in `?`, or opens with an interrogative.
+  Head position is what makes a question a question; a mid-sentence "is the" is
+  not. This also dissolved the "new class" of openers (`did` / `have we` /
+  `were` / `am I` / `isn't` / `how do I`) that a closed phrase list kept
+  missing: form cannot be walked around by inventing another opener. The match
+  list is now deliberately generic function words, since form does the gating.
+- **`skip_if_path` (kernel) + a two-tier scope signal.** `unbounded_scope`
+  (repo-wide: `entire codebase`, `everywhere`, `repo-wide`, …) is never
+  rescued, at −0.4 so `localized_micro_task` cannot cancel it.
+  `unbounded_scope_qualified` (`all call sites`, `every file`) is skipped when
+  a PATH token is present. **This is the S5 limiter/path rescue that round 1
+  declared impossible** — the honest-limit paragraph it added is now obsolete
+  and removed, because the rescue exists.
+- **Deny-list deleted; work intent decides and is checked first.** With the
+  order inverted the deny-list was redundant (no acknowledgement it listed
+  contains a work verb), so it is gone rather than kept as decoration.
+  `wrong`/`error` dropped from the work list — common in chat, and genuine
+  failure reports reach VIGIL through the kernel.
+- **Guards now pin the AXIS**: `N-G11`–`N-G14` (imperative + subordinate
+  interrogative clause → MUST route), `N-G15`–`N-G17` (question form via
+  openers no phrase list contains), `N-G18`–`N-G20` (repo-wide vs
+  path-bounded scope).
+
+## Evidence after round 2
 
 | AC | Result | Evidence |
 |---|---|---|
 | AC-1 | **PASS** | recall arm 100 % |
 | AC-2 | **PASS** | 0 MISS |
 | AC-3 | **PASS** | `public` 15/15 |
-| AC-4 | **PASS (now measured)** | 0/12 read-only interrogatives reach a writer, was 12/12; guards `N-G01`, `N-G06`, `N-G07`, `N-G10` |
-| AC-5 | **PASS** | recall arm collapses to **8.2 %** against `v2.17.0` (ceiling 20 %); exit 0 / 1 / 2 verified in all three directions |
-| AC-6 | **PASS (corpus)** | 10 conversational silent, 8 work requests surfaced, `cli/tests/harness.bats` 170/170 |
+| AC-4 | **PASS (measured both directions)** | 10/11 checker interrogatives clarify; **14/14** subordinate-clause imperatives route; 5/5 repo-wide scope clarifies; 2/2 path-bounded routes. Guards `N-G01`, `N-G06/07/10`, `N-G11`–`N-G20` |
+| AC-5 | **PASS** | recall arm collapses to **8.2 %** vs `v2.17.0`; exit 0 / 1 / 2 verified |
+| AC-6 | **PASS (corpus, both directions)** | 12/12 conversational silent (incl. `nothing wrong with that`, `human error, no biggie`); 6/6 courtesy-prefixed work requests surface; `cli/tests/harness.bats` green |
 | AC-7 | **PASS** | `make lint` 0 · `make schema` 0 · budget 836/850 · bash 3.2 construct test green |
-| AC-8 | **PASS** | `bats cli/tests/` → **1712/1712**, 0 failures |
+| AC-8 | **PASS** | full `bats cli/tests/` green, counted against the plan |
 
-Suites: recall **59/59**, public **15/15**, self-test **78 tasks**.
+Suites: recall **69/69**, public **15/15**, self-test **88 tasks**.
 Frozen `generalist-eidolon` fixtures: all 11 resolve to contracted routes.
 
 ## Residual — disclosed
 
-- **No LIMITER rescue.** A bounded ask containing a generic-scope phrase
-  ("update the helper at all call sites in `cli/src/lib.sh` only") still
-  clarifies. Implementing the rescue needs conditional signals — a kernel
-  change, not a data change.
+- **`"remind me what the migrate step does"`** still reaches a writer. It is
+  interrogative in *intent* but imperative in *form*, so the form gate does not
+  fire. Accepted: widening form detection to cover polite-imperative info
+  requests risks the subordinate-clause regression all over again.
 - **`"should we refactor this or leave it?"`** forms a `decide-then-implement`
   chain rather than a lone FORGE dispatch. `should we` is deliberately excluded
-  from `read_only_question`, because penalising the coder there would make that
-  chain unreachable. FORGE runs first and may conclude "leave it".
+  from `read_only_question` — penalising the coder there would make that chain
+  unreachable. FORGE runs first and may conclude "leave it".
 - The discriminator remains a heuristic; it never selects an Eidolon and fails
-  open in both directions.
+  open in both directions. Ordinary non-technical chat containing a listed verb
+  ("can you make it to standup?") costs one extra context line.
 
-## The lesson this round actually taught
+## What two rejection rounds actually taught
 
-Both of this change's headline gates were real — and both were sensitive to
-exactly one direction of failure. `AC-5` could detect a lexicon getting
-*narrower* and was structurally blind to one getting *wider*. Writing a gate is
-not the same as knowing which way it can fail.
+Round 1's gates were real and each was sensitive to exactly **one** direction of
+failure: `AC-5` could see a lexicon getting *narrower* and was structurally
+blind to one getting *wider*. Round 2's lesson is narrower and sharper: when a
+checker hands you counterexamples, fixing the counterexamples is not fixing the
+defect. Every round-1 fix passed the checker's own corpus and broke a class the
+corpus did not contain. Two of the three could not be fixed in data at all —
+the presence-matching signal table simply cannot express "is this a question",
+and pretending otherwise is what produced 18/18 regressions behind a green
+suite.
