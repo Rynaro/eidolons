@@ -361,6 +361,25 @@ chains:
     steps: ["atlas", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]
     when: "Unfamiliar code + multi-component change"
+  - name: scout-diagnose-decide-plan-fix
+    steps: ["atlas", "vigil", "forge", "ramza", "vivi", "idg"]
+    requires_classes: ["scout", "debugger", "reasoner", "planner", "coder"]
+    when: "Every routed class present — the full pipeline"
+    # Covers the union of the two spec-4 templates below, so adding
+    # scout-diagnose-decide-fix does not make them tie.
+  - name: scout-diagnose-decide-fix
+    steps: ["atlas", "vigil", "forge", "vivi", "idg"]
+    requires_classes: ["scout", "debugger", "reasoner", "coder"]
+    when: "Unfamiliar code + a live failure + a decision + a fix"
+    # Added after a checker measured scout-diagnose-fix taking this combination
+    # over from decide-then-implement and DROPPING the reasoner: on
+    # "audit the module, root cause the failure, decide between rollback or
+    # patch, then implement it", forge scored 0.8 and idg scored 0.0 — the
+    # template hardcoded the class that scored ZERO and excluded the one that
+    # scored 0.8. A user who asked to decide between two fixes got no
+    # deliberation step. Diagnosis precedes deliberation for the same reason
+    # diagnose-then-plan-then-fix orders it that way: root-cause first, then
+    # choose.
   - name: scout-diagnose-fix
     steps: ["atlas", "vigil", "vivi", "idg"]
     requires_classes: ["scout", "debugger", "coder"]

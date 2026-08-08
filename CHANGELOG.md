@@ -34,7 +34,19 @@ audit the module, diagnose the failure, fix it and document it
 - The four remaining ties are unchanged, still decided by declaration order, still pinned rather than endorsed.
 - A three-class scout+debugger+coder prompt now receives a docs step it did not explicitly ask for — the same trade `plan-before-build` has always made, stated rather than hidden.
 
-All four new assertions were falsified by mutation before being trusted, including one that removes **only** the trailing `idg` — the mutation that would reintroduce the silent scriber drop. Suites: recall 80/80, public 15/15, bats **1714/1714**.
+### The checker rejected the first cut, and the reason generalises
+
+`scout-diagnose-fix` alone took `{scout,debugger,reasoner,coder}` over from `decide-then-implement` and **dropped the FORGE step** — on a prompt asking to *"decide between rollback or patch"*, `forge` scored **0.8** while the hardcoded `idg` scored **0.0**. The template hardcoded the class that scored zero and excluded the one that scored 0.8. Same defect as the one being fixed, relocated onto another class. Now covered by **`scout-diagnose-decide-fix`** (`ATLAS → VIGIL → FORGE → Vivi → IDG`) and **`scout-diagnose-decide-plan-fix`** for the full five-class pipeline.
+
+More importantly: **the ambiguity pin could not have caught it.** It counts *pairs*, and the pair survived at a smaller witness while the route flipped. Pair-counting structurally cannot see a route change. Added a **route-level ratchet** that enumerates all 57 class subsets and counts those whose selected chain omits a triggered class.
+
+### The systemic finding
+
+Run that check against shipped **v2.19.1** and it reports **30 violations out of 57 subsets**. Step-drops are not an edge case in this design — they are the majority behaviour. Chain selection matches one template per class combination; with 57 subsets and 11 templates, most subsets fall back to an entry that omits a triggered class.
+
+This release takes it **30 → 24** and bounds it with a ratchet. It does **not** solve the shape, and nothing here claims to. A durable fix means synthesising the chain from the triggered classes in a canonical order instead of matching a template — a kernel redesign, deliberately out of scope.
+
+Six mutations red, baseline green — including one that removes only the trailing `idg`, and one that reintroduces the FORGE drop. Suites: recall 80/80, public 15/15, bats **1716/1716**.
 
 ## [2.19.1] — 2026-08-08 — what the checker found, three times
 

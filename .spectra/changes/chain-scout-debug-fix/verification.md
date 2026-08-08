@@ -3,13 +3,51 @@
 > ESL change `chain-scout-debug-fix` · tier **full**
 > Maker: `vivi` · Checker: `kupo` (maker ≠ checker, C4 — mechanically enforced)
 
+## Checker round 1 — **REJECT**
+
+| # | Severity | Finding | Status |
+|---|---|---|---|
+| H1 | **HIGH** | `scout-diagnose-fix` took `{scout,debugger,reasoner,coder}` (± scriber) over from `decide-then-implement` and **dropped the FORGE step**. Reproduced on four natural prompts. `forge` scored **0.8**; the hardcoded `idg` scored **0.0** — the template hardcoded the class that scored zero and excluded the one that scored 0.8. A user asking to *decide between rollback or patch* got no deliberation step. | **FIXED** |
+| H2 | **HIGH** | The test cited as AC-3's evidence pins a **scout-free** prompt, so it cannot go red on a scout-bearing route flip. And the ambiguity pin counts **pairs** — the pair survived at its smaller witness while the route changed, so it stayed green. Pair-counting structurally cannot see a route flip. | **FIXED** |
+| M1 | medium | `EIDOLONS.md:77` still said "Eight templates" (now 11) — the always-loaded cortex, mirrored to consumers by `eidolons sync`. Two other docs were re-synced; this one was missed. | **FIXED** |
+| L1–L4 | low | CHANGELOG said "four new assertions" (that is the mutation count); `verification.md` listed `audit-without-touching` as unchanged while AC-2 says it changed; two measured phrasings unpinned; `change.json` carries `acceptance_checks: []`. | **FIXED / noted** |
+
+AC-1, AC-2, AC-4, AC-5, AC-6, AC-7 all verified independently and held. Over-reach probes found none.
+
+## Remediation
+
+- **`scout-diagnose-decide-fix`** (`atlas → vigil → forge → vivi → idg`) for
+  `[scout, debugger, reasoner, coder]`, plus
+  **`scout-diagnose-decide-plan-fix`** for all five routed classes, covering the
+  union so the two spec-4 entries cannot tie.
+- **A route-level ratchet** (`routing_chains.bats`). H2 is the durable finding:
+  the ambiguity pin measures pairs and a route can flip beneath it. The new
+  check enumerates **all 57 class subsets** and counts those whose selected
+  chain omits a triggered class.
+- AC-3 and `safety_invariant` **retracted and restated** as what was measured.
+- `EIDOLONS.md` template-count sentence de-numbered so it cannot go stale again.
+
+## The systemic finding this exposed
+
+Running the coverage check against **shipped v2.19.1** gives **30 violations
+out of 57 subsets**. Step-drops are not an edge case in this design — they are
+the majority behaviour. Chain selection matches one template per class
+combination; with 57 subsets and 11 templates, most subsets fall back to a
+lower-specificity entry that omits a triggered class.
+
+This change takes it **30 → 24**. It does not solve the shape, and the record
+does not claim to. The ratchet bounds it; a durable fix would mean synthesizing
+the chain from the triggered classes in a canonical order rather than matching
+a template — a kernel redesign, out of scope here and recorded as a
+recommendation.
+
 ## Evidence
 
 | AC | Result | Evidence |
 |---|---|---|
 | **AC-1** | **PASS** | 3/3 scout+debugger+coder phrasings → `scout-diagnose-fix` → `[atlas, vigil, vivi, idg]` (`N-C07`, `N-C09`) |
 | **AC-2** | **PASS** | `"audit the module, diagnose the failure, fix it and document it"` → `[atlas, vigil, vivi, idg]`, was `[atlas, idg]` (`N-C08`) |
-| **AC-3** | **PASS** | `public` 15/15; `N-015` still `[vigil, vivi]`; `N-C04` still `scout-diagnose-plan-fix`; `plan-before-build` / `decide-then-implement` / `ship-fast` / `scout-then-spec` / `audit-without-touching` unchanged |
+| **AC-3** | **PASS (restated)** | All-subsets route differential vs `db82fb2`: **6 of 57 change, 51 identical**, and every changed subset **gains** triggered-class coverage — none loses a class it carried. `plan-before-build` / `ship-fast` / `scout-then-spec` / `forensic-then-fix` / `diagnose-then-plan-then-fix` / `scout-diagnose-plan-fix` unchanged; `public` 15/15; `N-015` still `[vigil, vivi]`. **`decide-then-implement` and `audit-without-touching` DO change on scout-bearing subsets** — the original wording claimed otherwise and was falsified |
 | **AC-4** | **PASS** | corrected subset audit: **5 → 4**, set difference is exactly `audit-without-touching\|forensic-then-fix\|coder+debugger+scout+scriber`; no new pair |
 | **AC-5** | **PASS — 4/4 mutations red** | table below |
 | **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **99 tasks** |
@@ -27,10 +65,19 @@ Baseline unmutated green; every mutation **red**:
 | M2 | delete `scout-diagnose-fix` | read-only-pair route | **RED** ✓ |
 | M3 | delete `scout-diagnose-fix` | ambiguity pin (set returns to 5) | **RED** ✓ |
 | M4 | drop **only** the trailing `idg` | read-only-pair route | **RED** ✓ |
+| M5 | delete `scout-diagnose-decide-fix` | **route-level ratchet** | **RED** ✓ |
+| M6 | delete `scout-diagnose-decide-fix` | targeted-combination test | **RED** ✓ |
 
-M4 is the load-bearing one. It is the mutation that would reintroduce a silent
-scriber step-drop — the defect two earlier checkers found in this family — and
-it is caught rather than assumed.
+M4 and M5 are the load-bearing ones. M4 is the mutation that would reintroduce
+a silent scriber step-drop. M5 reintroduces the exact FORGE drop the checker
+found — and it is caught by the route-level ratchet, which is the instrument
+that did not exist when the defect got through.
+
+Six mutations, twelve assertions. AC-5 says *"every new assertion goes red
+under a mutation that breaks what it guards"* — that is true of the assertions
+this change adds; it is **not** a claim that every assertion in the file has a
+dedicated mutation (the "pre-existing routes unchanged" test still has none,
+as recorded in the sibling `chain-three-class`).
 
 ## What the baseline measurement turned up that was not on the record
 

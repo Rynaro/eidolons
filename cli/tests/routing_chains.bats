@@ -171,6 +171,70 @@ _actual_ambiguous_pairs() {
   [ "$status" -eq 0 ]
 }
 
+# ─── The route-level ratchet ───────────────────────────────────────────────────
+# The ambiguity pin above counts PAIRS. A checker showed that a route can flip
+# while the pair count is untouched — `scout-diagnose-fix` took over
+# {scout,debugger,reasoner,coder} and dropped FORGE with the pin still green,
+# because the pair survived at its smaller witness. Pair-counting structurally
+# cannot see a route change.
+#
+# This is the property those bugs actually violate: for every subset of
+# triggered classes, the selected chain should contain at least one member of
+# EVERY triggered class. Anything else is a silent step-drop.
+#
+# It is NOT satisfiable today — chain selection matches a template per class
+# combination, and there are 57 subsets against 11 templates, so most subsets
+# fall back to a lower-specificity entry that omits a class. Measured: 30
+# violations at v2.19.1 (db82fb2), 24 here.
+#
+# So this is a RATCHET, not a pass/fail at zero: the count must not grow.
+# Stating it as "no step-drops" would be the absolute-invariant-over-a-partial-
+# mechanism mistake that got three earlier records rejected.
+_class_coverage_violations() {
+  yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" | jq '
+    .chains as $chains
+    | (.eidolons | with_entries(.value |= .capability_class)) as $cls
+    | ["scout","debugger","reasoner","planner","coder","scriber"] as $U
+    | [ range(1; pow(2; ($U|length)) | floor) ]
+    | map(. as $m | [ range(0; ($U|length)) | select((($m / pow(2;.)) | floor) % 2 == 1) | $U[.] ])
+    | map(select(length >= 2))
+    | map({ classes: (.|sort),
+            pick: ( . as $c
+                    | [ $chains[] | select([ .requires_classes[] | . as $x | ($c|index($x)) ] | all)
+                        | . + {spec: (.requires_classes|length)} ]
+                    | sort_by(-.spec) | if length>0 then .[0] else null end ) })
+    | map(select(.pick != null))
+    | map(. + { covered: ((.pick.steps // []) | map($cls[.]) | unique) })
+    | map(select([ .classes[] as $k | select(([.covered[]] | index($k)) == null) ] | length > 0))
+    | length'
+}
+
+@test "chains: class-coverage step-drops do not increase (route-level ratchet)" {
+  _n="$(_class_coverage_violations)"
+  # 24 measured on this tree; 30 at v2.19.1. Lower is better — if you REDUCE it,
+  # lower this number in the same commit so the ratchet keeps its grip.
+  [ "$_n" -le 24 ]
+}
+
+@test "chains: the combinations this change targets are step-drop free" {
+  # The ratchet above bounds the whole surface; these are the four subsets this
+  # change set out to fix, asserted individually so a regression names itself.
+  _out="$(yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" | jq -r '
+    .chains as $chains
+    | (.eidolons | with_entries(.value |= .capability_class)) as $cls
+    | [["coder","debugger","scout"],["coder","debugger","scout","scriber"],
+       ["coder","debugger","reasoner","scout"],["coder","debugger","reasoner","scout","scriber"]]
+    | map({ classes: .,
+            pick: ( . as $c
+                    | [ $chains[] | select([ .requires_classes[] | . as $x | ($c|index($x)) ] | all)
+                        | . + {spec: (.requires_classes|length)} ]
+                    | sort_by(-.spec) | .[0] ) })
+    | map(. + { covered: (.pick.steps | map($cls[.]) | unique) })
+    | map(select([ .classes[] as $k | select(([.covered[]] | index($k)) == null) ] | length > 0))
+    | map(.classes | join("+")) | join(" ")')"
+  [ -z "$_out" ]
+}
+
 @test "chains: every template's steps name real roster members" {
   run bash -c "yq -o=json '.chains' \"\$EIDOLONS_ROOT/roster/routing.yaml\" \
     | jq -r '.[].steps[]' | sort -u"

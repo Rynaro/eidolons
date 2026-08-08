@@ -23,18 +23,31 @@ problem: >
   that explicitly asked for a repair.
 
 decision: >
-  Add one template. DATA only; the selection algorithm is untouched (I-C2).
-  `scout-diagnose-fix` (atlas -> vigil -> vivi -> idg) for
-  [scout, debugger, coder]. It ends in `idg` for the same reason
-  plan-before-build and scout-diagnose-plan-fix do: it supersedes entries that
-  carried a trailing scriber step, and a 3-class scout pipeline that silently
-  lost it would be the step-drop this family of changes exists to remove.
+  Add THREE templates. DATA only; the selection algorithm is untouched (I-C2).
+  (1) `scout-diagnose-fix` (atlas -> vigil -> vivi -> idg) for
+  [scout, debugger, coder] — the gap this change set out to close. It ends in
+  `idg` for the same reason plan-before-build and scout-diagnose-plan-fix do:
+  it supersedes entries that carried a trailing scriber step.
+  (2) `scout-diagnose-decide-fix` (atlas -> vigil -> forge -> vivi -> idg) for
+  [scout, debugger, reasoner, coder] — added after a checker measured (1)
+  taking that combination over from decide-then-implement and dropping FORGE,
+  which scored 0.8 while the hardcoded idg scored 0.0.
+  (3) `scout-diagnose-decide-plan-fix` for all five routed classes, covering the
+  union of (2) and scout-diagnose-plan-fix so those two cannot tie.
 
 safety_invariant: >
-  No existing chain route changes. The 2-class templates (incl. forensic-then-fix
-  on a debugger+coder prompt with no scout, pinned by N-015), plan-before-build,
-  diagnose-then-plan-then-fix, scout-diagnose-plan-fix and decide-then-implement
-  all resolve exactly as before; `public` stays 15/15.
+  RETRACTED AND RESTATED. The round-1 wording claimed "no existing chain route
+  changes ... decide-then-implement resolves exactly as before". A checker
+  falsified it: scout-diagnose-fix took over {scout,debugger,reasoner,coder}
+  (+/- scriber) from decide-then-implement and DROPPED the forge step, on four
+  natural prompts, with forge scoring 0.8 and the hardcoded idg scoring 0.0.
+  What is true and measured: exactly 6 of 57 class subsets change, and every
+  one GAINS triggered-class coverage rather than losing it (verified by an
+  all-subsets route differential vs db82fb2). The 2-class templates,
+  plan-before-build, diagnose-then-plan-then-fix and scout-diagnose-plan-fix
+  are byte-identical; `public` stays 15/15; N-015 still pins the debugger+coder
+  no-scout route. decide-then-implement DOES change on scout-bearing subsets,
+  and that is now covered by scout-diagnose-decide-fix rather than denied.
 
 invariants:
   - Adds NO new ambiguity. Both unions with the other spec-3 templates are
@@ -47,6 +60,15 @@ invariants:
     mutation that removes ONLY the trailing idg.
   - STATED AS MEASURED: the four remaining order-dependent ties are unchanged
     and still resolved by declaration order. Nothing here claims otherwise.
+  - STEP-DROPS ARE SYSTEMIC, NOT AN EDGE CASE. Chain selection matches one
+    template per class combination; there are 57 subsets and 11 templates, so
+    most subsets fall back to a lower-specificity entry that omits a triggered
+    class. Measured class-coverage violations: 30 at v2.19.1, 24 here. This
+    change reduces the count; it does not solve the shape. Guarded by a
+    RATCHET (must not increase), not by a false "no step-drops" claim.
+  - PAIR COUNTING CANNOT SEE A ROUTE FLIP. The ambiguity pin measures pairs and
+    stayed green while a route changed. A route-level all-subsets check is the
+    companion it needed.
 
 anti_scope:
   - Do NOT resolve the four remaining ties; each needs a semantic decision per
@@ -57,8 +79,10 @@ anti_scope:
     change, and is recorded as a residual rather than fixed.
 
 files_touched:
-  - roster/routing.yaml                     # the template + tie-count note
-  - cli/tests/routing_chains.bats           # 2 route pins + corrected pinned set
+  - roster/routing.yaml                     # 3 templates + tie-count note
+  - cli/tests/routing_chains.bats           # route pins, corrected pinned set,
+                                            # route-level coverage ratchet
+  - EIDOLONS.md                             # cortex template-count sentence
   - evals/routing-suite.yaml                # N-C07..N-C09
   - methodology/cortex/chain-templates.md   # deep cortex table re-sync
   - CHANGELOG.md
@@ -73,14 +97,29 @@ acceptance_checks:
     check: scout+debugger+coder+scriber no longer returns the read-only [atlas, idg]
     evidence: recall suite N-C08; routing_chains "read-only pair"
   - id: AC-3
-    check: no existing chain route changes
-    evidence: public 15/15; N-015 still [vigil, vivi]; N-C04 still scout-diagnose-plan-fix
+    check: >
+      RESTATED after a checker falsified the original ("no existing chain route
+      changes"). Exactly 6 of 57 class subsets change, and EVERY changed subset
+      gains triggered-class coverage rather than losing it. No subset loses a
+      class it previously carried.
+    evidence: >
+      all-subsets route differential vs db82fb2 (6 changed / 51 unchanged, each
+      listed in verification.md); routing_chains route-level ratchet
+      (class-coverage violations 30 -> 24, must not increase); public 15/15;
+      N-015 still [vigil, vivi]; N-C04 still scout-diagnose-plan-fix.
+      NOTE: the original evidence line cited only public/N-015/N-C04, all of
+      which are true and NONE of which can fail on the property AC-3 states —
+      that is why the defect got through.
   - id: AC-4
     check: unresolved tie set moves 5 -> 4 with NO new ambiguity
     evidence: corrected subset audit; routing_chains ambiguity pin
   - id: AC-5
     check: every new assertion goes RED under a mutation that breaks what it guards
-    evidence: 4/4 mutations red incl. idg-removal, baseline green (verification.md)
+    evidence: >
+      4/4 mutations red incl. idg-removal, baseline green; PLUS the route-level
+      ratchet and the targeted-combination test both go red when
+      scout-diagnose-decide-fix is deleted (the mutation that reintroduces the
+      FORGE drop the checker found).
   - id: AC-6
     check: lint / schema / cortex token budget / suite self-test clean
     evidence: all exit 0; budget 836/850; self-test 99 tasks

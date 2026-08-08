@@ -74,7 +74,7 @@ refusal_rerouting: <bool>
 
 ## Chain Templates
 
-Eight templates route a prompt spanning ≥2 co-triggering capability classes
+Chain templates route a prompt spanning ≥2 co-triggering capability classes
 to a scripted step sequence. Full table (steps + trigger condition) relocated
 on demand: `methodology/cortex/chain-templates.md`.
 
