@@ -3396,3 +3396,40 @@ EOF
   run grep -q 'CLAUDE_PROJECT_DIR' .github/hooks/eidolons.json
   [ "$status" -ne 0 ]
 }
+
+# ─── routing-recall-gap AC-6: the no-route path must be OBSERVABLE ─────────────
+# A below-tau prompt used to return 0 and inject nothing, so a router with a
+# lexicon hole was indistinguishable from a healthy one: the host silently
+# worked the prompt inline and no Eidolon was ever invoked, while the kernel's
+# own clarification_request was computed and thrown away. These tests pin BOTH
+# branches — surfaced on work intent, still silent on conversation.
+
+@test "harness: clarify decision WITH work intent surfaces the clarification_request" {
+  local art='{"decision":"clarify","selected":[],"clarification_request":"No Eidolon scored >= 0.6. Clarify: (1) read-only or write? (2) which file/area? (3) decision, build, or debug?"}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="frobnicate the widget pipeline and fix it" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+  _ctx="$(jq -r '.hookSpecificOutput.additionalContext' <<< "$output")"
+  [[ "$_ctx" == *"No Eidolon matched this prompt"* ]]
+  [[ "$_ctx" == *"read-only or write?"* ]]
+}
+
+@test "harness: clarify decision WITHOUT work intent stays silent (R1-AC2 preserved)" {
+  local art='{"decision":"clarify","selected":[],"clarification_request":"No Eidolon scored >= 0.6."}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="thanks, that looks good" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "harness: clarify decision with EMPTY clarification_request stays silent (fail-open)" {
+  local art='{"decision":"clarify","selected":[]}'
+  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+    ARTIFACT_JSON="$art" PROMPT="please fix the thing" \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}

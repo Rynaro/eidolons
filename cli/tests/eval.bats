@@ -28,10 +28,16 @@ load helpers
   [ "$(echo "$output" | jq -r '.passed')" = "15" ]
 }
 
-@test "eval routing: --suite all covers public + holdout" {
+@test "eval routing: --suite all covers public + holdout + recall" {
   run eidolons eval routing --suite all --json
   [ "$status" -eq 0 ]
-  [ "$(echo "$output" | jq -r '.total')" = "19" ]
+  # 15 public + 4 holdout + 49 recall (44 natural-language + 5 precision guards).
+  # Derived from the suite file rather than hardcoded, so adding a task updates
+  # the expectation with it and this stays a coverage check, not a stale count.
+  _expected="$(yq -r '[.suites[][]] | length' "$EIDOLONS_ROOT/evals/routing-suite.yaml" 2>/dev/null \
+               || python3 -c 'import yaml,sys; d=yaml.safe_load(open(sys.argv[1])); print(sum(len(v) for v in d["suites"].values()))' "$EIDOLONS_ROOT/evals/routing-suite.yaml")"
+  [ "$(echo "$output" | jq -r '.total')" = "$_expected" ]
+  [ "$_expected" -ge 68 ]
 }
 
 @test "eval routing: by-category breakdown is present" {

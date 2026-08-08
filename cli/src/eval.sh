@@ -56,7 +56,12 @@ baseline    Diff the two most recent evals/results/ scorecards for a
             jq-only, mechanical — no LLM judge. See 'eidolons eval baseline --help'.
 
 Options (routing):
-  --suite public|holdout|all   Which suite(s) to run (default: public).
+  --suite public|holdout|recall|all
+                               Which suite(s) to run (default: public).
+                               'recall' is the adversarial natural-language set:
+                               prompts authored from user INTENT rather than from
+                               roster/routing.yaml's trigger phrases, so it can
+                               actually fail when the lexicons have holes.
   --validate-suite             Run the task-validity checklist on the suite
                                itself (the harness's own self-test) and exit.
   --min N                      Exit 1 if overall accuracy < N percent (CI gate).
@@ -97,7 +102,7 @@ while [[ $# -gt 0 ]]; do
     *)                die "Unknown option: $1" ;;
   esac
 done
-case "$SUITE_SEL" in public|holdout|all) ;; *) die "Invalid --suite '$SUITE_SEL' (want public|holdout|all)" ;; esac
+case "$SUITE_SEL" in public|holdout|recall|all) ;; *) die "Invalid --suite '$SUITE_SEL' (want public|holdout|recall|all)" ;; esac
 
 [[ -f "$ROUTING_SUITE" ]] || die "Routing suite not found: $ROUTING_SUITE"
 SUITE_JSON="$(yaml_to_json "$ROUTING_SUITE")"
