@@ -8,6 +8,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.18.0] — 2026-08-08 — the roster was silent, not selective
+
+Gilgamesh looked like it was never being invoked. It was — 51 of 21 975 recorded dispatches, 0.23 %. Chasing that number found something larger underneath it: **the router was scoring zero on most ordinary prompts, and failing silently when it did.**
+
+Measured over a 44-prompt corpus phrased the way engineers actually type — written intent-first, deliberately without consulting the trigger lists — the kernel selected the right Eidolon **6.8 %** of the time and selected *nothing at all* **91 %** of the time. `diagnose`, `debug`, `investigate`, `analyze`, `review`, `refactor`, `optimize`, `compare`, `evaluate`, `summarize` matched no Eidolon in the roster.
+
+A prompt that matches nothing scores 0, falls below `tau_standard`, and becomes `decision: clarify`. The harness hook then returned early and injected **nothing** — so the host received no routing context, worked the prompt inline, and no Eidolon was invoked at all. The kernel's own `clarification_request` was computed and thrown away. A router with a lexicon hole was byte-indistinguishable from a healthy one.
+
+And the reason none of this showed up in a gate: `evals/routing-suite.yaml` was authored *from* the trigger lexicons, so it could only ever confirm them. Fifteen tasks, 100 % green, permanently, over a router blind to nine prompts in ten.
+
+Gilgamesh's rarity was a symptom of the roster's silence, not a defect in Gilgamesh. Its Step-2(a) predicate is deliberately **unchanged** here — with honest specialist recall, a rarely-used fallthrough generalist is the correct steady state.
+
+### Added
+- **`--suite recall`** — an adversarial routing suite (49 tasks: 44 natural-language + 5 precision guards) in `evals/routing-suite.yaml`. Its prompts are written from user intent, never reworded to match the lexicon; that is the whole point of it. Carries an explicit maintenance contract: **when it regresses, widen the lexicon — never reword the prompt.**
+- **`scripts/verify-recall-mutation.sh`** — runs the current recall suite against a prior `roster/routing.yaml` and fails if the score does *not* collapse. A benchmark shipped with the data it measures passes trivially; this is what stops the replacement becoming the tautology it replaced. Current result: **16.3 %** against `HEAD`'s lexicons (ceiling 20 %).
+- **`unbounded_scope` routing signal** — `"refactor across the entire codebase"` no longer reaches a coder on a bare verb match. Unbounded mutation scope drops the coder/executor below `tau` (mirroring the Step-2 predicate's existing S5 bounded-scope judgement) so it clarifies instead. A *bounded* ask is never penalised, and named dispatch still wins.
+
+### Fixed
+- **Trigger lexicons widened across all seven routed classes** (`roster/routing.yaml`). Recall on the adversarial suite: **6.8 % → 100 %**, MISS rate 91 % → 0 %, with the existing `public` suite unchanged at 15/15 — no precision regression. This is a DATA change; invariant I-C2 holds (the kernel interprets, there is no eval).
+- **The no-route path is now observable** (`cli/src/harness_hook.sh`). A below-`tau` prompt carrying work intent surfaces the kernel's `clarification_request` instead of injecting nothing. Conversational turns ("thanks, that looks good") stay silent as before — R1-AC2 is preserved by a work-intent discriminator that is explicitly *not* a routing lexicon: it never selects an Eidolon, and fails open in both directions.
+
+### Changed
+- `EIDOLONS.md` cortex trigger table re-synced with `roster/routing.yaml` for the five classes whose vocabulary moved (ATLAS, Vivi, IDG, FORGE, VIGIL). Always-loaded region stays inside budget at 836/850 tokens.
+
 ## [2.17.0] — 2026-08-06 — a gate that cannot fail is not a gate
 
 The residual-eight campaign closed all eight remaining open issues on `Rynaro/crystalium` across two releases. Four of the eight did **not** close the way the plan assumed, and each says so with the measurement attached — two WONTFIX-with-rationale, two split closures where one half is retired and the other discharged.

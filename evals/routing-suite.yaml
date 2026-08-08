@@ -114,3 +114,243 @@ suites:
       category: docs
       prompt: "chronicle the migration decisions we made this sprint"
       expect: { decision: dispatch, selected: [idg] }
+
+  # ── Adversarial recall suite (ESL change `routing-recall-gap`) ───────────────
+  # WHY THIS EXISTS: the `public` suite above was authored FROM the trigger
+  # lexicons in roster/routing.yaml, so it could only ever confirm them. It sat
+  # at 15/15 = 100% while the kernel scored 0 — no Eidolon at all — on 40 of 44
+  # ordinary engineering prompts, because a below-tau prompt dead-ends in
+  # `clarify` and the harness hook injected nothing. 100% green, router blind.
+  #
+  # These tasks are written from USER INTENT FIRST: each prompt is phrased the
+  # way an engineer would actually type it, deliberately WITHOUT consulting the
+  # trigger phrase list. That is what makes this suite able to fail. Measured
+  # recall against the pre-change routing.yaml: 6.8% (3/44). Post-change: 100%.
+  #
+  # MAINTENANCE CONTRACT: when this suite regresses, widen the LEXICON — never
+  # reword the prompt to match the lexicon. Rewording turns this back into the
+  # tautology it was built to replace.
+  recall:
+    # ── scout: read-only investigation, natural phrasing ──
+    - id: N-001
+      category: discovery
+      prompt: "where does the auth token get validated"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-002
+      category: discovery
+      prompt: "I need to understand how the sync command works"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-003
+      category: discovery
+      prompt: "walk me through the install flow"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-004
+      category: discovery
+      prompt: "investigate how the cache is populated"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-005
+      category: discovery
+      prompt: "analyze the structure of the roster loader"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-006
+      category: discovery
+      prompt: "review the codebase layout"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-007
+      category: discovery
+      prompt: "what depends on the lib.sh helpers"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-008
+      category: discovery
+      prompt: "survey the test coverage across the CLI"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-009
+      category: discovery
+      prompt: "inspect the harness wiring"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-010
+      category: discovery
+      prompt: "how does the dispatcher pick a subcommand"
+      expect: { decision: dispatch, selected: [atlas] }
+
+    # ── debugger: failure reports as humans write them ──
+    - id: N-011
+      category: debug
+      prompt: "diagnose the intermittent test failure"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-012
+      category: debug
+      prompt: "debug the broken install path"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-013
+      category: debug
+      prompt: "why does the sync command hang"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-014
+      category: debug
+      prompt: "this test passes locally but fails in CI"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-015
+      category: debug
+      # failure context + a build verb: forensic-then-fix is the correct answer,
+      # not a bare coder dispatch (pre-change this routed to vivi alone — WRONG).
+      prompt: "the build broke after the last merge"
+      expect: { decision: chain, selected: [vigil, vivi] }
+    - id: N-016
+      category: debug
+      prompt: "track down what is causing the timeout"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-017
+      category: debug
+      prompt: "something is wrong with the lockfile logic"
+      expect: { decision: dispatch, selected: [vigil] }
+    - id: N-018
+      category: debug
+      prompt: "figure out why the hook stopped firing"
+      expect: { decision: dispatch, selected: [vigil] }
+
+    # ── coder: the mutation verbs engineers actually type ──
+    - id: N-019
+      category: implement
+      prompt: "refactor the roster loader for clarity"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-020
+      category: implement
+      prompt: "optimize the startup time of the CLI"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-021
+      category: implement
+      prompt: "port the shell script to use the new helper"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-022
+      category: implement
+      prompt: "add retry logic to the fetch step"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-023
+      category: implement
+      prompt: "write a test for the version parser"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-024
+      category: implement
+      prompt: "update the installer to handle the new flag"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-025
+      category: implement
+      prompt: "migrate the config format to v2"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-026
+      category: implement
+      prompt: "clean up the duplicated validation code"
+      expect: { decision: dispatch, selected: [vivi] }
+
+    # ── planner ──
+    - id: N-027
+      category: planning
+      prompt: "I need requirements for the new export feature"
+      expect: { decision: dispatch, selected: [ramza] }
+    - id: N-028
+      category: planning
+      prompt: "break this epic into workable pieces"
+      expect: { decision: dispatch, selected: [ramza] }
+    - id: N-029
+      category: planning
+      prompt: "what should the acceptance criteria be"
+      expect: { decision: dispatch, selected: [ramza] }
+    - id: N-030
+      category: planning
+      prompt: "draft an approach for the migration"
+      expect: { decision: dispatch, selected: [ramza] }
+    - id: N-031
+      category: planning
+      prompt: "scope out the work for multi-host support"
+      expect: { decision: dispatch, selected: [ramza] }
+
+    # ── reasoner ──
+    - id: N-032
+      category: decision
+      prompt: "compare the two caching strategies"
+      expect: { decision: dispatch, selected: [forge] }
+    - id: N-033
+      category: decision
+      prompt: "is it better to use a daemon or a cron job"
+      expect: { decision: dispatch, selected: [forge] }
+    - id: N-034
+      category: decision
+      prompt: "evaluate whether we should adopt the new schema"
+      expect: { decision: dispatch, selected: [forge] }
+    - id: N-035
+      category: decision
+      prompt: "weigh the options for the storage backend"
+      expect: { decision: dispatch, selected: [forge] }
+    - id: N-036
+      category: decision
+      prompt: "pros and cons of vendoring the dependency"
+      expect: { decision: dispatch, selected: [forge] }
+
+    # ── scriber ──
+    - id: N-037
+      category: docs
+      prompt: "write up what we decided in the meeting"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: N-038
+      category: docs
+      prompt: "produce a changelog entry for this release"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: N-039
+      category: docs
+      prompt: "summarize the architecture for new contributors"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: N-040
+      category: docs
+      prompt: "capture this as an ADR"
+      expect: { decision: dispatch, selected: [idg] }
+
+    # ── executor: localized micro-edits (must NOT be poached by the coder) ──
+    - id: N-041
+      category: micro
+      prompt: "change the version string in the manifest"
+      expect: { decision: dispatch, selected: [kupo] }
+    - id: N-042
+      category: micro
+      prompt: "swap the deprecated flag name everywhere"
+      expect: { decision: dispatch, selected: [kupo] }
+    - id: N-043
+      category: micro
+      prompt: "correct the spelling in the help text"
+      expect: { decision: dispatch, selected: [kupo] }
+    - id: N-044
+      category: micro
+      prompt: "point the import at the new module path"
+      expect: { decision: dispatch, selected: [kupo] }
+
+    # ── PRECISION GUARDS ────────────────────────────────────────────────────────
+    # Widening lexicons trades precision for recall. These fail if the trade went
+    # too far: read-only intent must never reach a write-capable Eidolon, the
+    # refusal reroute must still fire, and a genuinely empty prompt must still
+    # clarify rather than being force-routed somewhere by an over-broad phrase.
+    - id: N-G01
+      category: guard-readonly
+      prompt: "audit the payment module for unused exports"
+      expect: { decision: dispatch, selected: [atlas] }
+    - id: N-G02
+      category: guard-refusal
+      # atlas refuses write verbs even when named; reroute must survive widening
+      prompt: "ATLAS, refactor the dispatcher"
+      expect: { decision: refusal_reroute, refusal_rerouting: true }
+    - id: N-G03
+      category: guard-clarify
+      # still below tau after widening — the clarify path must not be swallowed
+      # (distinct wording from R-013 so the suite's own duplicate-task self-test
+      # stays satisfied)
+      prompt: "just take care of it for me"
+      expect: { decision: clarify }
+    - id: N-G04
+      category: guard-clarify
+      prompt: "thoughts?"
+      expect: { decision: clarify }
+    - id: N-G05
+      category: guard-trance
+      # TRANCE stays gated: a large surface alone never escalates the tier
+      prompt: "investigate how the cache is populated"
+      ctx: { surface_modules: 9 }
+      expect: { tier: standard }

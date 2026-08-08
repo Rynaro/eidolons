@@ -55,7 +55,12 @@ eidolons:
   atlas:
     capability_class: scout
     suggested_tier: standard
-    trigger_verbs: ["map", "trace", "find where", "who calls", "call graph", "list entrypoints", "entrypoints", "audit", "explore", "where is", "scout", "understand the codebase", "make sense of"]
+    # Recall pass (routing-recall-gap): the original list matched only the
+    # cortex's own vocabulary, so natural read-only phrasings ("where does X
+    # happen", "walk me through Y", "investigate Z") scored 0 and dead-ended in
+    # `clarify`. Additions below are all READ-ONLY intent, so a false positive
+    # lands on the safest member of the roster.
+    trigger_verbs: ["map", "trace", "find where", "who calls", "call graph", "list entrypoints", "entrypoints", "audit", "explore", "where is", "scout", "understand the codebase", "make sense of", "where does", "how does", "how is", "walk me through", "investigate", "analyze", "inspect", "survey", "what depends on", "what uses", "read through", "look into", "understand how", "understand", "review the", "figure out how", "show me how", "what calls"]
     refuse_verbs: ["implement", "fix", "edit", "write", "commit", "deploy", "migrate", "refactor", "patch"]
     downstream: ["ramza", "vivi", "idg"]
   ramza:
@@ -67,7 +72,8 @@ eidolons:
                                 # (right-size, rubric, EARS lint, SHA-256 freeze, drift, maker≠checker).
     fallback: spectra           # declared conservative peer for the host-tier fallthrough gate
                                 # (routing.yaml is DATA; I-C2 — the kernel interprets, no eval)
-    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
+    # Recall pass (routing-recall-gap): kept in lockstep with spectra below.
+    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work", "break down", "break this", "break the", "acceptance criteria", "draft an approach", "approach for", "scope out", "user story", "epic", "requirements for", "what should we build", "outline the work"]
     refuse_verbs: ["implement code", "modify files", "write the code"]
     downstream: ["vivi", "idg"]
   spectra:
@@ -76,7 +82,7 @@ eidolons:
     # conservative prose-methodology fallback; opt-in (`eidolons add spectra`);
     # named dispatch still routes to it (the +0.5 name bonus). RAMZA holds the
     # default planner seat via default_for_class above.
-    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work"]
+    trigger_verbs: ["spec", "plan", "decompose", "clarify requirements", "given/when/then", "decision-ready", "design", "requirements", "scope the work", "break down", "break this", "break the", "acceptance criteria", "draft an approach", "approach for", "scope out", "user story", "epic", "requirements for", "what should we build", "outline the work"]
     refuse_verbs: ["implement code", "modify files", "write the code"]
     downstream: ["apivr", "idg"]
   vivi:
@@ -90,7 +96,11 @@ eidolons:
                               # prose-only "degrade to APIVR-Δ")
     fallback: apivr           # declared conservative peer for the S1.7 host-tier
                               # fallthrough gate (routing.yaml is DATA; I-C2)
-    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
+    # Recall pass (routing-recall-gap): the mutation verbs an engineer actually
+    # types ("refactor", "optimize", "port", "clean up", "write a test") were
+    # all absent. Kept in lockstep with apivr below — the declared fallback peer
+    # must not have a different reachable surface than the default seat.
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
   apivr:
@@ -98,13 +108,15 @@ eidolons:
     suggested_tier: standard
     loop_native: false        # conservative non-loop fallback; opt-in (`eidolons add apivr`);
                               # named dispatch still routes to it (the +0.5 name bonus)
-    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code"]
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
   idg:
     capability_class: scriber
     suggested_tier: light
-    trigger_verbs: ["document", "adr", "runbook", "chronicle", "synthesize", "record decisions", "write the docs", "changelog narrative"]
+    # Recall pass (routing-recall-gap): natural scribe phrasings ("write up",
+    # "summarize", "release notes") were absent.
+    trigger_verbs: ["document", "adr", "runbook", "chronicle", "synthesize", "record decisions", "write the docs", "changelog narrative", "write up", "summarize", "capture this", "changelog entry", "release notes", "for new contributors", "hand-off note", "write the readme", "explain to"]
     refuse_verbs: ["explore repo", "find calls", "retrieve", "analyze code"]
     downstream: []
   forge:
@@ -113,13 +125,20 @@ eidolons:
     degraded_mode: sample-select  # N-sample deliberation + rubric-agreement selection
                                    # on weak hosts (sampling replaces unreliable
                                    # single-trace self-correction)
-    trigger_verbs: ["trade-off", "tradeoff", "which approach", "should we", "ambiguous", "counterfactual", "deliberate", "x or y", "decide between"]
+    # Recall pass (routing-recall-gap): "compare", "evaluate", "pros and cons"
+    # and "weigh" are the everyday words for a deliberation request.
+    trigger_verbs: ["trade-off", "tradeoff", "which approach", "should we", "ambiguous", "counterfactual", "deliberate", "x or y", "decide between", "compare", "evaluate", "pros and cons", "weigh", "is it better", "options for", "or should", "versus", "alternatives", "worth it"]
     refuse_verbs: ["implement", "retrieve", "synthesize prose"]
     downstream: []
   vigil:
     capability_class: debugger
     suggested_tier: deep
-    trigger_verbs: ["root cause", "flaky", "heisenbug", "regression after", "post-mortem", "postmortem", "why does this fail", "why does it fail"]
+    # Recall pass (routing-recall-gap): "diagnose" and "debug" — the two most
+    # common words for this capability class — were both absent, as was every
+    # natural failure-report phrasing ("stopped working", "passes locally but
+    # fails in CI"). Failure CONTEXT is the discriminator against the coder:
+    # when both fire, the forensic-then-fix chain is the correct outcome.
+    trigger_verbs: ["root cause", "flaky", "heisenbug", "regression after", "post-mortem", "postmortem", "why does this fail", "why does it fail", "diagnose", "debug", "why does", "why is", "why did", "broken", "stopped working", "no longer works", "fails in ci", "passes locally", "track down", "something is wrong", "intermittent", "hangs", "times out", "broke after", "what is causing", "what's causing", "keeps failing", "figure out why", "stopped firing"]
     refuse_verbs: ["build new feature", "plan from scratch"]
     downstream: []
   kupo:
@@ -133,7 +152,10 @@ eidolons:
       on_fail: reroute         # the kernel only SURFACES this data in the artifact —
       reroute_to: vivi         # execution belongs to the orchestrator/sandbox.
       max_escalations: 1
-    trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "pin the version", "autofix lint", "format fix", "one-line fix", "single-line edit", "update fixture", "update snapshot", "grep-replace", "search-replace", "config key edit", "fix the typo", "fix the path"]
+    # Recall pass (routing-recall-gap): additions stay DELIBERATELY narrow —
+    # each new phrase names a single localized edit, so the executor still
+    # cannot poach the coder's work (the NARROW-by-design note above holds).
+    trigger_verbs: ["rename symbol", "import fix", "fix the import", "path fix", "bump lockfile", "pin dependency", "pin the version", "autofix lint", "format fix", "one-line fix", "single-line edit", "update fixture", "update snapshot", "grep-replace", "search-replace", "config key edit", "fix the typo", "fix the path", "change the version", "bump the version", "version string", "swap the", "correct the spelling", "point the import", "rename the"]
     refuse_verbs: ["design", "cross-cutting refactor", "refactor across", "plan", "novel architecture", "greenfield", "open-ended", "loop-native campaign", "implement feature"]
     downstream: []
   gilgamesh:
@@ -185,6 +207,21 @@ signals:
     boost: { atlas: 0.2 }
     stakes: true
     note: "large surface → ATLAS-TRANCE candidate (V2)"
+  - id: unbounded_scope
+    # Widening the coder lexicon (routing-recall-gap) made bare "refactor" /
+    # "migrate" / "rewrite" reach Vivi on their own — correct for a scoped ask
+    # ("refactor the roster loader"), WRONG when the same verb carries no
+    # boundary ("refactor across the entire codebase"). An unbounded mutation
+    # is precisely the case the Step-2 predicate already treats as
+    # underspecified via its S5 bounded-scope signal; this mirrors that
+    # judgement into Step 1 instead of letting a single verb match hand a
+    # whole-repo rewrite to a coder. -0.4 drops a lone verb match (0.8) to 0.4,
+    # below tau_standard 0.6 → clarify. A LIMITER ("only", "just") is absent
+    # from the match list by design, so a bounded ask is never penalised.
+    # Named dispatch still wins: the +0.5 name bonus clears the penalty.
+    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "everywhere it appears", "all call sites", "project-wide", "repo-wide", "every file"]
+    boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
+    note: "unbounded mutation scope → never auto-route to a coder/executor on a bare verb match (mirrors predicate S5)"
   - id: localized_micro_task
     # Kupo-vs-coder tiebreak (executor precedence). The `fix`-family verbs
     # (fix the import / one-line fix / fix the typo) tie Kupo with Vivi/APIVR-Δ

@@ -491,8 +491,46 @@ ${ecm_block}"
   local decision
   decision="$(printf '%s' "$artifact_json" | jq -r '.decision // "clarify"' 2>/dev/null || echo "clarify")"
 
-  # Trivial/no-route: clarify decision with empty selected → empty stdout.
+  # ── No-route: surface the clarification instead of dead-ending silently ────
+  # Historically this branch returned 0 and injected NOTHING. That made a
+  # below-tau prompt indistinguishable from a healthy one: the host received no
+  # routing context, worked the prompt inline, and no Eidolon was ever invoked
+  # — while the kernel's own `clarification_request` was computed and discarded.
+  # A dead router looked exactly like a quiet one (cf. the fail-open-hides-dead-
+  # kernels failure mode). Emitting the clarification makes the miss OBSERVABLE.
+  # Fail-open preserved: absent/empty clarification_request → empty stdout,
+  # exactly the previous behaviour.
   if [[ "$decision" == "clarify" ]]; then
+    local clarify_text
+    clarify_text="$(printf '%s' "$artifact_json" \
+      | jq -r '.clarification_request // ""' 2>/dev/null || echo "")"
+    [[ -n "$clarify_text" ]] || return 0
+
+    # Conversational turns ("thanks, that looks good") are ALSO decision=clarify
+    # and must stay silent — surfacing a clarification there would nag on every
+    # acknowledgement (R1-AC2). Discriminate on work-intent: a prompt carrying a
+    # build/investigate marker that STILL failed to route is a genuine recall
+    # hole worth showing; a prompt carrying none is just chat. This is a
+    # visibility heuristic, deliberately NOT a routing lexicon — it never picks
+    # an Eidolon, and on no match the historical silent path is taken verbatim.
+    # bash 3.2: tr for case-folding (no ${var,,}).
+    local prompt_lc
+    prompt_lc="$(printf '%s' "${PROMPT:-}" | tr '[:upper:]' '[:lower:]')"
+    case " $prompt_lc " in
+      *add*|*build*|*chang*|*check*|*clean*|*creat*|*debug*|*diagnos*|*document*\
+      |*explain*|*fix*|*implement*|*improv*|*investigat*|*migrat*|*optimi*|*plan*\
+      |*refactor*|*remov*|*renam*|*review*|*rewrit*|*spec*|*test*|*trace*|*updat*\
+      |*why*|*where*|*how\ *|*what\ *|*should*|*broke*|*fail*|*wrong*|*error*)
+        : ;;   # work intent present but unrouted → surface it
+      *)
+        return 0 ;;  # conversational / trivial → historical silent path
+    esac
+    clarify_text="No Eidolon matched this prompt (below tau; no dispatch). ${clarify_text}  Ask the user these questions before proceeding, or state the assumption you are routing under."
+    clarify_text="$(printf '%s' "$clarify_text" | cut -c1-4000)"
+    jq -n \
+      --arg en "UserPromptSubmit" \
+      --arg ctx "$clarify_text" \
+      '{"hookSpecificOutput": {"hookEventName": $en, "additionalContext": $ctx}}'
     return 0
   fi
 

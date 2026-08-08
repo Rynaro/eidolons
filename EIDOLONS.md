@@ -24,14 +24,14 @@
 
 | Name | Capability class | Trigger verbs | Refuses | Hands off to |
 |------|-----------------|---------------|---------|--------------|
-| **ATLAS** | scout | map, trace, find where, who calls, call graph, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
+| **ATLAS** | scout | map, trace, where does, how does, investigate, analyze, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
 | **RAMZA** | planner (default) | spec, plan, decompose, clarify requirements, decision-ready | implement code, modify files | Vivi, IDG |
 | **SPECTRA** | planner (opt-in) | named dispatch only | implement code, modify files | Vivi, IDG |
-| **Vivi** | coder (default) | implement, build, fix, extend, wire up, make tests pass | design from scratch, novel architecture | IDG |
+| **Vivi** | coder (default) | implement, build, fix, refactor, optimize, migrate, make tests pass | design from scratch, novel architecture | IDG |
 | **APIVR-Δ** | coder (opt-in) | named dispatch only | design from scratch, novel architecture | IDG |
-| **IDG** | scriber | document, ADR, runbook, chronicle, synthesize | explore repo, find calls, retrieve | (terminal) |
-| **FORGE** | reasoner | trade-off, which approach, ambiguous, deliberate | implement, retrieve, synthesize prose | (lateral) |
-| **VIGIL** | debugger | root cause, flaky, heisenbug, regression after X | build new feature, plan from scratch | (lateral) |
+| **IDG** | scriber | document, ADR, runbook, write up, summarize | explore repo, find calls, retrieve | (terminal) |
+| **FORGE** | reasoner | trade-off, compare, evaluate, which approach | implement, retrieve, synthesize prose | (lateral) |
+| **VIGIL** | debugger | diagnose, debug, root cause, flaky, why does X fail | build new feature, plan from scratch | (lateral) |
 | **Kupo** | executor | rename, import/path fix, lockfile bump, lint autofix, one-line edit, search-replace | design, plan, cross-cutting refactor | (orchestrator-dispatched) |
 | **Gilgamesh** | generalist (fallback-only) |  | design, plan, deploy, migrate, route, spawn, underspecified | (orchestrator-dispatched; PROPOSEs upward) |
 
