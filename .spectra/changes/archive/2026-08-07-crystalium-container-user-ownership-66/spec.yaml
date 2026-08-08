@@ -1,0 +1,115 @@
+schema: eidolons/change-spec.v1
+change_id: crystalium-container-user-ownership-66
+tier: full
+maker: claude-opus-5
+checker: kupo
+target: crystalium — run the compose dev container as the host user so bind-mount writes stop landing as root (fix Rynaro/crystalium#66)
+
+problem: >
+  docker-compose.yml bind-mounts the source tree read-write and carries no `user:` key;
+  the Dockerfile adds no USER, so python:3.12-slim runs as root. Every `docker compose
+  run` leaves __pycache__/, .pytest_cache/, .ruff_cache/ and the .venv mountpoint on the
+  host owned by uid 0. Measured: 297 root-owned paths in a normal checkout, 2353 across
+  96M of residual-eight campaign worktrees, and 24 from a single run against a pristine
+  clone. Not cosmetic — `git worktree remove` deregisters from .git/worktrees BEFORE it
+  fails to delete the directory, so a failed cleanup leaves an orphan git no longer
+  tracks; five worktrees ended up in that state and 96M needed sudo to reclaim.
+
+decision: >
+  Pin the compose service to the invoking user (make exports DOCKER_UID/DOCKER_GID),
+  scoped to the dev/compose path ONLY. The published image is built from `target: base`
+  and is launched by the eidolons MCP wiring with a host bind mount onto
+  /root/.crystalium/<project>; adding a non-root USER to base — which issue #66's own
+  sketch proposed — would break every existing consumer. base therefore keeps running as
+  root with unchanged data-dir resolution, and a --user pin belongs on that `docker run`
+  invocation instead. Two consequences of non-root under compose, both found by running:
+  /root is mode 0700 so the dev volume moved to /data (pre-created 1777 in the dev stage
+  so a fresh volume inherits that mode and works for ANY host uid), and uv initialises a
+  cache under $HOME before the entrypoint reaches Python so HOME=/tmp is required.
+
+safety_invariant: >
+  The published image's default user, entrypoint and data-dir resolution are unchanged.
+  Any consumer wiring that works against 2.1.0 works unchanged after this. AC-407 pins it
+  mechanically: every added Dockerfile line must fall below `FROM base AS dev`.
+
+invariants:
+  - The gate measures REMOVABILITY, not ownership. POSIX removal permission comes from the
+    parent directory's write bit; the /app/.venv mountpoint is root-owned no matter what
+    `user:` says (the daemon creates it) but sits in a developer-owned parent, so rmdir
+    clears it. An ownership gate would need an exception list — that is how a gate rots.
+  - No hardcoded uid in the image. /data is 1777 so any host uid can write a fresh volume.
+  - Every criterion executed against both a passing and a failing input before it is trusted.
+
+known_gaps:
+  - "The /app/.venv anonymous-volume mountpoint is still created root-owned; unavoidable
+    without relocating the venv out of /app, which would change the base image. Harmless:
+    empty dir, developer-owned parent, removable by rmdir."
+  - "Existing checkouts still carry pre-change root-owned caches; `make fix-ownership`
+    migrates them. An existing tree cannot self-heal without a root-capable step."
+  - "The published image's own --user pin lives in the nexus templates (roster/mcps.yaml)
+    and cannot be regression-tested from this repo."
+  - "CLOSED (was: untested on a host where `id -u` != 1000). The CI ownership job on PR #67
+    ran as uid 1001 and passed, so /data's 1777 mode is measured uid-agnostic, not merely
+    argued. Run 31221905779, job 93008092327."
+  - "Podman / rootless Docker uid mapping is out of scope."
+  - "chattr +i immutable files defeat the gate AND defeat make fix-ownership (even a root
+    container's chown/rm are refused). Raised as REJECT-02 finding 1 and ACCEPTED AS REAL.
+    Not defended against on REACHABILITY grounds: measured that the compose service has no
+    chattr binary and runs as uid 1000, a root container with Docker's default capability
+    set gets Operation not permitted, and only an explicit --cap-add LINUX_IMMUTABLE (absent
+    from this repo) can set it. Detection needs lsattr, which does not exist on macOS and has
+    no cross-platform equivalent. NOTE: an earlier draft also claimed lsattr errors on
+    overlayfs/tmpfs; the checker disproved that by measurement (clean round-trip on tmpfs,
+    overlay2 and btrfs, the last being what backs the real checkout). Reachability is the
+    load-bearing argument; the lsattr-fragility claim was asserted, not measured, and is
+    withdrawn."
+
+files_touched:
+  - Dockerfile                      # dev stage only — /data mountpoint
+  - docker-compose.yml              # user:, HOME, data dir, volume rename
+  - Makefile                        # DOCKER_UID/GID export, check-ownership, fix-ownership
+  - .github/workflows/ci.yml        # new ownership job
+  - CHANGELOG.md
+  - scripts/check-ownership.sh      # added by REJECT-01 remediation — the removability rule
+
+test_harness: >
+  `make check-ownership` forces the container to write into the bind mount, then asserts
+  every path it left is deletable by the host user. Wired into CI as its own job because
+  every other job runs `docker run` against the baked image with NO bind mount and
+  therefore cannot observe this defect at all. Red-checked by removing the `user:` key.
+
+criteria:
+  ref: spec.criteria.md
+  in_force_count: 13
+  ids: [AC-401, AC-402, AC-403, AC-404, AC-405, AC-406, AC-407, AC-408, AC-409, AC-410, AC-411, AC-412, AC-413]
+
+verification:
+  plan_ref: verification-plan.md
+  result: 13/13 PASS (after REJECT-01 and REJECT-02 remediation)
+  suite: "make test-ci -> 1097 passed, 4 skipped, 1 xfailed, EXIT=0"
+  gate_red_check: "pre-fix compose -> make check-ownership EXIT=2, 22 undeletable paths"
+  reject_02: >
+    Second rejection. Finding 2 ACCEPTED AND FIXED: the scan carried `-path ./.git -prune`,
+    excluding exactly the territory the change protects — the motivating incident is
+    `git worktree remove` failing mid-way, and worktree metadata lives in .git/worktrees/.
+    The audit was also NARROWER THAN ITS OWN REMEDY, since make fix-ownership has no .git
+    exclusion and repairs what the audit could not see. Prune removed; .git adds 389 walked
+    entries and 0 foreign-owned paths on a real checkout, so no over-fire. Finding 1
+    (chattr +i) accepted as real but recorded as a bounded limitation, see known_gaps.
+  reject_01: >
+    Checker kupo REJECTED the first submission. The removability rule flagged a path only
+    when its OWN parent was unwritable — correct for a file, incomplete for a directory. A
+    root-owned mode-0700 directory with content in a host-owned parent passed the gate while
+    `rm -rf` on it genuinely failed; find could not descend into it and the traversal error
+    went into the check's own 2>/dev/null. Rule moved to scripts/check-ownership.sh, restated
+    as the real removability condition, fails closed on unreadable directories, and no longer
+    discards find's stderr. Stating it properly also caught a second case the checker did not
+    report (root-owned 0755 non-empty dir). Validated by a 6-case fixture (AC-411) so the fix
+    is shown not to over-fire — the .venv mountpoint still passes with no exception entry.
+  attribution: >
+    Measured in ONE checkout varying only the container user: root 1095 passed / 6 skipped
+    vs host-user 1097 passed / 4 skipped. The delta is exactly two tests —
+    test_doctor_readonly_data_dir_nonzero and test_doctor_fail_shows_fail_marker — which
+    self-skip as root with "chmod 0o444 does not prevent writes for root". They exist to
+    verify doctor reports failure on an unwritable data dir, the one property root cannot
+    exercise. Running non-root revives two gates that previously could not fail.
