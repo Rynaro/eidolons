@@ -23,7 +23,9 @@ audit the module, diagnose the failure, fix it and document it
 
 ### Added
 - **`scout-diagnose-fix`** (`ATLAS → VIGIL → Vivi → IDG`, `requires_classes: [scout, debugger, coder]`). Ends in `idg` for the same reason `plan-before-build` and `scout-diagnose-plan-fix` do — it supersedes entries carrying a trailing scriber step, and losing it would trade one silent step-drop for another.
+- **`scout-diagnose-decide-fix`** (`ATLAS → VIGIL → FORGE → Vivi → IDG`) and **`scout-diagnose-decide-plan-fix`** (the full five-class pipeline). Added after a checker showed `scout-diagnose-fix` alone took `{scout, debugger, reasoner, coder}` over from `decide-then-implement` and dropped the FORGE step — the same defect relocated onto another class. Detailed below.
 - Recall coverage `N-C07`–`N-C12`, and four `routing_chains.bats` route pins.
+- **A containment gate for the cortex deep table** — every template in `roster/routing.yaml` must be documented in `methodology/cortex/chain-templates.md`. The two templates above had reached the roster, the evals, the tests and this file, and never reached the table a host LLM loads to compose a chain by hand; a host routing that combination would have found no entry carrying FORGE after a scout and reproduced the defect. Four review rounds missed it because the row count and the template count both read 11 — the table also documents three dispatch patterns that are not kernel templates, exactly masking the three that were absent. `scout-then-spec`, missing since before this release, is now documented too.
 - **`make schema` now parses every live ESL change record** (`cli/src/check_change_specs.sh`). Found because this change's own `spec.yaml` was not valid YAML — and had shipped that way through four checker rounds. Nothing in the repo read the file, so its acceptance criteria were mechanically invisible while `change.json` carried `acceptance_checks: []`. Archived records are excluded by a depth-1 glob: the two predecessors in this lineage have the identical defect and are recorded, not rewritten.
 
 ### Changed
@@ -49,7 +51,7 @@ Run that check against shipped **v2.19.1** and it reports **30 violations out of
 
 This release takes it **30 → 24** and pins the resulting set, subset by subset. It does **not** solve the shape, and nothing here claims to. A durable fix means synthesising the chain from the triggered classes in a canonical order instead of matching a template — a kernel redesign, deliberately out of scope.
 
-**Ten** mutations red, baseline green — including one that removes only the trailing `idg`, one that reintroduces the FORGE drop, the checker's own count-neutral gaming attack, and a reversal of a template's step order. Three are caught by the coverage set pin **alone**. Chain assertions now pin the **full ordered** step list, so `vigil`-before-`forge` is enforced rather than argued. Suites: recall 83/83, public 15/15, bats **1718/1718**.
+Every mutation red, baseline green — including one that removes only the trailing `idg`, one that reintroduces the FORGE drop, the checker's own count-neutral gaming attack (verified to hold the violation count at exactly 24), and a reversal of a template's step order. **One** of them — dropping `idg` from `plan-before-build` — is caught by the coverage set pin and by nothing else, and that single row is what establishes the pin as necessary. The **four** chain assertions this release adds pin the full ordered step list, so `vigil`-before-`forge` is enforced rather than argued; the older templates' step order stays unpinned. Suites: recall 83/83, public 15/15, bats **1719/1719**.
 
 ## [2.19.1] — 2026-08-08 — what the checker found, three times
 

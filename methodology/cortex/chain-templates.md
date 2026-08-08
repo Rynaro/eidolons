@@ -16,10 +16,13 @@ Relocated out of the EIDOLONS.md always-loaded region per R-021/R-022
 
 | Template | Steps | When |
 |----------|-------|------|
-| **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi → IDG | Unfamiliar code + a live failure + a build (widest pipeline) |
+| **scout-diagnose-decide-plan-fix** | ATLAS → VIGIL → FORGE → RAMZA → Vivi → IDG | Every routed class present — the full pipeline (widest) |
+| **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi → IDG | Unfamiliar code + a live failure + a build |
+| **scout-diagnose-decide-fix** | ATLAS → VIGIL → FORGE → Vivi → IDG | Unfamiliar code + a live failure + a decision + a fix |
 | **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
 | **scout-diagnose-fix** | ATLAS → VIGIL → Vivi → IDG | Unfamiliar code + a live failure + a fix, no spec needed |
 | **diagnose-then-plan-then-fix** | VIGIL → RAMZA → Vivi | A live failure that needs a spec before the patch |
+| **scout-then-spec** | ATLAS → RAMZA | Discovery + spec verbs co-occur (V3) |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
 | **ship-fast** | RAMZA → Vivi | Known terrain, scoped feature |
 | **direct-implementation-bypass** | ATLAS → Vivi (skip RAMZA) | Complexity < 7/12 AND small surface AND unambiguous reqs; emit `[DECISION]` |

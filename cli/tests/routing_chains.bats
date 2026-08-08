@@ -305,6 +305,37 @@ EOF
   [ -z "$_out" ]
 }
 
+# ─── The cortex deep table must document every routing template ──────────────
+# methodology/cortex/chain-templates.md is what a host LLM loads on demand to
+# compose a chain by hand. Two templates added by this change —
+# scout-diagnose-decide-fix and scout-diagnose-decide-plan-fix, the two that
+# exist SPECIFICALLY to stop the FORGE step being dropped — reached
+# roster/routing.yaml, evals/routing-suite.yaml, this file and CHANGELOG.md,
+# and never reached that table. A host reading it to route
+# scout+debugger+reasoner+coder would have found no entry carrying FORGE after
+# a scout, and reproduced the original defect by hand.
+#
+# Four checker rounds passed over it because the row count and the template
+# count both read 11: the table also documents three DISPATCH PATTERNS that are
+# not kernel chain templates (direct-implementation-bypass,
+# failed-attempt-recovery, decision-only), which exactly masked the three
+# routing templates missing from it. Counting agreed while membership did not.
+#
+# So this asserts CONTAINMENT, not equality — a doc-only pattern in the table
+# is legitimate; a routing template absent from it is not.
+@test "chains: every routing template is documented in the cortex deep table" {
+  _table="$EIDOLONS_ROOT/methodology/cortex/chain-templates.md"
+  [ -f "$_table" ]
+  _missing=""
+  while read -r _name; do
+    [ -n "$_name" ] || continue
+    # Bold markers on both ends anchor the match, so scout-diagnose-plan-fix
+    # cannot be satisfied by scout-diagnose-decide-plan-fix's row.
+    grep -q "\*\*${_name}\*\*" "$_table" || _missing="$_missing $_name"
+  done <<< "$(yq -o=json '.chains' "$EIDOLONS_ROOT/roster/routing.yaml" | jq -r '.[].name')"
+  [ -z "$_missing" ]
+}
+
 @test "chains: every template's steps name real roster members" {
   run bash -c "yq -o=json '.chains' \"\$EIDOLONS_ROOT/roster/routing.yaml\" \
     | jq -r '.[].steps[]' | sort -u"

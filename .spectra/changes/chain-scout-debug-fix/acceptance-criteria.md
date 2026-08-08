@@ -22,7 +22,8 @@
 | **AC-5** | **Every assertion this change adds can fail**, under a mutation that breaks what it guards — including one removing only the trailing `idg`, and one reintroducing the FORGE drop | every row of the mutation table in `verification.md` goes RED; the replayed gaming attack. The count lives in that table only — restating it here is what let it diverge 4 / 8 / 10 across four files |
 | **AC-6** | lint / schema / cortex token budget / suite self-test clean | CI parity |
 | **AC-7** | Full bats suite green, counted against the plan | `bats cli/tests/` |
-| **AC-9** | This record's own `spec.yaml` parses, and the gate that now checks it goes RED on the defect it names | `make schema`; gate falsified against the HEAD form and an independent synthetic break |
+| **AC-9** | This record's own `spec.yaml` parses, and the gate that now checks it goes RED on the defect it names | `make schema`; gate falsified against both positions of the embedded `": "`, with a block-scalar control |
+| **AC-10** | Every `roster/routing.yaml` template is documented in the cortex deep table, and the gate asserting it goes RED on the pre-fix table | `routing_chains.bats`; falsified five ways incl. a doc-only-row control proving containment ≠ equality |
 
 **AC-5 is load-bearing**, as in every change in this family: a test written
 alongside the data it checks passes trivially. The `idg`-removal mutation is

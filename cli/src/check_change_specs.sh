@@ -11,13 +11,27 @@
 # file by any tool. A record that no gate parses is not a record.
 #
 # It was not a one-off: the two predecessor records in the same lineage
-# (chain-three-class, routing-recall-gap) also fail to parse. Same root cause,
-# two triggers — all three write a multi-line PLAIN scalar as a list entry:
-#   * continuation indented level with its key  -> "could not find expected ':'"
-#     (YAML reads the continuation as a new key)
-#   * continuation containing an embedded ": "  -> "mapping values are not
-#     allowed in this context"
-# A block scalar ('- >') is immune to both. Use one for any multi-line entry.
+# (chain-three-class, routing-recall-gap) also fail to parse.
+#
+# ONE root cause, verified by falsification rather than inspection: a ": "
+# embedded in a multi-line PLAIN scalar list entry. Only the colon's POSITION
+# changes the parser message, which is why the three looked like two defects:
+#   * colon on the entry's FIRST line -> the entry becomes a mapping, and the
+#     continuation at that key's indent reads as a new key:
+#     "could not find expected ':'"
+#   * colon on a CONTINUATION line -> "mapping values are not allowed in this
+#     context"
+# Indentation alone is NOT the cause: the same entry with identical indentation
+# and the colon removed parses cleanly. A block scalar ('- >') parses with both
+# hazards present. Use one for ANY multi-line list entry.
+#
+# SCOPE, so nobody mistakes this for more than it is: it checks that the file
+# PARSES, not that it is a well-formed record. An empty file, '---', a bare
+# scalar, duplicate keys, and acceptance_checks: [] all pass. It also reports OK
+# when the glob matches nothing (no records, or a record naming its spec
+# something other than spec.yaml), and the depth-1 glob skips any record nested
+# below .spectra/changes/<id>/ — no such record exists; depth-1 is the
+# convention.
 #
 # ARCHIVED records (.spectra/changes/archive/**) are deliberately NOT checked:
 # they are frozen lifecycle history and are not rewritten to satisfy a gate

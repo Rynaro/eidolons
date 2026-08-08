@@ -86,8 +86,14 @@ will rot in three.
 
 The load-bearing rows are the ones that would reintroduce a *silent* step-drop:
 dropping only the trailing `idg`, dropping only `forge`, and the checker's
-count-neutral gaming attack. All three are caught by the coverage **set** pin
-alone — nothing else in the repo sees them.
+count-neutral gaming attack.
+
+Exactly **one** of them — dropping `idg` from `plan-before-build` — is caught by
+the coverage **set** pin and by nothing else. That single row is what
+establishes the pin as necessary; an earlier wording here claimed all three were
+exclusive to it, which was asserted rather than measured and is false (the other
+two trip 2 and 3 tests respectively). The per-row counts live in
+`verification.md`'s table with the mutations themselves.
 
 ## Residual — disclosed
 

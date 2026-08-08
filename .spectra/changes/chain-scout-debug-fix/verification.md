@@ -134,14 +134,36 @@ mechanically invisible to every tool — while `change.json` carried
 any tool**, which is why four rounds of review never tripped on it: every
 checker read the YAML with their eyes, and it renders fine to a human.
 
+**Round 5 fixed one half of that, and only one half.** `spec.yaml` now parses
+and is gated; `change.json` still carries `acceptance_checks: []`, the new gate
+does not look at `change.json`, and nothing else does either. It is listed in
+the residual below rather than left implied — this record's headline finding
+names that empty array as half the defect, so omitting it from the residual
+would be the same partial correction the round is about. It is not a convention
+breach (30 of 47 records leave it empty) and populating it by hand is declined
+deliberately: `change.json` is tonberry's lifecycle state, and hand-editing an
+ESL state file to satisfy a reviewer is how a sibling campaign ended up with a
+frozen hash that excluded the criteria the checker ran against.
+
 It is not a one-off. Sweeping every `spec.yaml` under `.spectra/changes`
 (16 at the time of writing), exactly two others fail — `chain-three-class` and
 `routing-recall-gap`, the two **direct predecessor records in this lineage**,
-both archived 2026-08-08. Same root cause, different trigger: all three write a
-multi-line **plain** scalar as a list entry. This one breaks on indentation; the
-other two break on an embedded `: ` in a continuation line (`draft of the
-chains: header comment`, `maintenance contract: when`), which is why their
-parser message differs. A block scalar (`- >`) is immune to both. Three
+both archived 2026-08-08.
+
+**Root cause, corrected in round 6 — an earlier wording here blamed indentation
+and was wrong.** All three break for one reason: **a `": "` embedded in a
+multi-line PLAIN scalar list entry.** Only the colon's *position* changes the
+message, which is why the three looked like two different defects:
+
+| colon sits on | what YAML does | message | which record |
+|---|---|---|---|
+| the entry's **first** line | the entry becomes a mapping; the continuation at that key's indent then reads as a new key | `could not find expected ':'` | this one (`- STATED AS MEASURED: …`) |
+| a **continuation** line | a mapping value appears where none is allowed | `mapping values are not allowed in this context` | both archived (`draft of the chains: header comment`, `maintenance contract: when`) |
+
+Falsified rather than reasoned: the same entry with identical indentation and
+the colon **removed** parses cleanly, and a colon-free entry whose continuation
+is indented deeper also parses — so indentation alone is not the defect. A block
+scalar (`- >`) parses with **both** hazards present simultaneously. Three
 consecutive routing records shipped an unparseable spec — that is a missing
 gate, not three typos.
 
@@ -174,6 +196,71 @@ collided; the parse gate is now **AC-9**, and AC-8 has been added to both
 Caught by re-reading every criterion in all four files rather than the ones
 being edited.
 
+## Checker round 5 — **REJECT** (the correction reached the record, not the cortex)
+
+The checker re-derived and confirmed every round-5 claim, running rather than
+reasoning: `spec.yaml` fails at **all four** prior commits under **both** yq and
+PyYAML; exactly two of sixteen records share the defect; the new gate survived
+20 attack cases, is shellcheck-clean at default severity, carries no bash-4
+constructs, and `make schema` genuinely propagates its non-zero exit despite the
+`@`-prefixed recipe lines. It re-derived 30 → 24, 6 of 57, and the 5 → 4 tie set
+with its own enumerator, replayed the M9 gaming attack at a self-computed count
+of 24, and confirmed the disclosed order residual is honest and complete
+(step-drops on the unpinned templates *are* caught; only step *order* is not).
+
+**The blocker was a file nobody had compared.** Two of the three new templates —
+`scout-diagnose-decide-fix` and `scout-diagnose-decide-plan-fix`, the two that
+exist specifically to stop the FORGE drop — never reached
+`methodology/cortex/chain-templates.md`, the on-demand table a host LLM loads to
+compose a chain by hand. They reached `roster/routing.yaml`, `evals/`,
+`routing_chains.bats` and `CHANGELOG.md`. A host routing
+`scout+debugger+reasoner+coder` from that table would have found no entry
+carrying FORGE after a scout and **reproduced H1 by hand** — the exact defect
+this change exists to fix, still live in the artifact that drives routing.
+
+Five rounds of eyes passed over it because **the row count and the template
+count both read 11.** The table also documents three dispatch patterns that are
+not kernel templates (`direct-implementation-bypass`, `failed-attempt-recovery`,
+`decision-only`), which exactly masked the three routing templates absent from
+it. Counting agreed while membership did not, and nothing compared the lists.
+
+Fixed by adding the two, plus `scout-then-spec` (missing since before this
+change), and by adding the gate that would have caught it: `routing_chains.bats`
+now asserts every `roster/routing.yaml` template appears in the table.
+**Containment, not equality** — a doc-only pattern in the table is legitimate; a
+routing template absent from it is not. Falsified five ways, including against
+the pre-fix table (RED, so it would have caught this), a doc-only-row control
+(GREEN, proving containment is not equality), and a substring trap confirming
+`scout-diagnose-plan-fix` cannot be satisfied by `scout-diagnose-decide-plan-fix`.
+
+Also corrected, all measured rather than argued:
+
+- **"Nothing else catches it" was false.** Counted on this tree: M4 → **4**
+  tests, M7 → **2**, M8 → **1**, M9 → **3**. Only M8 is exclusive to the
+  coverage set pin. The claim had been restated in four places and was
+  invalidated by round 4's *own* commit, which added the second test that
+  catches M7. The substance is untouched — M8 alone establishes the pin as
+  necessary — but the enumeration was over-claimed.
+- **Round 5's own de-duplication claim was false.** It asserted the mutation
+  count "lives in that table only"; `CHANGELOG.md` still carried **Ten**. Now
+  removed there too. Round 5 wrote the remediation and did not finish applying
+  it — the round-4 class, committed by the round that named it.
+- **The root cause was mis-attributed** (see the corrected table above).
+  Indentation was blamed; indentation alone parses fine. The wrong cause had
+  been baked into `check_change_specs.sh`'s header as remediation guidance,
+  where it would have taught the next author the wrong fix.
+- **`CHANGELOG.md`'s "### Added" listed one of three new templates**, and its
+  "full ordered step list" sentence read as covering all chain assertions when
+  it covers the four this release adds. Both scoped.
+- **The gate's scope limits are now recorded** in its own header and in AC-9's
+  evidence: it checks that a file *parses*, not that it is a well-formed record.
+  `acceptance_checks: []` passes it — the very configuration its header names as
+  half the defect.
+
+The checker endorsed all three round-5 judgement calls (de-numbering the bats
+comment, keeping the order residual out of `CHANGELOG.md`, and adding the parse
+gate at all), with the one caveat about over-scoped wording, now fixed.
+
 ## The systemic finding this exposed
 
 Running the coverage check against **shipped v2.19.1** gives **30 violations
@@ -198,11 +285,12 @@ recommendation.
 | **AC-4** | **PASS** | corrected subset audit: **5 → 4**, set difference is exactly `audit-without-touching\|forensic-then-fix\|coder+debugger+scout+scriber`; no new pair |
 | **AC-5** | **PASS — 10/10 mutations red** | table below |
 | **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **102 tasks** |
-| **AC-7** | **PASS** | `bats cli/tests/` → **1718/1718**, 0 failures, 7 skipped. Counted against the plan (`1..1718`) *and* against `grep -c '^@test'` = **1718**, not read off the tail |
+| **AC-7** | **PASS** | `bats cli/tests/` → **1719/1719**, 0 failures, 7 skipped. Counted against the plan (`1..1719`) *and* against `grep -c '^@test'` = **1719**, not read off the tail |
 | **AC-8** | **PASS** | the guard cannot be paid off: the checker's count-neutral gaming attack (M9), a same-class count-neutral trade, and a gap-fill-only variant all go RED. Previously listed in `acceptance-criteria.md` only — absent from `spec.yaml` and from this table until round 5 |
-| **AC-9** | **PASS** | `spec.yaml` parses (invariants 5 · anti_scope 3 · acceptance_checks 9 · files_touched 10). Gate RED on the HEAD form **and on both triggers of the class** — same-indent continuation ("could not find expected `:`") and embedded `": "` continuation ("mapping values are not allowed"), the latter being what the two archived predecessors produce. Control: byte-identical text as a block scalar passes, so it keys on the defect, not on the edit |
+| **AC-10** | **PASS** | Every `roster/routing.yaml` template now appears in `methodology/cortex/chain-templates.md`. Gate falsified five ways — RED on the pre-fix table, RED dropping only the widest template's row, RED on a substring trap, GREEN on the fixed table, GREEN dropping a doc-only row (containment ≠ equality) |
+| **AC-9** | **PASS** | `spec.yaml` parses (invariants 5 · anti_scope 3 · acceptance_checks 10 · files_touched 10). Gate RED on the HEAD form **and on both positions of the embedded `": "`** — first-line ("could not find expected `:`") and continuation-line ("mapping values are not allowed", what the archived predecessors produce). Control: byte-identical text as a block scalar passes, so it keys on the defect, not on the edit. Scope limits (parses ≠ well-formed; silent OK on an empty match set) recorded in the script header and in AC-9's evidence rather than claimed away |
 
-Suites: recall **83/83**, public **15/15**, `routing_chains.bats` **14/14**.
+Suites: recall **83/83**, public **15/15**, `routing_chains.bats` **15/15**.
 
 ## AC-5 — falsifying the new assertions
 
@@ -216,18 +304,32 @@ Baseline unmutated green; every mutation **red**:
 | M4 | drop **only** the trailing `idg` | read-only-pair route | **RED** ✓ |
 | M5 | delete `scout-diagnose-decide-fix` | coverage set pin | **RED** ✓ |
 | M6 | delete `scout-diagnose-decide-fix` | targeted-combination test | **RED** ✓ |
-| M7 | drop **only** `forge` from `scout-diagnose-decide-plan-fix` | coverage set pin | **RED** ✓ (nothing else catches it) |
-| M8 | drop `idg` from `plan-before-build` | coverage set pin | **RED** ✓ (nothing else catches it) |
-| M9 | **the gaming attack**: add a plausible gap-fill template (−1 violation) AND drop `idg` from `plan-before-build` (+1), holding the COUNT at 24 | coverage set pin | **RED** ✓ |
+| M7 | drop **only** `forge` from `scout-diagnose-decide-plan-fix` | coverage set pin | **RED** ✓ (2 tests) |
+| M8 | drop `idg` from `plan-before-build` | coverage set pin | **RED** ✓ (**1 test** — the set pin alone) |
+| M9 | **the gaming attack**: add a plausible gap-fill template (−1 violation) AND drop `idg` from `plan-before-build` (+1), holding the COUNT at 24 | coverage set pin | **RED** ✓ (3 tests; count verified held at exactly 24) |
 | **M10** | reverse `scout-diagnose-decide-fix` to `[idg, vivi, forge, vigil, atlas]` — docs first, scout last | ordered route pins | **RED** ✓ (bats *and* recall suite) |
 
-M7, M8 and M9 are the load-bearing ones, and all three are caught by the
-coverage set pin **alone** — nothing else in the repo sees them. M9 is the
-checker's own gaming attack: it holds the violation COUNT at 24 while shipping
-a live step-drop, and it is the reason the guard pins a set rather than a
-number.
+M7, M8 and M9 are the load-bearing ones. **Corrected in round 6 after being
+measured rather than asserted:** an earlier wording said all three were caught
+by the coverage set pin *alone* — "nothing else in the repo sees them". Only
+**M8** is. Counted on this tree: M4 → 4 tests, M7 → 2, M8 → **1**, M9 → 3.
 
-Ten mutations, fourteen assertions. AC-5 claims *"every assertion this change
+The claim was invalidated by round 4's own commit: `8c755e2` added *"the
+five-class pipeline keeps FORGE and RAMZA, in order"*, which is the second test
+that catches M7 (`git log -S` confirms the provenance). The same round that
+added the test left the annotation saying nothing else could catch it — the
+round-4 defect class, one layer deeper, in a claim *about* coverage.
+
+The substance is unchanged and does not depend on the corrected number: **M8 is
+caught by the set pin and by nothing else**, which is all that is needed to
+establish the pin as necessary. M9 remains the reason the guard pins a set
+rather than a number — it holds the violation count at exactly 24 (re-measured)
+while shipping a live step-drop. Its other two reds are incidental to the
+particular gap-fill chosen (that one happens to create a new tie, and any new
+template trips the cortex-table gate), so M9's exclusivity is gap-fill-dependent
+and is not claimed.
+
+Ten mutations, fifteen assertions. AC-5 claims *"every assertion this change
 adds goes red under a mutation that breaks what it guards"* — true of what this
 change adds. It is **not** a claim that every assertion in the file has a
 dedicated mutation: the "pre-existing routes unchanged" test still has none, as
@@ -269,6 +371,19 @@ trusting the prior record's description of the gap.
 - A three-class scout+debugger+coder prompt now receives an `idg` step it did
   not explicitly ask for — the same trade `plan-before-build` has always made,
   stated rather than hidden.
+- **`change.json` still carries `acceptance_checks: []`.** Half of this record's
+  own headline finding — the criteria being unreadable from *either* file — and
+  round 5 closed only the `spec.yaml` half. The new gate does not read
+  `change.json`; nothing does. Not fixed here because that file is tonberry's
+  lifecycle state and hand-editing it to satisfy a review is a known way to
+  desynchronise a frozen hash from the criteria a checker actually ran against.
+- **The cortex table has no provenance gate.** `handoff-graph.md`
+  §"Chain Template Justifications" — which `chain-templates.md` points at "for
+  the edge-origin provenance of **each** template" — is missing five entries,
+  three of them since v2.19.0. The new containment gate covers
+  `chain-templates.md` only. Surfaced by the round-5 checker, recorded rather
+  than fixed: it is a pre-existing gap in a different file and this change has
+  been rejected five times for growing.
 - **Three templates have no exact-`selected` assertion anywhere**, so their step
   ORDER is unpinned: `plan-before-build`, `decide-then-implement` and
   `audit-without-touching` all stay green under total reversal. Pre-existing and

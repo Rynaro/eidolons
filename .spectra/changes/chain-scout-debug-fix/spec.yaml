@@ -150,6 +150,22 @@ acceptance_checks:
       the checker's own count-neutral gaming attack replayed against this tree
       goes RED (M9 in verification.md's mutation table), as does a same-class
       count-neutral trade and a gap-fill-only variant.
+  - id: AC-10
+    check: >
+      every template in roster/routing.yaml is documented in the cortex deep
+      table (methodology/cortex/chain-templates.md), and the gate asserting it
+      goes RED on the pre-fix table
+    evidence: >
+      routing_chains.bats "every routing template is documented in the cortex
+      deep table". Falsified five ways: RED against the pre-fix table (so it
+      would have caught the defect that prompted it), RED when only the new
+      widest template's row is removed, RED on a substring trap confirming
+      scout-diagnose-plan-fix cannot be satisfied by
+      scout-diagnose-decide-plan-fix's row, GREEN on the fixed table, and GREEN
+      when a doc-only dispatch pattern's row is removed — the last proving this
+      asserts CONTAINMENT and not set equality, which is required because the
+      table legitimately documents three patterns that are not kernel
+      templates.
   - id: AC-9
     check: >
       this record's own spec.yaml parses, and the gate that now checks it goes
@@ -157,12 +173,14 @@ acceptance_checks:
     evidence: >
       GREEN on the fixed tree; RED when this spec.yaml is reverted to its HEAD
       form (line 62, "could not find expected ':'"). Falsified against BOTH
-      triggers of the defect class, not just the one this record hit: an
-      appended continuation indented level with its key goes RED with that same
-      message, and an appended continuation carrying an embedded ": " goes RED
-      with "mapping values are not allowed in this context" — the message the
-      two archived predecessors produce. CONTROL: the byte-identical text as a
-      block scalar ('- >') passes, so the gate keys on the defect and not on
-      the added text. archive/ is excluded structurally by the depth-1 glob
-      rather than a name filter; the known-bad archived specs are recorded in
-      verification.md rather than rewritten.
+      positions of the embedded ": " that is the single root cause — on the
+      entry's first line (that same message) and on a continuation line
+      ("mapping values are not allowed in this context", the message the two
+      archived predecessors produce). CONTROL: byte-identical text as a block
+      scalar ('- >') passes, so the gate keys on the defect and not on the
+      added text. SCOPE, recorded rather than claimed away: it checks that the
+      file PARSES, not that it is a well-formed record — an empty file, '---',
+      a bare scalar, duplicate keys and acceptance_checks: [] all pass, and it
+      reports OK when the glob matches nothing. archive/ is excluded
+      structurally by the depth-1 glob rather than a name filter; the known-bad
+      archived specs are recorded in verification.md rather than rewritten.
