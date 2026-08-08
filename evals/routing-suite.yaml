@@ -400,6 +400,21 @@ suites:
       # forensic-then-fix — that is what keeps this template from over-reaching.)
       prompt: "explore the worker, debug the broken install path and fix it"
       expect: { decision: chain, selected: [atlas, vigil, vivi, idg] }
+    - id: N-C10
+      category: chain-multiclass
+      # checker finding H1: scout-diagnose-fix alone dropped FORGE here (0.8)
+      # while hardcoding idg (0.0)
+      prompt: "audit the module, root cause the failure, decide between rollback or patch, then implement it"
+      expect: { decision: chain, selected: [atlas, vigil, forge, vivi, idg] }
+    - id: N-C11
+      category: chain-multiclass
+      prompt: "map the repo, diagnose the regression, compare the two fixes and implement the better one"
+      expect: { decision: chain, selected: [atlas, vigil, forge, vivi, idg] }
+    - id: N-C12
+      category: chain-multiclass
+      # the full five-class pipeline
+      prompt: "explore the worker, diagnose the timeout, weigh the options, spec the fix and implement it"
+      expect: { decision: chain, selected: [atlas, vigil, forge, ramza, vivi, idg] }
     - id: N-C06
       category: chain-multiclass
       # guard: planner+coder without failure context stays on ship-fast

@@ -56,6 +56,28 @@ load helpers
   [[ "$_sel" == *"idg"* ]]     # docs step still there
 }
 
+@test "chains: scout+debugger+reasoner+coder keeps the FORGE step, in order" {
+  # Checker finding H1: scout-diagnose-fix took this combination over from
+  # decide-then-implement and DROPPED forge — which scored 0.8, while the
+  # hardcoded idg scored 0.0. Until this test existed, the fix was verified
+  # only structurally from the YAML and never once through the kernel.
+  #
+  # Asserts the FULL ordered list, not membership: that pins vigil-before-forge
+  # (root-cause before deliberating on the options the diagnosis produces), an
+  # argument the record makes at length and nothing previously enforced.
+  run eidolons run "audit the module, root cause the failure, decide between rollback or patch, then implement it" --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-decide-fix" ]
+  [ "$(jq -r '.selected | join(",")' <<< "$output")" = "atlas,vigil,forge,vivi,idg" ]
+}
+
+@test "chains: the five-class pipeline keeps FORGE and RAMZA, in order" {
+  run eidolons run "explore the worker, diagnose the timeout, weigh the options, spec the fix and implement it" --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-decide-plan-fix" ]
+  [ "$(jq -r '.selected | join(",")' <<< "$output")" = "atlas,vigil,forge,ramza,vivi,idg" ]
+}
+
 @test "chains: the widest pipeline does not drop the scriber step" {
   # scout-diagnose-plan-fix supersedes plan-before-build, which ended in idg.
   # Without a trailing idg of its own, a prompt that explicitly asked for
@@ -171,7 +193,7 @@ _actual_ambiguous_pairs() {
   [ "$status" -eq 0 ]
 }
 
-# ─── The route-level ratchet ───────────────────────────────────────────────────
+# ─── The route-level coverage set pin ─────────────────────────────────────────
 # The ambiguity pin above counts PAIRS. A checker showed that a route can flip
 # while the pair count is untouched — `scout-diagnose-fix` took over
 # {scout,debugger,reasoner,coder} and dropped FORGE with the pin still green,
@@ -265,7 +287,7 @@ EOF
 }
 
 @test "chains: the combinations this change targets are step-drop free" {
-  # The ratchet above bounds the whole surface; these are the four subsets this
+  # The set pin above bounds the whole surface; these are the four subsets this
   # change set out to fix, asserted individually so a regression names itself.
   _out="$(yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" | jq -r '
     .chains as $chains
