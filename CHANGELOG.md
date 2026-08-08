@@ -8,6 +8,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.19.0] — 2026-08-08 — the chain that dropped the diagnosis
+
+v2.18.0 left a residual on the record: no chain template covered three capability classes including `debugger`. Measured on `main` @ `13013ae`, **every** "diagnose it, spec it, fix it" prompt fell back to the two-class `ship-fast` — which meant the router handed **a planner a failure nobody had root-caused**, and the diagnosis step vanished without a trace.
+
+The kernel picks the matching template with the most `requires_classes`. There simply was no three-class debugger entry to pick.
+
+### Added
+- **`diagnose-then-plan-then-fix`** (`VIGIL → RAMZA → Vivi`, `requires_classes: [debugger, planner, coder]`) — a live failure that needs a spec before the patch.
+- **`scout-diagnose-plan-fix`** (`ATLAS → VIGIL → RAMZA → Vivi`, four classes). This exists for a specific reason: jq's `sort_by` is **stable**, so two equal-specificity templates that both match are resolved by *declaration order in the file* — an artifact, not a decision. Adding the three-class template alone would have collided with `plan-before-build` on a scout+debugger+planner+coder prompt and created an eighth such tie. This entry covers that union so **specificity stays decisive**.
+- **`cli/tests/routing_chains.bats`** — pins the multi-class routes and, more importantly, **pins the ambiguity set**: a template added later that introduces a new equal-specificity collision fails the suite instead of letting line order quietly pick a winner in production. All six assertions were falsified by mutation before being trusted (delete the template → red; add a colliding template → red; bogus step member → red; delete the tie cover → red).
+- Recall-suite coverage `N-C01`–`N-C04`, `N-C06` (`chain-multiclass`).
+
+### Changed
+- `methodology/cortex/chain-templates.md` re-synced, with a new section on where specificity stops deciding.
+
+### Known, and deliberately not fixed
+- **Seven equal-specificity pairs among the pre-existing two-class templates remain resolved by declaration order** (e.g. `decide-then-implement` vs `ship-fast` on a reasoner+planner+coder prompt). They predate this change; resolving them means choosing semantics for each pair, not adding a mechanism. They are now *pinned by test* — recorded, not endorsed. An earlier draft of the `chains:` comment claimed the list was closed under intersection; auditing that claim before shipping showed it was false, and the comment now states the narrower guarantee that is actually true.
+- `scout+debugger+coder` ("map the auth flow, diagnose why login fails, and fix it") still drops the scout step to the two-class `forensic-then-fix`.
+
 ## [2.18.0] — 2026-08-08 — the roster was silent, not selective
 
 Gilgamesh looked like it was never being invoked. It was — 51 of 21 975 recorded dispatches, 0.23 %. Chasing that number found something larger underneath it: **the router was scoring zero on most ordinary prompts, and failing silently when it did.**
