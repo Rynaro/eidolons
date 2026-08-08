@@ -20,10 +20,20 @@ AC-1, AC-2, AC-4, AC-5, AC-6, AC-7 all verified independently and held. Over-rea
   `[scout, debugger, reasoner, coder]`, plus
   **`scout-diagnose-decide-plan-fix`** for all five routed classes, covering the
   union so the two spec-4 entries cannot tie.
-- **A route-level ratchet** (`routing_chains.bats`). H2 is the durable finding:
-  the ambiguity pin measures pairs and a route can flip beneath it. The new
-  check enumerates **all 57 class subsets** and counts those whose selected
-  chain omits a triggered class.
+- **A route-level coverage guard** (`routing_chains.bats`). H2 is the durable
+  finding: the ambiguity pin measures pairs and a route can flip beneath it.
+  The new check enumerates **all 57 class subsets** and pins the **set** of
+  those whose selected chain omits a triggered class.
+
+  Its first form pinned a **count with a ceiling**, and the checker **paid it
+  off**: a plausible gap-fill template (−1) traded against a dropped `idg` on
+  `plan-before-build` (+1) held the total at 24, kept all twelve tests and
+  99/99 evals green, and shipped a live step-drop — `"explore the module, spec
+  the change, implement it and document it"` lost its docs step with the whole
+  repo green. Widening to (subset,class) pairs did not help either: 33 → 31
+  under the same attack. **Any aggregate scalar with a ceiling can be settled
+  by trading.** The set form was replayed against that exact roster and goes
+  RED while the count stays at 24.
 - AC-3 and `safety_invariant` **retracted and restated** as what was measured.
 - `EIDOLONS.md` template-count sentence de-numbered so it cannot go stale again.
 
@@ -36,7 +46,7 @@ combination; with 57 subsets and 11 templates, most subsets fall back to a
 lower-specificity entry that omits a triggered class.
 
 This change takes it **30 → 24**. It does not solve the shape, and the record
-does not claim to. The ratchet bounds it; a durable fix would mean synthesizing
+does not claim to. The pinned set bounds it; a durable fix would mean synthesizing
 the chain from the triggered classes in a canonical order rather than matching
 a template — a kernel redesign, out of scope here and recorded as a
 recommendation.
@@ -47,13 +57,13 @@ recommendation.
 |---|---|---|
 | **AC-1** | **PASS** | 3/3 scout+debugger+coder phrasings → `scout-diagnose-fix` → `[atlas, vigil, vivi, idg]` (`N-C07`, `N-C09`) |
 | **AC-2** | **PASS** | `"audit the module, diagnose the failure, fix it and document it"` → `[atlas, vigil, vivi, idg]`, was `[atlas, idg]` (`N-C08`) |
-| **AC-3** | **PASS (restated)** | All-subsets route differential vs `db82fb2`: **6 of 57 change, 51 identical**, and every changed subset **gains** triggered-class coverage — none loses a class it carried. `plan-before-build` / `ship-fast` / `scout-then-spec` / `forensic-then-fix` / `diagnose-then-plan-then-fix` / `scout-diagnose-plan-fix` unchanged; `public` 15/15; `N-015` still `[vigil, vivi]`. **`decide-then-implement` and `audit-without-touching` DO change on scout-bearing subsets** — the original wording claimed otherwise and was falsified |
+| **AC-3** | **PASS (restated)** | All-subsets route differential vs `db82fb2`: **6 of 57 change, 51 identical**. Every changed subset **gains coverage of a class that triggered it**, and **no subset loses coverage of a triggered class**. Every template's step list is **byte-identical** — but five templates *lose subsets* to the new entries (`forensic-then-fix`, `audit-without-touching`, `decide-then-implement`, `scout-diagnose-plan-fix`), so none of them can be described as "unchanged". `public` 15/15; `N-015` still `[vigil, vivi]` |
 | **AC-4** | **PASS** | corrected subset audit: **5 → 4**, set difference is exactly `audit-without-touching\|forensic-then-fix\|coder+debugger+scout+scriber`; no new pair |
-| **AC-5** | **PASS — 4/4 mutations red** | table below |
+| **AC-5** | **PASS — 9/9 mutations red** | table below |
 | **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **99 tasks** |
-| **AC-7** | **PASS** | `bats cli/tests/` → **1714/1714**, 0 failures, 7 skipped (counted against the plan, not read off the tail) |
+| **AC-7** | **PASS** | `bats cli/tests/` → **1716/1716**, 0 failures, 7 skipped (counted against the plan, not read off the tail) |
 
-Suites: recall **80/80**, public **15/15**, `routing_chains.bats` **10/10**.
+Suites: recall **80/80**, public **15/15**, `routing_chains.bats` **12/12**.
 
 ## AC-5 — falsifying the new assertions
 
@@ -65,19 +75,23 @@ Baseline unmutated green; every mutation **red**:
 | M2 | delete `scout-diagnose-fix` | read-only-pair route | **RED** ✓ |
 | M3 | delete `scout-diagnose-fix` | ambiguity pin (set returns to 5) | **RED** ✓ |
 | M4 | drop **only** the trailing `idg` | read-only-pair route | **RED** ✓ |
-| M5 | delete `scout-diagnose-decide-fix` | **route-level ratchet** | **RED** ✓ |
+| M5 | delete `scout-diagnose-decide-fix` | coverage set pin | **RED** ✓ |
 | M6 | delete `scout-diagnose-decide-fix` | targeted-combination test | **RED** ✓ |
+| M7 | drop **only** `forge` from `scout-diagnose-decide-plan-fix` | coverage set pin | **RED** ✓ (nothing else catches it) |
+| M8 | drop `idg` from `plan-before-build` | coverage set pin | **RED** ✓ (nothing else catches it) |
+| **M9** | **the gaming attack**: add a plausible gap-fill template (−1 violation) AND drop `idg` from `plan-before-build` (+1), holding the COUNT at 24 | coverage set pin | **RED** ✓ |
 
-M4 and M5 are the load-bearing ones. M4 is the mutation that would reintroduce
-a silent scriber step-drop. M5 reintroduces the exact FORGE drop the checker
-found — and it is caught by the route-level ratchet, which is the instrument
-that did not exist when the defect got through.
+M7, M8 and M9 are the load-bearing ones, and all three are caught by the
+coverage set pin **alone** — nothing else in the repo sees them. M9 is the
+checker's own gaming attack: it holds the violation COUNT at 24 while shipping
+a live step-drop, and it is the reason the guard pins a set rather than a
+number.
 
-Six mutations, twelve assertions. AC-5 says *"every new assertion goes red
-under a mutation that breaks what it guards"* — that is true of the assertions
-this change adds; it is **not** a claim that every assertion in the file has a
-dedicated mutation (the "pre-existing routes unchanged" test still has none,
-as recorded in the sibling `chain-three-class`).
+Nine mutations, twelve assertions. AC-5 claims *"every assertion this change
+adds goes red under a mutation that breaks what it guards"* — true of what this
+change adds. It is **not** a claim that every assertion in the file has a
+dedicated mutation: the "pre-existing routes unchanged" test still has none, as
+recorded in the sibling `chain-three-class`.
 
 ## What the baseline measurement turned up that was not on the record
 
@@ -90,6 +104,21 @@ was found by measuring the baseline before touching anything rather than by
 trusting the prior record's description of the gap.
 
 ## Residual — disclosed
+
+- **`{coder, debugger, reasoner}` with no scout** — *"diagnose the failure,
+  compare the two fixes and implement the better one"* → `decide-then-implement`
+  → `[forge, ramza, vivi]`, **no `vigil`**. A user asks for a diagnosis and gets
+  none. This is H1's shape on a three-class prompt, it is the minimal witness of
+  a tie this record already pins, and it is one template away. Surfaced by the
+  checker and left for a separate change rather than fixed here, because adding
+  a template at this point would need its own differential and this one has
+  already been rejected twice.
+- **Two subsets lose the `ramza` step** (`{coder,debugger,reasoner,scout}` ±
+  scriber): `decide-then-implement` was injecting a planner step on prompts
+  where the planner class never triggered. Not a coverage regression — arguably
+  a correctness gain — but the earlier wording *"none loses a class it carried"*
+  was literally false, because the old chain did carry it. Stated precisely
+  rather than quietly.
 
 - **`[scout, coder]` has no template.** `"explore the module and implement the
   change"` → `vivi` alone, scout dropped. A distinct combination this change

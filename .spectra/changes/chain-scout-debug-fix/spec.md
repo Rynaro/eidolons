@@ -30,13 +30,29 @@ Nobody chose that; a line number did.
 
 ## Decision
 
-One template. DATA only — the selection algorithm is untouched, so I-C2 holds.
+**Three templates.** DATA only — the selection algorithm is untouched, so I-C2
+holds.
 
 ```yaml
-- name: scout-diagnose-fix
+- name: scout-diagnose-fix                    # the gap this change targeted
   steps: ["atlas", "vigil", "vivi", "idg"]
   requires_classes: ["scout", "debugger", "coder"]
+
+- name: scout-diagnose-decide-fix             # added after checker finding H1
+  steps: ["atlas", "vigil", "forge", "vivi", "idg"]
+  requires_classes: ["scout", "debugger", "reasoner", "coder"]
+
+- name: scout-diagnose-decide-plan-fix        # covers the union of the two spec-4 entries
+  steps: ["atlas", "vigil", "forge", "ramza", "vivi", "idg"]
+  requires_classes: ["scout", "debugger", "reasoner", "planner", "coder"]
 ```
+
+The first alone was rejected: it took `{scout,debugger,reasoner,coder}` over
+from `decide-then-implement` and **dropped FORGE**, which scored 0.8 while the
+hardcoded `idg` scored 0.0. Diagnosis precedes deliberation (`vigil` → `forge`)
+for the same reason `diagnose-then-plan-then-fix` orders it that way: the
+options FORGE weighs are *produced by* the diagnosis, so deliberating first
+means deliberating on speculation.
 
 ### Why it ends in `idg`
 

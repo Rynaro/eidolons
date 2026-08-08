@@ -187,11 +187,22 @@ _actual_ambiguous_pairs() {
 # fall back to a lower-specificity entry that omits a class. Measured: 30
 # violations at v2.19.1 (db82fb2), 24 here.
 #
-# So this is a RATCHET, not a pass/fail at zero: the count must not grow.
-# Stating it as "no step-drops" would be the absolute-invariant-over-a-partial-
-# mechanism mistake that got three earlier records rejected.
+# It pins the SET, not a count. The first version was a count with a ceiling,
+# and a checker PAID IT OFF: adding a plausible gap-fill template (−1) while
+# dropping the trailing `idg` from `plan-before-build` (+1) held the total at 24,
+# kept all twelve tests and 99/99 evals green, and shipped a live step-drop —
+# `"explore the module, spec the change, implement it and document it"` lost its
+# docs step with the whole repo green. Widening the metric to (subset,class)
+# pairs does not help; it went 33 → 31 under the same attack. Any aggregate
+# scalar with a ceiling can be settled by trading one violation for another.
+# A set cannot be traded against: a NEW violating subset fails no matter how
+# many others were fixed.
+#
+# Stating this as "no step-drops" would be the absolute-invariant-over-a-
+# partial-mechanism mistake that got three earlier records rejected. It is a
+# known, enumerated, bounded defect surface — 30 subsets at v2.19.1, 24 here.
 _class_coverage_violations() {
-  yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" | jq '
+  yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" | jq -r '
     .chains as $chains
     | (.eidolons | with_entries(.value |= .capability_class)) as $cls
     | ["scout","debugger","reasoner","planner","coder","scriber"] as $U
@@ -205,15 +216,52 @@ _class_coverage_violations() {
                     | sort_by(-.spec) | if length>0 then .[0] else null end ) })
     | map(select(.pick != null))
     | map(. + { covered: ((.pick.steps // []) | map($cls[.]) | unique) })
-    | map(select([ .classes[] as $k | select(([.covered[]] | index($k)) == null) ] | length > 0))
-    | length'
+    | map(. + { missing: [ .classes[] as $k | select(([.covered[]] | index($k)) == null) | $k ] })
+    | map(select((.missing|length) > 0))
+    | map("\(.classes|join("+"))\t\(.missing|join(","))")
+    | sort | .[]'
 }
 
-@test "chains: class-coverage step-drops do not increase (route-level ratchet)" {
-  _n="$(_class_coverage_violations)"
-  # 24 measured on this tree; 30 at v2.19.1. Lower is better — if you REDUCE it,
-  # lower this number in the same commit so the ratchet keeps its grip.
-  [ "$_n" -le 24 ]
+# The exact subsets whose selected chain omits a class the prompt triggered,
+# with the omitted classes. Recorded, NOT endorsed — this is the enumerated
+# defect surface of template-per-combination selection.
+#
+# To change it: if you FIX one, delete its line in the same commit. If a line
+# you did not intend appears, you introduced a step-drop — fix the template,
+# do not paste the line in.
+_expected_coverage_violations() {
+  cat <<'EOF'
+coder+debugger+planner+reasoner	reasoner
+coder+debugger+planner+reasoner+scriber	reasoner,scriber
+coder+debugger+planner+scriber	scriber
+coder+debugger+reasoner	debugger
+coder+debugger+reasoner+scriber	debugger,scriber
+coder+debugger+scriber	scriber
+coder+planner+reasoner+scout	reasoner
+coder+planner+reasoner+scout+scriber	reasoner
+coder+planner+reasoner+scriber	scriber
+coder+planner+scriber	scriber
+coder+reasoner+scout	scout
+coder+reasoner+scout+scriber	scout,scriber
+coder+reasoner+scriber	scriber
+coder+scout+scriber	coder
+debugger+planner+reasoner+scout	debugger,reasoner
+debugger+planner+reasoner+scout+scriber	debugger,planner,reasoner
+debugger+planner+scout	debugger
+debugger+planner+scout+scriber	debugger,planner
+debugger+reasoner+scout+scriber	debugger,reasoner
+debugger+scout+scriber	debugger
+planner+reasoner+scout	reasoner
+planner+reasoner+scout+scriber	planner,reasoner
+planner+scout+scriber	planner
+reasoner+scout+scriber	reasoner
+EOF
+}
+
+@test "chains: the set of class-coverage step-drops is exactly the pinned set" {
+  _actual="$(_class_coverage_violations)"
+  _expected="$(_expected_coverage_violations)"
+  [ "$_actual" = "$_expected" ]
 }
 
 @test "chains: the combinations this change targets are step-drop free" {

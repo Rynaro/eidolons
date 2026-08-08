@@ -16,9 +16,10 @@
 |---|---|---|
 | **AC-1** | scout+debugger+coder selects `scout-diagnose-fix` → `[atlas, vigil, vivi, idg]` | `N-C07`, `N-C09`; `routing_chains.bats` |
 | **AC-2** | scout+debugger+coder+scriber no longer returns the read-only `[atlas, idg]` | `N-C08`; `routing_chains.bats` |
-| **AC-3** | No existing chain route changes — incl. debugger+coder **without** a scout staying on `forensic-then-fix` | `public` 15/15 + `N-015`, `N-C04` |
+| **AC-3** | **RESTATED** (the original — *"no existing chain route changes"* — was falsified by a checker). Exactly **6 of 57** class subsets change, and every one **gains** coverage of a class that triggered it; **no subset loses coverage of a class that triggered it**. Templates untouched on every subset are byte-identical. `decide-then-implement`, `audit-without-touching`, `forensic-then-fix` and `scout-diagnose-plan-fix` **do** change on scout-bearing subsets | all-subsets route differential vs `db82fb2` (enumerated in `verification.md`); the pinned coverage-violation **set**; `public` 15/15; `N-015`. **The original evidence trio (`public`/`N-015`/`N-C04`) is all true and none of it can fail on the property AC-3 states — that is why the defect got through** |
 | **AC-4** | Unresolved tie set moves **5 → 4** with NO new ambiguity | corrected subset audit; ambiguity pin |
-| **AC-5** | **Both new assertions can fail**, including under a mutation that removes only the trailing `idg` | mutation run in `verification.md` |
+| **AC-8** | The coverage guard **cannot be paid off**. Pinning a count let a checker trade a fixed violation against a smuggled one at constant total; the guard pins the **set** | replayed gaming attack goes RED |
+| **AC-5** | **Every assertion this change adds can fail**, under a mutation that breaks what it guards — including one removing only the trailing `idg`, and one reintroducing the FORGE drop | 8 mutations in `verification.md`; the replayed gaming attack |
 | **AC-6** | lint / schema / cortex token budget / suite self-test clean | CI parity |
 | **AC-7** | Full bats suite green, counted against the plan | `bats cli/tests/` |
 
