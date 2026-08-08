@@ -73,7 +73,7 @@ acceptance_checks:
     check: debugger+planner+coder selects diagnose-then-plan-then-fix -> [vigil, ramza, vivi]
     evidence: recall suite N-C01..N-C03
   - id: AC-2
-    check: scout+debugger+planner+coder resolves by specificity -> [atlas, vigil, ramza, vivi]
+    check: scout+debugger+planner+coder resolves by specificity -> [atlas, vigil, ramza, vivi, idg]
     evidence: recall suite N-C04 -> [atlas, vigil, ramza, vivi, idg]
   - id: AC-3
     check: no existing chain route changes

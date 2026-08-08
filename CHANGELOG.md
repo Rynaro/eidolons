@@ -58,7 +58,7 @@ Signals can now declare two conditions. Absent keys mean unchanged behaviour, so
 - **The recall suite now measures precision.** It had 44 imperative work requests and one read-only guard, making it sensitive to lexicon *removal* and blind to lexicon *addition*. Adds `N-G06`–`N-G10` (read-only interrogatives, bounded vs unbounded scope). `N-042` reworded: it had *expected* a repo-wide rename to reach Kupo, blessing the exact case `unbounded_scope` exists to catch.
 - **The AC-6 negative test pinned one string** — `"thanks, that looks good"`, one of the few acknowledgements that happened not to trip the old globs. Both directions are now corpora (10 conversational, 8 real work requests).
 
-Suites: recall **59/59**, public **15/15**, bats **1712/1712**.
+Suites: recall **69/69**, public **15/15**, bats **1712/1712**.
 
 ## [2.19.0] — 2026-08-08 — the chain that dropped the diagnosis
 
