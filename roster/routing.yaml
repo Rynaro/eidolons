@@ -100,7 +100,7 @@ eidolons:
     # types ("refactor", "optimize", "port", "clean up", "write a test") were
     # all absent. Kept in lockstep with apivr below — the declared fallback peer
     # must not have a different reachable surface than the default seat.
-    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port the", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
   apivr:
@@ -108,7 +108,7 @@ eidolons:
     suggested_tier: standard
     loop_native: false        # conservative non-loop fallback; opt-in (`eidolons add apivr`);
                               # named dispatch still routes to it (the +0.5 name bonus)
-    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
+    trigger_verbs: ["implement", "build", "fix", "extend", "wire up", "make tests pass", "add a", "add the", "patch", "code", "refactor", "optimize", "port the", "migrate", "clean up", "write a test", "add tests", "rewrite", "update the", "modify", "hook up", "add retry", "add support"]
     refuse_verbs: ["design from scratch", "novel architecture", "greenfield"]
     downstream: ["idg"]
   idg:
@@ -216,12 +216,87 @@ signals:
     # underspecified via its S5 bounded-scope signal; this mirrors that
     # judgement into Step 1 instead of letting a single verb match hand a
     # whole-repo rewrite to a coder. -0.4 drops a lone verb match (0.8) to 0.4,
-    # below tau_standard 0.6 → clarify. A LIMITER ("only", "just") is absent
-    # from the match list by design, so a bounded ask is never penalised.
+    # below tau_standard 0.6 → clarify, while a 2+ phrase match (0.9 / 0.97)
+    # survives at 0.65 / 0.72 and still routes. The penalty was -0.4 in the
+    # first revision, which vetoed EVERY coder score including raw=3 (0.97 →
+    # 0.57) — an unconditional veto, not the "bare verb match" the note claimed.
     # Named dispatch still wins: the +0.5 name bonus clears the penalty.
-    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "everywhere it appears", "all call sites", "project-wide", "repo-wide", "every file"]
+    #
+    # HONEST LIMIT — this is NOT a full mirror of the Step-2 predicate's S5.
+    # S5 (methodology/cortex/dispatch-predicate.md §"Reference extractor") has a
+    # LIMITER RESCUE: a generic scope is forgiven when a limiter ("only",
+    # "just") AND a path token co-occur. The signal table is presence-matched
+    # and cannot express that conjunction, so Step 1 implements only the
+    # punitive half. Consequence, stated rather than hidden: a genuinely bounded
+    # ask that happens to contain one of these phrases ("update the helper at
+    # all call sites in cli/src/lib.sh only") still falls to `clarify`. That is
+    # a CONSERVATIVE failure — it asks instead of mis-routing — and since the
+    # harness hook now surfaces the clarification on a work-intent prompt, it is
+    # visible rather than silent. Implementing the rescue needs conditional
+    # signals, which is a kernel change, not a data change.
+    # SPLIT into two tiers (round 2). A single tier could not be right for both
+    # "refactor across the entire codebase" (genuinely repo-wide) and "rename
+    # the symbol at all call sites in cli/src/run.sh" (one named file). At -0.4
+    # the second was suppressed; at -0.25 `localized_micro_task`'s +0.15
+    # cancelled most of it and repo-wide renames went BACK to the ≤2-file
+    # executor at 0.70 — measured 5/7 by a checker. Tiering fixes the class.
+    # Known to be a closed list with a tail — a checker measured 8/10 unbounded
+    # mutations escaping the round-2 list via `across the codebase` /
+    # `throughout the repo` / `globally` / `all files` / `codebase-wide`. Those
+    # are added; the invariant is stated as "measured", not "never", because a
+    # phrase list cannot honestly claim exhaustiveness.
+    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "across the codebase", "across all", "throughout the repo", "throughout the codebase", "everywhere", "everywhere it appears", "project-wide", "projectwide", "repo-wide", "repowide", "codebase-wide", "globally", "in all files", "in all the", "all files", "all modules", "all packages"]
     boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
-    note: "unbounded mutation scope → never auto-route to a coder/executor on a bare verb match (mirrors predicate S5)"
+    note: "REPO-WIDE mutation scope → never auto-route to a coder/executor; no rescue (mirrors predicate S5 with no LIMITER present)"
+  - id: unbounded_scope_qualified
+    # The rescuable tier: a generic quantifier that a PATH can bound. This is
+    # the limiter/path rescue predicate S5 has had all along and Step 1 lacked —
+    # the earlier note admitted the gap; `skip_if_path` closes it instead.
+    #   "rename the symbol at all call sites in cli/src/run.sh"  -> path -> route
+    #   "point the import at the new module path in every file"  -> none -> clarify
+    skip_if_path: true
+    match: ["all call sites", "every file", "all the call sites", "in every module"]
+    boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
+    note: "generic quantifier with NO path to bound it → treat as unbounded; a path token rescues it (predicate S5 limiter/path rule)"
+  - id: read_only_question
+    # Precision guard (found by the checker on `routing-recall-gap`): widening
+    # the coder/scriber lexicons made bare words match inside INTERROGATIVES.
+    # "which port does the server listen on?" scored vivi 0.8 and the hook then
+    # instructed the host to "Delegate to vivi now. Do NOT implement ... " —
+    # a question answered by an edit. Measured over 24 read-only interrogatives,
+    # writer-routing went 3/24 -> 15/24 before this signal.
+    # Only WRITE-capable classes + the scriber are penalised: a question is
+    # still allowed to reach ATLAS (read-only), FORGE (deliberation), VIGIL
+    # (a failure question) and RAMZA (a requirements question). -0.5 drops a
+    # lone match (0.8) to 0.3, well under tau.
+    # GATED ON INTERROGATIVE FORM (round 2). Presence-matching alone was wrong:
+    # "is the" / "which" / "what happens" occur constantly inside SUBORDINATE
+    # clauses of ordinary imperatives — "fix the bug where the retry count is
+    # the wrong type" — and the -0.5 vetoed even a raw=2 coder score. Two
+    # independent checkers measured 18/18 and 12/12 work requests regressing
+    # from a correct dispatch to `clarify`, invisible to a green suite.
+    # `requires_question_form` makes the kernel apply this ONLY when the prompt
+    # is actually a question (ends in '?' or opens with an interrogative), which
+    # is also why the match list no longer needs to enumerate every opener —
+    # `did` / `have we` / `were` / `am I` / `isn't` / `how do I` are all covered
+    # by form, and were the "new class" the first fix missed.
+    # NOTE: "should we ..." is deliberately NOT matched — penalising the coder
+    # there would make the decide-then-implement chain unreachable.
+    # With the form gate doing the real work, the match list is deliberately
+    # GENERIC — ubiquitous function words, so it fires on essentially any
+    # English question. Enumerating openers here was what let `did` / `have we`
+    # / `am I` / `isn't` slip through as a "new class"; a closed phrase list can
+    # always be walked around, whereas interrogative form cannot.
+    # The form gate decides WHETHER this applies; the list below only has to be
+    # present. An earlier note called it "essentially any English question" —
+    # untrue, and a checker found the counterexample (`what is our current code
+    # coverage?` contains none of the round-2 words and escaped to vivi). The
+    # list now carries the closed-class words that are hard to avoid in an
+    # English question; it is still a list, so the invariant says "measured".
+    requires_question_form: true
+    match: ["the", "a", "an", "we", "i", "it", "this", "that", "there", "any", "anything", "our", "your", "their", "my", "you", "they", "us", "them", "everyone", "anyone", "users", "teams", "do", "does", "did", "is", "are", "was", "were", "still", "ever", "currently", "current"]
+    boost: { vivi: -0.5, apivr: -0.5, kupo: -0.5, idg: -0.5 }
+    note: "read-only interrogative → never hand a question to a writer on a bare verb match"
   - id: localized_micro_task
     # Kupo-vs-coder tiebreak (executor precedence). The `fix`-family verbs
     # (fix the import / one-line fix / fix the typo) tie Kupo with Vivi/APIVR-Δ
@@ -244,27 +319,42 @@ signals:
 # match are resolved by nothing more principled than which one is declared
 # first in this file. That is not a rule anyone chose; it is an artifact.
 #
-# This list is NOT globally closed under union: 7 equal-specificity pairs among
-# the pre-existing 2-class templates have no more-specific entry covering their
-# union, and are still decided by file order (e.g. decide-then-implement vs
-# ship-fast on a reasoner+planner+coder prompt). Those predate this change and
-# are left alone deliberately — resolving them means choosing semantics for
+# This list is NOT globally closed under union: **5** equal-specificity pairs
+# among the pre-existing 2-class templates have no more-specific entry covering
+# their union, and are still decided by file order (e.g. decide-then-implement
+# vs ship-fast on a reasoner+planner+coder prompt). Those predate this change
+# and are left alone deliberately — resolving them means choosing semantics for
 # each, not adding a mechanism.
 #
+# A pair (A,B) counts as RESOLVED iff some template C has
+# `C.requires_classes ⊆ (A ∪ B)` AND `|C| > |A|` — SUBSET, matching what the
+# kernel actually does (`select(requires_classes ⊆ classes) | sort_by(-spec)`).
+# An earlier revision tested set-EQUALITY with the union, which over-reported
+# ties (it claimed 7) and was blind to a duplicate class set entirely. Because
+# the expected list had been generated with that same wrong expression, both
+# sides of the test agreed and the gate passed while proving nothing.
+#
 # What IS guaranteed: adding `diagnose-then-plan-then-fix` would itself have
-# created an 8th such pair (against plan-before-build, on a
+# created a 6th such pair (against plan-before-build, on a
 # scout+debugger+planner+coder prompt), so `scout-diagnose-plan-fix` is added
-# alongside it to cover that union and keep specificity decisive.
-# `cli/tests/routing_chains.bats` PINS the unresolved set to exactly those 7 —
-# a new template that introduces an 8th ambiguity fails the suite.
+# alongside it to cover that union and keep specificity decisive. The three-class
+# entry ALSO resolves a pre-existing tie (ship-fast vs forensic-then-fix at
+# coder+debugger+planner), so the set moves 6 → 5.
+# `cli/tests/routing_chains.bats` PINS the unresolved set to exactly those 5 —
+# a new template that introduces a 6th ambiguity, INCLUDING one that merely
+# duplicates an existing class set, fails the suite.
 chains:
   - name: scout-diagnose-plan-fix
-    steps: ["atlas", "vigil", "ramza", "vivi"]
+    steps: ["atlas", "vigil", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "debugger", "planner", "coder"]
     when: "Unfamiliar code + a live failure + a build (widest pipeline)"
-    # Exists to keep the set intersection-closed: without it, plan-before-build
-    # and diagnose-then-plan-then-fix both match a scout+debugger+planner+coder
+    # Exists so specificity stays decisive: without it, plan-before-build and
+    # diagnose-then-plan-then-fix both match a scout+debugger+planner+coder
     # prompt at specificity 3 and file order silently picks the winner.
+    # Ends with `idg` for the same reason plan-before-build does — this is the
+    # WIDEST pipeline, and the entry it supersedes carried a trailing scriber
+    # step. Without it, a prompt that explicitly asked for documentation lost
+    # the docs step: exactly the silent step-drop this whole change removes.
   - name: plan-before-build
     steps: ["atlas", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]

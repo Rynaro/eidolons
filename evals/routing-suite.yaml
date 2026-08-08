@@ -312,7 +312,12 @@ suites:
       expect: { decision: dispatch, selected: [kupo] }
     - id: N-042
       category: micro
-      prompt: "swap the deprecated flag name everywhere"
+      # Reworded (checker finding): the original said "...everywhere" and this
+      # suite EXPECTED kupo — blessing a repo-wide rename onto the ≤2-file
+      # executor, the exact unbounded case `unbounded_scope` exists to catch.
+      # A suite that expects the bug cancels the signal meant to prevent it.
+      # The unbounded variant is now pinned as a guard below (N-G08).
+      prompt: "swap the deprecated flag name in cli/src/init.sh"
       expect: { decision: dispatch, selected: [kupo] }
     - id: N-043
       category: micro
@@ -369,7 +374,7 @@ suites:
       # widest pipeline; also the pair that would otherwise have been decided by
       # declaration order alone
       prompt: "map the worker, diagnose the timeout, spec a fix and implement it"
-      expect: { decision: chain, selected: [atlas, vigil, ramza, vivi] }
+      expect: { decision: chain, selected: [atlas, vigil, ramza, vivi, idg] }
     # guard — a 2-class debugger prompt must NOT be inflated into the 3-class
     # chain: N-015 above already pins "the build broke after the last merge" to
     # [vigil, vivi], so it serves as that guard and is not repeated here.
@@ -378,6 +383,135 @@ suites:
       # guard: planner+coder without failure context stays on ship-fast
       prompt: "spec the caching layer and implement it"
       expect: { decision: chain, selected: [ramza, vivi] }
+
+    # ── PRECISION GUARDS, read-only interrogatives ──────────────────────────────
+    # The original guard set was 5 tasks, of which exactly ONE was read-only,
+    # while all 44 recall tasks are imperative work requests. So the suite was
+    # sensitive to lexicon REMOVAL (AC-5) and blind to lexicon ADDITION — the
+    # same tautology on the precision axis. A checker measured 24 read-only
+    # interrogatives and found writer-routing had gone 3/24 -> 15/24 unnoticed.
+    # These pin the axis that was unmeasured. A question must never be answered
+    # by an edit.
+    - id: N-G06
+      category: guard-readonly
+      prompt: "which port does the server listen on?"
+      expect: { decision: clarify }
+    - id: N-G07
+      category: guard-readonly
+      prompt: "when did we last update the lockfile?"
+      expect: { decision: clarify }
+    - id: N-G08
+      category: guard-unbounded
+      # the unbounded twin of N-042; must NOT reach the executor
+      prompt: "swap the deprecated flag name everywhere"
+      expect: { decision: clarify }
+    - id: N-G09
+      category: guard-unbounded
+      # bounded micro-edit naming one file: the -0.25 penalty must NOT veto it
+      prompt: "rename the symbol at all call sites in cli/src/run.sh"
+      expect: { decision: dispatch, selected: [kupo] }
+    - id: N-G10
+      category: guard-readonly
+      prompt: "what happens when the migrate step runs?"
+      expect: { decision: clarify }
+
+    # ── PRECISION GUARDS, interrogative FORM vs subordinate clause ─────────────
+    # Round-2 regression pins. The first `read_only_question` fix presence-
+    # matched phrases anywhere in the prompt, so ordinary imperatives carrying a
+    # subordinate "which"/"is the"/"what happens" were vetoed: two independent
+    # checkers measured 18/18 and 12/12 correct dispatches turning into
+    # `clarify`, with this suite green throughout because not one recall task
+    # contains a subordinate clause. These pin the AXIS — imperative-with-clause
+    # must route, question-form must not — rather than the found examples.
+    - id: N-G11
+      category: guard-clause
+      prompt: "fix the bug where the retry count is the wrong type"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G12
+      category: guard-clause
+      prompt: "implement the flag which the installer reads at startup"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G13
+      category: guard-clause
+      prompt: "document what happens when the queue overflows"
+      expect: { decision: dispatch, selected: [idg] }
+    - id: N-G14
+      category: guard-clause
+      prompt: "optimize the path where the cache is the bottleneck"
+      expect: { decision: dispatch, selected: [vivi] }
+    # question FORM — openers absent from any phrase list, caught by form alone
+    - id: N-G15
+      category: guard-readonly
+      prompt: "have we ever had to migrate this config before?"
+      expect: { decision: clarify }
+    - id: N-G16
+      category: guard-readonly
+      prompt: "isn't the changelog entry generated automatically?"
+      expect: { decision: clarify }
+    - id: N-G17
+      category: guard-readonly
+      prompt: "did anyone update the changelog for this release?"
+      expect: { decision: clarify }
+    # unbounded vs path-bounded scope (the S5 limiter/path rescue)
+    - id: N-G18
+      category: guard-unbounded
+      # localized_micro_task (+0.15) must NOT carry a repo-wide rename to Kupo
+      prompt: "rename the helper everywhere"
+      expect: { decision: clarify }
+    - id: N-G19
+      category: guard-unbounded
+      prompt: "rename the config key repo-wide"
+      expect: { decision: clarify }
+    - id: N-G20
+      category: guard-unbounded
+      # a generic quantifier BOUNDED by a path must still route
+      prompt: "fix the typo in the import path in every file under cli/src/ui"
+      expect: { decision: dispatch, selected: [kupo] }
+
+    # ── PRECISION GUARDS, request-vs-question (round 3) ────────────────────────
+    # The round-2 form gate keyed on "ends with ? OR opens with a modal" and so
+    # suppressed the most common way work is actually requested. A checker
+    # showed SIX of this suite's own tasks (N-019/020/023/024/025/026) failing
+    # with nothing changed but "can you" and a question mark — while the suite
+    # reported 69/69. These pin the distinction the gate now draws: a REQUEST is
+    # not a question however it is punctuated.
+    - id: N-G21
+      category: guard-polite
+      prompt: "can you implement the retry logic in the worker?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G22
+      category: guard-polite
+      prompt: "would you refactor the roster loader for clarity?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G23
+      category: guard-polite
+      prompt: "please fix the retry bug in the worker"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G24
+      category: guard-polite
+      # a trailing confirmation tag must not veto the imperative before it
+      prompt: "implement the retry logic. is that ok?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G25
+      category: guard-polite
+      # imperative head wearing a question mark
+      prompt: "refactor the roster loader, ok?"
+      expect: { decision: dispatch, selected: [vivi] }
+    # "have"+pronoun is a question while "have a look at ..." is an imperative —
+    # N-G15 above already pins that prompt, so it is not repeated here.
+    - id: N-G27
+      category: guard-readonly
+      # question carrying none of the round-2 function words
+      prompt: "what is our current code coverage?"
+      expect: { decision: clarify }
+    - id: N-G28
+      category: guard-unbounded
+      prompt: "rename the helper across the codebase"
+      expect: { decision: clarify }
+    - id: N-G29
+      category: guard-unbounded
+      prompt: "rename the helper globally"
+      expect: { decision: clarify }
 
     - id: N-G05
       category: guard-trance

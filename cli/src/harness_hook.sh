@@ -513,18 +513,45 @@ ${ecm_block}"
     # hole worth showing; a prompt carrying none is just chat. This is a
     # visibility heuristic, deliberately NOT a routing lexicon — it never picks
     # an Eidolon, and on no match the historical silent path is taken verbatim.
-    # bash 3.2: tr for case-folding (no ${var,,}).
-    local prompt_lc
+    # Matching is WHOLE-WORD. The first implementation used unanchored substring
+    # globs and was wrong in both directions: `*test*` fired on "la(test)",
+    # `*spec*` on "e(spec)ially", `*plan*` on "ex(plan)ation", `*where*` on
+    # "some(where)" — 12/20 on ordinary chat, including "how are you today?" —
+    # while 12/12 genuine work requests ("bump the timeout to 30 seconds",
+    # "revert the last commit") stayed silent, which is the exact dead-end this
+    # branch exists to close.
+    # bash 3.2: tr for case-folding (no ${var,,}); punctuation → spaces so every
+    # comparison below is bounded by whitespace on both sides.
+    local prompt_lc prompt_norm
     prompt_lc="$(printf '%s' "${PROMPT:-}" | tr '[:upper:]' '[:lower:]')"
-    case " $prompt_lc " in
-      *add*|*build*|*chang*|*check*|*clean*|*creat*|*debug*|*diagnos*|*document*\
-      |*explain*|*fix*|*implement*|*improv*|*investigat*|*migrat*|*optimi*|*plan*\
-      |*refactor*|*remov*|*renam*|*review*|*rewrit*|*spec*|*test*|*trace*|*updat*\
-      |*why*|*where*|*how\ *|*what\ *|*should*|*broke*|*fail*|*wrong*|*error*)
-        : ;;   # work intent present but unrouted → surface it
-      *)
-        return 0 ;;  # conversational / trivial → historical silent path
-    esac
+    prompt_norm=" $(printf '%s' "$prompt_lc" | tr -c 'a-z0-9' ' ') "
+
+    # WORK INTENT DECIDES, and it is checked FIRST.
+    #
+    # A previous revision put a conversational deny-list ahead of this and let
+    # it win outright. That silenced the most common turn shape in an agent
+    # session — acknowledge, then instruct:
+    #     "thanks! now bump the timeout to 30 seconds"          -> SILENT
+    #     "cool, next: teach the loader to accept YAML anchors" -> SILENT
+    # re-opening the exact dead-end this branch exists to close, reachable by
+    # prefixing "thanks". The defect was structural: no work-verb list can
+    # rescue a prompt when the deny-list returns before it is consulted.
+    #
+    # Inverting the order makes the deny-list redundant — none of the
+    # acknowledgements it held contain a work verb — so it is deleted rather
+    # than kept as decoration. `wrong` and `error` are deliberately absent
+    # below: both are common in ordinary chat ("nothing wrong with that",
+    # "human error, no biggie"), and a genuine failure report reaches VIGIL
+    # through the kernel rather than arriving on this branch at all.
+    #
+    # Bare interrogatives (how/what/where/why) are absent for the same reason:
+    # alone they are as likely to be conversation as work, and a real
+    # "how does X work" now routes to ATLAS.
+    local _work_intent_re
+    _work_intent_re=' (add|added|adding|adds|build|building|builds|built|bump|change|changes|changing|check|clean|cleanup|code|configure|create|crash|crashes|debug|delete|deploy|diagnose|disable|document|drop|enable|expose|extend|extract|fail|failed|failing|fails|fix|fixed|fixes|fixing|give|handle|harden|implement|implementing|improve|install|investigate|make|merge|migrate|move|need|optimise|optimize|patch|profile|refactor|remove|rename|revert|review|rewrite|rid|silence|spec|split|stub|support|swap|teach|test|testing|tests|trace|update|updating|upgrade|validate|want|wire|write|broke|broken|hangs) '
+    if [[ ! "$prompt_norm" =~ $_work_intent_re ]]; then
+      return 0   # conversational / trivial → historical silent path
+    fi
     clarify_text="No Eidolon matched this prompt (below tau; no dispatch). ${clarify_text}  Ask the user these questions before proceeding, or state the assumption you are routing under."
     clarify_text="$(printf '%s' "$clarify_text" | cut -c1-4000)"
     jq -n \

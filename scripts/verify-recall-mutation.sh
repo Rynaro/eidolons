@@ -12,13 +12,20 @@
 # measuring the lexicon and must be rewritten — do NOT relax the ceiling.
 #
 # Usage:  scripts/verify-recall-mutation.sh [git-ref] [max-percent]
-#   git-ref      revision to take roster/routing.yaml from (default: HEAD~1)
-#   max-percent  fail if recall at/above this (default: 20)
+#   git-ref      revision to take roster/routing.yaml from
+#                (default: v2.17.0 — the last release BEFORE the lexicons were
+#                widened, so the comparison is meaningful from any checkout)
+#   max-percent  fail if the recall arm scores at/above this (default: 20)
+#
+# The default was HEAD~1, which is only correct while standing on the merge
+# commit; run from main a release later it compares against an already-fixed
+# routing.yaml, reports 100%, and prints a FAIL telling you to rewrite a suite
+# that is fine. A pinned pre-change tag has no such footgun.
 #
 # bash 3.2 compatible (macOS system shell).
 set -u
 
-REF="${1:-HEAD~1}"
+REF="${1:-v2.17.0}"
 MAX="${2:-20}"
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -42,16 +49,28 @@ echo "── recall suite (current) vs roster/routing.yaml @ ${REF} ──"
 OUT="$(EIDOLONS_NEXUS="$TMP" bash "$TMP/cli/eidolons" eval routing --suite recall 2>&1)"
 printf '%s\n' "$OUT"
 
-# Take the field that ENDS IN '%', not a fixed column. The OVERALL line is
-#   OVERALL   8/49   16.3%   cost=0 tokens (no model)
-# and a positional $4 grabs "cost=0", which awk then happily reads as 0 —
-# a gate that passes for the wrong reason on every input. (It did exactly
-# that on first run; found by checking the message, not the exit status.)
-PCT="$(printf '%s\n' "$OUT" | awk '/OVERALL/ {for (i=1;i<=NF;i++) if ($i ~ /%$/) {gsub(/%/,"",$i); print $i; exit}}')"
-if [ -z "${PCT:-}" ]; then
-  echo "verify-recall-mutation: could not parse OVERALL percentage" >&2
+# Score the RECALL ARM only — every category NOT named `guard-*`.
+#
+# Guards are precision tasks: they assert a prompt still clarifies, still
+# reroutes on refusal, still reaches a read-only member. They are SUPPOSED to
+# pass against both the old and the new lexicons, so including them puts a
+# floor under the mutated score that rises with every guard added. When the
+# guard set grew 5 -> 10 the OVERALL figure went 16.6% -> 22% and tripped this
+# gate — not because the suite got weaker, but because the instrument was
+# measuring the wrong population. Fixing that is the honest move; RAISING THE
+# CEILING to make it pass would be the gate-that-cannot-fail defect this script
+# exists to prevent, committed by the script itself.
+JSON="$(EIDOLONS_NEXUS="$TMP" bash "$TMP/cli/eidolons" eval routing --suite recall --json 2>/dev/null)"
+PCT="$(printf '%s' "$JSON" | jq -r '
+  [ .by_category[] | select(.category | startswith("guard-") | not) ] as $r
+  | if ($r | length) == 0 then "" else
+      (( [$r[].passed] | add ) * 100 / ( [$r[].total] | add ) | . * 10 | round / 10 | tostring)
+    end' 2>/dev/null)"
+if [ -z "${PCT:-}" ] || [ "$PCT" = "null" ]; then
+  echo "verify-recall-mutation: could not compute the non-guard recall score" >&2
   exit 2
 fi
+echo "recall arm (guards excluded): ${PCT}%"
 
 echo
 if awk "BEGIN{exit !($PCT < $MAX)}"; then

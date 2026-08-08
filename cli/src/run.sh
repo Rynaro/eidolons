@@ -212,9 +212,98 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
            + (if .named then 0.5 else 0 end))
   })) as $s1
 # Step 1b — confidence signals (+ --prior-failure context).
+#
+# FORM PREDICATES (routing-recall-gap round 2). Two signals need to know
+# something about the SHAPE of the prompt, not just which phrases occur in it.
+# Presence-matching alone made both of them wrong in the same way: a phrase that
+# is decisive at the head of a question ("which ", "is the") is meaningless
+# inside a subordinate clause, so `fix the bug where the retry count is the
+# wrong type` was penalised as if it were a question and fell below tau. Two
+# independent checkers measured that regression at 18/18 and 12/12 imperative
+# work requests turned into `clarify`, with the routing suite green throughout.
+#
+#   is_question  — interrogative FORM: the prompt ends in '?', or its FIRST word
+#                  is an interrogative opener. Head position is what makes a
+#                  question a question; a mid-sentence "is the" is not.
+#   has_path     — a path/file token is present (contains '/' with a letter, or
+#                  a dotted filename). Used to implement the scope rescue the
+#                  Step-2 predicate's S5 already has, which Step 1 previously
+#                  lacked — see roster/routing.yaml `unbounded_scope_qualified`.
+#
+# A signal opts in with `requires_question_form: true` / `skip_if_path: true`.
+# Absent keys ⇒ unchanged behaviour, so every other signal is untouched.
+| (($prompt | ascii_downcase | gsub("^\\s+|\\s+$";"")) ) as $p_trim
+# FIRST SENTENCE only — a trailing confirmation tag must not turn the imperative
+# before it into a question ("implement the retry logic. is that ok?"). Split on
+# ". " rather than "." so a filename like cli/src/lib.sh stays intact.
+| (($p_trim | split(". ") | .[0] // $p_trim)) as $p_first
+| (($p_first | gsub("[^a-z0-9' ]";"") | split(" ") | map(select(. != "")))) as $w
+| (($w[0] // "")) as $w0
+| (($w[1] // "")) as $w1
+# A REQUEST is not a question, however it is punctuated. Two frames cover
+# almost all of it: a modal aimed at the addressee ("can you ...", "would you
+# ...") and a leading "please". Without this, "can you fix the retry bug in the
+# worker?" was scored as an interrogative and the coder vetoed — six of the
+# recall suite's own tasks fail this way with nothing changed but a courtesy
+# prefix and a '?', while the suite still reports green.
+#
+# CLOSED LIST — HAS A TAIL. Measured, not exhaustive. Request frames outside
+# this shape are still read as questions and suppressed: "any chance you could
+# …?", "would it be possible to …?", "how about we …?", "shall we …?",
+# "want to …?", "let's …, ok?", and a leading "so"/"and" before an imperative.
+# All predate this change (none is a regression) and all are enumerated in
+# .spectra/changes/routing-recall-gap/verification.md §Residual. Stated here
+# because an un-annotated list is the one a future reader trusts.
+| (($w0 == "please")
+   or (($w0 | IN("can","could","would","will","cant","couldnt","wont"))
+       and ($w1 | IN("you","we","u","yall")))) as $is_modal_request
+# An imperative HEAD also settles it: "add retry logic to the fetch step?" and
+# "refactor the roster loader, ok?" are instructions wearing a question mark.
+#
+# CLOSED LIST — HAS A TAIL. Measured, not exhaustive. Verbs absent from it are
+# still read as questions when punctuated as one — notably several Kupo/IDG
+# heads: "hook up …?" (`wire` is listed, `hook` is not), "point the import …?",
+# "correct the spelling …?", "pin the version …?", "synthesize …?". Enumerated
+# in .spectra/changes/routing-recall-gap/verification.md §Residual.
+| (($w0 | IN("add","build","fix","implement","refactor","optimize","optimise",
+             "migrate","update","clean","write","create","remove","rename",
+             "revert","bump","document","port","patch","extend","wire",
+             "install","configure","delete","drop","enable","disable",
+             "replace","rewrite","swap","stub","harden","profile","silence",
+             "teach","handle","make","give","move","merge","split","extract",
+             "expose","validate","check","test","trace","investigate","map",
+             "audit","explore","review","summarize","summarise","compare",
+             "evaluate","weigh","spec","plan","decompose","diagnose","debug",
+             "deploy","scope","draft","outline","capture","produce","walk",
+             "inspect","survey","analyze","analyse","pull","push","tidy",
+             "sort"))) as $is_imperative_head
+# NOTE: "have", "do", "take", "get", "let", "use", "run", "set" are NOT listed
+# above. They are imperative in "have a look at the loader" and interrogative in
+# "have we ever had to migrate this config?" — listing them here would win the
+# AND-NOT and misclassify the question. The opener rule already draws that line
+# correctly by requiring a PRONOUN subject after do/have/had, so these words are
+# left to it.
+# Interrogative opener. "do"/"have"/"had" only count with a pronoun subject —
+# "do we need X?" is a question, "do the migration in cli/src/lib.sh" and
+# "have a look at the loader" are not.
+| ((($w0 | IN("which","what","where","when","who","whom","whose","why","how",
+              "is","are","was","were","am","does","did","can","could","should",
+              "would","will","has","isnt","arent","doesnt","dont","didnt",
+              "shouldnt","couldnt","wasnt","werent"))
+    or (($w0 | IN("do","have","had"))
+        and ($w1 | IN("we","you","i","they","it","he","she","this","that",
+                      "anyone","everyone","any","all")))) ) as $is_opener
+| ((($p_first | endswith("?")) or $is_opener)
+   and ($is_modal_request | not)
+   and ($is_imperative_head | not)) as $is_question
+| ([ $prompt | split(" ")[]
+     | select((test("[A-Za-z]") and test("/"))
+              or test("^[A-Za-z0-9_.-]+\\.[A-Za-z0-9]+$")) ] | length > 0) as $has_path
 | ([ $R.signals[]
      | select((.match as $m | any($m[]; . as $mp | hasword($prompt; $mp)))
-              or (.id == "prior_apivr_failure" and $ctx.prior_failure)) ]) as $fired
+              or (.id == "prior_apivr_failure" and $ctx.prior_failure))
+     | select((.requires_question_form // false) | not or $is_question)
+     | select((.skip_if_path // false) | not or ($has_path | not)) ]) as $fired
 | (([ $fired[] | .boost | to_entries[] ]
      | group_by(.key)
      | map({key: .[0].key, value: (map(.value) | add)})

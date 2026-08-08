@@ -1,0 +1,99 @@
+schema: eidolons/change-spec.v1
+change_id: chain-three-class
+tier: full
+maker: vivi
+checker: kupo
+target: >
+  nexus — add the missing three-class chain template so a "diagnose it, spec it,
+  fix it" prompt stops falling back to a two-class chain that silently drops the
+  diagnosis step (residual recorded by change `routing-recall-gap`, v2.18.0)
+
+problem: >
+  The routing kernel selects the matching chain template with the most
+  `requires_classes` (`sort_by(-spec) | .[0]` in cli/src/run.sh). No template
+  covered debugger+planner+coder. Measured on main @ 13013ae over a 13-prompt
+  probe: all four debugger+planner+coder prompts selected the two-class
+  `ship-fast` -> [ramza, vivi], and the scout+debugger+planner+coder prompt
+  selected `plan-before-build`. In every case the DIAGNOSIS step was dropped —
+  the router handed a planner a failure nobody had root-caused, and the dropped
+  step left no trace in the artifact.
+
+decision: >
+  Add two template entries (DATA only; the selection algorithm is untouched, so
+  invariant I-C2 holds). `diagnose-then-plan-then-fix` (vigil -> ramza -> vivi)
+  covers debugger+planner+coder. `scout-diagnose-plan-fix` (atlas -> vigil ->
+  ramza -> vivi) covers the four-class union and is NOT optional: jq's `sort_by`
+  is stable, so two equal-specificity templates that both match are resolved by
+  declaration order in the file. Adding the three-class template alone would
+  have collided with `plan-before-build` on a scout+debugger+planner+coder
+  prompt and created a sixth order-dependent tie. The four-class entry keeps
+  specificity decisive.
+
+safety_invariant: >
+  No existing chain route changes OUTSIDE the target shape. Exhaustive
+  57-subset differential: exactly 8 subsets move, all supersets of
+  {coder,debugger,planner}. The 2-class templates and `plan-before-build`
+  resolve as before; `public` stays 15/15 and N-015 / N-C06 pin the two-class
+  debugger and planner routes. NOT unchanged, and disclosed rather than
+  claimed away: a reasoner+debugger+planner+coder prompt now selects
+  `diagnose-then-plan-then-fix` over `decide-then-implement`, dropping FORGE
+  (accepted on rationale; witness in verification.md).
+
+invariants:
+  - The template list is NOT closed under union. FIVE equal-specificity pairs
+    among the PRE-EXISTING two-class templates have no covering entry and remain
+    decided by declaration order. They are PINNED by cli/tests/routing_chains.bats
+    so a sixth cannot appear silently — recorded, not endorsed. An earlier
+    draft of the chains: header comment claimed closure; that claim was audited
+    before shipping and found FALSE, and the comment now states the narrower
+    guarantee that actually holds.
+  - A test written alongside the data it checks passes trivially. Every assertion
+    in routing_chains.bats was falsified by mutation before being trusted.
+  - Gilgamesh never appears in a chain template (Step-2(a) only); unchanged here.
+
+anti_scope:
+  - Do NOT resolve the five remaining ties. Each needs a semantic decision
+    per pair, not a mechanism; widening scope to "fix ties" would be a different
+    change.
+  - No `priority` field, no change to the selection algorithm. DATA only.
+  - The scout+debugger+coder combination (scout step dropped to
+    `forensic-then-fix`) is left open and reported.
+
+files_touched:
+  - roster/routing.yaml              # the two template entries + the tie-break note
+  - cli/tests/routing_chains.bats    # route pins + the ambiguity pin (new file)
+  - evals/routing-suite.yaml         # recall coverage N-C01..N-C04, N-C06
+  - methodology/cortex/chain-templates.md   # deep cortex table re-sync
+  - CHANGELOG.md
+  - VERSION                          # 2.18.0 -> 2.19.0
+  - .spectra/changes/chain-three-class/     # this record
+
+acceptance_checks:
+  - id: AC-1
+    check: debugger+planner+coder selects diagnose-then-plan-then-fix -> [vigil, ramza, vivi]
+    evidence: recall suite N-C01..N-C03
+  - id: AC-2
+    check: scout+debugger+planner+coder resolves by specificity -> [atlas, vigil, ramza, vivi, idg]
+    evidence: recall suite N-C04 -> [atlas, vigil, ramza, vivi, idg]
+  - id: AC-3
+    check: no existing chain route changes
+    evidence: public suite 15/15; N-015 [vigil, vivi]; N-C06 [ramza, vivi]
+  - id: AC-4
+    check: the set of order-dependent ties stays exactly the five remaining pairs (subset test, not set-equality)
+    evidence: routing_chains.bats "ambiguity pin"
+  - id: AC-5
+    check: every new assertion goes RED under a mutation that breaks what it guards
+    evidence: 5/5 mutations red incl. duplicate-class-set, baseline green (verification.md)
+  - id: AC-6
+    check: every template step names a real roster member
+    evidence: routing_chains.bats
+  - id: AC-7
+    check: lint / schema / cortex token budget / suite self-test clean
+    evidence: all exit 0; self-test 88 tasks; recall-mutation gate 8.2% vs v2.17.0
+  - id: AC-8
+    check: full bats suite green, counted against the plan
+    evidence: bats cli/tests/ -> full suite green, 0 failures (see verification.md for the counted figure)
+
+released_as: v2.19.0
+merge_commits:
+  - f152c4c5a6f33e739e678a0874e76ba360294e0b   # PR #553

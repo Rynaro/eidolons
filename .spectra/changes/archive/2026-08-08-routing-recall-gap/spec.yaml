@@ -1,0 +1,131 @@
+schema: eidolons/change-spec.v1
+change_id: routing-recall-gap
+tier: full
+maker: vivi
+checker: kupo
+target: >
+  nexus — close the routing kernel's recall hole and make its no-route path
+  observable, after "Gilgamesh is never invoked" turned out to be the visible
+  tip of the whole roster going unrouted
+
+problem: >
+  Reported symptom: Gilgamesh never dispatched. True but shallow — 51 of 21,975
+  recorded dispatches (0.23%), 2 in August 2026. The real defect was two layers
+  below. Measured over a 44-prompt corpus phrased intent-first (deliberately
+  without consulting the trigger lists): the kernel selected the correct Eidolon
+  6.8% of the time and selected NOTHING AT ALL 90.9% of the time. diagnose,
+  debug, investigate, analyze, review, refactor, optimize, compare, evaluate and
+  summarize matched no Eidolon in the roster. A prompt matching nothing scores 0,
+  falls below tau_standard, and becomes decision=clarify — at which point
+  cli/src/harness_hook.sh returned early and injected NOTHING. The host received
+  no routing context, worked the prompt inline, and no Eidolon was invoked at
+  all, while the kernel's own clarification_request was computed and discarded.
+  A router with a lexicon hole was byte-indistinguishable from a healthy one.
+  None of this surfaced in a gate because evals/routing-suite.yaml was authored
+  FROM the trigger lexicons: 15 tasks, 100% green, permanently.
+
+decision: >
+  Three moves. (1) Widen trigger_verbs across all seven routed capability classes
+  — DATA only, invariant I-C2 holds. (2) Make the no-route path observable: a
+  below-tau prompt CARRYING WORK INTENT surfaces the kernel's
+  clarification_request; conversational turns stay silent, preserving R1-AC2.
+  (3) Replace the tautological benchmark with an adversarial one whose prompts
+  are written from user intent, plus a mutation check that fails if the suite
+  ever stops being able to fail.
+
+safety_invariant: >
+  No precision regression: the pre-existing `public` suite stays 15/15, the
+  named-refusal reroute still fires, and a genuinely empty prompt still
+  clarifies. Read-only intent reaching a write-capable Eidolon is now MEASURED
+  rather than asserted (guards N-G01, N-G06/G07/G10/G15..G17), and imperative
+  work carrying a subordinate interrogative clause is pinned as MUST-ROUTE
+  (N-G11..N-G14). The round-1 wording — "read-only intent never reaches a
+  write-capable Eidolon ... pinned by guards N-G01..N-G05" — was falsified by a
+  checker (3/24 -> 15/24) and is retracted: five guards, of which one was
+  read-only, could not support it. Gilgamesh's Step-2(a) predicate and the frozen generalist-eidolon
+  S1..S5 vectors are UNTOUCHED; all 11 frozen predicate fixtures resolve to their
+  contracted routes.
+
+invariants:
+  - Gilgamesh's rarity is a SYMPTOM of the roster's silence, not a defect. With
+    honest specialist recall a rarely-used fallthrough generalist is the correct
+    steady state. Do not "fix" its dispatch rate directly.
+  - A benchmark authored from the implementation's own vocabulary is a tautology
+    wearing a percentage. The recall suite carries a maintenance contract: when
+    it regresses, widen the LEXICON — never reword the prompt.
+  - Unbounded mutation scope should not auto-route to a coder/executor. Step 1
+    implements BOTH halves of the Step-2 predicate's S5 rule: a repo-wide phrase
+    is not rescued, while a generic quantifier bounded by a PATH token is
+    (kernel `skip_if_path`). An earlier revision claimed to mirror S5 while
+    implementing only the punitive half; that claim was false and is retracted.
+    STATED AS MEASURED, NOT ABSOLUTE: the repo-wide trigger is a closed phrase
+    list and therefore has a tail. Round 3 widened it after a checker found 8/10
+    unbounded mutations escaping via `across the codebase` / `globally` /
+    `throughout the repo`; 7/7 of the probe set now clarifies. Absolute wording
+    on a phrase list is what earned the round-1 and round-2 rejections.
+  - A read-only QUESTION should not be answered by an edit, AND a REQUEST must
+    not be mistaken for a question. Gated on FORM (kernel
+    `requires_question_form`), not phrase presence. Two revisions were needed:
+    round 2 presence-matched "is the"/"which" anywhere and vetoed imperatives
+    carrying a subordinate clause (18/18 and 12/12 measured); round 3's first
+    form gate keyed on punctuation alone and suppressed polite requests —
+    "can you implement the retry logic in the worker?" scored 0.30, and six of
+    the recall suite's own tasks failed with nothing changed but a courtesy
+    prefix and a '?'. The gate now models request-vs-question: first sentence
+    only, modal-request frames and imperative heads are not questions, and
+    do/have need a pronoun subject.
+    STATED AS MEASURED, NOT ABSOLUTE: the signal's match list is closed, so a
+    question composed entirely of words outside it escapes. Round 3 widened it
+    after `what is our current code coverage?` was found to route to a writer.
+
+anti_scope:
+  - No change to the raw->score curve, tau_standard, or the chain templates.
+  - No change to the Gilgamesh Step-2(a) predicate or the frozen
+    generalist-eidolon lexicons — amending those needs a new SHA-256 freeze.
+  - The three-class chain-template gap is recorded as a residual, not fixed here
+    (subsequently closed by change `chain-three-class`, v2.19.0).
+
+files_touched:
+  - roster/routing.yaml              # widened lexicons + scope/question signals
+  - cli/src/run.sh                   # form predicates: requires_question_form, skip_if_path
+  - cli/src/harness_hook.sh          # work-intent clarify injection
+  - cli/src/eval.sh                  # --suite recall
+  - evals/routing-suite.yaml         # the adversarial recall suite + precision/axis guards
+  - scripts/verify-recall-mutation.sh # the "can this gate fail" check (new file)
+  - cli/tests/harness.bats           # AC-6 both branches
+  - cli/tests/eval.bats              # suite total derived, not hardcoded
+  - EIDOLONS.md                      # cortex trigger table re-sync
+  - CHANGELOG.md
+  - VERSION                          # 2.17.0 -> 2.18.0
+  - .spectra/changes/routing-recall-gap/    # this record
+
+acceptance_checks:
+  - id: AC-1
+    check: recall >= 80% on the adversarial suite
+    evidence: recall arm 69/69 = 100%
+  - id: AC-2
+    check: MISS rate (selected == []) <= 10%
+    evidence: 0%
+  - id: AC-3
+    check: no precision regression on the public suite
+    evidence: 15/15 unchanged
+  - id: AC-4
+    check: read-only QUESTIONS never route to a writer, AND imperatives carrying a
+      subordinate interrogative clause still do (both directions measured)
+    evidence: guards N-G01, N-G06/G07/G10, N-G11..N-G20; 14/14 clause-imperatives route
+  - id: AC-5
+    check: the gate CAN fail — recall collapses against the pre-change lexicons
+    evidence: recall arm 8.2% vs v2.17.0 (ceiling 20%), scripts/verify-recall-mutation.sh
+  - id: AC-6
+    check: clarify is observable on work intent, silent on conversation
+    evidence: cli/tests/harness.bats corpora — 12/12 conversational silent, 6/6 courtesy-prefixed work requests surface
+  - id: AC-7
+    check: lint / schema / bash 3.2 / cortex token budget
+    evidence: all exit 0; budget 836/850; macOS CLI-tests job green
+  - id: AC-8
+    check: full bats suite green, counted against the plan
+    evidence: bats cli/tests/ -> full suite green, 0 failures (counted against the plan; see verification.md)
+
+released_as: v2.18.0
+merge_commits:
+  - ec92dce3e1f63248505c6362164b579357460d3f   # PR #551

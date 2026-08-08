@@ -30,8 +30,19 @@ load helpers
 @test "chains: scout+debugger+planner+coder selects scout-diagnose-plan-fix (no order-dependent tie)" {
   run eidolons run "map the worker, diagnose the timeout, spec a fix and implement it" --json
   [ "$status" -eq 0 ]
-  [ "$(jq -r '.selected | join(",")' <<< "$output")" = "atlas,vigil,ramza,vivi" ]
+  [ "$(jq -r '.selected | join(",")' <<< "$output")" = "atlas,vigil,ramza,vivi,idg" ]
   [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-plan-fix" ]
+}
+
+@test "chains: the widest pipeline does not drop the scriber step" {
+  # scout-diagnose-plan-fix supersedes plan-before-build, which ended in idg.
+  # Without a trailing idg of its own, a prompt that explicitly asked for
+  # documentation lost the docs step — the same silent step-drop this change
+  # exists to remove, transplanted onto the scriber class.
+  run eidolons run "explore the module, diagnose the timeout, spec the fix, implement it and document the change" --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-plan-fix" ]
+  [[ "$(jq -r '.selected | join(",")' <<< "$output")" == *"idg"* ]]
 }
 
 @test "chains: pre-existing 2-class and 3-class routes are unchanged" {
@@ -61,23 +72,36 @@ _expected_ambiguous_pairs() {
   cat <<'EOF'
 audit-without-touching|forensic-then-fix|coder+debugger+scout+scriber
 audit-without-touching|scout-then-spec|planner+scout+scriber
-audit-without-touching|ship-fast|coder+planner+scout+scriber
 decide-then-implement|audit-without-touching|coder+reasoner+scout+scriber
 decide-then-implement|forensic-then-fix|coder+debugger+reasoner
-decide-then-implement|scout-then-spec|coder+planner+reasoner+scout
 decide-then-implement|ship-fast|coder+planner+reasoner
 EOF
 }
 
+# A pair (A,B) at equal specificity is RESOLVED iff some template C satisfies
+#   C.req ⊆ (A.req ∪ B.req)   AND   |C.req| > |A.req|
+# SUBSET — matching cli/src/run.sh, which selects
+#   select(requires_classes ⊆ classes) | sort_by(-spec) | .[0]
+#
+# The first revision of this helper tested set-EQUALITY (`. == $u`). That
+# over-reported ties (it claimed 7 where 5 exist) and, worse, was blind to a
+# template that merely DUPLICATES an existing class set — such a pair always
+# ties, since no C can be a strict superset inside their own union. Because the
+# expected list above had been generated with the same wrong expression, both
+# sides of the comparison were wrong identically and this test passed while
+# proving nothing about the property it names. The subset form below closes
+# both holes: duplicate class sets now surface as unresolved automatically.
 _actual_ambiguous_pairs() {
   yq -o=json '.chains' "$EIDOLONS_ROOT/roster/routing.yaml" | jq -r '
     [ .[] | {name, req: (.requires_classes | sort)} ] as $t
-    | [ $t[] | .req ] as $all
     | [ range(0; $t|length) as $i
         | range($i+1; $t|length) as $j
         | select(($t[$i].req|length) == ($t[$j].req|length))
         | (($t[$i].req + $t[$j].req) | unique) as $u
-        | select([ $all[] | select(. == $u) ] | length == 0)
+        | select([ $t[]
+                   | select(((.req - $u) == [])
+                            and ((.req|length) > ($t[$i].req|length))) ]
+                 | length == 0)
         | "\($t[$i].name)|\($t[$j].name)|\($u | join("+"))" ]
     | sort | .[]'
 }
@@ -86,6 +110,34 @@ _actual_ambiguous_pairs() {
   _actual="$(_actual_ambiguous_pairs)"
   _expected="$(_expected_ambiguous_pairs | sort)"
   [ "$_actual" = "$_expected" ]
+}
+
+@test "chains: a DUPLICATE class set is reported as an unresolved tie (pin blind-spot regression)" {
+  # The equality-based helper could not see this: a template duplicating an
+  # existing requires_classes always ties (no C can be a strict superset inside
+  # their own union), yet all assertions stayed green while the live route
+  # flipped to idg>kupo.
+  #
+  # This test calls _actual_ambiguous_pairs() against a DOCTORED ROSTER rather
+  # than re-implementing the predicate inline. The first version inlined a copy,
+  # which meant it asserted a property of its own frozen expression and gave the
+  # real helper zero protection — a checker confirmed it stayed green when the
+  # helper was reverted to the equality form. Pointing EIDOLONS_ROOT at a temp
+  # tree keeps exactly one copy of the predicate under test.
+  local _root="$BATS_TEST_TMPDIR/duproot"
+  mkdir -p "$_root/roster"
+  yq -o=json '.' "$EIDOLONS_ROOT/roster/routing.yaml" \
+    | jq '.chains += [{name:"rival-plan-before-build", steps:["idg","kupo"],
+                       requires_classes:["scout","planner","coder"]}]' \
+    | yq -P '.' > "$_root/roster/routing.yaml"
+
+  local _saved="$EIDOLONS_ROOT"
+  EIDOLONS_ROOT="$_root"
+  local _out
+  _out="$(_actual_ambiguous_pairs)"
+  EIDOLONS_ROOT="$_saved"
+
+  [[ "$_out" == *"plan-before-build|rival-plan-before-build"* ]]
 }
 
 @test "chains: adding diagnose-then-plan-then-fix did NOT introduce a tie with plan-before-build" {

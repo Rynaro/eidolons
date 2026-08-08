@@ -31,9 +31,9 @@ order-dependent tie.
 | ID | Criterion | Method |
 |---|---|---|
 | **AC-1** | debugger+planner+coder selects `diagnose-then-plan-then-fix` → `[vigil, ramza, vivi]` | recall suite `N-C01..N-C03` |
-| **AC-2** | scout+debugger+planner+coder resolves by **specificity**, not file order → `[atlas, vigil, ramza, vivi]` | `N-C04` |
-| **AC-3** | No existing chain route changes (2-class and the pre-existing 3-class) | `public` 15/15 + `N-015`, `N-C06` |
-| **AC-4** | **No NEW order-dependent tie.** The set of unresolved equal-specificity pairs stays exactly the 7 pre-existing ones | `cli/tests/routing_chains.bats` |
+| **AC-2** | scout+debugger+planner+coder resolves by **specificity**, not file order → `[atlas, vigil, ramza, vivi, idg]` | `N-C04` |
+| **AC-3** | No existing chain route changes **outside the target shape**. Exhaustive 57-subset differential: exactly 8 subsets move, all supersets of `{coder,debugger,planner}`. NOT unchanged, and disclosed rather than claimed away: a reasoner+debugger+planner+coder prompt now selects `diagnose-then-plan-then-fix` over the 2-class `decide-then-implement`, dropping FORGE | `public` 15/15 + `N-015`, `N-C06`; witness in `verification.md` |
+| **AC-4** | **No NEW order-dependent tie.** The set of unresolved equal-specificity pairs stays exactly the 5 remaining ones | `cli/tests/routing_chains.bats` |
 | **AC-5** | **The new tests can fail.** Each is falsified by mutating what it guards | mutation run, recorded in `verification.md` |
 | **AC-6** | Every template step names a real roster member | `routing_chains.bats` |
 | **AC-7** | lint / schema / token budget / suite self-test clean | CI parity |
@@ -46,9 +46,9 @@ claims to protect.
 
 ## Anti-scope
 
-- **The 7 pre-existing equal-specificity ties are NOT resolved here.** They
+- **The 5 remaining equal-specificity ties are NOT resolved here.** They
   predate this change; fixing them means choosing semantics for each pair, not
-  adding a mechanism. They are *pinned* by test so no eighth can appear
+  adding a mechanism. They are *pinned* by test so no sixth can appear
   silently — recorded, not endorsed.
 - **No `priority` field / no change to the selection algorithm.** The fix is
   DATA: two template entries. Invariant I-C2 holds.
