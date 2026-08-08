@@ -8,7 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-## [2.19.1] — 2026-08-08 — what the checker found, twice
+## [2.19.1] — 2026-08-08 — what the checker found, three times
+
+> **Round 3.** The form predicate below was itself rejected on first landing. It keyed on `ends with '?' OR opens with a modal` and so suppressed the most common way work is requested: `"can you implement the retry logic in the worker?"` → `clarify` (vivi 0.30). **Six of the eight measured failures were the recall suite's own tasks** (`N-019`, `N-020`, `N-023`–`N-026`) with nothing changed but a courtesy prefix and a question mark — while the suite reported 69/69. It now models **request vs question**: first sentence only (a trailing tag cannot veto the imperative before it), modal-request frames (`can you`, `please`) and imperative heads are not questions, and `do`/`have` need a pronoun subject to count as openers. Guards `N-G21`–`N-G29` pin that axis. Both closed phrase lists were widened after the checker measured their tails (8/10 unbounded mutations escaping via `across the codebase` / `globally`; `"what is our current code coverage?"` matching none of the function words), and both invariants reworded from "never" to what is measured — absolute wording on a closed list is what earned the first two rejections.
+
 
 Two independent checkers were dispatched to close the ESL records for `routing-recall-gap` (v2.18.0) and `chain-three-class` (v2.19.0). **Both rejected. Then both rejected the remediation.** maker ≠ checker is mechanically enforced here and it earned its keep twice over: every finding was produced by *running* the shipped code, and none of it was visible to the gates that shipped with it.
 

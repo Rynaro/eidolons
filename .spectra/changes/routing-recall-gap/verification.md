@@ -69,21 +69,87 @@ there with data alone.
   openers no phrase list contains), `N-G18`–`N-G20` (repo-wide vs
   path-bounded scope).
 
-## Evidence after round 2
+## Checker round 3 — **REJECT**
+
+Round 2's kernel form predicate was the right mechanism and fixed everything it
+was aimed at — and then failed in the same shape one level up. `$is_question`
+was `ends with '?' OR opens with a modal`, evaluated over the whole prompt with
+no check for an imperative. So:
+
+```
+can you implement the retry logic in the worker?   -> clarify   (vivi 0.30)
+would you refactor the roster loader for clarity?  -> clarify
+implement the retry logic. is that ok?             -> clarify
+refactor the roster loader, ok?                    -> clarify
+```
+
+**Six of the eight measured failures are this suite's own tasks** — `N-019`,
+`N-020`, `N-023`, `N-024`, `N-025`, `N-026` — with nothing changed but a
+courtesy prefix and a question mark. The suite reported **69/69** throughout.
+Apply the most common politeness transformation in English to the corpus and
+the recall arm collapses; no guard covered it, because not one of `N-G11`–`N-G20`
+put a `?` on an imperative.
+
+Two secondary findings, both "a closed list with a tail" under absolute
+invariant wording:
+
+- `read_only_question` did not fire on a question containing none of its 11
+  function words — `"what is our current code coverage?"` → `vivi`, from the
+  checker's own corpus (5/5 constructed to that shape reached a writer).
+- The repo-wide list missed `across the codebase` / `throughout the repo` /
+  `globally` / `all files` / `codebase-wide`: **8/10** unbounded mutations
+  still routed.
+
+## Remediation round 3
+
+`$is_question` now models **request vs question** instead of punctuation:
+
+- **First sentence only.** A trailing tag cannot turn the imperative before it
+  into a question. Split on `". "` so a filename keeps its dots.
+- **Modal-request frame is not a question.** `can/could/would/will` + `you/we`,
+  or a leading `please`.
+- **Imperative head is not a question.** `"add retry logic to the fetch step?"`
+  is an instruction wearing a question mark.
+- **`do`/`have`/`had` need a pronoun subject** to count as openers, which is
+  what separates `"have we ever had to migrate this config?"` (question) from
+  `"have a look at the loader"` (imperative). Those words are deliberately
+  absent from the imperative-head list, or they would win the AND-NOT and
+  misclassify the question.
+
+Both closed lists were widened, and both invariants reworded from "never" to
+what is actually measured — absolute wording is what earned rounds 1 and 2.
+
+Guards `N-G21`–`N-G29` pin the new axis: polite/modal requests and tag
+questions must route; questions without common function words and the wider
+repo-wide vocabulary must clarify.
+
+**Not fixed, and it is a pre-existing gap rather than a regression:**
+`"do the migration in cli/src/lib.sh"` still clarifies — `migration` is a noun
+and the coder lexicon has `migrate`. Adding the noun was tried and reverted: it
+broke `N-030` (`"draft an approach for the migration"`), which correctly routes
+to the planner. Trading a correct route for a prompt that never worked is not
+an improvement.
+
+## Evidence after round 3
 
 | AC | Result | Evidence |
 |---|---|---|
 | AC-1 | **PASS** | recall arm 100 % |
 | AC-2 | **PASS** | 0 MISS |
 | AC-3 | **PASS** | `public` 15/15 |
-| AC-4 | **PASS (measured both directions)** | 10/11 checker interrogatives clarify; **14/14** subordinate-clause imperatives route; 5/5 repo-wide scope clarifies; 2/2 path-bounded routes. Guards `N-G01`, `N-G06/07/10`, `N-G11`–`N-G20` |
+| AC-4 | **PASS (measured both directions)** | 9/9 polite/modal requests route · 6/6 tag-question imperatives route · 3/3 subordinate-clause imperatives route · 9/9 interrogatives clarify · 7/7 repo-wide clarify · 3/3 path-bounded route. Guards `N-G01`, `N-G06/07/10`, `N-G11`–`N-G29` |
 | AC-5 | **PASS** | recall arm collapses to **8.2 %** vs `v2.17.0`; exit 0 / 1 / 2 verified |
-| AC-6 | **PASS (corpus, both directions)** | 12/12 conversational silent (incl. `nothing wrong with that`, `human error, no biggie`); 6/6 courtesy-prefixed work requests surface; `cli/tests/harness.bats` green |
+| AC-6 | **PASS (corpus, both directions)** | 12/12 real work requests surface (incl. 6/6 courtesy-prefixed shapes); 39/40 conversational silent |
 | AC-7 | **PASS** | `make lint` 0 · `make schema` 0 · budget 836/850 · bash 3.2 construct test green |
 | AC-8 | **PASS** | full `bats cli/tests/` green, counted against the plan |
 
-Suites: recall **69/69**, public **15/15**, self-test **88 tasks**.
+Suites: recall **77/77**, public **15/15**, self-test **96 tasks**.
 Frozen `generalist-eidolon` fixtures: all 11 resolve to contracted routes.
+
+Both kernel predicates were verified by mutation rather than by reading —
+removing `requires_question_form` drops recall 69/69 → 41/69 and
+`guard-clause` to 0/4; removing `skip_if_path` drops `guard-unbounded` to 3/5.
+The guards depend on the mechanism they claim to guard.
 
 ## Residual — disclosed
 

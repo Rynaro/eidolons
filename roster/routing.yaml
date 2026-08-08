@@ -240,7 +240,12 @@ signals:
     # the second was suppressed; at -0.25 `localized_micro_task`'s +0.15
     # cancelled most of it and repo-wide renames went BACK to the ≤2-file
     # executor at 0.70 — measured 5/7 by a checker. Tiering fixes the class.
-    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "everywhere", "everywhere it appears", "project-wide", "repo-wide"]
+    # Known to be a closed list with a tail — a checker measured 8/10 unbounded
+    # mutations escaping the round-2 list via `across the codebase` /
+    # `throughout the repo` / `globally` / `all files` / `codebase-wide`. Those
+    # are added; the invariant is stated as "measured", not "never", because a
+    # phrase list cannot honestly claim exhaustiveness.
+    match: ["entire codebase", "whole codebase", "across the entire", "across the whole", "across the codebase", "across all", "throughout the repo", "throughout the codebase", "everywhere", "everywhere it appears", "project-wide", "projectwide", "repo-wide", "repowide", "codebase-wide", "globally", "in all files", "in all the", "all files", "all modules", "all packages"]
     boost: { vivi: -0.4, apivr: -0.4, kupo: -0.4 }
     note: "REPO-WIDE mutation scope → never auto-route to a coder/executor; no rescue (mirrors predicate S5 with no LIMITER present)"
   - id: unbounded_scope_qualified
@@ -282,8 +287,14 @@ signals:
     # English question. Enumerating openers here was what let `did` / `have we`
     # / `am I` / `isn't` slip through as a "new class"; a closed phrase list can
     # always be walked around, whereas interrogative form cannot.
+    # The form gate decides WHETHER this applies; the list below only has to be
+    # present. An earlier note called it "essentially any English question" —
+    # untrue, and a checker found the counterexample (`what is our current code
+    # coverage?` contains none of the round-2 words and escaped to vivi). The
+    # list now carries the closed-class words that are hard to avoid in an
+    # English question; it is still a list, so the invariant says "measured".
     requires_question_form: true
-    match: ["the", "a", "an", "we", "i", "it", "this", "that", "there", "any", "anything"]
+    match: ["the", "a", "an", "we", "i", "it", "this", "that", "there", "any", "anything", "our", "your", "their", "my", "you", "they", "us", "them", "everyone", "anyone", "users", "teams", "do", "does", "did", "is", "are", "was", "were", "still", "ever", "currently", "current"]
     boost: { vivi: -0.5, apivr: -0.5, kupo: -0.5, idg: -0.5 }
     note: "read-only interrogative → never hand a question to a writer on a bare verb match"
   - id: localized_micro_task

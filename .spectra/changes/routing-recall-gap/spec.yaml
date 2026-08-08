@@ -53,16 +53,30 @@ invariants:
   - A benchmark authored from the implementation's own vocabulary is a tautology
     wearing a percentage. The recall suite carries a maintenance contract: when
     it regresses, widen the LEXICON — never reword the prompt.
-  - Unbounded mutation scope must never auto-route to a coder/executor. Step 1
-    now implements BOTH halves of the Step-2 predicate's S5 rule: a repo-wide
-    phrase is never rescued, while a generic quantifier bounded by a PATH token
-    is (kernel `skip_if_path`). An earlier revision claimed to mirror S5 while
+  - Unbounded mutation scope should not auto-route to a coder/executor. Step 1
+    implements BOTH halves of the Step-2 predicate's S5 rule: a repo-wide phrase
+    is not rescued, while a generic quantifier bounded by a PATH token is
+    (kernel `skip_if_path`). An earlier revision claimed to mirror S5 while
     implementing only the punitive half; that claim was false and is retracted.
-  - A read-only QUESTION must never be answered by an edit. This is gated on
-    interrogative FORM (kernel `requires_question_form`), not on phrase
-    presence: an earlier revision presence-matched "is the"/"which" anywhere and
-    vetoed ordinary imperatives carrying a subordinate clause — two independent
-    checkers measured 18/18 and 12/12 correct dispatches turning into clarify.
+    STATED AS MEASURED, NOT ABSOLUTE: the repo-wide trigger is a closed phrase
+    list and therefore has a tail. Round 3 widened it after a checker found 8/10
+    unbounded mutations escaping via `across the codebase` / `globally` /
+    `throughout the repo`; 7/7 of the probe set now clarifies. Absolute wording
+    on a phrase list is what earned the round-1 and round-2 rejections.
+  - A read-only QUESTION should not be answered by an edit, AND a REQUEST must
+    not be mistaken for a question. Gated on FORM (kernel
+    `requires_question_form`), not phrase presence. Two revisions were needed:
+    round 2 presence-matched "is the"/"which" anywhere and vetoed imperatives
+    carrying a subordinate clause (18/18 and 12/12 measured); round 3's first
+    form gate keyed on punctuation alone and suppressed polite requests —
+    "can you implement the retry logic in the worker?" scored 0.30, and six of
+    the recall suite's own tasks failed with nothing changed but a courtesy
+    prefix and a '?'. The gate now models request-vs-question: first sentence
+    only, modal-request frames and imperative heads are not questions, and
+    do/have need a pronoun subject.
+    STATED AS MEASURED, NOT ABSOLUTE: the signal's match list is closed, so a
+    question composed entirely of words outside it escapes. Round 3 widened it
+    after `what is our current code coverage?` was found to route to a writer.
 
 anti_scope:
   - No change to the raw->score curve, tau_standard, or the chain templates.

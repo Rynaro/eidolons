@@ -468,6 +468,51 @@ suites:
       prompt: "fix the typo in the import path in every file under cli/src/ui"
       expect: { decision: dispatch, selected: [kupo] }
 
+    # ── PRECISION GUARDS, request-vs-question (round 3) ────────────────────────
+    # The round-2 form gate keyed on "ends with ? OR opens with a modal" and so
+    # suppressed the most common way work is actually requested. A checker
+    # showed SIX of this suite's own tasks (N-019/020/023/024/025/026) failing
+    # with nothing changed but "can you" and a question mark — while the suite
+    # reported 69/69. These pin the distinction the gate now draws: a REQUEST is
+    # not a question however it is punctuated.
+    - id: N-G21
+      category: guard-polite
+      prompt: "can you implement the retry logic in the worker?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G22
+      category: guard-polite
+      prompt: "would you refactor the roster loader for clarity?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G23
+      category: guard-polite
+      prompt: "please fix the retry bug in the worker"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G24
+      category: guard-polite
+      # a trailing confirmation tag must not veto the imperative before it
+      prompt: "implement the retry logic. is that ok?"
+      expect: { decision: dispatch, selected: [vivi] }
+    - id: N-G25
+      category: guard-polite
+      # imperative head wearing a question mark
+      prompt: "refactor the roster loader, ok?"
+      expect: { decision: dispatch, selected: [vivi] }
+    # "have"+pronoun is a question while "have a look at ..." is an imperative —
+    # N-G15 above already pins that prompt, so it is not repeated here.
+    - id: N-G27
+      category: guard-readonly
+      # question carrying none of the round-2 function words
+      prompt: "what is our current code coverage?"
+      expect: { decision: clarify }
+    - id: N-G28
+      category: guard-unbounded
+      prompt: "rename the helper across the codebase"
+      expect: { decision: clarify }
+    - id: N-G29
+      category: guard-unbounded
+      prompt: "rename the helper globally"
+      expect: { decision: clarify }
+
     - id: N-G05
       category: guard-trance
       # TRANCE stays gated: a large surface alone never escalates the tier
