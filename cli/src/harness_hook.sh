@@ -513,18 +513,36 @@ ${ecm_block}"
     # hole worth showing; a prompt carrying none is just chat. This is a
     # visibility heuristic, deliberately NOT a routing lexicon — it never picks
     # an Eidolon, and on no match the historical silent path is taken verbatim.
-    # bash 3.2: tr for case-folding (no ${var,,}).
-    local prompt_lc
+    # Matching is WHOLE-WORD. The first implementation used unanchored substring
+    # globs and was wrong in both directions: `*test*` fired on "la(test)",
+    # `*spec*` on "e(spec)ially", `*plan*` on "ex(plan)ation", `*where*` on
+    # "some(where)" — 12/20 on ordinary chat, including "how are you today?" —
+    # while 12/12 genuine work requests ("bump the timeout to 30 seconds",
+    # "revert the last commit") stayed silent, which is the exact dead-end this
+    # branch exists to close.
+    # bash 3.2: tr for case-folding (no ${var,,}); punctuation → spaces so every
+    # comparison below is bounded by whitespace on both sides.
+    local prompt_lc prompt_norm
     prompt_lc="$(printf '%s' "${PROMPT:-}" | tr '[:upper:]' '[:lower:]')"
-    case " $prompt_lc " in
-      *add*|*build*|*chang*|*check*|*clean*|*creat*|*debug*|*diagnos*|*document*\
-      |*explain*|*fix*|*implement*|*improv*|*investigat*|*migrat*|*optimi*|*plan*\
-      |*refactor*|*remov*|*renam*|*review*|*rewrit*|*spec*|*test*|*trace*|*updat*\
-      |*why*|*where*|*how\ *|*what\ *|*should*|*broke*|*fail*|*wrong*|*error*)
-        : ;;   # work intent present but unrouted → surface it
-      *)
-        return 0 ;;  # conversational / trivial → historical silent path
+    prompt_norm=" $(printf '%s' "$prompt_lc" | tr -c 'a-z0-9' ' ') "
+
+    # (1) Conversational deny-list wins outright — never nag on an
+    # acknowledgement, however many work-ish words it happens to contain.
+    case "$prompt_norm" in
+      *" thanks "*|*" thank you "*|*" how are you "*|*" sounds good "*|*" looks good "*\
+      |*" makes sense "*|*" got it "*|*" i see "*|*" never mind "*|*" nevermind "*\
+      |*" hello "*|*" hi "*|*" hey "*|*" yep "*|*" yeah "*|*" nice "*|*" cool "*)
+        return 0 ;;
     esac
+
+    # (2) Whole-word work intent. Bare interrogatives (how/what/where/why) are
+    # deliberately NOT here: on their own they are as likely to be conversation
+    # as work, and a genuine "how does X work" now routes to ATLAS anyway.
+    local _work_intent_re
+    _work_intent_re=' (add|added|adding|adds|build|building|builds|built|bump|change|changes|changing|check|clean|cleanup|code|configure|create|crash|crashes|debug|deploy|diagnose|document|error|extend|fail|failed|failing|fails|fix|fixed|fixes|fixing|handle|harden|implement|implementing|improve|install|investigate|make|migrate|optimise|optimize|patch|profile|refactor|remove|rename|revert|review|rewrite|silence|spec|split|stub|support|swap|teach|test|testing|tests|trace|update|updating|upgrade|wire|write|broke|broken|wrong|hangs|delete|drop|disable|enable|expose|extract|merge|move|rid|validate) '
+    if [[ ! "$prompt_norm" =~ $_work_intent_re ]]; then
+      return 0   # conversational / trivial → historical silent path
+    fi
     clarify_text="No Eidolon matched this prompt (below tau; no dispatch). ${clarify_text}  Ask the user these questions before proceeding, or state the assumption you are routing under."
     clarify_text="$(printf '%s' "$clarify_text" | cut -c1-4000)"
     jq -n \

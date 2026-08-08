@@ -312,7 +312,12 @@ suites:
       expect: { decision: dispatch, selected: [kupo] }
     - id: N-042
       category: micro
-      prompt: "swap the deprecated flag name everywhere"
+      # Reworded (checker finding): the original said "...everywhere" and this
+      # suite EXPECTED kupo — blessing a repo-wide rename onto the ≤2-file
+      # executor, the exact unbounded case `unbounded_scope` exists to catch.
+      # A suite that expects the bug cancels the signal meant to prevent it.
+      # The unbounded variant is now pinned as a guard below (N-G08).
+      prompt: "swap the deprecated flag name in cli/src/init.sh"
       expect: { decision: dispatch, selected: [kupo] }
     - id: N-043
       category: micro
@@ -369,7 +374,7 @@ suites:
       # widest pipeline; also the pair that would otherwise have been decided by
       # declaration order alone
       prompt: "map the worker, diagnose the timeout, spec a fix and implement it"
-      expect: { decision: chain, selected: [atlas, vigil, ramza, vivi] }
+      expect: { decision: chain, selected: [atlas, vigil, ramza, vivi, idg] }
     # guard — a 2-class debugger prompt must NOT be inflated into the 3-class
     # chain: N-015 above already pins "the build broke after the last merge" to
     # [vigil, vivi], so it serves as that guard and is not repeated here.
@@ -378,6 +383,37 @@ suites:
       # guard: planner+coder without failure context stays on ship-fast
       prompt: "spec the caching layer and implement it"
       expect: { decision: chain, selected: [ramza, vivi] }
+
+    # ── PRECISION GUARDS, read-only interrogatives ──────────────────────────────
+    # The original guard set was 5 tasks, of which exactly ONE was read-only,
+    # while all 44 recall tasks are imperative work requests. So the suite was
+    # sensitive to lexicon REMOVAL (AC-5) and blind to lexicon ADDITION — the
+    # same tautology on the precision axis. A checker measured 24 read-only
+    # interrogatives and found writer-routing had gone 3/24 -> 15/24 unnoticed.
+    # These pin the axis that was unmeasured. A question must never be answered
+    # by an edit.
+    - id: N-G06
+      category: guard-readonly
+      prompt: "which port does the server listen on?"
+      expect: { decision: clarify }
+    - id: N-G07
+      category: guard-readonly
+      prompt: "when did we last update the lockfile?"
+      expect: { decision: clarify }
+    - id: N-G08
+      category: guard-unbounded
+      # the unbounded twin of N-042; must NOT reach the executor
+      prompt: "swap the deprecated flag name everywhere"
+      expect: { decision: clarify }
+    - id: N-G09
+      category: guard-unbounded
+      # bounded micro-edit naming one file: the -0.25 penalty must NOT veto it
+      prompt: "rename the symbol at all call sites in cli/src/run.sh"
+      expect: { decision: dispatch, selected: [kupo] }
+    - id: N-G10
+      category: guard-readonly
+      prompt: "what happens when the migrate step runs?"
+      expect: { decision: clarify }
 
     - id: N-G05
       category: guard-trance

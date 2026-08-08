@@ -3417,12 +3417,56 @@ EOF
 }
 
 @test "harness: clarify decision WITHOUT work intent stays silent (R1-AC2 preserved)" {
+  # A CORPUS, not one string. The first version of this test pinned exactly
+  # "thanks, that looks good" — which a checker showed was one of the few
+  # acknowledgements that happened NOT to trip the substring globs then in use.
+  # A negative gate whose single case is the case that works cannot fail.
   local art='{"decision":"clarify","selected":[],"clarification_request":"No Eidolon scored >= 0.6."}'
-  run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
-    ARTIFACT_JSON="$art" PROMPT="thanks, that looks good" \
-    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
-  [ "$status" -eq 0 ]
-  [ -z "$output" ]
+  local _p
+  for _p in "thanks, that looks good" \
+            "how are you today?" \
+            "thanks, that's the latest one" \
+            "that makes sense, thanks for the explanation" \
+            "sounds good, especially the second half" \
+            "I see what you mean now" \
+            "somewhere around there is fine" \
+            "additionally, I like the tone" \
+            "that's a creative solution" \
+            "I checked out early yesterday"; do
+    run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+      ARTIFACT_JSON="$art" PROMPT="$_p" \
+      bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+    [ "$status" -eq 0 ]
+    if [ -n "$output" ]; then
+      echo "FALSE POSITIVE — conversational prompt surfaced a clarification: $_p"
+      return 1
+    fi
+  done
+}
+
+@test "harness: clarify decision surfaces real work requests the kernel failed to route" {
+  # The other direction, also a corpus. These are genuine engineering asks that
+  # score below tau; every one previously produced EMPTY output — the silent
+  # dead-end this branch exists to close.
+  local art='{"decision":"clarify","selected":[],"clarification_request":"CR"}'
+  local _p
+  for _p in "bump the timeout to 30 seconds" \
+            "revert the last commit on the release branch" \
+            "get rid of the dead branch in the loader" \
+            "silence the deprecation warning in the installer" \
+            "stub out the network calls in the integration suite" \
+            "harden the input validation on the upload endpoint" \
+            "profile the slow query in the reports page" \
+            "make the parser handle unicode"; do
+    run env HOOK_HOST=claude-code HOOK_MODE=run HOOK_EVENT_NAME=UserPromptSubmit \
+      ARTIFACT_JSON="$art" PROMPT="$_p" \
+      bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+    [ "$status" -eq 0 ]
+    if [ -z "$output" ]; then
+      echo "SILENT DEAD-END — real work request produced no clarification: $_p"
+      return 1
+    fi
+  done
 }
 
 @test "harness: clarify decision with EMPTY clarification_request stays silent (fail-open)" {

@@ -8,6 +8,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.19.1] — 2026-08-08 — what the checker found
+
+Two independent checkers were dispatched to close the ESL records for `routing-recall-gap` (v2.18.0) and `chain-three-class` (v2.19.0). **Both rejected.** maker ≠ checker is mechanically enforced here and it earned its keep: every finding below was produced by *running* the shipped code, and none of it was visible to the gates that shipped with it.
+
+The shared root cause is one sentence: **both changes asserted precision over guard sets that were structurally incapable of failing.** That is the same defect `routing-recall-gap` was written to remove, committed twice more by the change that removed it.
+
+### Fixed — routing precision (`routing-recall-gap` findings)
+
+- **Read-only questions no longer route to writers.** Widened lexicons made bare words match inside interrogatives: `"which port does the server listen on?"` scored `vivi` 0.8, and the hook then told the host *"Delegate to vivi now. Do NOT implement…"* — a question answered by an edit. Measured over 24 read-only interrogatives, writer-routing was **3/24 → 15/24**. New `read_only_question` signal (−0.5 to coder/executor/scriber only, so ATLAS/FORGE/VIGIL/RAMZA still receive questions), and `port` → `port the`. Now **0/12** on the checker's own counterexamples.
+- **`unbounded_scope` was an unconditional veto, not the "bare verb match" its own note claimed.** At −0.4 it killed even a raw=3 score (0.97 → 0.57), suppressing legitimately bounded work (`"rename the symbol at all call sites in cli/src/run.sh"` → clarify) while `"swap the deprecated flag name everywhere"` routed straight to Kupo. Now −0.25: a lone verb match (0.8 → 0.55) still clarifies, a 2+ phrase match (0.9 → 0.65) routes. `everywhere` added to the match list.
+- **The "mirrors predicate S5" claim was false and is now stated honestly.** S5 has a LIMITER rescue (a generic scope is forgiven when a limiter *and* a path co-occur); the presence-matched signal table cannot express that conjunction, so Step 1 implements only the punitive half. A bounded ask carrying a generic-scope phrase may still clarify — a conservative failure, and now a *visible* one.
+- **The work-intent discriminator used unanchored substring globs.** `*test*` fired on "la**test**", `*spec*` on "e**spec**ially", `*plan*` on "ex**plan**ation" — 12/20 on ordinary chat, including `"how are you today?"` — while **12/12** genuine work requests stayed silent, the exact dead-end it exists to close. Rewritten as whole-word matching over a punctuation-normalised prompt, with an explicit conversational deny-list.
+
+### Fixed — chain ambiguity ledger (`chain-three-class` findings)
+
+- **The ambiguity pin was a tautology, and its number was wrong.** It tested set *equality* with the union where the kernel uses *subset*, and the expected list had been generated with that same expression — so both sides were wrong identically and the test passed while proving nothing. The true count is **5**, not 7; the parent had **6**, not 9. Two pinned "ties" are provably resolved by `plan-before-build`. Corrected in `roster/routing.yaml`, `cli/tests/routing_chains.bats`, `methodology/cortex/chain-templates.md` and the v2.19.0 entry below.
+- **v2.19.0 also resolved a pre-existing tie and never said so** — `ship-fast` vs `forensic-then-fix` at coder+debugger+planner. Set moved 6 → 5.
+- **The pin was blind to duplicate class sets.** A rival template with identical `requires_classes` kept all six assertions green while the live route flipped to `idg>kupo`. The subset form closes this automatically; a regression test now pins it.
+- **`scout-diagnose-plan-fix` dropped the scriber step.** It supersedes `plan-before-build`, which ends in `idg` — so a prompt explicitly asking for documentation lost the docs step. Same silent step-drop the change existed to remove, transplanted onto another class. Now ends `… → Vivi → IDG`.
+- Disclosed, not fixed: a reasoner+debugger+planner+coder prompt now selects `diagnose-then-plan-then-fix` over `decide-then-implement`, dropping FORGE. Root-causing before deliberating is defensible when a live failure is present; recorded rather than hidden.
+
+### Fixed — the instruments themselves
+
+- **`verify-recall-mutation.sh` scored the wrong population.** Guards are precision tasks that pass against old *and* new lexicons by design, so they floor the mutated score; growing the guard set 5 → 10 pushed it 16.6 % → 22 % and tripped the gate. It now scores the **recall arm only** (non-`guard-*` categories): **8.2 %** against `v2.17.0`. Raising the ceiling would have been the gate-that-cannot-fail defect committed by the script written to prevent it. Default ref pinned to `v2.17.0` (`HEAD~1` produced a false alarm from any later checkout).
+- **The recall suite now measures precision.** It had 44 imperative work requests and one read-only guard, making it sensitive to lexicon *removal* and blind to lexicon *addition*. Adds `N-G06`–`N-G10` (read-only interrogatives, bounded vs unbounded scope). `N-042` reworded: it had *expected* a repo-wide rename to reach Kupo, blessing the exact case `unbounded_scope` exists to catch.
+- **The AC-6 negative test pinned one string** — `"thanks, that looks good"`, one of the few acknowledgements that happened not to trip the old globs. Both directions are now corpora (10 conversational, 8 real work requests).
+
+Suites: recall **59/59**, public **15/15**, bats **1712/1712**.
+
 ## [2.19.0] — 2026-08-08 — the chain that dropped the diagnosis
 
 v2.18.0 left a residual on the record: no chain template covered three capability classes including `debugger`. Measured on `main` @ `13013ae`, **every** "diagnose it, spec it, fix it" prompt fell back to the two-class `ship-fast` — which meant the router handed **a planner a failure nobody had root-caused**, and the diagnosis step vanished without a trace.
@@ -24,7 +53,7 @@ The kernel picks the matching template with the most `requires_classes`. There s
 - `methodology/cortex/chain-templates.md` re-synced, with a new section on where specificity stops deciding.
 
 ### Known, and deliberately not fixed
-- **Seven equal-specificity pairs among the pre-existing two-class templates remain resolved by declaration order** (e.g. `decide-then-implement` vs `ship-fast` on a reasoner+planner+coder prompt). They predate this change; resolving them means choosing semantics for each pair, not adding a mechanism. They are now *pinned by test* — recorded, not endorsed. An earlier draft of the `chains:` comment claimed the list was closed under intersection; auditing that claim before shipping showed it was false, and the comment now states the narrower guarantee that is actually true.
+- **[CORRECTED in 2.19.1 — the true count is FIVE, not seven; this entry's number was computed by a test that used set-equality where the kernel uses subset.]** ~~Seven~~ equal-specificity pairs among the pre-existing two-class templates remain resolved by declaration order (e.g. `decide-then-implement` vs `ship-fast` on a reasoner+planner+coder prompt). They predate this change; resolving them means choosing semantics for each pair, not adding a mechanism. They are now *pinned by test* — recorded, not endorsed. An earlier draft of the `chains:` comment claimed the list was closed under intersection; auditing that claim before shipping showed it was false, and the comment now states the narrower guarantee that is actually true.
 - `scout+debugger+coder` ("map the auth flow, diagnose why login fails, and fix it") still drops the scout step to the two-class `forensic-then-fix`.
 
 ## [2.18.0] — 2026-08-08 — the roster was silent, not selective

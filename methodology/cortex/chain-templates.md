@@ -16,7 +16,7 @@ Relocated out of the EIDOLONS.md always-loaded region per R-021/R-022
 
 | Template | Steps | When |
 |----------|-------|------|
-| **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi | Unfamiliar code + a live failure + a build (widest pipeline) |
+| **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi → IDG | Unfamiliar code + a live failure + a build (widest pipeline) |
 | **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
 | **diagnose-then-plan-then-fix** | VIGIL → RAMZA → Vivi | A live failure that needs a spec before the patch |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
@@ -37,12 +37,20 @@ nobody had root-caused.
 
 Equal-specificity matches are resolved by jq's *stable* sort, i.e. by
 declaration order in `roster/routing.yaml` — an artifact, not a decision.
-Seven such pairs exist among the two-class templates and are pinned (not
+**Five** such pairs exist among the two-class templates and are pinned (not
 endorsed) by `cli/tests/routing_chains.bats`. `scout-diagnose-plan-fix` exists
-specifically so that adding `diagnose-then-plan-then-fix` did not create an
-eighth: it covers the union of that pair's classes, keeping specificity
-decisive. **Adding a template means re-running that suite** — a new collision
-fails it rather than quietly letting line order choose in production.
+specifically so that adding `diagnose-then-plan-then-fix` did not create a
+sixth: it covers the union of that pair's classes, keeping specificity
+decisive. The three-class entry also *resolved* a pre-existing tie
+(`ship-fast` vs `forensic-then-fix` at coder+debugger+planner), so the set
+moved 6 → 5. **Adding a template means re-running that suite** — a new
+collision, including one that merely duplicates an existing class set, fails
+it rather than quietly letting line order choose in production.
+
+A pair counts as resolved iff some template `C` has
+`C.requires_classes ⊆ (A ∪ B)` **and** `|C| > |A|` — subset, matching the
+kernel. An earlier revision of both this note and the test used set *equality*
+with the union; that over-counted (7) and was blind to duplicate class sets.
 
 Gilgamesh (generalist, fallback-only) never appears in a chain template —
 it lives solely in Dispatch Protocol Step-2(a) (no specialist scores ≥ τ,
