@@ -319,7 +319,7 @@ signals:
 # match are resolved by nothing more principled than which one is declared
 # first in this file. That is not a rule anyone chose; it is an artifact.
 #
-# This list is NOT globally closed under union: **5** equal-specificity pairs
+# This list is NOT globally closed under union: **4** equal-specificity pairs
 # among the pre-existing 2-class templates have no more-specific entry covering
 # their union, and are still decided by file order (e.g. decide-then-implement
 # vs ship-fast on a reasoner+planner+coder prompt). Those predate this change
@@ -339,9 +339,11 @@ signals:
 # scout+debugger+planner+coder prompt), so `scout-diagnose-plan-fix` is added
 # alongside it to cover that union and keep specificity decisive. The three-class
 # entry ALSO resolves a pre-existing tie (ship-fast vs forensic-then-fix at
-# coder+debugger+planner), so the set moves 6 → 5.
-# `cli/tests/routing_chains.bats` PINS the unresolved set to exactly those 5 —
-# a new template that introduces a 6th ambiguity, INCLUDING one that merely
+# coder+debugger+planner), so the set moved 6 → 5. `scout-diagnose-fix` then
+# resolved a second one (audit-without-touching vs forensic-then-fix at
+# coder+debugger+scout+scriber), moving it 5 → 4.
+# `cli/tests/routing_chains.bats` PINS the unresolved set to exactly those 4 —
+# a new template that introduces a 5th ambiguity, INCLUDING one that merely
 # duplicates an existing class set, fails the suite.
 chains:
   - name: scout-diagnose-plan-fix
@@ -359,6 +361,27 @@ chains:
     steps: ["atlas", "ramza", "vivi", "idg"]
     requires_classes: ["scout", "planner", "coder"]
     when: "Unfamiliar code + multi-component change"
+  - name: scout-diagnose-fix
+    steps: ["atlas", "vigil", "vivi", "idg"]
+    requires_classes: ["scout", "debugger", "coder"]
+    when: "Unfamiliar code + a live failure + a fix, with no spec needed"
+    # Closes the last residual recorded by `chain-three-class`. Before this,
+    # scout+debugger+coder fell back to the 2-class forensic-then-fix and
+    # dropped the SCOUT step. Worse, adding a scriber turned it into one of the
+    # five order-dependent ties and `audit-without-touching` won by declaration
+    # order — so "audit the module, diagnose the failure, fix it and document
+    # it" returned [atlas, idg], dropping BOTH the diagnosis and the fix and
+    # handing back a read-only scout for a prompt that asked for a repair.
+    #
+    # Ends with `idg` for the same reason plan-before-build and
+    # scout-diagnose-plan-fix do: it supersedes an entry that carried a
+    # trailing scriber step, and a 3-class scout pipeline that silently lost it
+    # would be the step-drop this family of changes exists to remove.
+    #
+    # Adds NO new ambiguity: its unions with the other two spec-3 templates are
+    # both {scout,debugger,planner,coder}, already covered by
+    # scout-diagnose-plan-fix at spec 4. It also RESOLVES a pre-existing tie
+    # (audit-without-touching vs forensic-then-fix), moving the set 5 -> 4.
   - name: diagnose-then-plan-then-fix
     steps: ["vigil", "ramza", "vivi"]
     requires_classes: ["debugger", "planner", "coder"]

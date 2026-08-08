@@ -1,0 +1,89 @@
+schema: eidolons/change-spec.v1
+change_id: chain-scout-debug-fix
+tier: full
+maker: vivi
+checker: kupo
+supersedes_residual_of: chain-three-class   # archived 2026-08-08, v2.19.0
+target: >
+  nexus — close the last recorded chain-template residual: a
+  scout+debugger+coder prompt fell back to the two-class forensic-then-fix and
+  dropped the SCOUT step
+
+problem: >
+  Measured on main @ db82fb2 (v2.19.1). Three phrasings of scout+debugger+coder
+  ("map the auth flow, diagnose why login fails, and fix it") all selected
+  forensic-then-fix -> [vigil, vivi], dropping the scout step. This was recorded
+  as a known residual by `chain-three-class` rather than fixed there, because
+  that change's guard set did not measure the combination.
+  A worse case, NOT previously recorded, surfaced while measuring the baseline:
+  adding a scriber makes the combination one of the order-dependent ties, and
+  `audit-without-touching` wins it by declaration order — so "audit the module,
+  diagnose the failure, fix it and document it" returned [atlas, idg], dropping
+  BOTH the diagnosis and the fix and handing back a read-only scout for a prompt
+  that explicitly asked for a repair.
+
+decision: >
+  Add one template. DATA only; the selection algorithm is untouched (I-C2).
+  `scout-diagnose-fix` (atlas -> vigil -> vivi -> idg) for
+  [scout, debugger, coder]. It ends in `idg` for the same reason
+  plan-before-build and scout-diagnose-plan-fix do: it supersedes entries that
+  carried a trailing scriber step, and a 3-class scout pipeline that silently
+  lost it would be the step-drop this family of changes exists to remove.
+
+safety_invariant: >
+  No existing chain route changes. The 2-class templates (incl. forensic-then-fix
+  on a debugger+coder prompt with no scout, pinned by N-015), plan-before-build,
+  diagnose-then-plan-then-fix, scout-diagnose-plan-fix and decide-then-implement
+  all resolve exactly as before; `public` stays 15/15.
+
+invariants:
+  - Adds NO new ambiguity. Both unions with the other spec-3 templates are
+    {scout,debugger,planner,coder}, already covered by scout-diagnose-plan-fix
+    at spec 4. It RESOLVES a pre-existing tie (audit-without-touching vs
+    forensic-then-fix at coder+debugger+scout+scriber), so the unresolved set
+    moves 5 -> 4. Verified by the corrected subset audit, not by assertion.
+  - A test written alongside the data it checks passes trivially. Both new
+    assertions were falsified by mutation before being trusted, including a
+    mutation that removes ONLY the trailing idg.
+  - STATED AS MEASURED: the four remaining order-dependent ties are unchanged
+    and still resolved by declaration order. Nothing here claims otherwise.
+
+anti_scope:
+  - Do NOT resolve the four remaining ties; each needs a semantic decision per
+    pair, not a mechanism.
+  - No change to the selection algorithm, the form predicates, or the signals.
+  - The [scout, coder] combination ("explore the module and implement the
+    change" -> dispatch vivi, no chain) is a DIFFERENT gap, unmeasured by this
+    change, and is recorded as a residual rather than fixed.
+
+files_touched:
+  - roster/routing.yaml                     # the template + tie-count note
+  - cli/tests/routing_chains.bats           # 2 route pins + corrected pinned set
+  - evals/routing-suite.yaml                # N-C07..N-C09
+  - methodology/cortex/chain-templates.md   # deep cortex table re-sync
+  - CHANGELOG.md
+  - VERSION                                 # 2.19.1 -> 2.20.0
+  - .spectra/changes/chain-scout-debug-fix/ # this record
+
+acceptance_checks:
+  - id: AC-1
+    check: scout+debugger+coder selects scout-diagnose-fix -> [atlas, vigil, vivi, idg]
+    evidence: recall suite N-C07, N-C09; routing_chains "scout step no longer dropped"
+  - id: AC-2
+    check: scout+debugger+coder+scriber no longer returns the read-only [atlas, idg]
+    evidence: recall suite N-C08; routing_chains "read-only pair"
+  - id: AC-3
+    check: no existing chain route changes
+    evidence: public 15/15; N-015 still [vigil, vivi]; N-C04 still scout-diagnose-plan-fix
+  - id: AC-4
+    check: unresolved tie set moves 5 -> 4 with NO new ambiguity
+    evidence: corrected subset audit; routing_chains ambiguity pin
+  - id: AC-5
+    check: every new assertion goes RED under a mutation that breaks what it guards
+    evidence: 4/4 mutations red incl. idg-removal, baseline green (verification.md)
+  - id: AC-6
+    check: lint / schema / cortex token budget / suite self-test clean
+    evidence: all exit 0; budget 836/850; self-test 99 tasks
+  - id: AC-7
+    check: full bats suite green, counted against the plan
+    evidence: see verification.md

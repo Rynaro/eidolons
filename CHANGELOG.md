@@ -8,6 +8,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [2.20.0] — 2026-08-08 — a fix request answered read-only
+
+Closes the last recorded chain-template residual. A scout + debugger + coder prompt — *"map the auth flow, diagnose why login fails, and fix it"* — fell back to the two-class `forensic-then-fix` and dropped the **scout** step.
+
+Measuring the baseline before touching anything turned up something worse that was **not** on the record. Add a scriber to that combination and it becomes one of the order-dependent ties, which `audit-without-touching` wins by declaration order:
+
+```
+audit the module, diagnose the failure, fix it and document it
+  →  [atlas, idg]
+```
+
+**Both the diagnosis and the fix are dropped**, and a prompt explicitly asking for a repair comes back with a read-only scout and a scribe. Nobody chose that behaviour; a line number did.
+
+### Added
+- **`scout-diagnose-fix`** (`ATLAS → VIGIL → Vivi → IDG`, `requires_classes: [scout, debugger, coder]`). Ends in `idg` for the same reason `plan-before-build` and `scout-diagnose-plan-fix` do — it supersedes entries carrying a trailing scriber step, and losing it would trade one silent step-drop for another.
+- Recall coverage `N-C07`–`N-C09`, and two `routing_chains.bats` route pins.
+
+### Changed
+- **The unresolved order-dependent tie set moves 5 → 4.** `scout-diagnose-fix` resolves `audit-without-touching` vs `forensic-then-fix` outright, since `{scout,debugger,coder} ⊆ {coder,debugger,scout,scriber}` at strictly greater specificity. It adds none: both its unions with the other spec-3 templates are `{scout,debugger,planner,coder}`, already covered at spec 4. Verified with the corrected subset audit rather than asserted.
+- `roster/routing.yaml` and `methodology/cortex/chain-templates.md` re-synced to **four**.
+
+### Known, and deliberately not fixed
+- **`[scout, coder]` has no template** — `"explore the module and implement the change"` dispatches to `vivi` alone, dropping the scout step. A distinct combination this change does not measure; closing one gap by opening an unmeasured one is the pattern four checker rounds removed.
+- The four remaining ties are unchanged, still decided by declaration order, still pinned rather than endorsed.
+- A three-class scout+debugger+coder prompt now receives a docs step it did not explicitly ask for — the same trade `plan-before-build` has always made, stated rather than hidden.
+
+All four new assertions were falsified by mutation before being trusted, including one that removes **only** the trailing `idg` — the mutation that would reintroduce the silent scriber drop. Suites: recall 80/80, public 15/15, bats **1714/1714**.
+
 ## [2.19.1] — 2026-08-08 — what the checker found, three times
 
 > **Round 3.** The form predicate below was itself rejected on first landing. It keyed on `ends with '?' OR opens with a modal` and so suppressed the most common way work is requested: `"can you implement the retry logic in the worker?"` → `clarify` (vivi 0.30). **Six of the eight measured failures were the recall suite's own tasks** (`N-019`, `N-020`, `N-023`–`N-026`) with nothing changed but a courtesy prefix and a question mark — while the suite reported 69/69. It now models **request vs question**: first sentence only (a trailing tag cannot veto the imperative before it), modal-request frames (`can you`, `please`) and imperative heads are not questions, and `do`/`have` need a pronoun subject to count as openers. Guards `N-G21`–`N-G29` pin that axis. Both closed phrase lists were widened after the checker measured their tails (8/10 unbounded mutations escaping via `across the codebase` / `globally`; `"what is our current code coverage?"` matching none of the function words), and both invariants reworded from "never" to what is measured — absolute wording on a closed list is what earned the first two rejections.

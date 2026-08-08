@@ -34,6 +34,28 @@ load helpers
   [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-plan-fix" ]
 }
 
+@test "chains: scout+debugger+coder selects scout-diagnose-fix (scout step no longer dropped)" {
+  # Was the last residual of `chain-three-class`: this fell back to the 2-class
+  # forensic-then-fix and dropped the SCOUT step.
+  run eidolons run "map the auth flow, diagnose why login fails, and fix it" --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-fix" ]
+  [ "$(jq -r '.selected | join(",")' <<< "$output")" = "atlas,vigil,vivi,idg" ]
+}
+
+@test "chains: scout+debugger+coder+scriber no longer returns a read-only pair" {
+  # Adding a scriber used to make this one of the order-dependent ties, and
+  # audit-without-touching won by declaration order — so a prompt asking for a
+  # FIX came back as [atlas, idg], dropping both the diagnosis and the repair.
+  run eidolons run "audit the module, diagnose the failure, fix it and document it" --json
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.chain[0].template' <<< "$output")" = "scout-diagnose-fix" ]
+  _sel="$(jq -r '.selected | join(",")' <<< "$output")"
+  [[ "$_sel" == *"vigil"* ]]   # diagnosis present
+  [[ "$_sel" == *"vivi"* ]]    # the fix they actually asked for
+  [[ "$_sel" == *"idg"* ]]     # docs step still there
+}
+
 @test "chains: the widest pipeline does not drop the scriber step" {
   # scout-diagnose-plan-fix supersedes plan-before-build, which ended in idg.
   # Without a trailing idg of its own, a prompt that explicitly asked for
@@ -70,7 +92,6 @@ load helpers
 # `scout-diagnose-plan-fix` does), rather than appending a line below.
 _expected_ambiguous_pairs() {
   cat <<'EOF'
-audit-without-touching|forensic-then-fix|coder+debugger+scout+scriber
 audit-without-touching|scout-then-spec|planner+scout+scriber
 decide-then-implement|audit-without-touching|coder+reasoner+scout+scriber
 decide-then-implement|forensic-then-fix|coder+debugger+reasoner

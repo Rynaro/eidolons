@@ -18,6 +18,7 @@ Relocated out of the EIDOLONS.md always-loaded region per R-021/R-022
 |----------|-------|------|
 | **scout-diagnose-plan-fix** | ATLAS → VIGIL → RAMZA → Vivi → IDG | Unfamiliar code + a live failure + a build (widest pipeline) |
 | **plan-before-build** | ATLAS → RAMZA → Vivi → IDG | Unfamiliar code + multi-component change |
+| **scout-diagnose-fix** | ATLAS → VIGIL → Vivi → IDG | Unfamiliar code + a live failure + a fix, no spec needed |
 | **diagnose-then-plan-then-fix** | VIGIL → RAMZA → Vivi | A live failure that needs a spec before the patch |
 | **audit-without-touching** | ATLAS → IDG | "Audit", "explain", "review" with no write intent |
 | **ship-fast** | RAMZA → Vivi | Known terrain, scoped feature |
@@ -37,13 +38,15 @@ nobody had root-caused.
 
 Equal-specificity matches are resolved by jq's *stable* sort, i.e. by
 declaration order in `roster/routing.yaml` — an artifact, not a decision.
-**Five** such pairs exist among the two-class templates and are pinned (not
+**Four** such pairs exist among the two-class templates and are pinned (not
 endorsed) by `cli/tests/routing_chains.bats`. `scout-diagnose-plan-fix` exists
 specifically so that adding `diagnose-then-plan-then-fix` did not create a
 sixth: it covers the union of that pair's classes, keeping specificity
 decisive. The three-class entry also *resolved* a pre-existing tie
 (`ship-fast` vs `forensic-then-fix` at coder+debugger+planner), so the set
-moved 6 → 5. **Adding a template means re-running that suite** — a new
+moved 6 → 5, and `scout-diagnose-fix` later resolved a second
+(`audit-without-touching` vs `forensic-then-fix`), moving it 5 → 4.
+**Adding a template means re-running that suite** — a new
 collision, including one that merely duplicates an existing class set, fails
 it rather than quietly letting line order choose in production.
 
