@@ -246,11 +246,25 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
 # worker?" was scored as an interrogative and the coder vetoed — six of the
 # recall suite's own tasks fail this way with nothing changed but a courtesy
 # prefix and a '?', while the suite still reports green.
+#
+# CLOSED LIST — HAS A TAIL. Measured, not exhaustive. Request frames outside
+# this shape are still read as questions and suppressed: "any chance you could
+# …?", "would it be possible to …?", "how about we …?", "shall we …?",
+# "want to …?", "let's …, ok?", and a leading "so"/"and" before an imperative.
+# All predate this change (none is a regression) and all are enumerated in
+# .spectra/changes/routing-recall-gap/verification.md §Residual. Stated here
+# because an un-annotated list is the one a future reader trusts.
 | (($w0 == "please")
    or (($w0 | IN("can","could","would","will","cant","couldnt","wont"))
        and ($w1 | IN("you","we","u","yall")))) as $is_modal_request
 # An imperative HEAD also settles it: "add retry logic to the fetch step?" and
 # "refactor the roster loader, ok?" are instructions wearing a question mark.
+#
+# CLOSED LIST — HAS A TAIL. Measured, not exhaustive. Verbs absent from it are
+# still read as questions when punctuated as one — notably several Kupo/IDG
+# heads: "hook up …?" (`wire` is listed, `hook` is not), "point the import …?",
+# "correct the spelling …?", "pin the version …?", "synthesize …?". Enumerated
+# in .spectra/changes/routing-recall-gap/verification.md §Residual.
 | (($w0 | IN("add","build","fix","implement","refactor","optimize","optimise",
              "migrate","update","clean","write","create","remove","rename",
              "revert","bump","document","port","patch","extend","wire",

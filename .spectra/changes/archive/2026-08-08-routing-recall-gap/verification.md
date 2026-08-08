@@ -151,7 +151,72 @@ removing `requires_question_form` drops recall 69/69 → 41/69 and
 `guard-clause` to 0/4; removing `skip_if_path` drops `guard-unbounded` to 3/5.
 The guards depend on the mechanism they claim to guard.
 
-## Residual — disclosed
+## Residual — disclosed (round 4, enumerated)
+
+Both remaining defects are **closed lists with tails**. The lists are named here
+rather than described, because "has a tail" without the tail is how the false
+invariants in rounds 1–3 got written.
+
+**Request frames outside `can/could/would/will + you/we`** — still suppressed
+to `clarify` (all 13 were *already* suppressed before this change; none is a
+regression):
+
+```
+any chance you could add the retry logic to the fetch step?
+would it be possible to optimize the startup time?
+how about we refactor the roster loader?
+shall we migrate the config format to v2?
+want to refactor the roster loader?
+let's clean up the duplicated validation code, ok?
+so fix the retry bug in the worker?
+and add the retry logic to the fetch step?
+```
+
+**Imperative heads absent from `$is_imperative_head`** — notably the Kupo/IDG
+verbs:
+
+```
+hook up the new flag to the CLI?           (`wire` is listed, `hook` is not)
+point the import at the new module path?
+correct the spelling in the help text?
+pin the version in the lockfile?
+synthesize the release notes?
+```
+
+**Sentence-order case:** `is the build still broken? fix the retry bug in the
+worker` → `vigil` alone. Sentence 1 is a genuine question, so the imperative in
+sentence 2 is vetoed and the fix step drops.
+
+**Repo-wide phrases still escaping** the `unbounded_scope` list:
+
+```
+across the repo · throughout the project · in each file · in every single file
+monorepo-wide · org-wide · wherever it appears · in each module · in all of the files
+```
+
+**Interrogative intent in declarative/imperative form** (named class, 4 known):
+`remind me what the migrate step does` · `tell me if the code still compiles on
+3.2` · `I'm wondering whether we should port the docs` · `let me know which
+files the installer will modify`.
+
+### The kernel lists have tails too
+
+`$is_modal_request` frames and `$is_imperative_head` verbs in `cli/src/run.sh`
+are closed enumerations exactly like the signal match lists, and until round 4
+carried **no** tail acknowledgement anywhere — the signal lists were labelled
+"measured, not absolute" while the kernel lists were not. That asymmetry is
+itself the defect species this campaign kept hitting: the un-annotated list is
+the one a future reader trusts. Both now carry the caveat in-line.
+
+**`"do the migration in cli/src/lib.sh"`** still clarifies. `migration` is a
+noun; the lexicon has `migrate`. Adding the noun was tried and **reverted** — it
+broke `N-030` (`"draft an approach for the migration"`, a correct and *guarded*
+planner route). Verified by the checker to have never routed at `e427d07`,
+`8c9912f`, or now: a pre-existing gap, not a regression. If it is ever worth
+closing, the phrase form (`do the migration` / `run the migration`) is safe
+where the bare noun is not, because `N-030` has no verb before it.
+
+## Residual — earlier rounds
 
 - **`"remind me what the migrate step does"`** still reaches a writer. It is
   interrogative in *intent* but imperative in *form*, so the form gate does not
