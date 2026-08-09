@@ -88,12 +88,13 @@ The load-bearing rows are the ones that would reintroduce a *silent* step-drop:
 dropping only the trailing `idg`, dropping only `forge`, and the checker's
 count-neutral gaming attack.
 
-Exactly **one** of them — dropping `idg` from `plan-before-build` — is caught by
-the coverage **set** pin and by nothing else. That single row is what
-establishes the pin as necessary; an earlier wording here claimed all three were
-exclusive to it, which was asserted rather than measured and is false (the other
-two trip 2 and 3 tests respectively). The per-row counts live in
-`verification.md`'s table with the mutations themselves.
+The witness for the pin's necessity is a *different* mutation: dropping `idg`
+from `audit-without-touching`, which is caught by exactly one test in the full
+1719-test suite — the coverage **set** pin. Two earlier wordings here named the
+wrong rows (first all three, then `plan-before-build`), both because the counts
+were taken inside `routing_chains.bats` and written up as repo-wide. The
+per-mutation counts live in `verification.md`'s table with the mutations
+themselves, and are full-suite.
 
 ## Residual — disclosed
 

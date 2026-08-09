@@ -65,6 +65,13 @@ jobs:
       - name: Check roster/mcps.yaml and roster/index.yaml crystalium version parity
         run: bash cli/src/check_roster_mcp_skew.sh
 
+      # Live ESL change records must be parseable YAML. This job re-implements
+      # `make schema` inline rather than invoking it, so a gate added to the
+      # Makefile alone does NOT run at the merge gate — three unparseable specs
+      # shipped through green PRs exactly that way. Keep both in step.
+      - name: Check live ESL change specs parse
+        run: bash cli/src/check_change_specs.sh
+
   cortex-token-budget:
     name: Cortex always-loaded token budget
     runs-on: ubuntu-latest

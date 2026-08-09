@@ -323,6 +323,17 @@ EOF
 #
 # So this asserts CONTAINMENT, not equality — a doc-only pattern in the table
 # is legitimate; a routing template absent from it is not.
+#
+# SCOPE, recorded rather than claimed away:
+#   * It checks NAME PRESENCE, not steps. A row naming a template alongside the
+#     WRONG steps passes. All 11 rows were checked by hand against
+#     roster/routing.yaml and are correct, so there is no live defect — but this
+#     gate would not catch one.
+#   * It passes VACUOUSLY on an empty enumeration (the .chains key renamed, the
+#     roster truncated), because an empty loop leaves _missing empty. Same
+#     empty-match-set hole disclosed in check_change_specs.sh's header.
+#   * A bold mention of the name anywhere in the file satisfies it, not only a
+#     table row.
 @test "chains: every routing template is documented in the cortex deep table" {
   _table="$EIDOLONS_ROOT/methodology/cortex/chain-templates.md"
   [ -f "$_table" ]

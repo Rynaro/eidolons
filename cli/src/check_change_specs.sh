@@ -13,17 +13,19 @@
 # It was not a one-off: the two predecessor records in the same lineage
 # (chain-three-class, routing-recall-gap) also fail to parse.
 #
-# ONE root cause, verified by falsification rather than inspection: a ": "
-# embedded in a multi-line PLAIN scalar list entry. Only the colon's POSITION
-# changes the parser message, which is why the three looked like two defects:
-#   * colon on the entry's FIRST line -> the entry becomes a mapping, and the
-#     continuation at that key's indent reads as a new key:
-#     "could not find expected ':'"
-#   * colon on a CONTINUATION line -> "mapping values are not allowed in this
-#     context"
-# Indentation alone is NOT the cause: the same entry with identical indentation
-# and the colon removed parses cleanly. A block scalar ('- >') parses with both
-# hazards present. Use one for ANY multi-line list entry.
+# THE RULE, which is trigger-independent: use a block scalar ('- >') for ANY
+# multi-line list entry. Verified directly — a block scalar parses with every
+# hazard below present simultaneously.
+#
+# Deliberately NOT a list of causes. Two earlier revisions of this header each
+# named a single root cause (indentation, then an embedded ": ") and a checker
+# falsified both. Measured: an embedded ": " AND a bare trailing ":" each break
+# a multi-line plain entry, and the two parser messages
+#   "could not find expected ':'"        -> the construct is on the FIRST line
+#   "mapping values are not allowed ..." -> it is on a CONTINUATION line
+# discriminate the POSITION, not the trigger. A colon with no following space
+# (http://x) is fine. Do not treat that as exhaustive; reach for '- >' instead
+# of matching your text against a list.
 #
 # SCOPE, so nobody mistakes this for more than it is: it checks that the file
 # PARSES, not that it is a well-formed record. An empty file, '---', a bare

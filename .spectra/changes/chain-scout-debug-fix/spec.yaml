@@ -97,6 +97,9 @@ files_touched:
   - methodology/cortex/chain-templates.md   # deep cortex table re-sync
   - cli/src/check_change_specs.sh           # NEW: parse gate for live ESL specs
   - Makefile                                # wires that gate into `make schema`
+  - .github/workflows/ci.yml                # and into CI, which re-implements
+                                            # `make schema` inline rather than
+                                            # calling it — both are required
   - CHANGELOG.md
   - VERSION                                 # 2.19.1 -> 2.20.0
   - .spectra/changes/chain-scout-debug-fix/ # this record
@@ -166,6 +169,13 @@ acceptance_checks:
       asserts CONTAINMENT and not set equality, which is required because the
       table legitimately documents three patterns that are not kernel
       templates.
+      SCOPE, recorded rather than claimed away: it checks NAME PRESENCE, not
+      steps — a row naming a template with the wrong steps passes (all 11 rows
+      were checked by hand against roster/routing.yaml and are correct, so no
+      live defect). It passes VACUOUSLY on an empty enumeration, e.g. the
+      .chains key renamed or the roster truncated — the same empty-match-set
+      hole disclosed for check_change_specs.sh. And a bold mention of the name
+      anywhere in the prose satisfies it, not only a table row.
   - id: AC-9
     check: >
       this record's own spec.yaml parses, and the gate that now checks it goes
