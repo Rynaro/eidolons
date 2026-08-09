@@ -23,7 +23,8 @@
 | **AC-6** | lint / schema / cortex token budget / suite self-test clean | CI parity |
 | **AC-7** | Full bats suite green, counted against the plan | `bats cli/tests/` |
 | **AC-9** | This record's own `spec.yaml` parses, and the gate that now checks it goes RED on the defect it names | `make schema`; gate falsified against both positions of the embedded `": "`, with a block-scalar control |
-| **AC-10** | Every `roster/routing.yaml` template is documented in the cortex deep table, and the gate asserting it goes RED on the pre-fix table | `routing_chains.bats`; falsified five ways incl. a doc-only-row control proving containment ≠ equality |
+| **AC-10** | Every `roster/routing.yaml` template is documented in the cortex deep table, and the gate asserting it goes RED on the pre-fix table | `routing_chains.bats`; falsified five ways incl. a doc-only-row control proving containment ≠ equality. Scope limits (name presence not steps; vacuous pass on an empty enumeration) disclosed in the bats comment and AC-10's evidence |
+| **AC-11** | The recall eval arm scores 100%, so the cases cited as AC-1/AC-2 evidence can fail | `eval.bats` "the recall arm scores 100%"; falsifiable — the `idg`-drop mutation takes recall to 80/83 while public stays 15/15 |
 
 **AC-5 is load-bearing**, as in every change in this family: a test written
 alongside the data it checks passes trivially. The `idg`-removal mutation is

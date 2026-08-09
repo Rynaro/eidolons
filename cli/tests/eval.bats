@@ -28,10 +28,30 @@ load helpers
   [ "$(echo "$output" | jq -r '.passed')" = "15" ]
 }
 
+@test "eval routing: the recall arm scores 100% (its cases must be able to fail)" {
+  # The public test above asserts public ACCURACY; `--suite all` below asserts
+  # only the task COUNT. Nothing asserted recall accuracy, so every recall case
+  # could go red with the whole repo green — including N-C07..N-C12, which
+  # `chain-scout-debug-fix` cites as the evidence for AC-1 and AC-2. Evidence
+  # that cannot fail is not evidence.
+  #
+  # Falsifiable, demonstrated: dropping the trailing `idg` from
+  # `scout-diagnose-fix` takes recall to 80/83 while public stays 15/15.
+  #
+  # The bar is derived from the suite file rather than hardcoded, so adding a
+  # task raises it instead of leaving a stale number behind.
+  run eidolons eval routing --suite recall --json
+  [ "$status" -eq 0 ]
+  _total="$(echo "$output" | jq -r '.total')"
+  [ "$_total" -ge 83 ]
+  [ "$(echo "$output" | jq -r '.passed')" = "$_total" ]
+}
+
 @test "eval routing: --suite all covers public + holdout + recall" {
   run eidolons eval routing --suite all --json
   [ "$status" -eq 0 ]
-  # 15 public + 4 holdout + 49 recall (44 natural-language + 5 precision guards).
+  # 15 public + 4 holdout + 83 recall (the recall arm has grown; its accuracy is
+  # asserted by the test above, its membership here).
   # Derived from the suite file rather than hardcoded, so adding a task updates
   # the expectation with it and this stays a coverage check, not a stale count.
   _expected="$(yq -r '[.suites[][]] | length' "$EIDOLONS_ROOT/evals/routing-suite.yaml" 2>/dev/null \

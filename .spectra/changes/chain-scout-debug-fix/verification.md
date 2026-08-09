@@ -95,7 +95,7 @@ The behaviour is settled. The checker ran **thirteen ordering mutations** across
 both new templates — full reversals, `forge` moved off its slot, and a swap of
 only the last two steps — and every one went RED in `routing_chains.bats` *and*
 in the recall suite. It also established, two ways, that eval grading is
-order-sensitive **by construction**: `cli/src/eval.sh:163` compares `.selected`
+order-sensitive **by construction**: `cli/src/eval.sh:164` compares `.selected`
 with jq array equality rather than as a set, and six reordering-only mutations
 each dropped the suite below 102/102 with zero membership change. A bonus the
 record can now claim: asserting the full ordered join makes a within-class
@@ -226,7 +226,7 @@ compose a chain by hand. They reached `roster/routing.yaml`, `evals/`,
 carrying FORGE after a scout and **reproduced H1 by hand** — the exact defect
 this change exists to fix, still live in the artifact that drives routing.
 
-Five rounds of eyes passed over it because **the row count and the template
+Four checker rounds passed over it because **the row count and the template
 count both read 11.** The table also documents three dispatch patterns that are
 not kernel templates (`direct-implementation-bypass`, `failed-attempt-recovery`,
 `decision-only`), which exactly masked the three routing templates absent from
@@ -309,6 +309,42 @@ introduced the next round's defect, because each was verified with a narrower
 instrument than the claim it made. A grep in one file became "the repo"; a probe
 against one record became "all three"; a Makefile target became "CI".
 
+## Checker round 7 — **REJECT** (two one-line stale claims, and evidence that could not fail)
+
+The closing checker verified all six round-6 fixes as genuinely landed,
+including the load-bearing one: **M11 trips exactly one test in all 1719** — the
+coverage set pin — confirming the witness. It reproduced M4→4, M7→2, M8→4 at
+the then-current 1719-test suite (AC-11 has since raised M4→5 and M7→3; M8, M9
+and M11 are unchanged — all re-measured, not inferred) at
+the three named sites, and M9→6 with the violation count at 24 using a gap-fill
+*it* chose. It reversed both remaining unpinned templates in one tree and got
+1719/1719 green, confirming the corrected residual behaviourally rather than by
+grep. It could not break the guards.
+
+Two blockers, both the change's signature defect:
+
+- `verification.md`'s AC-9 row said `files_touched 10`; the tree has **11**,
+  because *this round's own CI fix* added an entry. The three sibling counts on
+  the same line were right. That row no longer carries counts at all — a number
+  restated there went stale twice, so it now points at the closing sweep.
+- `spec.yaml` still asserted *"the embedded `": "` that is the single root
+  cause"* — a live claim contradicting the retraction two files away, in the
+  canonical `full`-tier artifact. Removed; the evidence now names the modes
+  measured and explicitly declines to call the list exhaustive.
+
+**And the finding that matters beyond this change: the recall eval arm was
+gated nowhere.** `eval.bats` asserted the *public* arm's accuracy and only the
+*task count* for `--suite all`; no workflow runs `eval routing` at all. So
+`N-C07`–`N-C12`, cited throughout as the evidence for AC-1 and AC-2, could
+every one go red with the whole repo green — demonstrated: the `idg`-drop
+mutation takes recall to 80/83 while public holds 15/15 and no eval test fails.
+The mechanism is pre-existing, but this change added six artifacts to that arm
+and presented them as proof. Now gated by AC-11, with the bar derived from the
+suite file so it rises as tasks are added.
+
+That is the round-6 blocker's exact shape — *a gate wired into only one of the
+places that must run it* — recurring on the artifact nobody thought to check.
+
 ## The systemic finding this exposed
 
 Running the coverage check against **shipped v2.19.1** gives **30 violations
@@ -333,10 +369,11 @@ recommendation.
 | **AC-4** | **PASS** | corrected subset audit: **5 → 4**, set difference is exactly `audit-without-touching\|forensic-then-fix\|coder+debugger+scout+scriber`; no new pair |
 | **AC-5** | **PASS — 11/11 mutations red** | table below |
 | **AC-6** | **PASS** | `make lint` 0 · `make schema` 0 · token budget 836/850 · self-test **102 tasks** |
-| **AC-7** | **PASS** | `bats cli/tests/` → **1719/1719**, 0 failures, 7 skipped. Counted against the plan (`1..1719`) *and* against `grep -c '^@test'` = **1719**, not read off the tail |
+| **AC-7** | **PASS** | `bats cli/tests/` → **1720/1720**, 0 failures, 7 skipped. Counted against the plan (`1..1720`) *and* against `grep -c '^@test'` = **1720**, not read off the tail |
 | **AC-8** | **PASS** | the guard cannot be paid off: the checker's count-neutral gaming attack (M9), a same-class count-neutral trade, and a gap-fill-only variant all go RED. Previously listed in `acceptance-criteria.md` only — absent from `spec.yaml` and from this table until round 5 |
-| **AC-10** | **PASS** | Every `roster/routing.yaml` template now appears in `methodology/cortex/chain-templates.md`. Gate falsified five ways — RED on the pre-fix table, RED dropping only the widest template's row, RED on a substring trap, GREEN on the fixed table, GREEN dropping a doc-only row (containment ≠ equality) |
-| **AC-9** | **PASS** | `spec.yaml` parses (invariants 5 · anti_scope 3 · acceptance_checks 10 · files_touched 10). Gate RED on the HEAD form **and on both positions of the embedded `": "`** — first-line ("could not find expected `:`") and continuation-line ("mapping values are not allowed", what the archived predecessors produce). Control: byte-identical text as a block scalar passes, so it keys on the defect, not on the edit. Scope limits (parses ≠ well-formed; silent OK on an empty match set) recorded in the script header and in AC-9's evidence rather than claimed away |
+| **AC-11** | **PASS** | Recall arm gated at 100%. Previously the public arm's accuracy was asserted and recall's was not (`--suite all` checked only the task count), so `N-C07`–`N-C12` — this change's AC-1/AC-2 evidence — could all go red with the repo green. Falsifiable: the `idg`-drop takes recall to 80/83 while public holds 15/15 |
+| **AC-10** | **PASS** | Every `roster/routing.yaml` template now appears in `methodology/cortex/chain-templates.md`. Gate falsified five ways — RED on the pre-fix table, RED dropping only the widest template's row, RED on a substring trap, GREEN on the fixed table, GREEN dropping a doc-only row (containment ≠ equality). **Scope limits disclosed** in the bats comment and AC-10's evidence: it checks name presence not steps, passes vacuously on an empty enumeration, and accepts a bold mention anywhere in the file |
+| **AC-9** | **PASS** | `spec.yaml` parses; its section lengths are re-derived by the closing sweep rather than restated here — a count copied into this row went stale twice. Gate RED on the HEAD form **and on both colon positions**, and on a bare trailing `:` with no `": "` present. Control: byte-identical text as a block scalar passes, so it keys on the defect, not on the edit. Scope limits (parses ≠ well-formed; silent OK on an empty match set) recorded in the script header and AC-9's evidence |
 
 Suites: recall **83/83**, public **15/15**, `routing_chains.bats` **15/15**.
 
@@ -352,13 +389,15 @@ Baseline unmutated green; every mutation **red**:
 | M4 | drop **only** the trailing `idg` | read-only-pair route | **RED** ✓ |
 | M5 | delete `scout-diagnose-decide-fix` | coverage set pin | **RED** ✓ |
 | M6 | delete `scout-diagnose-decide-fix` | targeted-combination test | **RED** ✓ |
-| M7 | drop **only** `forge` from `scout-diagnose-decide-plan-fix` | coverage set pin | **RED** ✓ (2 tests) |
+| M7 | drop **only** `forge` from `scout-diagnose-decide-plan-fix` | coverage set pin | **RED** ✓ (3 tests) |
 | M8 | drop `idg` from `plan-before-build` | coverage set pin | **RED** ✓ (**4 tests** — `run.bats` ×2 and `harness.bats` also pin this template's ordered chain) |
-| M9 | **the gaming attack**: add a plausible gap-fill template (−1 violation) AND drop `idg` from `plan-before-build` (+1), holding the COUNT at 24 | coverage set pin | **RED** ✓ (6 tests; count independently verified held at exactly 24) |
+| M9 | **the gaming attack**, replayable as written: add `diagnose-decide-fix` = `[vigil, forge, vivi]` requiring `{debugger, reasoner, coder}` (−1 violation) AND drop `idg` from `plan-before-build` (+1), holding the COUNT at 24 | coverage set pin | **RED** ✓ (6 tests; count independently verified held at exactly 24) |
 | **M10** | reverse `scout-diagnose-decide-fix` to `[idg, vivi, forge, vigil, atlas]` — docs first, scout last | ordered route pins | **RED** ✓ (bats *and* recall suite) |
 | **M11** | drop `idg` from `audit-without-touching` | coverage set pin | **RED** ✓ (**1 test — the set pin ALONE**) |
 
-Counts are **full-suite** (all 1719 tests), not `routing_chains.bats` alone.
+Counts are **full-suite** (all 1720 tests), not `routing_chains.bats` alone,
+and were **re-measured after AC-11 was added** rather than carried forward:
+that gate moved M4 4→5 and M7 2→3, while M8, M9 and M11 were unaffected.
 Rounds 5 and 6 both reported `routing_chains`-only counts as if they were
 repo-wide; that is what made M8 look exclusive when three other files pin
 `plan-before-build`'s ordered chain.
@@ -371,7 +410,7 @@ only. Round 7 measured the **full suite**: M8 is caught by **4** tests, because
 and `harness.bats:647`. M8 was never the witness either.
 
 M11 is. Dropping `idg` from `audit-without-touching` is a real step-drop caught
-by exactly **one** test in the whole 1719-test suite — the coverage set pin.
+by exactly **one** test in the whole 1720-test suite — the coverage set pin.
 That single mutation is what establishes the pin as necessary, and it now sits
 in the table rather than being asserted in prose.
 

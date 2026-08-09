@@ -90,7 +90,7 @@ count-neutral gaming attack.
 
 The witness for the pin's necessity is a *different* mutation: dropping `idg`
 from `audit-without-touching`, which is caught by exactly one test in the full
-1719-test suite — the coverage **set** pin. Two earlier wordings here named the
+1720-test suite — the coverage **set** pin. Two earlier wordings here named the
 wrong rows (first all three, then `plan-before-build`), both because the counts
 were taken inside `routing_chains.bats` and written up as repo-wide. The
 per-mutation counts live in `verification.md`'s table with the mutations

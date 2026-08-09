@@ -91,7 +91,9 @@ anti_scope:
 files_touched:
   - roster/routing.yaml                     # 3 templates + tie-count note
   - cli/tests/routing_chains.bats           # route pins, corrected pinned set,
-                                            # route-level coverage SET pin
+                                            # route-level coverage SET pin,
+                                            # cortex-table containment gate
+  - cli/tests/eval.bats                     # gate the recall arm's accuracy
   - EIDOLONS.md                             # cortex template-count sentence
   - evals/routing-suite.yaml                # N-C07..N-C12
   - methodology/cortex/chain-templates.md   # deep cortex table re-sync
@@ -153,6 +155,18 @@ acceptance_checks:
       the checker's own count-neutral gaming attack replayed against this tree
       goes RED (M9 in verification.md's mutation table), as does a same-class
       count-neutral trade and a gap-fill-only variant.
+  - id: AC-11
+    check: >
+      the recall eval arm scores 100%, so the cases this change cites as AC-1
+      and AC-2 evidence are capable of failing a merge gate
+    evidence: >
+      eval.bats "the recall arm scores 100%". Before it, the public arm's
+      accuracy was asserted and the recall arm's was not — `--suite all`
+      checked only the task COUNT — so N-C07..N-C12 could all go red with the
+      repo green. Falsifiable and demonstrated: dropping the trailing idg from
+      scout-diagnose-fix takes recall to 80/83 while public stays 15/15. The
+      bar is derived from the suite file, so adding a task raises it rather
+      than leaving a stale number.
   - id: AC-10
     check: >
       every template in roster/routing.yaml is documented in the cortex deep
@@ -182,11 +196,13 @@ acceptance_checks:
       RED on the defect it names
     evidence: >
       GREEN on the fixed tree; RED when this spec.yaml is reverted to its HEAD
-      form (line 62, "could not find expected ':'"). Falsified against BOTH
-      positions of the embedded ": " that is the single root cause — on the
-      entry's first line (that same message) and on a continuation line
-      ("mapping values are not allowed in this context", the message the two
-      archived predecessors produce). CONTROL: byte-identical text as a block
+      form (line 62, "could not find expected ':'"). NO root cause is claimed:
+      two earlier wordings named one (indentation, then an embedded ": ") and a
+      checker falsified both. Falsified across the failure modes actually
+      measured — an embedded ": " on an entry's first line and on a
+      continuation line, AND a bare trailing ":" with no ": " present anywhere,
+      which is what breaks the archived routing-recall-gap record. That list is
+      not asserted to be exhaustive. CONTROL: byte-identical text as a block
       scalar ('- >') passes, so the gate keys on the defect and not on the
       added text. SCOPE, recorded rather than claimed away: it checks that the
       file PARSES, not that it is a well-formed record — an empty file, '---',
