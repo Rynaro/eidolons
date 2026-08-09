@@ -38,11 +38,33 @@ load helpers
   # Falsifiable, demonstrated: dropping the trailing `idg` from
   # `scout-diagnose-fix` takes recall to 80/83 while public stays 15/15.
   #
-  # The bar is derived from the suite file rather than hardcoded, so adding a
-  # task raises it instead of leaving a stale number behind.
+  # Three assertions, each with a DIFFERENT failure mode. Their natures differ
+  # and an earlier comment here got this wrong, claiming the whole bar was
+  # "derived from the suite file" — lifted from the neighbouring test, which
+  # genuinely does read the file. This one did not. Stated precisely:
+  #
+  #   1. total == the recall arm's length in the suite file — DERIVED. Catches a
+  #      runner or loader that silently drops tasks it was handed.
+  #   2. total >= 83 — a HARDCODED FLOOR, and deliberately so. It is the only
+  #      anti-shrink guard available: `--suite all` below derives both sides of
+  #      its comparison from the same file, so it is structurally blind to the
+  #      file shrinking. Deleting recall tasks is invisible to everything else.
+  #
+  #      Its coverage, MEASURED rather than asserted: arm 77 RED, 82 RED,
+  #      83 green, 84 green, 90 green. So it catches a drop BELOW the floor and
+  #      nothing else — grow the arm to 90 and shrink it back to 84 and six
+  #      tasks vanish undetected. The floor does NOT rise on its own. Growing
+  #      the arm means bumping this number in the same commit; that is the
+  #      whole contract, and it is a ratchet, not a derivation.
+  #   3. passed == total — ACCURACY, and this one does rise by itself: add a
+  #      task and it must pass too.
+  _suite="$EIDOLONS_ROOT/evals/routing-suite.yaml"
+  _declared="$(yq -r '.suites.recall | length' "$_suite" 2>/dev/null \
+               || python3 -c 'import yaml,sys; print(len(yaml.safe_load(open(sys.argv[1]))["suites"]["recall"]))' "$_suite")"
   run eidolons eval routing --suite recall --json
   [ "$status" -eq 0 ]
   _total="$(echo "$output" | jq -r '.total')"
+  [ "$_total" = "$_declared" ]
   [ "$_total" -ge 83 ]
   [ "$(echo "$output" | jq -r '.passed')" = "$_total" ]
 }

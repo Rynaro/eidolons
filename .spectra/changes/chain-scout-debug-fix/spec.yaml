@@ -164,9 +164,19 @@ acceptance_checks:
       accuracy was asserted and the recall arm's was not — `--suite all`
       checked only the task COUNT — so N-C07..N-C12 could all go red with the
       repo green. Falsifiable and demonstrated: dropping the trailing idg from
-      scout-diagnose-fix takes recall to 80/83 while public stays 15/15. The
-      bar is derived from the suite file, so adding a task raises it rather
-      than leaving a stale number.
+      scout-diagnose-fix takes recall to 80/83 while public stays 15/15.
+      Three assertions with different natures, stated precisely because an
+      earlier wording called the whole bar "derived" and a checker showed it
+      was not: total == the arm's length in the suite file (DERIVED, catches a
+      loader dropping tasks); total >= 83 (a HARDCODED FLOOR and the only
+      anti-shrink guard, since --suite all derives both sides of its comparison
+      from the same file and cannot see the file shrink); passed == total
+      (ACCURACY, which does rise on its own).
+      The floor's coverage is measured, not asserted: arm 77 RED, 82 RED, 83
+      green, 84 green, 90 green. It catches a drop below the floor and nothing
+      more — growing the arm to 90 and shrinking it back to 84 loses six tasks
+      undetected. It is a ratchet, not a derivation, and must be bumped by hand
+      in the same commit that grows the arm.
   - id: AC-10
     check: >
       every template in roster/routing.yaml is documented in the cortex deep

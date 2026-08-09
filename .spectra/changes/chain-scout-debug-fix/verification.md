@@ -323,7 +323,8 @@ grep. It could not break the guards.
 
 Two blockers, both the change's signature defect:
 
-- `verification.md`'s AC-9 row said `files_touched 10`; the tree has **11**,
+- `verification.md`'s AC-9 row said `files_touched 10`; the tree had **11** at
+  the time (and **12** as of round 8, which added `cli/tests/eval.bats`),
   because *this round's own CI fix* added an entry. The three sibling counts on
   the same line were right. That row no longer carries counts at all — a number
   restated there went stale twice, so it now points at the closing sweep.
@@ -339,11 +340,67 @@ gated nowhere.** `eval.bats` asserted the *public* arm's accuracy and only the
 every one go red with the whole repo green — demonstrated: the `idg`-drop
 mutation takes recall to 80/83 while public holds 15/15 and no eval test fails.
 The mechanism is pre-existing, but this change added six artifacts to that arm
-and presented them as proof. Now gated by AC-11, with the bar derived from the
-suite file so it rises as tasks are added.
+and presented them as proof. Now gated by AC-11.
+
+Its three assertions have **different natures**, and the round-8 checker caught
+this record calling all of them "derived from the suite file" when the test did
+not read that file at all — the phrasing was lifted from a neighbouring test
+that genuinely does. Precisely: `total` is checked against the arm's declared
+length (derived — catches a loader silently dropping tasks); `total >= 83` is a
+**hardcoded floor** and the *only* anti-shrink guard, because `--suite all`
+derives both sides of its comparison from the same file and is structurally
+blind to that file shrinking; `passed == total` is accuracy and does rise on
+its own.
+
+The floor's coverage is **measured, not asserted**: arm 77 RED, 82 RED, 83
+green, 84 green, 90 green. It catches a drop below the floor and nothing more —
+the checker's exact attack (grow to 90, shrink back to 84) is **still
+undetected**, and is disclosed here rather than papered over. Growing the arm
+means bumping the number in the same commit; it is a ratchet, not a derivation,
+and the record now says so in all three places that describe it.
 
 That is the round-6 blocker's exact shape — *a gate wired into only one of the
 places that must run it* — recurring on the artifact nobody thought to check.
+
+## Checker round 8 — **REJECT** (the new gate's own description was false)
+
+A narrow delta pass over `f86fa38..afe7266`. It re-measured all five mutation
+counts full-suite and **all five matched** — M4 5, M7 3, M8 4, M9 6 (violations
+held at exactly 24), **M11 1**, confirming the witness a third time. It attacked
+AC-11 for vacuity on five vectors (arm truncated, arm emptied, `.suites.recall`
+deleted, suite file missing, non-numeric total) and could not make it pass while
+recall was broken. It confirmed AC-11 does run on PRs: `cli-tests` executes
+`bats cli/tests/` over the whole directory, so this is **not** the round-6
+"wired in only one place" defect recurring. It also disclosed and then corrected
+an invalid first attempt of its own — a shell quoting bug that silently deleted
+a `- name:` line — rather than reporting its results.
+
+**The blocker: AC-11's bar is hardcoded, and three files said it was derived.**
+`eval.bats`, `spec.yaml` and `verification.md` all claimed the bar was "derived
+from the suite file rather than hardcoded"; the test never opened that file. The
+phrasing was lifted from the neighbouring `--suite all` test, which genuinely
+does read it — the mechanism was not copied with the words. Measured
+consequences: growing the arm to 90 left the floor at 83, and growing then
+shrinking back to 84 was **green across the whole repo**, silently losing six
+recall tasks.
+
+Fixed by making the mechanism match the description *and* stating each
+assertion's nature separately, because they genuinely differ — one derived, one
+a hardcoded ratchet, one self-raising. The floor stays hardcoded on purpose: it
+is the only anti-shrink guard, since `--suite all` derives both sides of its
+comparison from the same file and cannot see that file shrink. That is the
+"both sides of the test agreed" defect this record already names elsewhere,
+found here in the gate written to close a different instance of it.
+
+Also fixed: `verification.md` said the tree had 11 `files_touched` when round 8
+had taken it to **12**, inside the bullet whose subject is a `files_touched`
+count going stale; and AC-9's row in `acceptance-criteria.md` still carried the
+retracted single-cause wording, having been reached in the two sibling files but
+not the canonical criteria artifact — the same partial propagation round 2
+rejected on.
+
+The checker confirmed `verification.md:315/317/321` correctly retain **1719** as
+its predecessor's own measurement.
 
 ## The systemic finding this exposed
 
@@ -520,3 +577,38 @@ Recorded plainly because an earlier draft of this very section claimed the
 opposite — that the spec preceded the implementation — which was false and
 would have overstated the check. That is the same species of overclaim three
 checker rounds removed from the sibling records.
+
+### Drift verdict at `afe7266`: **WIDENED, not clean**
+
+Two independent checkers analysed it, and the honest verdict is not the
+comfortable one. Mechanically there is **no undeclared file**: `files_touched`
+and `git diff --name-only db82fb2 afe7266` agree in both directions, and
+`anti_scope` holds — the selection algorithm, form predicates and signals are
+untouched, and `roster/routing.yaml` gains data only.
+
+But the check **cannot fail**, and the scope did move:
+
+- There is no `declared_scope` key in `spec.yaml` or `change.json`, and no
+  frozen plan-time baseline to compare against.
+- `files_touched` has been **extended in-flight four times** to admit work as it
+  arrived — `EIDOLONS.md` at `d9e08a1`, the parse gate + `Makefile` at
+  `3f52083`, `ci.yml` at `f86fa38`, `eval.bats` at `afe7266`. Each extension was
+  declared in the commit that made the change, so drift was always zero by
+  construction.
+- The narrative fields still read *"Add THREE templates. DATA only; the
+  selection algorithm is untouched"*. The tree ships a new CLI script, a new CI
+  step, a Makefile change and **three merge gates**. AC-11 widens it on a new
+  axis: the first gate whose subject is the eval harness rather than chain
+  templates.
+
+Nothing landed outside the declared scope; **the declared scope grew to fit what
+landed.** Recording that rather than the zero-mismatch number, because
+`mcp__tonberry__drift_check` is a *recording* API — its `mismatches` field is an
+input, and it returns clean even with an undeclared file committed to the tree
+(falsified directly). A clean drift result from it is worth exactly the analysis
+performed beforehand and nothing more.
+
+The round-7 checker's caveat is **not** reproduced verbatim here: `afe7266`
+invalidated two of its counts (three extensions → four, two gates → three).
+Copying it forward would have shipped this record's signature defect inside the
+sentence describing that defect.
