@@ -1,11 +1,13 @@
 {
   "esl_version": "1.1",
   "change_id": "chain-scout-debug-fix",
-  "status": "in_progress",
+  "status": "archived",
   "tier": "full",
   "maker": "vivi",
   "checker": "kupo",
   "acceptance_checks": [],
   "spec_ref": "roster/routing.yaml",
+  "drift_checked": true,
+  "archive_path": "archive/2026-08-09-chain-scout-debug-fix",
   "has_code": true
 }
