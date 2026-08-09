@@ -590,6 +590,31 @@ eiis_check() {
 PROJECT_MANIFEST="eidolons.yaml"
 PROJECT_LOCK="eidolons.lock"
 
+# LOCK_INSTALLER_BLOCKS — top-level eidolons.lock blocks that are owned by a
+# sibling installer (harness_install.sh), NOT by sync. sync rebuilds the lock
+# from scratch every run, so without an explicit carry-over these blocks are
+# destroyed by the next `eidolons sync` — which silently un-installs the
+# harness and the ECM context kernel from every consumer project (the lock is
+# the only record either one has; `harness status` and doctor D12 both report
+# "not installed" once it is gone, so the breakage is invisible).
+# Order is the on-disk append order; keep it stable for idempotency.
+LOCK_INSTALLER_BLOCKS="harness context"
+
+# lock_extract_block FILE KEY
+# Prints the top-level `KEY:` block of a YAML lockfile verbatim (the header
+# line plus every following indented/blank line, up to the next top-level
+# key). Prints nothing when FILE or the block is absent.
+# Bash 3.2 safe: awk only, no associative arrays.
+lock_extract_block() {
+  local file="$1" key="$2"
+  [[ -f "$file" ]] || return 0
+  awk -v k="^${key}:" '
+    $0 ~ k && /^[^[:space:]]/ { inblk = 1; print; next }
+    inblk && /^[^[:space:]]/  { inblk = 0 }
+    inblk                     { print }
+  ' "$file"
+}
+
 manifest_exists() { [[ -f "$PROJECT_MANIFEST" ]]; }
 
 # Read installed members from eidolons.yaml → one name per line
