@@ -347,7 +347,10 @@ this record calling all of them "derived from the suite file" when the test did
 not read that file at all — the phrasing was lifted from a neighbouring test
 that genuinely does. Precisely: `total` is checked against the arm's declared
 length (derived — catches a loader silently dropping tasks); `total >= 83` is a
-**hardcoded floor** and the *only* anti-shrink guard, because `--suite all`
+**hardcoded floor** and the only anti-shrink guard **in the recall band 49–82**
+(below 49 the `--suite all` test's union floor of 68 also fires — measured:
+with this floor removed, recall 60 is green and recall 40 is red), because
+`--suite all`
 derives both sides of its comparison from the same file and is structurally
 blind to that file shrinking; `passed == total` is accuracy and does rise on
 its own.
@@ -387,7 +390,7 @@ recall tasks.
 Fixed by making the mechanism match the description *and* stating each
 assertion's nature separately, because they genuinely differ — one derived, one
 a hardcoded ratchet, one self-raising. The floor stays hardcoded on purpose: it
-is the only anti-shrink guard, since `--suite all` derives both sides of its
+is the only anti-shrink guard in the recall band 49–82, since `--suite all` derives both sides of its
 comparison from the same file and cannot see that file shrink. That is the
 "both sides of the test agreed" defect this record already names elsewhere,
 found here in the gate written to close a different instance of it.
@@ -401,6 +404,54 @@ rejected on.
 
 The checker confirmed `verification.md:315/317/321` correctly retain **1719** as
 its predecessor's own measurement.
+
+## Checker round 9 — **ACCEPT** (nothing blocking; four residuals recorded)
+
+The closing pass ran under an explicit convergence rule: findings triaged
+BLOCKING (behaviour wrong, a gate that misses what it claims, a *false* live
+claim, a number contradicting the tree) vs NON-BLOCKING (imprecise-but-true
+wording, a disclosure reaching some files and not others, pre-existing gaps) —
+and an accept was **required** if nothing was blocking. That rule exists because
+eight rounds had shown each record fix perturbing another, and endless polishing
+of a record whose behaviour is verified four times over is itself a failure
+mode.
+
+**Nothing landed in BLOCKING.** The checker isolated each of AC-11's three
+assertions so only one could fire and confirmed all three have the natures
+claimed — including a **negative control** proving the derived check is
+load-bearing: with `total == declared` deleted, a file-90/runner-84 desync goes
+green, so nothing else catches a loader silently dropping tasks. It re-measured
+the floor's coverage table (77/82 RED, 83/84/90 green, boundary exact),
+reproduced the disclosed hole end-to-end with real tasks, and confirmed the
+disclosure is **word-identical on every number** across all three files — the
+signature partial-propagation defect did not recur in that delta.
+
+It also re-derived every number in the record from the tree, confirmed the
+retained "1719" at three lines is correct as round 7's own measurement, and
+confirmed both surviving quotations of "derived from the suite file" are
+retractions rather than live claims.
+
+Four residuals, all recorded rather than fixed — except N1 and N3, corrected
+here because they were one-line precision fixes:
+
+- **N1 (corrected)** — the floor was called the *only* anti-shrink guard. It is
+  the only one **in the recall band 49–82**; below 49 the `--suite all` test's
+  union floor of 68 also fires (measured: recall 60 green, recall 40 red with
+  the floor removed). Corrected in all four sites, consistently.
+- **N2 (corrected)** — `acceptance-criteria.md`'s AC-11 row carried the short
+  form without the ratchet disclosure the other files carry.
+- **N3 (corrected)** — the drift section was headed `afe7266`; it now carries a
+  verdict line for the reviewed commit.
+- **N4 (recorded)** — `mcp_health.bats:352` makes an unbounded network call.
+  Pre-existing, untouched by this change, listed in the residuals above.
+
+The checker disclosed three flaws in its **own** run rather than quietly
+re-running: an accidental concurrent single-test bats invocation (impact
+analysed — per-test `$BATS_TEST_TMPDIR` isolation means concurrency can
+manufacture a spurious failure, never a spurious pass), killing the stalled
+GHCR curl, and discarding a bogus `arm=83 → RED` row caused by an `IndexError`
+in its own mutation script. All four mutated files were restored and verified
+**byte-identical by sha256**.
 
 ## The systemic finding this exposed
 
@@ -530,6 +581,18 @@ trusting the prior record's description of the gap.
 - A three-class scout+debugger+coder prompt now receives an `idg` step it did
   not explicitly ask for — the same trade `plan-before-build` has always made,
   stated rather than hidden.
+- **`bats cli/tests/` makes a live, unbounded network call** —
+  `mcp_health.bats:352` curls `https://ghcr.io/token?...` with no `--max-time`.
+  It stalled the closing checker's sequential run for ~3 minutes until the curl
+  was killed, after which the test passed. Pre-existing, in a file this change
+  does not touch, and **not created here** — but it makes the suite's runtime
+  depend on network reachability, which is worth its own issue. Surfaced by the
+  round-9 checker.
+- **AC-11's floor is a ratchet that does not self-raise.** Growing the recall
+  arm requires bumping `83` in `cli/tests/eval.bats` in the same commit. Its
+  measured coverage is 77 RED · 82 RED · 83/84/90 green, so growing the arm and
+  then shrinking it back to anything ≥ 83 loses tasks undetected. Disclosed in
+  all four places that describe the gate rather than designed away.
 - **`change.json` still carries `acceptance_checks: []`.** Half of this record's
   own headline finding — the criteria being unreadable from *either* file — and
   round 5 closed only the `spec.yaml` half. The new gate does not read
@@ -578,7 +641,20 @@ opposite — that the spec preceded the implementation — which was false and
 would have overstated the check. That is the same species of overclaim three
 checker rounds removed from the sibling records.
 
-### Drift verdict at `afe7266`: **WIDENED, not clean**
+### Drift verdict at `a6b070a` (final): **WIDENED, not clean**
+
+> Zero undeclared files — `files_touched` (12) and `git diff --name-only
+> db82fb2 a6b070a` agree in both directions — and `anti_scope` holds. **But**
+> there is no `declared_scope` key and no frozen plan-time baseline, and
+> `files_touched` was extended in-flight **four** times, so drift was zero by
+> construction. The narrative still reads *"Add THREE templates. DATA only"*
+> over a tree shipping a new CLI script, a CI step and **three** merge gates.
+
+Independently re-derived by the closing checker, which dumped `files_touched`
+at all ten commits in the chain and confirmed the four extensions land at
+exactly the four commits named below. `a6b070a` itself added no entry, so both
+"four" and "three" still stand at the reviewed commit. The analysis below was
+written at `afe7266` and every element of it re-derives true here.
 
 Two independent checkers analysed it, and the honest verdict is not the
 comfortable one. Mechanically there is **no undeclared file**: `files_touched`

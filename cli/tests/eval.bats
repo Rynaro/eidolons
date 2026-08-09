@@ -45,10 +45,13 @@ load helpers
   #
   #   1. total == the recall arm's length in the suite file — DERIVED. Catches a
   #      runner or loader that silently drops tasks it was handed.
-  #   2. total >= 83 — a HARDCODED FLOOR, and deliberately so. It is the only
-  #      anti-shrink guard available: `--suite all` below derives both sides of
-  #      its comparison from the same file, so it is structurally blind to the
-  #      file shrinking. Deleting recall tasks is invisible to everything else.
+  #   2. total >= 83 — a HARDCODED FLOOR, and deliberately so. `--suite all`
+  #      below derives both sides of ITS comparison from the same file, so that
+  #      comparison is structurally blind to the file shrinking. This floor is
+  #      the only guard in the recall band 49-82; below 49 the union floor at
+  #      the end of that test (`_expected >= 68`) also fires. Measured, not
+  #      assumed: with this floor deleted, recall 60 is green and recall 40 is
+  #      red. Every realistic silent shrink lives in the 49-82 band.
   #
   #      Its coverage, MEASURED rather than asserted: arm 77 RED, 82 RED,
   #      83 green, 84 green, 90 green. So it catches a drop BELOW the floor and
