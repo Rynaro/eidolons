@@ -983,83 +983,302 @@ nexus_rollback() {
   return 0
 }
 
-# nexus_verify_release VERSION CLONE_DIR → verifies the clone against
-# roster/index.yaml nexus.versions.releases.<version>. Unlike
-# _verify_release_integrity_internal (which reads from eidolons[]), this
-# function reads from the top-level nexus: block.
-# Return codes:
-#   0 — verified (all checks pass, or metadata absent — skip with warning)
-#   2 — mismatch (commit / tree / archive drift)
-#   3 — corrupt clone (HEAD unresolvable)
-nexus_verify_release() {
+# nexus_release_meta_upstream VERSION CLONE_DIR
+#
+# The only source that can structurally hold a release's OWN metadata: the
+# upstream DEFAULT BRANCH, reached through the remote CLONE_DIR already has
+# (nexus_clone_to_sibling sets origin to EIDOLONS_REPO). A tag's own tree
+# cannot carry its own commit/tree/archive hashes — the record is written by
+# a PR that merges after the tag (see spec.md "Problem"). The ref is
+# literally `origin HEAD` — never `origin main` (dead against the bats
+# fixture remote, whose default branch is `master`) and never configurable
+# (no env override; EIDOLONS_REPO already covers fork/test redirection).
+#
+#   Three "upstream reached but nothing usable" sub-cases exist once origin
+#   HEAD resolves, and all three are rc 0 with empty stdout — never rc 1:
+#     (a) roster/index.yaml exists and parses, but carries no entry for
+#         VERSION (the ordinary forward-upgrade case).
+#     (b) roster/index.yaml does not exist at FETCH_HEAD at all (a fork, a
+#         moved roster path, or a default branch switched to docs).
+#     (c) roster/index.yaml exists but does not parse as YAML — the
+#         `yaml_to_json | jq` pipeline below already fails soft (`|| true`)
+#         into empty stdout for this one; it needed no fix.
+#   (a) and (c) were already correct; (b) was the one collapsed into rc 1
+#   pre-fix — see cli/tests/upgrade_self.bats's AC-26 fixture for the
+#   reproduction.
+#
+#   stdout: the release-metadata JSON object for VERSION, or nothing for any
+#           of the three sub-cases above. Nothing else is ever written to
+#           stdout.
+#   stderr: all logging.
+#   rc 0  — source consulted: `git fetch` reached origin HEAD, whether or not
+#           roster/index.yaml exists there, parses, or carries an entry for
+#           VERSION. Caller must classify empty stdout as `absent`, never
+#           `network` — the upstream WAS reached.
+#   rc 1  — source unavailable: `git fetch --depth 1 origin HEAD` itself
+#           failed (network/DNS/ref error — origin HEAD could not be
+#           resolved at all). Caller must report this as `network`, never
+#           `absent`.
+#
+# Running under `set -euo pipefail`: the "print only if non-empty" tail is
+# guarded with an `if`, never `[ -n "$x" ] && printf` — the latter's
+# short-circuit-false trips -e and aborts the caller.
+nexus_release_meta_upstream() {
   local version="$1" clone_dir="$2"
-  local actual_commit
+  local tmp
 
-  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
-  if [[ -z "$actual_commit" ]]; then
-    warn "nexus@$version cannot resolve cloned commit"
-    return 3
+  if ! git -C "$clone_dir" fetch --depth 1 origin HEAD >/dev/null 2>&1; then
+    warn "nexus@$version cannot fetch upstream default branch (origin HEAD) for release metadata"
+    return 1
   fi
 
-  # Read metadata from roster nexus.versions.releases.<version>
-  local meta
-  meta="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null \
-    | jq --arg v "$version" '.nexus.versions.releases[$v] // empty' 2>/dev/null || true)"
-
-  if [[ -z "$meta" || "$meta" == "null" || "$meta" == "empty" ]]; then
-    warn "nexus@$version has no release integrity metadata in roster — skipping verification"
+  tmp="$(mktemp)"
+  if ! git -C "$clone_dir" show FETCH_HEAD:roster/index.yaml > "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    # Upstream WAS reached (fetch above succeeded) — it simply has no
+    # roster/index.yaml at FETCH_HEAD. This is a recordless upstream, not an
+    # unreachable one: rc 0 with empty stdout, so the caller's
+    # _nexus_release_source_status classifies it `absent` rather than
+    # collapsing it into `network` (a false "upstream unreachable" claim
+    # about a source that just answered `git fetch`).
+    warn "nexus@$version upstream default branch has no roster/index.yaml at FETCH_HEAD"
     return 0
   fi
 
-  # Check for placeholder values written at bootstrap time.
-  local expected_commit expected_tree expected_archive
-  expected_commit="$(echo "$meta" | jq -r '.commit // empty')"
-  expected_tree="$(echo "$meta" | jq -r '.tree // empty')"
-  expected_archive="$(echo "$meta" | jq -r '.archive_sha256 // empty')"
+  local meta
+  meta="$(yaml_to_json "$tmp" 2>/dev/null \
+    | jq --arg v "$version" '.nexus.versions.releases[$v] // empty' 2>/dev/null || true)"
+  rm -f "$tmp"
 
-  # Skip verification when placeholders are present (bootstrap window).
-  case "$expected_commit" in
-    "<"*) warn "nexus@$version commit placeholder detected — skipping verification (bootstrap window)"; return 0 ;;
-  esac
+  if [[ -n "$meta" && "$meta" != "null" && "$meta" != "empty" ]]; then
+    printf '%s' "$meta"
+  fi
+  return 0
+}
 
-  if [[ -n "$expected_commit" && "$actual_commit" != "$expected_commit" ]]; then
-    warn "nexus@$version commit mismatch: got $actual_commit, expected $expected_commit"
-    return 2
+# _nexus_release_source_status META ACTUAL_COMMIT ACTUAL_TREE CLONE_DIR VERSION
+# → echoes exactly one of: absent | placeholder | mismatch | verified
+# Internal helper for nexus_verify_release — not part of the public contract.
+# Classifies a SINGLE source's evidence; the caller combines two of these by
+# severity. Mirrors the per-field comparison _verify_release_integrity_internal
+# already does for per-Eidolon members, scoped to the nexus: roster block.
+#
+# AC-21/AC-22 (revision 1.4.0): classification is driven by what was actually
+# COMPARED, never by falling through. A record that exists but carries
+# nothing comparable — {tag, released_at} only, all three fields present but
+# empty, or a non-object scalar — is `absent`, never `verified`; a record
+# whose only comparable evidence is `<`-sentinels, in ANY of the three
+# fields (not `commit` alone), is `placeholder`. A record with at least one
+# REAL field that matches is `verified` even if another field is a sentinel
+# — the sentinel skips a field, it never vetoes a real match.
+_nexus_release_source_status() {
+  local meta="$1" actual_commit="$2" actual_tree="$3" clone_dir="$4" version="$5"
+
+  if [[ -z "$meta" || "$meta" == "null" || "$meta" == "empty" ]]; then
+    echo "absent"
+    return 0
   fi
 
-  local actual_tree
-  actual_tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
-  case "$expected_tree" in
-    "<"*) : ;;  # placeholder
-    "")  : ;;
+  # Guard the non-object shape (a raw scalar string/number where the record
+  # should be) BEFORE extracting fields — `jq -r '.commit // empty'` on a
+  # scalar errors to stderr and yields the empty string, which must not
+  # silently reach the same "nothing to compare" fall-through by accident.
+  # A scalar has no comparable field by construction: absent.
+  if ! echo "$meta" | jq -e 'type == "object"' >/dev/null 2>&1; then
+    echo "absent"
+    return 0
+  fi
+
+  local expected_commit expected_tree expected_archive
+  expected_commit="$(echo "$meta" | jq -r '.commit // empty' 2>/dev/null)"
+  expected_tree="$(echo "$meta" | jq -r '.tree // empty' 2>/dev/null)"
+  expected_archive="$(echo "$meta" | jq -r '.archive_sha256 // empty' 2>/dev/null)"
+
+  # Track what was actually compared, not what fell through. `compared`
+  # counts real (non-empty, non-sentinel) fields that were checked against
+  # the clone; `saw_sentinel` records whether any field carried a `<`
+  # placeholder. Classification happens once at the end, on these counts —
+  # `echo "verified"` must not be reachable from a record that compared
+  # nothing (AC-21).
+  local compared=0 saw_sentinel=0
+
+  case "$expected_commit" in
+    "<"*) saw_sentinel=1 ;;
+    "")   : ;;
     *)
+      compared=1
+      if [[ "$actual_commit" != "$expected_commit" ]]; then
+        echo "mismatch"
+        return 0
+      fi
+      ;;
+  esac
+
+  case "$expected_tree" in
+    "<"*) saw_sentinel=1 ;;
+    "")   : ;;
+    *)
+      compared=1
       if [[ "$actual_tree" != "$expected_tree" ]]; then
-        warn "nexus@$version tree mismatch: got ${actual_tree:-unknown}, expected $expected_tree"
-        return 2
+        echo "mismatch"
+        return 0
       fi
       ;;
   esac
 
   case "$expected_archive" in
-    "<"*) : ;;  # placeholder
-    "")  : ;;
+    "<"*) saw_sentinel=1 ;;
+    "")   : ;;
     *)
+      compared=1
       local prefix actual_archive
       prefix="eidolons-${version}/"
       actual_archive="$(git_archive_sha256 "$clone_dir" "$prefix" || echo "")"
-      if [[ -z "$actual_archive" ]]; then
-        warn "nexus@$version cannot compute archive checksum"
-        return 2
-      fi
-      if [[ "$actual_archive" != "$expected_archive" ]]; then
-        warn "nexus@$version archive checksum mismatch: got $actual_archive, expected $expected_archive"
-        return 2
+      if [[ -z "$actual_archive" || "$actual_archive" != "$expected_archive" ]]; then
+        echo "mismatch"
+        return 0
       fi
       ;;
   esac
 
-  ok "nexus@$version release integrity verified"
+  if [[ "$compared" -eq 1 ]]; then
+    echo "verified"
+    return 0
+  fi
+
+  if [[ "$saw_sentinel" -eq 1 ]]; then
+    echo "placeholder"
+    return 0
+  fi
+
+  # Nothing comparable and no sentinel either — {tag, released_at} only, or
+  # all three fields present but empty. A record that exists but proves
+  # nothing is no-evidence, never a positive verification.
+  echo "absent"
   return 0
+}
+
+# nexus_verify_release VERSION CLONE_DIR
+#
+# Two-source classifier + severity rule (spec.yaml decision / severity_precedence
+# for change `upgrade-self-integrity-gate`). nexus_verify_release CLASSIFIES
+# evidence; upgrade_self.sh APPLIES policy at its own call site (mirrors
+# verify.sh:68 and doctor.sh:230, which both consult integrity_enforcement_mode
+# where they are called, not inside a shared helper).
+#
+# Sources consulted:
+#   installed — $ROSTER_FILE, the CURRENTLY INSTALLED nexus's roster. The more
+#               independent witness: it predates this fetch, so it is the only
+#               source that can notice a tag that moved since the last sync.
+#   upstream  — origin HEAD's roster/index.yaml, reached via
+#               nexus_release_meta_upstream. The only source that can
+#               structurally hold a release's OWN metadata.
+# The upstream source does not REPLACE the installed roster, it JOINS it —
+# this is monotone: adding a source can only make verification stricter,
+# never looser. Any source's field mismatch is unconditional.
+#
+# Return codes (0/2/3 keep the pre-existing meaning; 4 is new):
+#   0 — verified: some source supplied a real (non-placeholder) value and no
+#       source disagreed. NEXUS_VERIFY_STATUS = "verified" (upstream
+#       corroborated) or "verified:local-only" (only the installed roster did).
+#   2 — mismatch (commit / tree / archive drift on any source). Unconditional.
+#   3 — corrupt clone (HEAD unresolvable).
+#   4 — no evidence anywhere; NEXUS_VERIFY_STATUS carries which kind
+#       (absent | network | placeholder), selected by severity when the two
+#       sources disagree: mismatch > corrupt > absent > network > placeholder.
+#       The most severe outcome reported by ANY source wins.
+#
+# NEXUS_VERIFY_STATUS is a global the caller must read as
+# ${NEXUS_VERIFY_STATUS:-} — on the non-tag branch this function is never
+# called at all, and `set -euo pipefail` turns an unguarded read into an
+# `unbound variable` abort immediately before the summary line.
+#
+# AC-25 (revision 1.4.0) — two additional globals, same ${VAR:-} discipline,
+# same reason they're unset on the non-tag branch: NEXUS_VERIFY_INSTALLED_STATUS
+# and NEXUS_VERIFY_UPSTREAM_STATUS carry each source's own classification
+# (absent | placeholder | mismatch | verified | network), independent of which
+# one the severity rule selected for NEXUS_VERIFY_STATUS. The severity rule can
+# select `absent` while the OTHER source actually reported `network` (upstream
+# unreachable) — that is real evidence of a fetch failure, not silence, and the
+# call site needs it to distinguish a suppressed witness from the benign
+# release-day window where both sources are genuinely silent. These do not
+# widen NEXUS_VERIFY_STATUS's own closed set of seven values.
+#
+# Writes NOTHING to stdout in any outcome — the only caller does not capture
+# stdout, so an echo would land raw in the user's terminal. All logging (this
+# function's own, and nexus_release_meta_upstream's) is on stderr.
+nexus_verify_release() {
+  local version="$1" clone_dir="$2"
+  local actual_commit actual_tree
+
+  NEXUS_VERIFY_STATUS=""
+  NEXUS_VERIFY_INSTALLED_STATUS=""
+  NEXUS_VERIFY_UPSTREAM_STATUS=""
+
+  actual_commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo "")"
+  if [[ -z "$actual_commit" ]]; then
+    warn "nexus@$version cannot resolve cloned commit"
+    NEXUS_VERIFY_STATUS="corrupt"
+    return 3
+  fi
+  actual_tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+
+  # ─── Source: installed ($ROSTER_FILE) ────────────────────────────────────
+  local installed_meta installed_status
+  installed_meta="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null \
+    | jq --arg v "$version" '.nexus.versions.releases[$v] // empty' 2>/dev/null || true)"
+  installed_status="$(_nexus_release_source_status "$installed_meta" "$actual_commit" "$actual_tree" "$clone_dir" "$version")"
+
+  # ─── Source: upstream (origin HEAD) ───────────────────────────────────────
+  local upstream_meta upstream_status _um_rc=0
+  upstream_meta="$(nexus_release_meta_upstream "$version" "$clone_dir")" || _um_rc=$?
+  if [[ "$_um_rc" -ne 0 ]]; then
+    upstream_status="network"
+  else
+    upstream_status="$(_nexus_release_source_status "$upstream_meta" "$actual_commit" "$actual_tree" "$clone_dir" "$version")"
+  fi
+
+  NEXUS_VERIFY_INSTALLED_STATUS="$installed_status"
+  NEXUS_VERIFY_UPSTREAM_STATUS="$upstream_status"
+
+  # ─── A mismatch from EITHER source is unconditional ───────────────────────
+  if [[ "$installed_status" == "mismatch" || "$upstream_status" == "mismatch" ]]; then
+    warn "nexus@$version release integrity mismatch (installed=$installed_status upstream=$upstream_status)"
+    NEXUS_VERIFY_STATUS="mismatch"
+    return 2
+  fi
+
+  # ─── A real match from either source verifies the release ─────────────────
+  # Upstream corroboration wins the plain "verified" token — it is the source
+  # that matches the measured production shape (spec.md AC-2). A match from
+  # the installed roster alone (upstream absent/network/placeholder) is
+  # "verified:local-only": still a pass, but flagged as single-witness.
+  if [[ "$upstream_status" == "verified" ]]; then
+    ok "nexus@$version release integrity verified (upstream)"
+    NEXUS_VERIFY_STATUS="verified"
+    return 0
+  fi
+  if [[ "$installed_status" == "verified" ]]; then
+    ok "nexus@$version release integrity verified (installed roster only; upstream: $upstream_status)"
+    NEXUS_VERIFY_STATUS="verified:local-only"
+    return 0
+  fi
+
+  # ─── No evidence anywhere — severity rule selects which kind to report ───
+  # mismatch > corrupt > absent > network > placeholder. mismatch/corrupt are
+  # already resolved above/upfront, so only absent/network/placeholder compete
+  # here. The most severe outcome reported by ANY source wins.
+  local status
+  if [[ "$installed_status" == "absent" || "$upstream_status" == "absent" ]]; then
+    status="absent"
+  elif [[ "$installed_status" == "network" || "$upstream_status" == "network" ]]; then
+    status="network"
+  else
+    status="placeholder"
+  fi
+  warn "nexus@$version has no verifiable release integrity metadata (installed=$installed_status upstream=$upstream_status)"
+  NEXUS_VERIFY_STATUS="$status"
+  return 4
 }
 
 # ─── SemVer helpers (pure bash, no external deps) ─────────────────────────
