@@ -2065,3 +2065,78 @@ JSON
   _cmd2="$(jq -r '.hooks.SessionStart[0].hooks[0].command' .claude/settings.json)"
   [ "$_cmd2" = ".eidolons/harness/hooks/claude-code-SessionStart.sh" ]
 }
+
+# ─── installer-owned lock blocks survive sync (harness + ECM context) ──────
+# Regression coverage for a defect the tests above could not see: every
+# harness assertion drove harness_install.sh DIRECTLY, so nothing exercised
+# the `eidolons sync` path that is the only way an already-installed project
+# ever receives a shim refresh. Two defects hid behind that gap:
+#   1. sync rebuilt eidolons.lock from scratch and dropped `harness:` and
+#      `context:`, silently un-installing the harness and the ECM context
+#      kernel on the first sync after an install.
+#   2. sync's own guard read the YAML lock with bare `jq`, which parse-errors
+#      on line 1 of every lockfile — so the guard was the constant "absent"
+#      and the refresh/heal block was unreachable for every project.
+# Both tests below drive `eidolons sync`, never harness_install.sh.
+
+_seed_lock_with_installer_blocks() {
+  seed_lock
+  cat >> eidolons.lock <<'EOF'
+harness:
+  schema_version: 1
+  hosts_wired:
+    - claude-code
+  shim_paths:
+    - .eidolons/harness/hooks/claude-code-SessionStart.sh
+context:
+  schema_version: 1
+  ecm_version: "0.1.0"
+  host_tier: "full"
+EOF
+}
+
+@test "sync: preserves the installer-owned harness: and context: lock blocks" {
+  seed_manifest
+  _seed_lock_with_installer_blocks
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+
+  # Both blocks survive the rebuild, with their contents intact.
+  grep -q '^harness:' eidolons.lock
+  grep -q '^context:' eidolons.lock
+  grep -q 'ecm_version: "0.1.0"' eidolons.lock
+  # The nested body carries over too, not just the header line.
+  grep -q '^  hosts_wired:' eidolons.lock
+  grep -q '^    - claude-code$' eidolons.lock
+  grep -q 'claude-code-SessionStart\.sh' eidolons.lock
+
+  # ...and sync stays idempotent: a second run neither drops nor duplicates.
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^harness:' eidolons.lock)" = "1" ]
+  [ "$(grep -c '^context:' eidolons.lock)" = "1" ]
+}
+
+@test "sync: reaches the harness shim-refresh block when the lock declares it" {
+  seed_manifest
+  _seed_lock_with_installer_blocks
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  # The guard must read the YAML lock through yaml_to_json — bare jq on the
+  # lockfile parse-errors and pins this to "absent" forever.
+  [[ "$output" =~ would\ refresh\ harness\ shims ]]
+  [[ "$output" =~ schema_version=1 ]]
+}
+
+@test "sync: no harness block in the lock leaves the refresh block untouched" {
+  seed_manifest
+  seed_lock
+
+  run eidolons sync --dry-run
+  [ "$status" -eq 0 ]
+  # Opt-in: absent harness: must NOT install one (and must not carry a block).
+  ! [[ "$output" =~ would\ refresh\ harness\ shims ]]
+  ! grep -q '^harness:' eidolons.lock
+}

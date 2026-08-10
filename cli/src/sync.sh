@@ -641,6 +641,23 @@ done
 } >> "$LOCK_TMP"
 unset _hoisted_list _src _base
 
+# ─── Carry over installer-owned lock blocks ──────────────────────────────
+# sync rebuilds the lock from scratch, but `harness:` and `context:` are
+# written by harness_install.sh and are the ONLY record that the harness /
+# ECM context kernel is installed. Without this carry-over the first sync
+# after an install erased them, which (a) silently un-installed both, and
+# (b) made the shim-refresh block below unreachable forever after — the
+# hook entries in .claude/settings.json kept pointing at shims that sync
+# could no longer refresh or migrate. Read from the OLD lock, which is
+# still intact on disk until the mv below.
+for _lb in $LOCK_INSTALLER_BLOCKS; do
+  _lb_text="$(lock_extract_block "$PROJECT_LOCK" "$_lb")"
+  [[ -n "$_lb_text" ]] || continue
+  printf '%s\n' "$_lb_text" >> "$LOCK_TMP"
+  info "  preserved '$_lb:' block in $PROJECT_LOCK"
+done
+unset _lb _lb_text
+
 # ─── LOCK stage ─────────────────────────────────────────────────────────
 [[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "LOCK  eidolons.lock"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
@@ -1016,7 +1033,14 @@ fi
 # ─── Harness shim refresh ────────────────────────────────────────────────
 # If harness is installed (harness.schema_version present in lock), refresh
 # shim contents from the current template. Does NOT install if absent (opt-in).
-_harness_installed="$(jq -r '.harness.schema_version // "absent"' "$PROJECT_LOCK" 2>/dev/null || echo "absent")"
+# NOTE: the lock is YAML — it MUST go through yaml_to_json first. Feeding the
+# file straight to jq made this read a constant: jq parse-errors on line 1 of
+# every lockfile, so the guard evaluated to "absent" unconditionally and the
+# refresh/heal below never ran for any project. That silently stranded the
+# $CLAUDE_PROJECT_DIR command migration (v2.14.1), whose only delivery path to
+# an already-installed project is this block. Mirrors harness_status.sh:46.
+_harness_installed="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
+  | jq -r '.harness.schema_version // "absent"' 2>/dev/null || echo "absent")"
 if [[ "$_harness_installed" != "absent" ]]; then
   if [[ "$DRY_RUN" == "true" ]]; then
     info "  [dry-run] would refresh harness shims (harness installed, schema_version=$_harness_installed)"

@@ -8,6 +8,67 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+- **`eidolons sync` erased the harness install record, then could never restore it.** Two independent defects in `cli/src/sync.sh`, compounding into a trap that made the v2.14.1 `$CLAUDE_PROJECT_DIR` hook-command anchor **undeliverable to every already-installed project** — the exact failure that fix was published to end (`SessionStart hook error … .eidolons/harness/hooks/claude-code-SessionStart.sh: No such file or directory`, raised from any session whose shell cwd is not the project root).
+  - sync rebuilds `eidolons.lock` from scratch each run and never carried over `harness:` or `context:`, the blocks owned by `harness_install.sh`. The first sync after `eidolons harness install` **deleted the harness record**, while the hook entries it had written into `.claude/settings.json` stayed behind — pointing at shims sync no longer believed were installed.
+  - sync's own guard for that refresh read the **YAML** lock with bare `jq` (`jq -r '.harness.schema_version' eidolons.lock`). `jq` parse-errors on line 1 of every lockfile, so the guard evaluated to the constant `"absent"` and the refresh/heal block was **unreachable for every project, harness record or not**. Every sibling call site — `harness_status.sh`, `harness_remove.sh`, `canary.sh`, `lib.sh` D12 — already piped through `yaml_to_json`; this was the one that did not.
+  - Net effect: the shim-content refresh and the settings-command migration, whose *only* delivery path to an existing project is `eidolons sync`, had never run anywhere. Anchoring shipped correctly in `harness_install.sh` and reached nobody who had already installed.
+  - **`--dry-run` was destructive.** It writes the rebuilt lock like any other run, so `eidolons sync --dry-run` erased the `harness:` block too — a flag documented as *"show what would be done without touching disk"* silently un-installed the harness.
+- Installer-owned lock blocks are now carried across the rebuild via `lock_extract_block` (`cli/src/lib.sh`, single source of truth, bash 3.2 awk), driven by the `LOCK_INSTALLER_BLOCKS` list. Carry-over is verbatim and order-stable, so repeat syncs stay byte-identical.
+
+### Why five releases of green tests never saw it
+
+Every harness assertion in the suite invoked `cli/src/harness_install.sh` **directly** — including the one named *"sync refresh path: heal migrates the old-form command to the anchored form"*, which never calls `eidolons sync`. The tests exercised the migration and the gate that was supposed to trigger it as two unconnected halves, so the broken wire between them was untested surface. New coverage in `cli/tests/sync.bats` drives `eidolons sync` end-to-end and is mutation-verified: reverting either fix turns the corresponding test red.
+
+The state was also invisible to the diagnostics. `eidolons harness status` prints `harness: not installed` and doctor's D12 consistency check returns `pass "D12 harness: not installed (skip)"` whenever the lock block is absent — so a project with live hook entries in `.claude/settings.json` and shims on disk reported a **clean opt-out** rather than a broken install. Not changed here; recorded as the reason the erasure went unnoticed.
+
+Note: losing the lock's `context:` block cost ECM its install record (host tier, resolved thresholds, per-host managed flags), not its runtime. The kernel's opt-in gate reads `context:` from the consumer project's `eidolons.yaml`, so ECM stayed enabled throughout.
+
+## [2.20.0] — 2026-08-08 — a fix request answered read-only
+
+Closes the last recorded chain-template residual. A scout + debugger + coder prompt — *"map the auth flow, diagnose why login fails, and fix it"* — fell back to the two-class `forensic-then-fix` and dropped the **scout** step.
+
+Measuring the baseline before touching anything turned up something worse that was **not** on the record. Add a scriber to that combination and it becomes one of the order-dependent ties, which `audit-without-touching` wins by declaration order:
+
+```
+audit the module, diagnose the failure, fix it and document it
+  →  [atlas, idg]
+```
+
+**Both the diagnosis and the fix are dropped**, and a prompt explicitly asking for a repair comes back with a read-only scout and a scribe. Nobody chose that behaviour; a line number did.
+
+### Added
+- **`scout-diagnose-fix`** (`ATLAS → VIGIL → Vivi → IDG`, `requires_classes: [scout, debugger, coder]`). Ends in `idg` for the same reason `plan-before-build` and `scout-diagnose-plan-fix` do — it supersedes entries carrying a trailing scriber step, and losing it would trade one silent step-drop for another.
+- **`scout-diagnose-decide-fix`** (`ATLAS → VIGIL → FORGE → Vivi → IDG`) and **`scout-diagnose-decide-plan-fix`** (the full five-class pipeline). Added after a checker showed `scout-diagnose-fix` alone took `{scout, debugger, reasoner, coder}` over from `decide-then-implement` and dropped the FORGE step — the same defect relocated onto another class. Detailed below.
+- Recall coverage `N-C07`–`N-C12`, and four `routing_chains.bats` route pins.
+- **A containment gate for the cortex deep table** — every template in `roster/routing.yaml` must be documented in `methodology/cortex/chain-templates.md`. The two templates above had reached the roster, the evals, the tests and this file, and never reached the table a host LLM loads to compose a chain by hand; a host routing that combination would have found no entry carrying FORGE after a scout and reproduced the defect. Four checker rounds missed it because the row count and the template count both read 11 — the table also documents three dispatch patterns that are not kernel templates, exactly masking the three that were absent. `scout-then-spec`, missing since before this release, is now documented too.
+- **Every live ESL change record is now parsed by `make schema` *and* by CI** (`cli/src/check_change_specs.sh`). Both call sites are required: no workflow invokes `make`, so `.github/workflows/ci.yml` re-implements that target inline — a gate added to the Makefile alone does not run at the merge gate, which is how the unparseable specs below shipped through green PRs. Found because this change's own `spec.yaml` was not valid YAML — and had shipped that way through four checker rounds. Nothing in the repo read the file, so its acceptance criteria were mechanically invisible while `change.json` carried `acceptance_checks: []`. Archived records are excluded by a depth-1 glob: the two predecessors in this lineage have the identical defect and are recorded, not rewritten.
+
+### Changed
+- **The unresolved order-dependent tie set moves 5 → 4.** `scout-diagnose-fix` resolves `audit-without-touching` vs `forensic-then-fix` outright, since `{scout,debugger,coder} ⊆ {coder,debugger,scout,scriber}` at strictly greater specificity. It adds none: both its unions with the other spec-3 templates are `{scout,debugger,planner,coder}`, already covered at spec 4. Verified with the corrected subset audit rather than asserted.
+- `roster/routing.yaml` and `methodology/cortex/chain-templates.md` re-synced to **four**.
+
+### Known, and deliberately not fixed
+- **`[scout, coder]` has no template** — `"explore the module and implement the change"` dispatches to `vivi` alone, dropping the scout step. A distinct combination this change does not measure; closing one gap by opening an unmeasured one is the pattern four checker rounds removed.
+- The four remaining ties are unchanged, still decided by declaration order, still pinned rather than endorsed.
+- A three-class scout+debugger+coder prompt now receives a docs step it did not explicitly ask for — the same trade `plan-before-build` has always made, stated rather than hidden.
+
+### The checker rejected the first cut, and the reason generalises
+
+`scout-diagnose-fix` alone took `{scout,debugger,reasoner,coder}` over from `decide-then-implement` and **dropped the FORGE step** — on a prompt asking to *"decide between rollback or patch"*, `forge` scored **0.8** while the hardcoded `idg` scored **0.0**. The template hardcoded the class that scored zero and excluded the one that scored 0.8. Same defect as the one being fixed, relocated onto another class. Now covered by **`scout-diagnose-decide-fix`** (`ATLAS → VIGIL → FORGE → Vivi → IDG`) and **`scout-diagnose-decide-plan-fix`** for the full five-class pipeline.
+
+More importantly: **the ambiguity pin could not have caught it.** It counts *pairs*, and the pair survived at a smaller witness while the route flipped. Pair-counting structurally cannot see a route change. Added a **route-level coverage guard** that enumerates all 57 class subsets and pins the **set** of those whose selected chain omits a triggered class.
+
+Its first form pinned a **count with a ceiling**, and the checker paid it off: a plausible gap-fill template (−1 violation) traded against a dropped `idg` on `plan-before-build` (+1) held the total at 24, kept every test and eval green, and shipped a live step-drop — `"explore the module, spec the change, implement it and document it"` lost its docs step with the whole repo green. Widening the metric to (subset,class) pairs did not help either (33 → 31 under the same attack). **Any aggregate scalar with a ceiling can be settled by trading; a set has no exchange rate.**
+
+### The systemic finding
+
+Run that check against shipped **v2.19.1** and it reports **30 violations out of 57 subsets**. Step-drops are not an edge case in this design — they are the majority behaviour. Chain selection matches one template per class combination; with 57 subsets and 11 templates, most subsets fall back to an entry that omits a triggered class.
+
+This release takes it **30 → 24** and pins the resulting set, subset by subset. It does **not** solve the shape, and nothing here claims to. A durable fix means synthesising the chain from the triggered classes in a canonical order instead of matching a template — a kernel redesign, deliberately out of scope.
+
+Every mutation red, baseline green — including one that removes only the trailing `idg`, one that reintroduces the FORGE drop, the checker's own count-neutral gaming attack (verified to hold the violation count at exactly 24), and a reversal of a template's step order. **One** of them — dropping `idg` from `audit-without-touching` — is caught by exactly one test in the whole 1720-test suite, the coverage set pin, and that single row is what establishes the pin as necessary. **Three** of the four chain assertions this release adds pin the full ordered step list, so `vigil`-before-`forge` is enforced rather than argued (the fourth asserts membership, with eval `N-C08` pinning that prompt's exact chain). Of the templates this release does not touch, `plan-before-build` is order-pinned elsewhere in the suite; `decide-then-implement` and `audit-without-touching` are not, and stay green under reversal. Suites: recall 83/83 (now gated — it previously could not fail), public 15/15, bats **1720/1720**.
+
 ## [2.19.1] — 2026-08-08 — what the checker found, three times
 
 > **Round 3.** The form predicate below was itself rejected on first landing. It keyed on `ends with '?' OR opens with a modal` and so suppressed the most common way work is requested: `"can you implement the retry logic in the worker?"` → `clarify` (vivi 0.30). **Six of the eight measured failures were the recall suite's own tasks** (`N-019`, `N-020`, `N-023`–`N-026`) with nothing changed but a courtesy prefix and a question mark — while the suite reported 69/69. It now models **request vs question**: first sentence only (a trailing tag cannot veto the imperative before it), modal-request frames (`can you`, `please`) and imperative heads are not questions, and `do`/`have` need a pronoun subject to count as openers. Guards `N-G21`–`N-G29` pin that axis. Both closed phrase lists were widened after the checker measured their tails (8/10 unbounded mutations escaping via `across the codebase` / `globally`; `"what is our current code coverage?"` matching none of the function words), and both invariants reworded from "never" to what is measured — absolute wording on a closed list is what earned the first two rejections.

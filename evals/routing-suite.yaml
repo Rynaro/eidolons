@@ -378,6 +378,43 @@ suites:
     # guard — a 2-class debugger prompt must NOT be inflated into the 3-class
     # chain: N-015 above already pins "the build broke after the last merge" to
     # [vigil, vivi], so it serves as that guard and is not repeated here.
+    - id: N-C07
+      category: chain-multiclass
+      # last residual of chain-three-class: the scout step was dropped to the
+      # 2-class forensic-then-fix
+      prompt: "map the auth flow, diagnose why login fails, and fix it"
+      expect: { decision: chain, selected: [atlas, vigil, vivi, idg] }
+    - id: N-C08
+      category: chain-multiclass
+      # adding a scriber made this an order-dependent tie that
+      # audit-without-touching won, returning [atlas, idg] for a prompt that
+      # explicitly asked for a fix — both diagnosis and repair dropped
+      prompt: "audit the module, diagnose the failure, fix it and document it"
+      expect: { decision: chain, selected: [atlas, vigil, vivi, idg] }
+    - id: N-C09
+      category: chain-multiclass
+      # a third scout+debugger+coder phrasing, so the route is pinned by the
+      # class combination rather than by one sentence shape.
+      # (The debugger+coder-WITHOUT-scout guard is N-015 above, which still
+      # pins "the build broke after the last merge" to the 2-class
+      # forensic-then-fix — that is what keeps this template from over-reaching.)
+      prompt: "explore the worker, debug the broken install path and fix it"
+      expect: { decision: chain, selected: [atlas, vigil, vivi, idg] }
+    - id: N-C10
+      category: chain-multiclass
+      # checker finding H1: scout-diagnose-fix alone dropped FORGE here (0.8)
+      # while hardcoding idg (0.0)
+      prompt: "audit the module, root cause the failure, decide between rollback or patch, then implement it"
+      expect: { decision: chain, selected: [atlas, vigil, forge, vivi, idg] }
+    - id: N-C11
+      category: chain-multiclass
+      prompt: "map the repo, diagnose the regression, compare the two fixes and implement the better one"
+      expect: { decision: chain, selected: [atlas, vigil, forge, vivi, idg] }
+    - id: N-C12
+      category: chain-multiclass
+      # the full five-class pipeline
+      prompt: "explore the worker, diagnose the timeout, weigh the options, spec the fix and implement it"
+      expect: { decision: chain, selected: [atlas, vigil, forge, ramza, vivi, idg] }
     - id: N-C06
       category: chain-multiclass
       # guard: planner+coder without failure context stays on ship-fast
