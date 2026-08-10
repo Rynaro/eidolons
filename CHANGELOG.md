@@ -8,23 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-### Fixed
-- **`eidolons sync` erased the harness install record, then could never restore it.** Two independent defects in `cli/src/sync.sh`, compounding into a trap that made the v2.14.1 `$CLAUDE_PROJECT_DIR` hook-command anchor **undeliverable to every already-installed project** — the exact failure that fix was published to end (`SessionStart hook error … .eidolons/harness/hooks/claude-code-SessionStart.sh: No such file or directory`, raised from any session whose shell cwd is not the project root).
-  - sync rebuilds `eidolons.lock` from scratch each run and never carried over `harness:` or `context:`, the blocks owned by `harness_install.sh`. The first sync after `eidolons harness install` **deleted the harness record**, while the hook entries it had written into `.claude/settings.json` stayed behind — pointing at shims sync no longer believed were installed.
-  - sync's own guard for that refresh read the **YAML** lock with bare `jq` (`jq -r '.harness.schema_version' eidolons.lock`). `jq` parse-errors on line 1 of every lockfile, so the guard evaluated to the constant `"absent"` and the refresh/heal block was **unreachable for every project, harness record or not**. Every sibling call site — `harness_status.sh`, `harness_remove.sh`, `canary.sh`, `lib.sh` D12 — already piped through `yaml_to_json`; this was the one that did not.
-  - Net effect: the shim-content refresh and the settings-command migration, whose *only* delivery path to an existing project is `eidolons sync`, had never run anywhere. Anchoring shipped correctly in `harness_install.sh` and reached nobody who had already installed.
-  - **`--dry-run` was destructive.** It writes the rebuilt lock like any other run, so `eidolons sync --dry-run` erased the `harness:` block too — a flag documented as *"show what would be done without touching disk"* silently un-installed the harness.
-- Installer-owned lock blocks are now carried across the rebuild via `lock_extract_block` (`cli/src/lib.sh`, single source of truth, bash 3.2 awk), driven by the `LOCK_INSTALLER_BLOCKS` list. Carry-over is verbatim and order-stable, so repeat syncs stay byte-identical.
 
-### Why five releases of green tests never saw it
-
-Every harness assertion in the suite invoked `cli/src/harness_install.sh` **directly** — including the one named *"sync refresh path: heal migrates the old-form command to the anchored form"*, which never calls `eidolons sync`. The tests exercised the migration and the gate that was supposed to trigger it as two unconnected halves, so the broken wire between them was untested surface. New coverage in `cli/tests/sync.bats` drives `eidolons sync` end-to-end and is mutation-verified: reverting either fix turns the corresponding test red.
-
-The state was also invisible to the diagnostics. `eidolons harness status` prints `harness: not installed` and doctor's D12 consistency check returns `pass "D12 harness: not installed (skip)"` whenever the lock block is absent — so a project with live hook entries in `.claude/settings.json` and shims on disk reported a **clean opt-out** rather than a broken install. Not changed here; recorded as the reason the erasure went unnoticed.
-
-Note: losing the lock's `context:` block cost ECM its install record (host tier, resolved thresholds, per-host managed flags), not its runtime. The kernel's opt-in gate reads `context:` from the consumer project's `eidolons.yaml`, so ECM stayed enabled throughout.
-
-## [2.20.0] — 2026-08-08 — a fix request answered read-only
+## [2.20.0] — 2026-08-10 — a fix request answered read-only, and the fix that reached nobody
 
 Closes the last recorded chain-template residual. A scout + debugger + coder prompt — *"map the auth flow, diagnose why login fails, and fix it"* — fell back to the two-class `forensic-then-fix` and dropped the **scout** step.
 
@@ -47,6 +32,22 @@ audit the module, diagnose the failure, fix it and document it
 ### Changed
 - **The unresolved order-dependent tie set moves 5 → 4.** `scout-diagnose-fix` resolves `audit-without-touching` vs `forensic-then-fix` outright, since `{scout,debugger,coder} ⊆ {coder,debugger,scout,scriber}` at strictly greater specificity. It adds none: both its unions with the other spec-3 templates are `{scout,debugger,planner,coder}`, already covered at spec 4. Verified with the corrected subset audit rather than asserted.
 - `roster/routing.yaml` and `methodology/cortex/chain-templates.md` re-synced to **four**.
+
+### Fixed
+- **`eidolons sync` erased the harness install record, then could never restore it.** Two independent defects in `cli/src/sync.sh`, compounding into a trap that made the v2.14.1 `$CLAUDE_PROJECT_DIR` hook-command anchor **undeliverable to every already-installed project** — the exact failure that fix was published to end (`SessionStart hook error … .eidolons/harness/hooks/claude-code-SessionStart.sh: No such file or directory`, raised from any session whose shell cwd is not the project root).
+  - sync rebuilds `eidolons.lock` from scratch each run and never carried over `harness:` or `context:`, the blocks owned by `harness_install.sh`. The first sync after `eidolons harness install` **deleted the harness record**, while the hook entries it had written into `.claude/settings.json` stayed behind — pointing at shims sync no longer believed were installed.
+  - sync's own guard for that refresh read the **YAML** lock with bare `jq` (`jq -r '.harness.schema_version' eidolons.lock`). `jq` parse-errors on line 1 of every lockfile, so the guard evaluated to the constant `"absent"` and the refresh/heal block was **unreachable for every project, harness record or not**. Every sibling call site — `harness_status.sh`, `harness_remove.sh`, `canary.sh`, `lib.sh` D12 — already piped through `yaml_to_json`; this was the one that did not.
+  - Net effect: the shim-content refresh and the settings-command migration, whose *only* delivery path to an existing project is `eidolons sync`, had never run anywhere. Anchoring shipped correctly in `harness_install.sh` and reached nobody who had already installed.
+  - **`--dry-run` was destructive.** It writes the rebuilt lock like any other run, so `eidolons sync --dry-run` erased the `harness:` block too — a flag documented as *"show what would be done without touching disk"* silently un-installed the harness.
+- Installer-owned lock blocks are now carried across the rebuild via `lock_extract_block` (`cli/src/lib.sh`, single source of truth, bash 3.2 awk), driven by the `LOCK_INSTALLER_BLOCKS` list. Carry-over is verbatim and order-stable, so repeat syncs stay byte-identical.
+
+### Why five releases of green tests never saw it
+
+Every harness assertion in the suite invoked `cli/src/harness_install.sh` **directly** — including the one named *"sync refresh path: heal migrates the old-form command to the anchored form"*, which never calls `eidolons sync`. The tests exercised the migration and the gate that was supposed to trigger it as two unconnected halves, so the broken wire between them was untested surface. New coverage in `cli/tests/sync.bats` drives `eidolons sync` end-to-end and is mutation-verified: reverting either fix turns the corresponding test red.
+
+The state was also invisible to the diagnostics. `eidolons harness status` prints `harness: not installed` and doctor's D12 consistency check returns `pass "D12 harness: not installed (skip)"` whenever the lock block is absent — so a project with live hook entries in `.claude/settings.json` and shims on disk reported a **clean opt-out** rather than a broken install. Not changed here; recorded as the reason the erasure went unnoticed.
+
+Note: losing the lock's `context:` block cost ECM its install record (host tier, resolved thresholds, per-host managed flags), not its runtime. The kernel's opt-in gate reads `context:` from the consumer project's `eidolons.yaml`, so ECM stayed enabled throughout.
 
 ### Known, and deliberately not fixed
 - **`[scout, coder]` has no template** — `"explore the module and implement the change"` dispatches to `vivi` alone, dropping the scout step. A distinct combination this change does not measure; closing one gap by opening an unmeasured one is the pattern four checker rounds removed.
