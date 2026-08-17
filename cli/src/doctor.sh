@@ -33,7 +33,7 @@ Checks:
   - eidolons.yaml present and valid
   - eidolons.lock present and consistent with manifest
   - Each installed Eidolon has its files in .eidolons/<n>/
-  - Each installed Eidolon's install.manifest.json is valid
+  - Each installed Eidolon's EIIS v3 package/receipt pair or legacy manifest is valid
   - Host dispatch files exist for every host listed in eidolons.yaml
   - Release-integrity status per lock entry (verified / legacy / missing)
   - Agent files missing explicit tools: line (warn — inherits ALL tools)
@@ -101,8 +101,26 @@ manifest_members | while read -r name; do
     err "$name declared but not installed at $target (per-Eidolon install.sh didn't run or failed)"
     continue
   fi
-  if [[ ! -f "$target/install.manifest.json" ]]; then
-    err "$name installed at $target but install.manifest.json is missing (not EIIS-conformant — report upstream)"
+  if [[ -f "$target/manifest.json" || -f "$target/install.receipt.json" ]]; then
+    if ! jq -e '
+      .eiis_version | startswith("3.")
+    ' "$target/manifest.json" >/dev/null 2>&1; then
+      err "$name has missing or corrupt EIIS v3 manifest.json"
+    fi
+    if ! jq -e '
+      .schema_version == "1.0" and
+      (.eiis_version | startswith("3.")) and
+      (.package.name | type == "string") and
+      (.package.version | type == "string") and
+      (.package.manifest_sha256 | test("^[0-9a-f]{64}$")) and
+      (.tree_sha256 | test("^[0-9a-f]{64}$")) and
+      (.adapters | type == "array") and
+      (all(.adapters[]; (.type == "symlink" or .type == "pointer")))
+    ' "$target/install.receipt.json" >/dev/null 2>&1; then
+      err "$name has missing or corrupt EIIS v3 install.receipt.json"
+    fi
+  elif [[ ! -f "$target/install.manifest.json" ]]; then
+    err "$name installed at $target but has neither a v3 package/receipt nor legacy install.manifest.json"
   elif ! jq -e . "$target/install.manifest.json" >/dev/null 2>&1; then
     err "$name has corrupt install.manifest.json at $target/install.manifest.json"
   else
@@ -133,8 +151,10 @@ for host in $hosts; do
       fi
       ;;
     copilot)
-      # Per-vendor files: .github/instructions/<eidolon>-<skill>.instructions.md
-      if [[ -d ".github/instructions" ]] && ls .github/instructions/*.instructions.md >/dev/null 2>&1; then
+      # EIIS v3 uses GitHub custom agents. Keep instructions as v1 compatibility.
+      if [[ -d ".github/agents" ]] && ls .github/agents/*.agent.md >/dev/null 2>&1; then
+        pass "copilot wired (.github/agents/*.agent.md present)"
+      elif [[ -d ".github/instructions" ]] && ls .github/instructions/*.instructions.md >/dev/null 2>&1; then
         pass "copilot wired (.github/instructions/*.instructions.md present)"
       elif [[ "$SHARED_DISPATCH" == "true" ]] && [[ -f ".github/copilot-instructions.md" || -f "AGENTS.md" ]]; then
         pass "copilot wired (shared dispatch)"
@@ -159,10 +179,12 @@ for host in $hosts; do
       fi
       ;;
     codex)
-      # Per-vendor files live under .codex/agents/<name>.md. AGENTS.md is
+      # EIIS v3 uses .toml agent descriptors; .md remains v1 compatibility.
       # the shared dispatch surface (always wired when codex is declared,
       # per the T.12 override in sync.sh). Accept either as sufficient.
-      if [[ -d ".codex/agents" ]] && ls .codex/agents/*.md >/dev/null 2>&1; then
+      if [[ -d ".codex/agents" ]] && ls .codex/agents/*.toml >/dev/null 2>&1; then
+        pass "codex wired (.codex/agents/*.toml present)"
+      elif [[ -d ".codex/agents" ]] && ls .codex/agents/*.md >/dev/null 2>&1; then
         pass "codex wired (.codex/agents/*.md present)"
       elif [[ "$SHARED_DISPATCH" == "true" ]] && [[ -f "AGENTS.md" ]]; then
         pass "codex wired (AGENTS.md shared dispatch)"

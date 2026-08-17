@@ -2244,13 +2244,17 @@ deep_check_manifest_integrity() {
   local lock_sha
   lock_sha="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
     | jq -r --arg n "$name" \
-      '(.members // [])[] | select(.name == $n) | .manifest_sha256 // empty' 2>/dev/null || true)"
+      '(.members // [])[] | select(.name == $n) | .package_manifest_sha256 // .manifest_sha256 // empty' 2>/dev/null || true)"
   if [[ -z "$lock_sha" ]]; then
     warn "$name@$version: no manifest_sha256 in lock (legacy / pre-1.4 release) — skip"
     return 0
   fi
   local installed_sha
-  installed_sha="$(lock_manifest_sha256 ".eidolons/$name/install.manifest.json" 2>/dev/null || true)"
+  if [[ -f ".eidolons/$name/manifest.json" ]]; then
+    installed_sha="$(sha256_file ".eidolons/$name/manifest.json" 2>/dev/null || true)"
+  else
+    installed_sha="$(lock_manifest_sha256 ".eidolons/$name/install.manifest.json" 2>/dev/null || true)"
+  fi
   if [[ -z "$installed_sha" ]]; then
     err "$name@$version: cannot compute installed manifest_sha256"
     return 1
@@ -2367,21 +2371,26 @@ deep_check_eiis_v3_layout() {
   fi
   for adapter in .claude/skills/${name}-*/SKILL.md; do
     [[ -e "$adapter" || -L "$adapter" ]] || continue
-    if [[ ! -L "$adapter" ]]; then
-      err "$name: duplicated vendor skill body: $adapter (use a symlink to .eidolons)"
-      rc=$((rc + 1))
-      continue
+    if [[ -L "$adapter" ]]; then
+      if [[ ! -e "$adapter" ]]; then
+        err "$name: broken vendor skill symlink: $adapter"
+        rc=$((rc + 1))
+        continue
+      fi
+      target="$(readlink "$adapter" 2>/dev/null || true)"
+      case "$target" in *".eidolons/$name/skills/"*"/SKILL.md") ;; *)
+        err "$name: vendor skill link escapes its canonical .eidolons tree: $adapter -> $target"
+        rc=$((rc + 1)) ;;
+      esac
+    else
+      if [[ "$(wc -c < "$adapter" | tr -d ' ')" -gt 2048 ]] \
+         || ! grep -qF 'generated_by: eidolons' "$adapter" \
+         || ! grep -qF ".eidolons/$name/skills/" "$adapter" \
+         || grep -qF '<!-- eidolon:' "$adapter"; then
+        err "$name: vendor skill adapter is neither a canonical symlink nor a constrained pointer: $adapter"
+        rc=$((rc + 1))
+      fi
     fi
-    if [[ ! -e "$adapter" ]]; then
-      err "$name: broken vendor skill symlink: $adapter"
-      rc=$((rc + 1))
-      continue
-    fi
-    target="$(readlink "$adapter" 2>/dev/null || true)"
-    case "$target" in *".eidolons/$name/skills/"*"/SKILL.md") ;; *)
-      err "$name: vendor skill link escapes its canonical .eidolons tree: $adapter -> $target"
-      rc=$((rc + 1)) ;;
-    esac
   done
   (( rc == 0 )) && pass "$name: EIIS v3 single-source layout verified"
   return "$rc"
