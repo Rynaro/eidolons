@@ -6,7 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
-## [Unreleased]
+## [2.21.0] — 2026-08-17 — the gate that read the wrong source
 
 ### Fixed
 - **`eidolons upgrade self` now actually verifies the release it installs.** `nexus_verify_release` read expected metadata from the *installed* nexus's roster (`$NEXUS/roster/index.yaml`) — but a release's `commit`/`tree`/`archive_sha256` are recorded by a PR that merges **after** its tag, so no tag's own tree (and no prior install's roster) can ever contain the target's own metadata. Every forward upgrade therefore took the fail-open `return 0` at the metadata-absent branch and installed an unverified payload at exit 0 (observed live on 2.14.1 → 2.20.0). Fixed by reading the upstream **default branch** (`git -C "$NEXUS_NEW" fetch --depth 1 origin HEAD` then `git show FETCH_HEAD:roster/index.yaml`) through the remote a fresh clone already has — the only source that can structurally hold a release's own hashes — and **joining** it with the installed roster (never replacing it: adding a source can only make verification stricter, and the installed roster is the only witness that predates the current fetch). When sources disagree about which kind of evidence they hold, the most severe wins: `mismatch > corrupt > absent > network > placeholder`. `origin HEAD`, never `origin main` — GitHub's default branch is a symref; the bats fixture remote's is `master`, and a `main` hardcode would have been correct in production and silently dead in the harness. No environment override for the ref: `EIDOLONS_REPO` already covers fork/test redirection.
