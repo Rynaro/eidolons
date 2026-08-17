@@ -1109,6 +1109,15 @@ if [[ "$DEEP" == "true" ]]; then
         ERRORS=$((ERRORS + _d6_rc))
       done <<< "$_deep_members"
 
+      # D6b — EIIS v3 single-source layout (no duplicated vendor bodies)
+      echo "  D6b — EIIS v3 single-source layout"
+      while IFS= read -r _dm; do
+        [[ -z "$_dm" ]] && continue
+        _d6b_rc=0
+        deep_check_eiis_v3_layout "$_dm" || _d6b_rc=$?
+        ERRORS=$((ERRORS + _d6b_rc))
+      done <<< "$_deep_members"
+
       # D7 — ACI boundary conformance (SWE-agent ACI rubric, R8-02)
       echo "  D7 — ACI boundary conformance"
       while IFS= read -r _dm; do
