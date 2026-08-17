@@ -17,6 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - `eidolons harness check` validates that every lock-recorded hook exists, is executable, has valid shell syntax, and is actually registered in its host configuration.
 - EIIS v3 layout checks in `doctor --deep`, while retaining read compatibility for legacy EIIS installations.
 - The local EIIS 3.0 integration contract in `docs/eiis-3.0.md`.
+- EIIS 3.0 is defined and mechanically checked upstream in `Rynaro/eidolons-eiis#5`; that release must land before this nexus requirement is merged.
 
 ## [2.21.0] — 2026-08-17 — the gate that read the wrong source
 

@@ -2372,6 +2372,11 @@ deep_check_eiis_v3_layout() {
       rc=$((rc + 1))
       continue
     fi
+    if [[ ! -e "$adapter" ]]; then
+      err "$name: broken vendor skill symlink: $adapter"
+      rc=$((rc + 1))
+      continue
+    fi
     target="$(readlink "$adapter" 2>/dev/null || true)"
     case "$target" in *".eidolons/$name/skills/"*"/SKILL.md") ;; *)
       err "$name: vendor skill link escapes its canonical .eidolons tree: $adapter -> $target"
