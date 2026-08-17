@@ -1,0 +1,203 @@
+{
+  "schema": "ramza/plan-state.v1",
+  "plan": "upgrade-self-integrity-gate",
+  "created_at": "2026-08-10T18:54:40Z",
+  "tier": "full",
+  "phase": "A",
+  "phases_done": [
+    "RS",
+    "S",
+    "P",
+    "E",
+    "C",
+    "T",
+    "A"
+  ],
+  "refine_cycles": 0,
+  "skips": [],
+  "gates": [
+    {
+      "rubric": "refine",
+      "cycle": 1,
+      "total": 3.6,
+      "min": 3,
+      "dims": {
+        "clarity": 4,
+        "completeness": 3,
+        "actionability": 4,
+        "efficiency": 4,
+        "testability": 3
+      },
+      "verdict": "pass",
+      "at": "2026-08-10T18:54:49Z",
+      "label": "critic ramza-critic-561 — upgrade-self-integrity-gate"
+    },
+    {
+      "rubric": "complexity",
+      "total": 9,
+      "dims": {
+        "scope": 2,
+        "ambiguity": 2,
+        "dependencies": 2,
+        "risk": 3
+      },
+      "verdict": "extended",
+      "at": "2026-08-10T19:06:22Z"
+    },
+    {
+      "rubric": "explore",
+      "total": 54,
+      "dims": {
+        "alignment": 5,
+        "correctness": 3,
+        "maintainability": 7,
+        "performance": 8,
+        "simplicity": 9,
+        "risk": 3,
+        "innovation": 2
+      },
+      "verdict": "weak",
+      "at": "2026-08-10T19:06:23Z",
+      "label": "hyp-A-nexus-refresh-first"
+    },
+    {
+      "rubric": "explore",
+      "total": 66,
+      "dims": {
+        "alignment": 7,
+        "correctness": 9,
+        "maintainability": 4,
+        "performance": 9,
+        "simplicity": 3,
+        "risk": 4,
+        "innovation": 8
+      },
+      "verdict": "weak",
+      "at": "2026-08-10T19:06:23Z",
+      "label": "hyp-D-tag-carries-own-metadata"
+    },
+    {
+      "rubric": "explore",
+      "total": 74,
+      "dims": {
+        "alignment": 9,
+        "correctness": 8,
+        "maintainability": 7,
+        "performance": 6,
+        "simplicity": 7,
+        "risk": 6,
+        "innovation": 6
+      },
+      "verdict": "solid",
+      "at": "2026-08-10T19:06:23Z",
+      "label": "hyp-B-upstream-replaces-local"
+    },
+    {
+      "rubric": "explore",
+      "total": 81.5,
+      "dims": {
+        "alignment": 10,
+        "correctness": 9,
+        "maintainability": 8,
+        "performance": 6,
+        "simplicity": 6,
+        "risk": 8,
+        "innovation": 7
+      },
+      "verdict": "solid",
+      "at": "2026-08-10T19:06:23Z",
+      "label": "hyp-C-all-sources-must-agree"
+    },
+    {
+      "rubric": "confidence",
+      "total": 83.75,
+      "dims": {
+        "pattern_match": 85,
+        "requirement_clarity": 90,
+        "decomposition_stability": 75,
+        "constraint_compliance": 85
+      },
+      "verdict": "VALIDATE",
+      "at": "2026-08-10T19:06:23Z"
+    }
+  ],
+  "amendments": [
+    {
+      "prev": "6c042bf8db105fd197ba03f5e8dbd9aa38bc2f0dabb11435250083e859c888bb",
+      "new": "e6a32302d8670d9b8263d9e1741ed9ac1312fa1028ec7d9f9d06e9c1578d778a",
+      "reason": "coordinator amend hop: AC-15 restated as a SET over 3 flag/exit surfaces (the third is in docs/cli-reference.md, outside the file the original pinned); AC-19 doc-correctness; AC-20 the integrity-verified claim set incl. docs/cli-reference.md:769 missed by the first enumeration; declared_scope +docs/cli-reference.md +README.md; OQ-4 ruled closed",
+      "at": "2026-08-10T19:12:04Z"
+    },
+    {
+      "prev": "e6a32302d8670d9b8263d9e1741ed9ac1312fa1028ec7d9f9d06e9c1578d778a",
+      "new": "9272691fe8ac96394d96509ec42086e396f6e028553464466d96a2a717dfacdb",
+      "reason": "record defect fix (implementation NOT changed): AC-17 asserted the evidence VARIABLE VALUE 'skipped:non-tag' on the SUMMARY LINE, merging two distinct layers; the code emits the display string 'UNVERIFIED - non-tag ref' and 'skipped:non-tag' appears nowhere in cli/src/ by design (assigning it on the non-tag branch would make AC-18 unfailable). AC-17 restated against the display string; spec.md gains a three-layer vocabulary table (evidence variable value / outcome label / display string) and withdraws 'set on the else branch'; NEXUS_VERIFY_STATUS closed set corrected eight -> seven. AC-15 ruled MET and ruled blind to SEMANTIC drift (set equality sees membership, never a wrong description on a correct code). AC-19 ruled MET AS FROZEN and closed; the missed exit-code-table requirement stays in spec.md's Shape bullet, which pre-warned against that very failure — a prose warning is not a gate. Anti-scope non-tag bullet reworded label-vs-display. Checker identity corrected kupo -> vigil.",
+      "at": "2026-08-10T20:17:54Z"
+    },
+    {
+      "prev": "9272691fe8ac96394d96509ec42086e396f6e028553464466d96a2a717dfacdb",
+      "new": "863aa9f2fba6623396953e8ddb8dccb82c6ddb83e6a5fa92dc4fb4253aa350dd",
+      "reason": "AC-15 locator repair, same session as the 1.3.0 amend: the criterion's pinned line numbers were measured on 933f36b and this change moves them (--allow-unverified adds 3 header lines and 2 heredoc lines), so a checker following the frozen range 14-21 for the header exit-code block extracts {0,1,2,4,5,6} and reports a FALSE FAIL — reproduced while re-checking the row. Surfaces are now located by NAME, with the numbers as a hint only. No criterion semantics changed.",
+      "at": "2026-08-10T20:19:56Z"
+    },
+    {
+      "prev": "863aa9f2fba6623396953e8ddb8dccb82c6ddb83e6a5fa92dc4fb4253aa350dd",
+      "new": "c2f331de6e58dda1b14c22b6a7a084c7f6a02714e44cd592f39f1a0371fbd9d4",
+      "reason": "1.4.0 adversary round — AC-21..AC-25 added, every claim re-measured by EXECUTING the shipped helper. AC-21 vacuous-record class: _nexus_release_source_status skips each field comparison when the expected value is empty and falls through to echo verified, so a record that exists but compares nothing is a positive verification — measured verified for {tag,released_at}, all-empty fields, a non-object scalar, and commit-absent-with-sentinels; {tag,released_at} is schema-legal (roster.schema.json:41). This FALSIFIES the record's own MONOTONE/fail-closed invariant: one local file write with no hashes yields verified:local-only exit 0. AC-22 sentinel scope (placeholder classification keyed on .commit alone). AC-23 fail-closed enforcement read AT THE upgrade_self.sh CALL SITE ONLY (integrity_enforcement_mode unchanged; verify.sh/doctor.sh share it — filed follow-up, risk R-6); measured: env value echoed verbatim + exact compare, and an unreadable roster returns the literal 'warn', indistinguishable from a roster that says warn, hence the independent parse check. AC-24 exit-5 descriptions, the mechanical instrument for the obligation AC-19 was ruled not to cover and AC-15 is blind to. AC-25 suppressed-witness disclosure, with the reported 'byte-identical' claim CORRECTED — lib.sh:1194 and :1012 already disclose on stderr; the refusal line and summary reason are what is identical, and what the criterion binds. Placeholder row recorded as unreachable on a forward upgrade (OQ-2 NOT re-decided). Two residuals (one unexplained fetch failure in ~40 runs; nexus_clone_to_sibling stdout) and two out-of-scope follow-ups filed.",
+      "at": "2026-08-10T20:31:03Z"
+    },
+    {
+      "prev": "c2f331de6e58dda1b14c22b6a7a084c7f6a02714e44cd592f39f1a0371fbd9d4",
+      "new": "b13b4c64106dab2d89dc81f0555a5793ab6b408dcac8cd4c1f8a899d150d1389",
+      "reason": "1.5.0 minimal amend — AC-26 + AC-27 added, nothing else re-litigated. Two independent verifiers disagreed about AC-25 and both were right about a DIFFERENT LAYER: the checker drove the status VALUES (status->message mapping correct); the adversary drove REALITY (reality->status mapping wrong). AC-26: nexus_release_meta_upstream returns 1 for two different causes (fetch failed / no roster/index.yaml at FETCH_HEAD) and the caller collapses both into `network`, so a REACHABLE upstream that simply holds no record is reported `upstream=network` and refused with the operator line \"(absent, upstream unreachable)\" — a false statement about an upstream that answered. Reproduced END TO END on a scratch fixture (fetch origin HEAD rc 0, git show FETCH_HEAD:roster/index.yaml rc 128); required behaviour is `absent` with no disclosure, genuine unreachability unchanged as the negative control. Supporting measurement: a PRESENT-BUT-UNPARSEABLE upstream roster ALREADY classifies `absent` (rc 0 + empty stdout), so reachable-but-recordless is the only one of three sub-cases reporting `network`, and the helper rc-1 contract comment states the defect as the contract. AC-27: the `*)` catch-all is a fail-open default inside a fail-closed change — forcing an out-of-contract rc (return 4 -> return 9 in a mutable full-tree fixture copy) under strict with no metadata anywhere exits 0 printing \"(integrity: verified)\". CORRECTION to the reported finding: \"no log line at all\" is WRONG — nexus_verify_release warn still prints; only the CALL-SITE refusal and any adverse token are absent, so the criterion binds exit code + summary display string, never \"no output\". SECOND CORRECTION, mechanism: sed-ing the INSTALLED fixture copy of lib.sh mutates a file that never executes — _seed_minimal_nexus_tree omits cli/src/upgrade.sh so cli/eidolons resets CLI_SRC to THE CHECKOUT (traced with bash -x); the working mechanism is a full cli/ tree copy. AC-13 gains two behaviour-level mutation rows so the new assertions cannot be unfailable. Anti-scope gains AC-23s letter-vs-purpose bound: (a) a duplicate YAML key silently flips enforcement to `warn` under BOTH backends while yq eval . and jq empty exit 0 — OUT OF SCOPE, the instrument belongs in roster CI because a call-site fix guards one reader while verify.sh/doctor.sh/roster_get/make schema keep taking last-wins; (b) tr -d [:space:] strips INTERIOR whitespace so \"wa rn\" normalises to warn, degenerate and identical to pre-fix; (c) a 0-byte roster parses to null and yields warn. spec.md records two residuals: verification.md CALLS THE die()/subshell PATH UNREACHABLE AND IT IS NOT (both routes executed: exported _YAML_TO_JSON_BACKEND=none, and a PATH with coreutils but no yq/python3 — the guard is correct and verified, only the record was wrong), and rc-3 corrupt-clone detection never fires because git rev-parse HEAD on an empty repo PRINTS the literal \"HEAD\" (byte-identical to main:lib.sh:998 and the frozen member path at :307 — recorded, not fixed). RENDERING-ONLY: two unescaped `||` inside table cells (pre-existing AC-23, and new AC-26) escaped to \\|\\| so both rows render as 3 cells; no semantic change.",
+      "at": "2026-08-10T21:49:26Z"
+    }
+  ],
+  "declared_scope": [
+    "cli/src/lib.sh",
+    "cli/src/upgrade_self.sh",
+    "cli/tests/upgrade_self.bats",
+    "docs/cli-reference.md",
+    "README.md",
+    "CHANGELOG.md",
+    "VERSION",
+    ".spectra/changes/upgrade-self-integrity-gate/*"
+  ],
+  "criteria_sha256": "b13b4c64106dab2d89dc81f0555a5793ab6b408dcac8cd4c1f8a899d150d1389",
+  "critic": {
+    "author": "ramza",
+    "checker": "ramza-critic-561",
+    "at": "2026-08-10T18:54:56Z"
+  },
+  "provenance": "State file CREATED BY THE CRITIC (ramza-critic-561) on 2026-08-10. No state file existed for this plan; the author ran ramza-score/ramza-rightsize without --state, so gates[] carries ONLY the critic refine score. Phase RS is the init default and does NOT assert that RS..T were walked — the author phase history is unrecorded and unauditable.",
+  "critique": {
+    "verdict": "ACCEPT-WITH-CHANGES",
+    "blocking": [
+      "B-1 no-evidence token precedence unspecified: upstream=placeholder + installed=absent is reachable (5 of 18 existing tests) and strict gives exit 0 vs exit 5 depending on an unwritten rule; security-relevant (local roster write could downgrade a strict refusal).",
+      "B-2 S6 measured vacuous: exits 1 at the dirty-tree guard, never clones, never calls nexus_verify_release. The alternative-B rejection rationale, spec.md reason 3, and AC-10 discrimination clause all rest on a false fact.",
+      "B-3 non-tag path (_is_semver_tag false) completes an upgrade with no verification and no token; the NO NEW SILENT SUCCESS invariant is unsatisfiable as written and set -u makes an unguarded NEXUS_VERIFY_STATUS an unbound-variable abort."
+    ],
+    "non_blocking": [
+      "N-1 EIDOLONS_INTEGRITY_REF in spec.yaml only",
+      "N-2 AC-11 passes pre-fix and needs --force",
+      "N-3 AC-8 named mechanism unreachable from bats",
+      "N-4 R-1 sync repair false for stable channel",
+      "N-5 change.json acceptance_checks [] vs spec.yaml 15",
+      "N-6 rc4 refusal nexus.new cleanup unspecified"
+    ],
+    "verified_by_measurement": [
+      "origin HEAD resolves on real GitHub (rc0) and on the git-init fixture remote (HEAD=refs/heads/master); fetch origin main against the fixture exits 128 — the main-hardcode claim reproduces in both directions",
+      "v2.20.0 commit+tree+archive_sha256 all reproduce from the shallow --branch clone the upgrade path creates",
+      "bats cli/tests/upgrade_self.bats baseline on 933f36b = 18/18 green, exit 0",
+      "all 11 cited source line numbers accurate; AC-3 nexus_refresh grep assertion holds",
+      "make schema exit 0; ramza-lint --tier full exit 0; spec.yaml parses under both yq and python yaml.safe_load"
+    ],
+    "oq_rulings": {
+      "OQ-1": "post-ship documentation, not a blocker: zero metadata corrections in repo history; but R-1 mitigation text must drop the claim that eidolons sync repairs it for stable-channel installs",
+      "OQ-2": "keep the skip (do not extend strict to placeholders) but make it dependent on B-1 precedence; placeholders shipped in a nexus block exactly once (v1.0.0 bootstrap) and never since",
+      "EARS": "override ACCEPTED at tier=full; ramza-ears-lint exit 1 reproduced, ESL table form has no EARS blocks, acceptance_checks in spec.yaml is the parsed mechanical substitute"
+    }
+  },
+  "criteria_frozen_at": "2026-08-10T19:06:35Z",
+  "scope_declared_at": "2026-08-10T19:12:04Z"
+}

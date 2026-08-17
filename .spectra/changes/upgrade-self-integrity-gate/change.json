@@ -1,0 +1,149 @@
+{
+  "esl_version": "1.1",
+  "change_id": "upgrade-self-integrity-gate",
+  "status": "verified",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "vigil",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "then": "Gate goes RED on the defect it names: metadata upstream-only + tag moved after the record was written =\u003e refuse, exit 5, token mismatch, nexus.new removed",
+      "verify_method": "new upgrade_self.bats scenario against the fixture remote; FAILS AGAINST PRE-FIX CODE, which exits 0 and completes the swap"
+    },
+    {
+      "id": "AC-2",
+      "then": "Control for AC-1 and the positive path: same fixture untampered exits 0 and the summary reads 'integrity: verified'",
+      "verify_method": "untampered arm; metadata reachable ONLY from the fixture remote default branch, never the installed roster, never the tag tree; fails pre-fix"
+    },
+    {
+      "id": "AC-3",
+      "then": "The stable roster channel verifies too: .roster_ref=stable with metadata only on the default branch is unchanged from AC-2",
+      "verify_method": "new scenario; this is the row remedy (1) fails, since nexus_refresh resolves stable to the target TAG whose roster lacks its own metadata; plus the issue's grep probe as a standing assertion"
+    },
+    {
+      "id": "AC-4",
+      "then": "strict enforcement with no metadata in any source refuses with exit 5, states plainly that verification did not happen, names both escape hatches, removes nexus.new",
+      "verify_method": "new scenario with EIDOLONS_INTEGRITY_ENFORCEMENT=strict; precedent verify.sh:68, doctor.sh:230"
+    },
+    {
+      "id": "AC-5",
+      "then": "warn enforcement with no metadata proceeds (exit 0) but the summary line is NOT the verified line",
+      "verify_method": "new scenario asserting the exact summary token; indistinguishability is the second half of the reported defect"
+    },
+    {
+      "id": "AC-6",
+      "then": "--allow-unverified under strict with no metadata proceeds (exit 0) with the UNVERIFIED banner",
+      "verify_method": "new scenario; flag documented in every surface per AC-15"
+    },
+    {
+      "id": "AC-7",
+      "then": "The escape hatch cannot disable the gate: --allow-unverified and EIDOLONS_INTEGRITY_ENFORCEMENT=warn still refuse AC-1's tamper",
+      "verify_method": "AC-1 replayed under each relaxation; same shape as archived chain-scout-debug-fix AC-8"
+    },
+    {
+      "id": "AC-8",
+      "then": "A failed metadata fetch is its own outcome: token network, never absent, never verified; warn proceeds, strict refuses",
+      "verify_method": "git -C $FIXTURE_REMOTE symbolic-ref HEAD refs/heads/no-such-branch (MEASURED: clone rc 0, fetch origin HEAD rc 128); the revision-1.0.0 mechanism was unreachable from bats"
+    },
+    {
+      "id": "AC-9",
+      "then": "The placeholder path is preserved, not repurposed, and holds only when NO source reports absent",
+      "verify_method": "scenario recording a placeholder upstream AND for the same version in the installed roster; unqualified AC-9 would contradict AC-4 on the fixture's live default state"
+    },
+    {
+      "id": "AC-16",
+      "then": "Severity dominance is the selector: upstream=placeholder + installed=absent under strict refuses; writing commit '\u003cx' locally cannot convert a refusal into a completed upgrade",
+      "verify_method": "new scenario on the fixture's own default forward-upgrade state; local-write downgrade guard; FAILS AGAINST PRE-FIX CODE"
+    },
+    {
+      "id": "AC-17",
+      "then": "The non-tag branch stops claiming a verification: --ref \u003cbranch\u003e completes (exit 0) with the DISPLAY STRING '(integrity: UNVERIFIED - non-tag ref)' on the summary line, and no wording implying anything was verified",
+      "verify_method": "new scenario asserting the DISPLAY STRING. AMENDED 1.3.0 IN THE RECORD, NOT THE CODE: the frozen wording asserted the outcome label 'skipped:non-tag' on the summary line, which the implementation never emits (grep -rn 'skipped:non-tag' cli/src/ returns nothing, by design) — the record was wrong, the code is correct and unchanged. The test NAME must contain the literal its body asserts. FAILS PRE-FIX (measured: exits 0 printing 'commit SHA verified'); neither existing S4 test can catch it, both exit 1 at clone and assert only status -ne 5"
+    },
+    {
+      "id": "AC-18",
+      "then": "set -u safety on the non-tag path: --ref \u003cbranch\u003e --force does not abort with unbound variable before the summary",
+      "verify_method": "same scenario asserting the summary is reached; nexus_verify_release is never called on that branch so every read must be ${NEXUS_VERIFY_STATUS:-}; set -euo pipefail at upgrade_self.sh:24"
+    },
+    {
+      "id": "AC-10",
+      "then": "No regression: upgrade_self.bats passes with existing tests UNMODIFIED at the measured 18/18 baseline on 933f36b",
+      "verify_method": "bats cli/tests/upgrade_self.bats; diff adds tests and edits none. SCOPE: discriminates between NO DESIGN — revision 1.0.0's claim that it separated alternative B from C was false because S6 never reaches the verification path"
+    },
+    {
+      "id": "AC-11",
+      "then": "The installed roster remains a live constraint: metadata present only there, and wrong, refuses with exit 5",
+      "verify_method": "new scenario asserting exit 5 EXPLICITLY. REGRESSION GUARD, NOT A DISCRIMINATOR — pre-fix code already exits 5 here; --force is part of the criterion or the run exits 1 at the dirty guard, the defect that made S6 vacuous"
+    },
+    {
+      "id": "AC-12",
+      "then": "nexus_verify_release writes nothing to stdout in any outcome",
+      "verify_method": "invoke with stdout captured; empty for verified/mismatch/corrupt and every no-evidence token; protects lib.sh's stderr-only logging contract for the new captured-stdout helper"
+    },
+    {
+      "id": "AC-13",
+      "then": "Every assertion this change adds can fail under a mutation that breaks what it guards",
+      "verify_method": "every row of the mutation table in verification.md goes RED with baseline green. THAT TABLE IS THE ONLY PLACE THE MUTATION SET IS ENUMERATED OR COUNTED — restating it is what diverged the count 4/8/10 across four files previously"
+    },
+    {
+      "id": "AC-14",
+      "then": "make lint (shellcheck -S error) and make schema clean, macOS cli-tests green, bash 3.2 clean",
+      "verify_method": "CI parity; make schema includes check_change_specs.sh which parses this record's own spec.yaml; no declare -A, no ${var,,}, no readarray/mapfile, no \u0026\u003e\u003e"
+    },
+    {
+      "id": "AC-15",
+      "then": "Flag and exit-code documentation agrees across the full SET of surfaces, diffed pairwise and never compared by length",
+      "verify_method": "sort + comm -3 over: upgrade_self.sh header (6-12) and --help heredoc (52-58) and docs/cli-reference.md usage block (793-798) and flag table (800-806); exit codes at upgrade_self.sh:14-21, heredoc 59-63, docs table 830-838. Regression guard: prevents --allow-unverified landing in only two. RULED MET at 1.3.0 and ruled blind to SEMANTIC drift: set equality compares which codes/flags are listed, never what each is said to MEAN, so a wrong description on a correct code passes it unmoved (exit 5 still described as 'integrity check failed' after 5 also came to cover 'no evidence, refused under strict')"
+    },
+    {
+      "id": "AC-19",
+      "then": "docs/cli-reference.md step 4 names the upstream default branch as the metadata source (not the installed roster), documents --allow-unverified, carries the severity rule beside its placeholder parenthetical, and lists exit 5 on an absent record under strict",
+      "verify_method": "doc diff against the shipped behaviour; FAILS PRE-FIX in every part — step 4 currently names roster/index.yaml, the wrong source, as fact. RULED MET AS FROZEN at 1.3.0 and CLOSED: all four clauses attach to step 4 and step 4 carries them. The missed exit-code-TABLE requirement lives in spec.md's Shape bullet, whose own parenthetical ('the third copy of that table') pre-warned against exactly the failure that then happened — a prose warning is not a gate"
+    },
+    {
+      "id": "AC-20",
+      "then": "Every 'integrity-verified' claim about upgrade self is true of the shipped code: README.md:292, docs/cli-reference.md:769 and :789",
+      "verify_method": "grep the CLAIM, not the files — that method is what found :769, the --system row steering users toward upgrade self on the strength of the absent guarantee. CHANGELOG.md:1764 deliberately excluded as frozen release history"
+    },
+    {
+      "id": "AC-21",
+      "then": "A record that exists but carries nothing comparable is no-evidence, never verified: {tag, released_at} only, all-empty fields, a non-object scalar, and commit-absent-with-sentinels; the local-write escalation (one file write, no hashes) must not turn a strict refusal into a completed upgrade",
+      "verify_method": "MEASURED BY EXECUTING _nexus_release_source_status (lib.sh:1040-1089): all four shapes return verified — empty expected values skip each comparison (:1060, :1065-1066, :1075-1076) and control falls through to echo verified (:1088). {tag, released_at} is schema-legal (roster.schema.json:41). FAILS AGAINST THE CURRENT IMPLEMENTATION; this is the criterion that makes the MONOTONE/fail-closed invariant true"
+    },
+    {
+      "id": "AC-22",
+      "then": "The \u003c-sentinel is recognised in all three fields, not commit alone: an all-sentinel record classifies placeholder whichever field carries it, while one real matching field still classifies verified",
+      "verify_method": "measured — lib.sh:1056-1058 keys the placeholder classification on expected_commit alone; tree/archive_sha256 sentinels are silently skipped at :1065-1066 and :1075-1076. FAILS AGAINST THE CURRENT IMPLEMENTATION"
+    },
+    {
+      "id": "AC-23",
+      "then": "The enforcement read is fail-closed on the upgrade path: trimmed+lowercased env value, only strict/warn accepted, everything else (including empty) refuses; when unset, an unparseable or missing roster also refuses",
+      "verify_method": "SCOPE DECISION: normalise at the upgrade_self.sh call site only; integrity_enforcement_mode is NOT changed (verify.sh:68 and doctor.sh:230 share it; frozen anti-scope; filed follow-up, risk R-6). bash 3.2 tr, never ${var,,}. Measured: the helper echoes the env value verbatim (lib.sh:213-215) and the call site compares exactly (upgrade_self.sh:335); an unreadable roster returns the literal warn, indistinguishable from a roster that says warn — hence the independent parse check. FAILS AGAINST THE CURRENT IMPLEMENTATION"
+    },
+    {
+      "id": "AC-24",
+      "then": "All three exit-5 descriptions (header block, --help heredoc, docs exit-code table) state that 5 also covers 'integrity could not be verified / refused under strict'",
+      "verify_method": "one mechanical grep per surface, located by surface NAME. FAILS PRE-FIX AND TODAY: INTEGRITY_ERROR / integrity check failed / Integrity verification failed. This is the INSTRUMENT for the obligation AC-19 was ruled not to cover and AC-15 is structurally blind to — a prose warning is not a gate"
+    },
+    {
+      "id": "AC-25",
+      "then": "A suppressed witness is named: with upstream unreachable and installed absent, strict still refuses (order unchanged) but the refusal message and summary reason disclose that upstream was unreachable",
+      "verify_method": "AC-8's measured mechanism. CORRECTION TO THE FINDING AS REPORTED: the cases are NOT byte-identical in full output — lib.sh:1194 prints installed=absent upstream=network and lib.sh:1012 warns about the fetch. What is identical is the refusal line (upgrade_self.sh:337) and the summary reason, and those are what this criterion binds. Matters because its documented remedy, --allow-unverified, is the lever that lands the AC-21 attack"
+    },
+    {
+      "id": "AC-26",
+      "then": "A reachable upstream that holds no record classifies absent, never network: when the fetch SUCCEEDS (rc 0) but the default branch carries no roster/index.yaml at FETCH_HEAD, the upstream source is absent and the refusal line must NOT carry the ', upstream unreachable' disclosure; a genuine fetch failure still classifies network and still discloses (negative control). Severity order unchanged, both cases still refuse under strict",
+      "verify_method": "New scenario binding BOTH layers - the evidence line (must read upstream=absent) and the operator refusal line ('(absent)', no disclosure) - plus the unreachable arm as control. Mechanism measured: push the target tag, then land a LATER commit on the remote's default branch removing roster/index.yaml; fetch --depth 1 origin HEAD then exits 0 while git show FETCH_HEAD:roster/index.yaml exits 128. FAILS AGAINST THE IMPLEMENTATION AS IT STANDS (reproduced end to end): nexus_release_meta_upstream returns 1 for BOTH causes and the caller collapses every non-zero into network. Not satisfiable by the two warn texts, which are already distinct and honest - the classification and the operator line are what lie. Supporting measurement: a present-but-UNPARSEABLE upstream roster already classifies absent, so reachable-but-recordless is the only one of three sub-cases reporting network, and the helper's rc-1 contract comment states the defect as the contract"
+    },
+    {
+      "id": "AC-27",
+      "then": "The policy switch has no fail-open default: in upgrade_self.sh's case \"$_verify_rc\", 0) becomes an explicit arm and *) REFUSES - exit 5, a distinct message naming the unexpected return code, $NEXUS_NEW removed, $NEXUS/VERSION unchanged. No return code outside the documented contract {0,2,3,4} may reach a completed upgrade",
+      "verify_method": "Checkable ONLY by forcing an out-of-contract return code, never by reading the switch. Measured, and the obvious mechanism does NOT work: _seed_minimal_nexus_tree omits cli/src/upgrade.sh, so cli/eidolons's source probe resets CLI_SRC to THE CHECKOUT's cli/src (traced with bash -x) and sed-ing the installed fixture copy mutates a file that never executes - the AC-8 unreachable-mechanism trap. Mechanism that works, verified end to end: seed the fixture nexus with the FULL cli/ tree, then mutate that copy; with return 4 -\u003e return 9, strict, no metadata anywhere, the run exits 0 printing (integrity: verified). CORRECTION TO THE FINDING AS REPORTED: there IS still a log line - nexus_verify_release's own warn prints before the forced return; what is absent is any CALL-SITE refusal and any adverse token, so bind exit code + summary display string, never 'no output'. Unreachable today only because the call site is || _verify_rc=$?, which suppresses errexit for the whole dynamic extent"
+    }
+  ],
+  "spec_ref": ".spectra/changes/upgrade-self-integrity-gate/spec.yaml",
+  "created_at": "2026-08-10T00:00:00Z",
+  "drift_checked": true,
+  "has_code": true
+}

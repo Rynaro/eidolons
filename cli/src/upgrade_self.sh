@@ -10,13 +10,16 @@
 #   --check              Read-only: show what would change, then exit 0.
 #   --force              Skip dirty-working-tree check and smoke-test wait.
 #   --non-interactive    Proceed without confirmation prompts.
+#   --allow-unverified   Proceed when release integrity has no evidence either
+#                        way (absent/network). Never overrides a detected
+#                        mismatch or a corrupt clone — those always refuse.
 #
 # Exit codes:
 #   0  success or no-op
 #   1  generic failure
 #   2  already at requested ref but not the latest (informational)
 #   4  NETWORK_ERROR (cannot reach upstream)
-#   5  INTEGRITY_ERROR
+#   5  INTEGRITY_ERROR (mismatch, corrupt clone, or no evidence refused under strict)
 #   6  smoke test failed on new nexus
 #   7  rollback requested but no nexus.prev
 # ═══════════════════════════════════════════════════════════════════════════
@@ -32,22 +35,25 @@ ROLLBACK=false
 CHECK=false
 FORCE=false
 NON_INTERACTIVE=false
+ALLOW_UNVERIFIED=false
+INTEGRITY_TOKEN=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ref)
       [[ $# -lt 2 ]] && { echo "--ref requires an argument" >&2; exit 1; }
       REF="$2"; shift 2 ;;
-    --rollback)        ROLLBACK=true;           shift ;;
-    --check)           CHECK=true;              shift ;;
-    --force)           FORCE=true;              shift ;;
-    --non-interactive) NON_INTERACTIVE=true;    shift ;;
+    --rollback)          ROLLBACK=true;          shift ;;
+    --check)             CHECK=true;             shift ;;
+    --force)             FORCE=true;             shift ;;
+    --non-interactive)   NON_INTERACTIVE=true;   shift ;;
+    --allow-unverified)  ALLOW_UNVERIFIED=true;  shift ;;
     -h|--help)
       cat <<'HELP'
 eidolons upgrade self — atomic nexus self-upgrade
 
 Usage: eidolons upgrade self [--ref <ref>] [--check] [--rollback]
-                              [--force] [--non-interactive]
+                              [--force] [--non-interactive] [--allow-unverified]
 
 Flags:
   --ref <ref>          Upgrade to a specific branch, tag, or SHA.
@@ -55,10 +61,12 @@ Flags:
   --check              Show upgrade plan without modifying anything.
   --force              Skip dirty-check and proceed without confirmation.
   --non-interactive    Fail on prompts instead of waiting for input.
+  --allow-unverified   Proceed when integrity has no evidence either way
+                        (absent/network). Never overrides a detected mismatch.
 
 Exit codes:
   0  success / no-op   4  network error
-  1  generic failure   5  integrity check failed
+  1  generic failure   5  integrity check failed, or no evidence refused under strict
   2  already current   6  smoke test failed
   7  no prev to roll back to
 HELP
@@ -148,6 +156,59 @@ _is_semver_tag() {
 
 # Strip leading 'v' prefix.
 _strip_v() { echo "${1#v}"; }
+
+# _upgrade_self_enforcement_mode — the fail-closed enforcement read (AC-23),
+# normalised AT THIS CALL SITE ONLY. integrity_enforcement_mode (lib.sh) is
+# NOT changed: verify.sh:68 and doctor.sh:230 share it and the per-Eidolon
+# member integrity path is frozen anti-scope (risk R-6,
+# https://github.com/Rynaro/eidolons/issues/562). That helper echoes
+# EIDOLONS_INTEGRITY_ENFORCEMENT verbatim and returns the literal string
+# "warn" when $ROSTER_FILE is unreadable (`set -o pipefail` fires the
+# `|| echo "warn"` on a failing yaml_to_json) — indistinguishable at the call
+# site from a roster that genuinely says `warn`. Hence clause (ii)'s
+# independent parse check, rather than a smarter read of the helper's output.
+#
+# (i) EIDOLONS_INTEGRITY_ENFORCEMENT set: trim + lowercase (bash 3.2:
+#     `tr '[:upper:]' '[:lower:]'`, never `${var,,}`), accept ONLY
+#     strict/warn; anything else — including empty after trim — resolves to
+#     the REFUSING posture (strict).
+# (ii) Unset: consult integrity_enforcement_mode AND independently confirm
+#     $ROSTER_FILE parses (yaml_to_json succeeds). If it does not parse or
+#     does not exist, use strict regardless of what the helper returned.
+_upgrade_self_enforcement_mode() {
+  local raw normalized
+
+  # `${VAR+x}` (existence test) rather than `${VAR:-}` (value test) — the
+  # criterion's "including empty" clause covers the variable being SET to an
+  # empty string, which `-n "${VAR:-}"` cannot distinguish from unset. Unset
+  # falls through to clause (ii) below; set-but-empty is handled here and
+  # resolves to strict, same as any other unrecognised value.
+  if [[ -n "${EIDOLONS_INTEGRITY_ENFORCEMENT+x}" ]]; then
+    raw="${EIDOLONS_INTEGRITY_ENFORCEMENT}"
+    normalized="$(printf '%s' "$raw" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+    case "$normalized" in
+      strict|warn) echo "$normalized"; return 0 ;;
+      *)           echo "strict";      return 0 ;;
+    esac
+  fi
+
+  # Parenthesised (subshell) call: yaml_to_json's own last resort is
+  # die() -> exit 1 when no YAML backend is available at all, and an
+  # unparenthesised call here would take the whole script down with it
+  # instead of reporting "unparseable" to this function's caller. A subshell
+  # confines that exit to itself.
+  if ! ( yaml_to_json "$ROSTER_FILE" >/dev/null 2>&1 ); then
+    echo "strict"
+    return 0
+  fi
+
+  raw="$(integrity_enforcement_mode)"
+  normalized="$(printf '%s' "$raw" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
+  case "$normalized" in
+    strict|warn) echo "$normalized"; return 0 ;;
+    *)           echo "strict";      return 0 ;;
+  esac
+}
 
 # ─── Rollback path ────────────────────────────────────────────────────────
 if [[ "$ROLLBACK" == true ]]; then
@@ -278,26 +339,111 @@ if ! nexus_clone_to_sibling "$TARGET_REF" "$NEXUS_NEW" 2>/dev/null; then
   exit 1
 fi
 
-# ─── Integrity verification ───────────────────────────────────────────────
+# ─── Integrity verification ────────────────────────────────────────────────
+# nexus_verify_release (lib.sh) CLASSIFIES evidence from two sources (the
+# installed roster + the upstream default branch) and returns a token on
+# NEXUS_VERIFY_STATUS. Policy is applied HERE, at the call site — mirrors
+# verify.sh:68 and doctor.sh:230, which both consult integrity_enforcement_mode
+# where they are called rather than inside a shared helper.
+#
+# Every read of NEXUS_VERIFY_STATUS is ${NEXUS_VERIFY_STATUS:-}: on the
+# non-tag branch below, nexus_verify_release is never called, and
+# `set -euo pipefail` (line 24) turns an unguarded read into an
+# `unbound variable` abort immediately before the summary line.
 if _is_semver_tag "$TARGET_REF"; then
   info "Verifying release integrity for nexus@$TARGET_VERSION"
   _verify_rc=0
   nexus_verify_release "$TARGET_VERSION" "$NEXUS_NEW" || _verify_rc=$?
-  if [[ "$_verify_rc" -eq 2 ]]; then
-    echo "" >&2
-    echo "Integrity check failed for nexus $TARGET_VERSION." >&2
-    echo "Refusing to swap. The previous nexus is intact." >&2
-    rm -rf "$NEXUS_NEW"
-    exit 5
-  elif [[ "$_verify_rc" -eq 3 ]]; then
-    echo "" >&2
-    echo "Integrity check failed (corrupt clone) for nexus $TARGET_VERSION." >&2
-    echo "Refusing to swap. The previous nexus is intact." >&2
-    rm -rf "$NEXUS_NEW"
-    exit 5
-  fi
+  _verify_status="${NEXUS_VERIFY_STATUS:-}"
+
+  case "$_verify_rc" in
+    2)
+      # Mismatch is unconditional: never relaxed by --allow-unverified or by
+      # EIDOLONS_INTEGRITY_ENFORCEMENT=warn. A flag wide enough to swallow a
+      # detected mismatch is not an escape hatch, it is an off switch.
+      echo "" >&2
+      echo "Integrity check failed for nexus $TARGET_VERSION (mismatch)." >&2
+      echo "Refusing to swap. The previous nexus is intact." >&2
+      rm -rf "$NEXUS_NEW"
+      exit 5
+      ;;
+    3)
+      # Corrupt clone is likewise unconditional.
+      echo "" >&2
+      echo "Integrity check failed (corrupt clone) for nexus $TARGET_VERSION." >&2
+      echo "Refusing to swap. The previous nexus is intact." >&2
+      rm -rf "$NEXUS_NEW"
+      exit 5
+      ;;
+    4)
+      # No evidence anywhere. Policy depends on the token and on enforcement
+      # mode. The placeholder row is a separate, intentional bootstrap-window
+      # skip (anti-scope: not repurposed) and warns+proceeds under BOTH modes,
+      # unaffected by --allow-unverified.
+      if [[ "${_verify_status:-}" == "placeholder" ]]; then
+        warn "nexus@$TARGET_VERSION release metadata is a bootstrap placeholder — skipping verification."
+        INTEGRITY_TOKEN="UNVERIFIED - placeholder"
+      else
+        # AC-25: a suppressed witness is named, not folded into the benign
+        # case. The severity rule can select `absent` while the OTHER source
+        # actually reported `network` (upstream unreachable) — that source's
+        # report is real evidence of a fetch failure, not silence, and
+        # folding it into the plain "(absent)" reason makes it
+        # indistinguishable from the benign release-day window where both
+        # sources are genuinely silent. The severity ORDER is unchanged
+        # (absent still wins, strict still refuses); this only changes what
+        # the message says. Both new globals follow the same ${VAR:-}
+        # discipline as NEXUS_VERIFY_STATUS.
+        _reason="${_verify_status:-absent}"
+        if [[ "$_reason" == "absent" ]] \
+          && { [[ "${NEXUS_VERIFY_INSTALLED_STATUS:-}" == "network" ]] || [[ "${NEXUS_VERIFY_UPSTREAM_STATUS:-}" == "network" ]]; }; then
+          _reason="absent, upstream unreachable"
+        fi
+
+        _mode="$(_upgrade_self_enforcement_mode)"
+        if [[ "$_mode" == "strict" && "$ALLOW_UNVERIFIED" != true ]]; then
+          echo "" >&2
+          echo "nexus@$TARGET_VERSION release integrity could not be verified (${_reason})." >&2
+          echo "Refusing to swap under strict enforcement. The previous nexus is intact." >&2
+          echo "  Re-run with --allow-unverified, or set EIDOLONS_INTEGRITY_ENFORCEMENT=warn, to proceed anyway." >&2
+          rm -rf "$NEXUS_NEW"
+          exit 5
+        fi
+        warn "nexus@$TARGET_VERSION release integrity could not be verified (${_reason}); proceeding unverified."
+        INTEGRITY_TOKEN="UNVERIFIED - ${_reason}"
+      fi
+      ;;
+    0)
+      if [[ "${_verify_status:-}" == "verified:local-only" ]]; then
+        INTEGRITY_TOKEN="verified:local-only"
+      else
+        INTEGRITY_TOKEN="verified"
+      fi
+      ;;
+    *)
+      # Out-of-contract return code from nexus_verify_release. Its documented
+      # closed set is {0,2,3,4} (lib.sh:1155-1164) — anything else means the
+      # function changed under us, or a future call site drops the `||
+      # _verify_rc=$?` guard and lets an unrelated failure's exit status land
+      # here. The old catch-all treated every such code as "verified", which
+      # is a fail-open default on the security path this change exists to
+      # close (see verification.md — the checker forced `return 4` to
+      # `return 9` and got exit 0, "(integrity: verified)", swap completed).
+      # Refuse instead, and name the code so the failure is diagnosable.
+      echo "" >&2
+      echo "nexus@$TARGET_VERSION integrity check returned an unexpected code (rc=${_verify_rc}) from nexus_verify_release." >&2
+      echo "Refusing to swap. The previous nexus is intact." >&2
+      rm -rf "$NEXUS_NEW"
+      exit 5
+      ;;
+  esac
 else
-  warn "Non-tag ref '$TARGET_REF': commit SHA verified, tree/archive checks skipped."
+  # No release record exists for a non-tag ref by construction — an explicit
+  # --ref <branch|sha> is a developer opt-in, and refusing it would break that
+  # documented workflow. This warning must not assert that anything was
+  # verified (that was the second live instance of #561's defect class).
+  warn "Non-tag ref '$TARGET_REF': no release record exists for a non-tag ref; nothing was verified."
+  INTEGRITY_TOKEN="UNVERIFIED - non-tag ref"
 fi
 
 # ─── Smoke test ───────────────────────────────────────────────────────────
@@ -339,8 +485,14 @@ fi
 
 nexus_atomic_swap "$NEXUS_NEW" "$NEXUS_PREV"
 
+# ─── Terminal summary ───────────────────────────────────────────────────────
+# The outcome rides on EVERY path that completes an upgrade — this is what
+# makes the NO NEW SILENT SUCCESS invariant satisfiable rather than
+# aspirational (one grep: "integrity: verified" vs "integrity: UNVERIFIED").
+# INTEGRITY_TOKEN is set on every branch above (tag: verified /
+# verified:local-only / UNVERIFIED - <token>; non-tag: UNVERIFIED - non-tag ref).
 echo ""
-ok "Upgraded nexus $_prev_ver -> $TARGET_VERSION"
+ok "Upgraded nexus $_prev_ver -> $TARGET_VERSION (integrity: ${INTEGRITY_TOKEN:-UNVERIFIED - unknown})"
 if [[ -d "$NEXUS_PREV" ]]; then
   echo "  Previous nexus preserved at $NEXUS_PREV" >&2
   echo "  To roll back: eidolons upgrade self --rollback" >&2
