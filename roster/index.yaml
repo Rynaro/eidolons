@@ -731,9 +731,9 @@ eidolons:
       repo: Rynaro/Vivi
       default_ref: main
     versions:
-      latest: "1.3.0"
+      latest: "1.4.0"
       pins:
-        stable: "1.3.0"
+        stable: "1.4.0"
       releases:
         1.0.0:
           tag: v1.0.0
@@ -785,6 +785,15 @@ eidolons:
           commit: a965c071c7ddd64cba3c8f74c9e2f14ad54e336d
           tree: df09f48e21e33ca2c38f527786244b4aa81f93c3
           archive_sha256: 422190399234430513b40d0e3479cba93ff6b8b3332a6b1b5c490423909d3293
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.4.0:
+          tag: v1.4.0
+          commit: f6a89f7b2800ec3936a2ea5072dced95fe297327
+          tree: b4378bee347a60f4e785963289b76b0880fc4c99
+          archive_sha256: 52f52b9f66c718f18cb0a13ced59254b24d0434df9b46c91900dbd97ec0ebd12
           manifest_sha256:
           provenance:
             github_attestation: true
