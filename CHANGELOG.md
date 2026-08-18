@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- spectra v4.12.0 published in the roster with release integrity metadata.
 - atlas v1.14.0 published in the roster with release integrity metadata.
 
 ## [2.21.0] — 2026-08-17 — the gate that read the wrong source
