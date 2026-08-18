@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-08-18T21:04Z"
+updated_at: "2026-08-18T21:09Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1629,9 +1629,9 @@ eidolons:
       repo: Rynaro/Kupo
       default_ref: main
     versions:
-      latest: "1.3.0"
+      latest: "1.4.0"
       pins:
-        stable: "1.3.0"
+        stable: "1.4.0"
       releases: # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
         0.1.0:
           tag: v0.1.0
@@ -1692,6 +1692,15 @@ eidolons:
           commit: 810b0020d33267b510779c2a5f73bd2b44d48f9a
           tree: 42ebc733ae5932c40f207c1512c34bf11ecd3c13
           archive_sha256: 86cdf2fa875318b72ad5c6689bd4fcdc87bb786a49c1ba68877fa109480ecb58
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.4.0:
+          tag: v1.4.0
+          commit: dbc4fb71196d425b5e3633553ef5f120a8839793
+          tree: 80dba502ea412c067beab850df6ecad729845513
+          archive_sha256: cb2fdf7bd72fe90cc569f48dbfde9fa85b392c188893d21c04aa15d3acc5b354
           manifest_sha256:
           provenance:
             github_attestation: true
