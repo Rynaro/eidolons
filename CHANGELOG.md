@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- gilgamesh v1.1.0 published in the roster with release integrity metadata.
 - kupo v1.4.0 published in the roster with release integrity metadata.
 - crystalium v2.2.0 published in the roster with release integrity metadata.
 - idg v1.11.0 published in the roster with release integrity metadata.
