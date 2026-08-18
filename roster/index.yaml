@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-08-18T20:52Z"
+updated_at: "2026-08-18T20:53Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -548,9 +548,9 @@ eidolons:
       repo: Rynaro/APIVR-Delta
       default_ref: main
     versions:
-      latest: "3.8.0"
+      latest: "3.9.0"
       pins:
-        stable: "3.8.0"
+        stable: "3.9.0"
       releases:
         3.0.5:
           tag: v3.0.5
@@ -683,6 +683,15 @@ eidolons:
           commit: a8845b73f7727eaabf96a1ac8dd2b48e018a272c
           tree: dbca79758e42a6d9c0d4a49d033ee790228b3761
           archive_sha256: 40e3dde859318b1571fd1b6196b64dc16d48b7f36f7031a21247723282178a04
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        3.9.0:
+          tag: v3.9.0
+          commit: 8fffc0a04fa79b76c47cd1857226506a66cc8fb6
+          tree: 0da9c062e59fd8fce11e1055113933233f270e8e
+          archive_sha256: 3559a837b72e736a0c15774dae7feac49d32e8c828a32568506b591e7f3430b4
           manifest_sha256:
           provenance:
             github_attestation: true
