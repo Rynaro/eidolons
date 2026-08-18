@@ -57,10 +57,13 @@ jobs:
           escaped_ver="$(printf '%s' "$ver" | sed 's/\./\\./g')"
           ok=1
 
-          if grep -qE "^[[:space:]]*(readonly[[:space:]]+)?EIDOLON_VERSION=\"${escaped_ver}\"" install.sh; then
-            echo "::notice::install.sh EIDOLON_VERSION stamp OK (${ver})"
+          if [[ -f manifest.json ]] && jq -e --arg ver "$ver" '.version == $ver' manifest.json >/dev/null; then
+            echo "::notice::manifest.json version stamp OK (${ver})"
+          elif grep -qE "^[[:space:]]*(readonly[[:space:]]+)?EIDOLON_VERSION=\"${escaped_ver}\"" install.sh; then
+            echo "::notice::legacy install.sh EIDOLON_VERSION stamp OK (${ver})"
           else
-            echo "::error::install.sh does not declare EIDOLON_VERSION=\"${ver}\". Found:"
+            echo "::error::neither manifest.json nor install.sh declares package version ${ver}. Found:"
+            jq -r '.version // empty' manifest.json 2>/dev/null || true
             grep "EIDOLON_VERSION" install.sh || echo "  (no EIDOLON_VERSION line found)"
             ok=0
           fi
