@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 
 ### Added
+- vigil v1.9.0 published in the roster with release integrity metadata.
 - forge v1.11.0 published in the roster with release integrity metadata.
 - vivi v1.4.0 published in the roster with release integrity metadata.
 - apivr v3.9.0 published in the roster with release integrity metadata.
