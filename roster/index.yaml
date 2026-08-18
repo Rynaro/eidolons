@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-08-18T21:09Z"
+updated_at: "2026-08-18T21:10Z"
 eiis_required: "1.4"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -1738,9 +1738,9 @@ eidolons:
       repo: Rynaro/Gilgamesh
       default_ref: main
     versions:
-      latest: "1.0.0"
+      latest: "1.1.0"
       pins:
-        stable: "1.0.0"
+        stable: "1.1.0"
       releases:
         0.2.0:
           tag: v0.2.0
@@ -1769,6 +1769,15 @@ eidolons:
           provenance:
             github_attestation: false
             note: "shipped release — methodology identical to v0.3.0 (which cleared the two-arm gate, independently attested); version-bumped to 1.0.0 at the in_construction → shipped flip"
+        1.1.0:
+          tag: v1.1.0
+          commit: facc37aa0961490579a1eb06dd75c1d3d3728838
+          tree: 017ae8a41cce97c86641eb12ed134ca62bd247e5
+          archive_sha256: a78063ce2210692237fde623f2476bc11821cf8ba25470750b3b18688e80a6a5
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/gilgamesh"
       standalone: true
