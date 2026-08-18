@@ -67,6 +67,8 @@ Explore, then `rm -rf /tmp/eidolons-demo` and walk away. Full flow in [Install](
 
 Each Eidolon is its own repo, independently versioned and installable; the roster's machine-readable source of truth is [`roster/index.yaml`](roster/index.yaml). Partial teams are first-class — bring only ATLAS to an audit, or the whole pipeline to a greenfield.
 
+As of v3, an installed Eidolon is self-contained under `.eidolons/<agent>/`: `PERSONA.md`, `SPEC.md`, and `skills/<methodology>/SKILL.md` are the only methodology sources. Root and vendor files only provide discovery pointers. See the [EIIS 3.0 integration contract](docs/eiis-3.0.md).
+
 ## See it route
 
 The routing kernel is a real program, not a prompt. Ask it something and it answers in JSON — which specialists, in what order, at what model tier:

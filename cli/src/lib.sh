@@ -523,8 +523,8 @@ fetch_eidolon() {
 # eiis_required_version → reads `eiis_required` from roster/index.yaml
 eiis_required_version() {
   local roster="$NEXUS/roster/index.yaml"
-  [[ -f "$roster" ]] || { echo "1.1"; return; }
-  yaml_to_json "$roster" 2>/dev/null | jq -r '.eiis_required // "1.1"'
+  [[ -f "$roster" ]] || { echo "3.0.0"; return; }
+  yaml_to_json "$roster" 2>/dev/null | jq -r '.eiis_required // "3.0.0"'
 }
 
 # resolve_eiis_tag REQ → echoes the tag to clone (e.g. "1.1" → "1.1.4")
@@ -573,7 +573,7 @@ eiis_check() {
   fi
 
   # Offline fallback — keep behaviour byte-compatible with v1.0 inline check.
-  local required=( "AGENTS.md" "CLAUDE.md" "install.sh" "agent.md" "README.md" )
+  local required=( "EIDOLONS.md" "install.sh" "PERSONA.md" "README.md" )
   local missing=()
   for f in "${required[@]}"; do
     [[ -f "$dir/$f" ]] || missing+=("$f")
@@ -2188,7 +2188,8 @@ _deep_check_outbound_links() {
 # Bash 3.2 compatible (arithmetic with $(( )) and wc -w).
 deep_check_agent_token_budget() {
   local name="$1"
-  local path=".eidolons/$name/agent.md"
+  local path=".eidolons/$name/PERSONA.md"
+  [[ -f "$path" ]] || path=".eidolons/$name/agent.md"
   if [[ ! -f "$path" ]]; then
     err "$name: $path missing (cannot check token budget)"
     return 1
@@ -2200,7 +2201,10 @@ deep_check_agent_token_budget() {
     err "$name: agent.md is ~${tokens} tokens (budget: 1000) — re-install or trim"
     return 1
   fi
-  pass "$name: agent.md within token budget (${tokens}/1000)"
+  case "$path" in
+    */PERSONA.md) pass "$name: PERSONA.md within token budget (${tokens}/1000)" ;;
+    *)            pass "$name: agent.md within token budget (${tokens}/1000)" ;;
+  esac
   return 0
 }
 
@@ -2210,7 +2214,8 @@ deep_check_agent_token_budget() {
 # Delegates to _deep_check_outbound_links. Returns broken-ref count.
 deep_check_agent_links() {
   local name="$1"
-  local path=".eidolons/$name/agent.md"
+  local path=".eidolons/$name/PERSONA.md"
+  [[ -f "$path" ]] || path=".eidolons/$name/agent.md"
   # If agent.md is missing, D1 already errored; skip silently here.
   [[ -f "$path" ]] || return 0
   local rc=0
@@ -2239,13 +2244,17 @@ deep_check_manifest_integrity() {
   local lock_sha
   lock_sha="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
     | jq -r --arg n "$name" \
-      '(.members // [])[] | select(.name == $n) | .manifest_sha256 // empty' 2>/dev/null || true)"
+      '(.members // [])[] | select(.name == $n) | .package_manifest_sha256 // .manifest_sha256 // empty' 2>/dev/null || true)"
   if [[ -z "$lock_sha" ]]; then
     warn "$name@$version: no manifest_sha256 in lock (legacy / pre-1.4 release) — skip"
     return 0
   fi
   local installed_sha
-  installed_sha="$(lock_manifest_sha256 ".eidolons/$name/install.manifest.json" 2>/dev/null || true)"
+  if [[ -f ".eidolons/$name/manifest.json" ]]; then
+    installed_sha="$(sha256_file ".eidolons/$name/manifest.json" 2>/dev/null || true)"
+  else
+    installed_sha="$(lock_manifest_sha256 ".eidolons/$name/install.manifest.json" 2>/dev/null || true)"
+  fi
   if [[ -z "$installed_sha" ]]; then
     err "$name@$version: cannot compute installed manifest_sha256"
     return 1
@@ -2269,14 +2278,20 @@ deep_check_manifest_integrity() {
 # Bash 3.2 compatible: tr for upper-case, no ${var^^}.
 deep_check_host_agent_body() {
   local name="$1"
+  local persona_ref=".eidolons/$name/agent.md"
+  if [[ -f ".eidolons/$name/EIIS_VERSION" ]]; then
+    case "$(tr -d '[:space:]' < ".eidolons/$name/EIIS_VERSION")" in
+      3.*) persona_ref=".eidolons/$name/PERSONA.md" ;;
+    esac
+  fi
   local upper
   upper="$(echo "$name" | tr 'a-z-' 'A-Z_' | tr '_' '-')"
   local host_dir host_file rc=0
   for host_dir in .claude/agents .codex/agents .opencode/agents; do
     host_file="$host_dir/$name.md"
     [[ -f "$host_file" ]] || continue
-    if ! grep -qF ".eidolons/$name/agent.md" "$host_file" 2>/dev/null; then
-      err "$name: $host_file does not reference .eidolons/$name/agent.md"
+    if ! grep -qF "$persona_ref" "$host_file" 2>/dev/null; then
+      err "$name: $host_file does not reference $persona_ref"
       rc=$((rc + 1))
     fi
     if ! grep -qF ".eidolons/$name/SPEC.md" "$host_file" 2>/dev/null; then
@@ -2327,6 +2342,57 @@ deep_check_skills_dual_write() {
   if (( rc == 0 )); then
     pass "$name: skills dual-write parity verified"
   fi
+  return "$rc"
+}
+
+# D6-v3: the member tree is the single source of truth. Every skill is a
+# directory containing SKILL.md. Claude's discovery surface may be a symlink
+# to it, but must never contain a second regular-file copy.
+deep_check_eiis_v3_layout() {
+  local name="$1" root=".eidolons/$1" rc=0 skill adapter target
+  [[ -f "$root/EIIS_VERSION" ]] || return 0
+  case "$(tr -d '[:space:]' < "$root/EIIS_VERSION")" in 3.*) ;; *) return 0 ;; esac
+  if [[ ! -f "$root/PERSONA.md" ]]; then
+    err "$name: EIIS v3 requires $root/PERSONA.md"
+    rc=$((rc + 1))
+  fi
+  if [[ -f "$root/agent.md" ]]; then
+    err "$name: EIIS v3 forbids duplicate $root/agent.md"
+    rc=$((rc + 1))
+  fi
+  if [[ -d "$root/skills" ]]; then
+    for skill in "$root"/skills/*; do
+      [[ -e "$skill" ]] || continue
+      if [[ ! -d "$skill" || ! -f "$skill/SKILL.md" ]]; then
+        err "$name: EIIS v3 skill must be skills/<methodology>/SKILL.md: $skill"
+        rc=$((rc + 1))
+      fi
+    done
+  fi
+  for adapter in .claude/skills/${name}-*/SKILL.md; do
+    [[ -e "$adapter" || -L "$adapter" ]] || continue
+    if [[ -L "$adapter" ]]; then
+      if [[ ! -e "$adapter" ]]; then
+        err "$name: broken vendor skill symlink: $adapter"
+        rc=$((rc + 1))
+        continue
+      fi
+      target="$(readlink "$adapter" 2>/dev/null || true)"
+      case "$target" in *".eidolons/$name/skills/"*"/SKILL.md") ;; *)
+        err "$name: vendor skill link escapes its canonical .eidolons tree: $adapter -> $target"
+        rc=$((rc + 1)) ;;
+      esac
+    else
+      if [[ "$(wc -c < "$adapter" | tr -d ' ')" -gt 2048 ]] \
+         || ! grep -qF 'generated_by: eidolons' "$adapter" \
+         || ! grep -qF ".eidolons/$name/skills/" "$adapter" \
+         || grep -qF '<!-- eidolon:' "$adapter"; then
+        err "$name: vendor skill adapter is neither a canonical symlink nor a constrained pointer: $adapter"
+        rc=$((rc + 1))
+      fi
+    fi
+  done
+  (( rc == 0 )) && pass "$name: EIIS v3 single-source layout verified"
   return "$rc"
 }
 

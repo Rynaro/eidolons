@@ -99,6 +99,27 @@ JSTUB
   [[ "$output" =~ "not installed" ]]
 }
 
+@test "harness: check proves installed hooks are registered and executable" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code,codex --non-interactive
+  [ "$status" -eq 0 ]
+  run eidolons harness check
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "harness check: ok" ]]
+}
+
+@test "harness: check fails when a registered shim is not executable" {
+  seed_manifest
+  seed_lock
+  run eidolons harness install --hosts claude-code --non-interactive
+  [ "$status" -eq 0 ]
+  chmod -x .eidolons/harness/hooks/claude-code-SessionStart.sh
+  run eidolons harness check
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "missing or non-executable" ]]
+}
+
 @test "harness: unknown subcommand exits 2 with list of available subcommands" {
   run eidolons harness bogus-subcommand
   [ "$status" -eq 2 ]

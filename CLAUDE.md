@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+The canonical Eidolons routing contract is [EIDOLONS.md](./EIDOLONS.md). This file contains repository-development notes only and does not duplicate agent personas, methodologies, or skills.
+
 ## What this repo is
 
 This is the **Eidolons nexus** — the registry and CLI orchestrator for a team of AI agents (ATLAS, SPECTRA, APIVR-Δ, IDG, FORGE). It is **not** itself an Eidolon. Each Eidolon lives in its own public repo (`Rynaro/ATLAS`, `Rynaro/SPECTRA`, etc.) and is independently installable, versioned, and self-contained. The nexus only coordinates: it publishes the roster, ships the `eidolons` CLI, and defines how members compose.

@@ -8,7 +8,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-
 ### Added
 - gilgamesh v1.1.0 published in the roster with release integrity metadata.
 - kupo v1.4.0 published in the roster with release integrity metadata.
@@ -21,6 +20,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - ramza v1.1.0 published in the roster with release integrity metadata.
 - spectra v4.12.0 published in the roster with release integrity metadata.
 - atlas v1.14.0 published in the roster with release integrity metadata.
+
+## [3.0.0] — 2026-08-17 — one Eidolon, one source
+
+### Changed
+- Bump the nexus and required EIIS contract to 3.0.0. Installed members now have one canonical persona (`.eidolons/<agent>/PERSONA.md`), one normative `SPEC.md`, and directory skills at `.eidolons/<agent>/skills/<methodology>/SKILL.md` with colocated resources.
+- Vendor agent and skill files are discovery adapters only. Skill adapters that require a vendor-native `SKILL.md` are symlinks to the canonical entrypoint; copied methodology bodies are rejected by the deep doctor gate.
+- Root `EIDOLONS.md` is mandatory. `AGENTS.md` and `CLAUDE.md` point to it rather than carrying independently maintained Eidolon instructions.
+
+### Added
+- `eidolons harness check` validates that every lock-recorded hook exists, is executable, has valid shell syntax, and is actually registered in its host configuration.
+- EIIS v3 layout checks in `doctor --deep`, while retaining read compatibility for legacy EIIS installations.
+- The local EIIS 3.0 integration contract in `docs/eiis-3.0.md`.
+- EIIS 3.0 is defined and mechanically checked upstream in `Rynaro/eidolons-eiis#5`; that release must land before this nexus requirement is merged.
 
 ## [2.21.0] — 2026-08-17 — the gate that read the wrong source
 

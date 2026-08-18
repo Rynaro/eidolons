@@ -15,6 +15,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_eidolons_md.sh"
 # shellcheck disable=SC1091
+. "$SELF_DIR/lib_eiis_v3.sh"
+# shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp_wiring.sh"
@@ -412,6 +414,21 @@ while read -r member; do
   host_prune_manifest_pass "$target" "$HOSTS_CSV"
   host_prune_path_patterns "$target" "$HOSTS_CSV"
 
+  # EIIS v3 packages contain no vendor files. The nexus renders every host
+  # discovery adapter from immutable manifest.json after installation.
+  if [[ -f "$target/manifest.json" ]] \
+     && [[ "$(jq -r '.eiis_version // empty' "$target/manifest.json" 2>/dev/null)" == 3.* ]]; then
+    eiis_v3_render_adapters "$name" "$HOSTS_CSV" \
+      || { warn "$name: failed to render EIIS v3 host adapters"; _sync_has_failure=true; continue; }
+    info "  rendered EIIS v3 host adapters from $target/manifest.json"
+  fi
+
+  # EIIS v3 makes the installed member tree authoritative. Host files below
+  # contain discovery metadata only; methodology prose always resolves to
+  # PERSONA.md (SPEC.md remains the normative methodology contract).
+  _persona_path=".eidolons/$name/PERSONA.md"
+  [[ -f "$_persona_path" ]] || _persona_path=".eidolons/$name/agent.md"
+
   # ─── claude-code safety net ────────────────────────────────────────────
   # If the host wiring asked for claude-code but the per-Eidolon installer
   # didn't produce .claude/agents/<name>.md, write a minimal dispatch stub so
@@ -432,7 +449,7 @@ name: $name
 description: $display — $summary
 ---
 
-See ./.eidolons/$name/agent.md for the full methodology.
+See ./$_persona_path for the canonical persona and ./.eidolons/$name/SPEC.md for its methodology.
 STUB
     info "  wrote .claude/agents/$name.md (nexus safety net)"
   fi
@@ -448,7 +465,7 @@ STUB
     summary="$(echo "$entry" | jq -r '.methodology.summary // ""')"
     printf 'name = "%s"\n' "$name" > ".codex/agents/$name.toml"
     printf 'description = "%s"\n' "$display — $summary" >> ".codex/agents/$name.toml"
-    printf 'instructions = "See .eidolons/%s/agent.md for the full methodology."\n' "$name" \
+    printf 'instructions = "See %s for the canonical persona and .eidolons/%s/SPEC.md for its methodology."\n' "$_persona_path" "$name" \
       >> ".codex/agents/$name.toml"
     info "  wrote .codex/agents/$name.toml (nexus safety net, G10)"
   fi
@@ -466,7 +483,7 @@ name: $name
 description: $display — $summary
 ---
 
-See .eidolons/$name/agent.md for the full methodology.
+See $_persona_path for the canonical persona and .eidolons/$name/SPEC.md for its methodology.
 AGENTMD
     info "  wrote .github/agents/$name.agent.md (nexus safety net, G3/G8)"
   fi
@@ -492,8 +509,31 @@ AGENTMD
     fi
   fi
 
-  # Pull the manifest emitted by the per-Eidolon install.sh
-  if [[ -f "$target/install.manifest.json" ]]; then
+  # EIIS v3 separates immutable package metadata from consumer install state.
+  if [[ -f "$target/manifest.json" && -f "$target/install.receipt.json" ]]; then
+    ver="$(jq -r '.version' "$target/manifest.json" 2>/dev/null || echo "$version")"
+    commit="$(git -C "$clone_dir" rev-parse HEAD)"
+    tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
+    archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
+    package_manifest_sha="$(sha256_file "$target/manifest.json")"
+    receipt_sha="$(sha256_file "$target/install.receipt.json")"
+    verification="$(release_integrity_status "$name" "$ver")"
+    cat >> "$LOCK_TMP" <<LOCK
+  - name: $name
+    version: "$ver"
+    eiis_version: "$(jq -r '.eiis_version' "$target/manifest.json")"
+    resolved: "github:$(echo "$entry" | jq -r '.source.repo')@$commit"
+    commit: "$commit"
+    tree: "$tree"
+    archive_sha256: "$archive_sha"
+    package_manifest_sha256: "$package_manifest_sha"
+    install_receipt_sha256: "$receipt_sha"
+    verification: "$verification"
+    target: "$target"
+    hosts_wired: [$(printf '%s' "$HOSTS_CSV" | sed 's/,/, /g')]
+LOCK
+  # Pull the legacy manifest emitted by EIIS 1.x installers.
+  elif [[ -f "$target/install.manifest.json" ]]; then
     ver="$(jq -r '.version' "$target/install.manifest.json" 2>/dev/null || echo "$version")"
     commit="$(git -C "$clone_dir" rev-parse HEAD)"
     tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
@@ -540,7 +580,11 @@ LOCK
     _acq_meth_cycle="$(echo "$entry" | jq -r '.methodology.cycle // "—"')"
     _acq_handoff="$(echo "$entry" | jq -r '.handoffs.downstream | if . == null or length == 0 then "—" else join(", ") end')"
     _acq_tier="$(echo "$entry" | jq -r '.status // "shipped"')"
-    _acq_hosts="$(jq -r '(.hosts_wired // []) | join(",")' "$target/install.manifest.json" 2>/dev/null || echo "$HOSTS_CSV")"
+    if [[ -f "$target/install.receipt.json" ]]; then
+      _acq_hosts="$HOSTS_CSV"
+    else
+      _acq_hosts="$(jq -r '(.hosts_wired // []) | join(",")' "$target/install.manifest.json" 2>/dev/null || echo "$HOSTS_CSV")"
+    fi
     ui_acquire_card "$name" "$_acq_ver" "$_acq_meth_cycle" "$_acq_handoff" "$_acq_tier" "$target" "$_acq_hosts"
     _member_new_count=$((_member_new_count + 1))
   else
@@ -676,19 +720,28 @@ ok "Wrote $PROJECT_LOCK"
 # resolve correctly (option (a) per design note in the follow-up spec).
 # All copies are idempotent: files are only written when content differs.
 CORTEX_SRC="$NEXUS/EIDOLONS.md"
+CORTEX_ROOT_DEST="./EIDOLONS.md"
 CORTEX_DEST="./.eidolons/cortex/EIDOLONS.md"
 CORTEX_DEEP_SRC="$NEXUS/methodology/cortex"
 CORTEX_DEEP_DEST="./.eidolons/cortex"
 if [[ "$DRY_RUN" == "true" ]]; then
-  info "  [dry-run] would mirror cortex to $CORTEX_DEST"
+  info "  [dry-run] would install canonical cortex at $CORTEX_ROOT_DEST"
+  info "  [dry-run] would link compatibility path $CORTEX_DEST to the root cortex"
   info "  [dry-run] would mirror deep tables to $CORTEX_DEEP_DEST/"
 elif [[ -f "$CORTEX_SRC" ]]; then
   mkdir -p "./.eidolons/cortex"
-  if [[ ! -f "$CORTEX_DEST" ]] || ! diff -q "$CORTEX_SRC" "$CORTEX_DEST" >/dev/null 2>&1; then
-    cp "$CORTEX_SRC" "$CORTEX_DEST"
-    ok "Mirrored cortex → $CORTEX_DEST"
+  if [[ ! -f "$CORTEX_ROOT_DEST" ]] || ! diff -q "$CORTEX_SRC" "$CORTEX_ROOT_DEST" >/dev/null 2>&1; then
+    cp "$CORTEX_SRC" "$CORTEX_ROOT_DEST"
+    ok "Installed canonical cortex → $CORTEX_ROOT_DEST"
   else
-    info "Cortex already up-to-date at $CORTEX_DEST"
+    info "Cortex already up-to-date at $CORTEX_ROOT_DEST"
+  fi
+  # Pre-v3 consumers had a full second copy here. Keep the path working for
+  # old pointers, but make it resolve to the root source of truth.
+  if [[ ! -L "$CORTEX_DEST" ]] || [[ "$(readlink "$CORTEX_DEST" 2>/dev/null || true)" != "../../EIDOLONS.md" ]]; then
+    rm -f "$CORTEX_DEST"
+    ln -s "../../EIDOLONS.md" "$CORTEX_DEST"
+    ok "Linked cortex compatibility path → $CORTEX_DEST"
   fi
   # Mirror deep companion tables if the source directory exists.
   if [[ -d "$CORTEX_DEEP_SRC" ]]; then

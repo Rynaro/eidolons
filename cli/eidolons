@@ -142,10 +142,11 @@ Commands:
                    enable                               Write Stop shim + hook registration (Phase F)
                    disable                              Remove Stop shim + hook entry (Phase F)
                  Run 'eidolons telemetry --help' for full usage.
-  harness <sub>  Wire host hooks for routing-context injection (claude-code, codex).
+  harness <sub>  Wire and validate host hooks for routing-context injection.
                    install [--hosts <h>]   Install hook shims + settings wiring
                    remove                  Remove hook shims + settings wiring
                    status                  Show wired hosts, tier, and shim paths
+                   check                   Validate shim files and host registrations
                  Legacy aliases (deprecated, removal v3.0.0):
                    up|verify|uninstall     Delegate to 'eidolons mcp <verb> junction'
                  Run 'eidolons harness --help' for full usage.
@@ -234,6 +235,7 @@ case "$cmd" in
         ;;
       remove)   exec bash "$CLI_SRC/harness_remove.sh"  "$@" ;;
       status)   exec bash "$CLI_SRC/harness_status.sh"  "$@" ;;
+      check)    exec bash "$CLI_SRC/harness_check.sh"   "$@" ;;
       # ── Legacy Junction aliases (deprecated; removal v3.0.0) ─────────
       up)
         _deprecated_alias "eidolons harness up" "eidolons mcp health junction"
