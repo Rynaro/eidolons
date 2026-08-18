@@ -163,10 +163,13 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.1.0"
+      latest: "2.2.0"
       pins:
-        stable: "2.1.0"
+        stable: "2.2.0"
       releases:
+        "2.2.0":
+          digest: "sha256:75077ffe6b9bcded8f50c0fcb7092ead204128ec4f72af5103df1dfd036f82d5"
+          released_at: "2026-08-18T21:22:00Z"
         "2.1.0":
           # Recall result ORDER and MEMBERSHIP change by design (#45 #44 #42).
           # #45: arms fetched per layer and appended layer-major, so a record

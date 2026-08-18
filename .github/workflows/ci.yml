@@ -52,7 +52,7 @@ jobs:
       - name: Validate roster/index.yaml required fields
         run: |
           set -euo pipefail
-          yq eval '.' roster/index.yaml > /tmp/roster.json
+          yq -o=json eval '.' roster/index.yaml > /tmp/roster.json
           for name in $(jq -r '.eidolons[].name' /tmp/roster.json); do
             jq -e --arg n "$name" '.eidolons[] | select(.name == $n) |
               .methodology.name and .methodology.version and .methodology.cycle and
