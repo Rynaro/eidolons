@@ -6,6 +6,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ---
 
+## [Unreleased]
+
+### Added
+- gilgamesh v1.1.0 published in the roster with release integrity metadata.
+- kupo v1.4.0 published in the roster with release integrity metadata.
+- crystalium v2.2.0 published in the roster with release integrity metadata.
+- idg v1.11.0 published in the roster with release integrity metadata.
+- vigil v1.9.0 published in the roster with release integrity metadata.
+- forge v1.11.0 published in the roster with release integrity metadata.
+- vivi v1.4.0 published in the roster with release integrity metadata.
+- apivr v3.9.0 published in the roster with release integrity metadata.
+- ramza v1.1.0 published in the roster with release integrity metadata.
+- spectra v4.12.0 published in the roster with release integrity metadata.
+- atlas v1.14.0 published in the roster with release integrity metadata.
+
 ## [3.0.0] — 2026-08-17 — one Eidolon, one source
 
 ### Changed

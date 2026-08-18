@@ -7,7 +7,7 @@
 # Versioning: bump `registry_version` on any breaking change to this file's shape.
 
 registry_version: "1.1"
-updated_at: "2026-07-05T20:45Z"
+updated_at: "2026-08-18T21:10Z"
 eiis_required: "3.0.0"
 integrity:
   enforcement: strict # all shipped Eidolons publish release metadata; mismatches are fatal
@@ -27,9 +27,9 @@ eidolons:
       repo: Rynaro/ATLAS
       default_ref: main
     versions:
-      latest: "1.13.0"
+      latest: "1.14.0"
       pins:
-        stable: "1.13.0"
+        stable: "1.14.0"
       releases:
         1.3.0:
           tag: v1.3.0
@@ -229,6 +229,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.14.0:
+          tag: v1.14.0
+          commit: 20fcadf3a4644792b656c221a7f960ea00546eda
+          tree: ff501d41711c59f76283a4dc7137fe1c914cc985
+          archive_sha256: 17c08dfe6d2425cdd213de513346e994324d563c819688d3d94633426ee4216a
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/atlas"
       standalone: true
@@ -264,9 +273,9 @@ eidolons:
       repo: Rynaro/SPECTRA
       default_ref: main
     versions:
-      latest: "4.11.0"
+      latest: "4.12.0"
       pins:
-        stable: "4.11.0"
+        stable: "4.12.0"
       releases:
         4.2.10:
           tag: v4.2.10
@@ -430,6 +439,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        4.12.0:
+          tag: v4.12.0
+          commit: 7e5e8c033835d56c94852e503e1c979b345374a1
+          tree: 732df888684ac2d42549b240318a63e76f1b9e97
+          archive_sha256: 89545128321b0337ded23adcec45b14cecb62d93e5260ff966e5670c2df549dc
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/spectra"
       standalone: true
@@ -463,9 +481,9 @@ eidolons:
       repo: Rynaro/Ramza
       default_ref: main
     versions:
-      latest: "1.0.0"
+      latest: "1.1.0"
       pins:
-        stable: "1.0.0"
+        stable: "1.1.0"
       releases:
         1.0.0:
           tag: v1.0.0
@@ -481,6 +499,15 @@ eidolons:
           commit: af5f546885852e8f9441e0509f89d82c6a2ac559
           tree: 80d24100074dcecf7447da481ec9977be581e5e1
           archive_sha256: 6d15577bd7578753d8017a058c60a53687d43703e13f3882c6daa9e2e5b06f30
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
+        1.1.0:
+          tag: v1.1.0
+          commit: 38f380f31b57a3598490332bd6cd87c67aa2bb32
+          tree: c8d032bd92b184115214c28ac1a5783ad53a0364
+          archive_sha256: 7e625d2bd1a01e138d9b265b4a80a52deed1d95470b108eb6129171803080a8d
           manifest_sha256:
           provenance:
             github_attestation: true
@@ -521,9 +548,9 @@ eidolons:
       repo: Rynaro/APIVR-Delta
       default_ref: main
     versions:
-      latest: "3.8.0"
+      latest: "3.9.0"
       pins:
-        stable: "3.8.0"
+        stable: "3.9.0"
       releases:
         3.0.5:
           tag: v3.0.5
@@ -660,6 +687,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        3.9.0:
+          tag: v3.9.0
+          commit: 8fffc0a04fa79b76c47cd1857226506a66cc8fb6
+          tree: 0da9c062e59fd8fce11e1055113933233f270e8e
+          archive_sha256: 3559a837b72e736a0c15774dae7feac49d32e8c828a32568506b591e7f3430b4
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/apivr"
       standalone: true
@@ -695,9 +731,9 @@ eidolons:
       repo: Rynaro/Vivi
       default_ref: main
     versions:
-      latest: "1.3.0"
+      latest: "1.4.0"
       pins:
-        stable: "1.3.0"
+        stable: "1.4.0"
       releases:
         1.0.0:
           tag: v1.0.0
@@ -753,6 +789,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.4.0:
+          tag: v1.4.0
+          commit: f6a89f7b2800ec3936a2ea5072dced95fe297327
+          tree: b4378bee347a60f4e785963289b76b0880fc4c99
+          archive_sha256: 52f52b9f66c718f18cb0a13ced59254b24d0434df9b46c91900dbd97ec0ebd12
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/vivi"
       standalone: true
@@ -787,9 +832,9 @@ eidolons:
       repo: Rynaro/IDG
       default_ref: main
     versions:
-      latest: "1.10.0"
+      latest: "1.11.0"
       pins:
-        stable: "1.10.0"
+        stable: "1.11.0"
       releases:
         1.1.5:
           tag: v1.1.5
@@ -944,6 +989,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.11.0:
+          tag: v1.11.0
+          commit: 0129a2f533c6265769af067cec6737eb8affa6fa
+          tree: e058df076ec63d119d8159bf4ae98278e839b9d4
+          archive_sha256: 543399376f98f18460b368752fa26094b2f167cc0ef009d221659eb315453bea
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/idg"
       standalone: true
@@ -979,9 +1033,9 @@ eidolons:
       repo: Rynaro/FORGE
       default_ref: main
     versions:
-      latest: "1.10.0"
+      latest: "1.11.0"
       pins:
-        stable: "1.10.0"
+        stable: "1.11.0"
       releases:
         1.2.1:
           tag: v1.2.1
@@ -1127,6 +1181,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.11.0:
+          tag: v1.11.0
+          commit: f3ceb3b28c75f63fdb52d173f5aef3d1a8dec004
+          tree: 6c807dd566ee4c0b230d84d2e019d4bf3b101a7a
+          archive_sha256: 36cf8f6bcb42dbe6cb5b2ce13aea95d85c4f0376b568454adaea099e3183f3a0
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/forge"
       standalone: true
@@ -1159,9 +1222,9 @@ eidolons:
       repo: Rynaro/VIGIL
       default_ref: main
     versions:
-      latest: "1.8.0"
+      latest: "1.9.0"
       pins:
-        stable: "1.8.0"
+        stable: "1.9.0"
       releases:
         1.0.3:
           tag: v1.0.3
@@ -1316,6 +1379,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.9.0:
+          tag: v1.9.0
+          commit: b7e8c6370176c3deb9165a4a770e858b9b21e6ed
+          tree: 7db158dbea081265d1400cf9254c7e2ee6b5655e
+          archive_sha256: b3cd030f71060c6e2ebf28587f12784793c66e734f1eea63726f7e47bb521b53
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/vigil"
       standalone: true
@@ -1358,9 +1430,9 @@ eidolons:
       # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
       signer_workflow: .github/workflows/release.yml
     versions:
-      latest: "2.1.0"
+      latest: "2.2.0"
       pins:
-        stable: "2.1.0"
+        stable: "2.2.0"
       releases:
         2.1.0:
           tag: v2.1.0
@@ -1523,6 +1595,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        2.2.0:
+          tag: v2.2.0
+          commit: e378b1e06f4262d567efbe1fc270bbe3adff1e1d
+          tree: a5c2227d9aaff39f9c18931a8b2ceedc57889d01
+          archive_sha256: 9ace6d4564a12eee27f58f62d4157b797cdef14d3a4f116bd7d4c26726373ca9
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/crystalium"
       standalone: true
@@ -1548,9 +1629,9 @@ eidolons:
       repo: Rynaro/Kupo
       default_ref: main
     versions:
-      latest: "1.3.0"
+      latest: "1.4.0"
       pins:
-        stable: "1.3.0"
+        stable: "1.4.0"
       releases: # Roster Intake populates each release's attested metadata; in_construction skips strict CI conformance only
         0.1.0:
           tag: v0.1.0
@@ -1615,6 +1696,15 @@ eidolons:
           provenance:
             github_attestation: true
             workflow: .github/workflows/release.yml
+        1.4.0:
+          tag: v1.4.0
+          commit: dbc4fb71196d425b5e3633553ef5f120a8839793
+          tree: 80dba502ea412c067beab850df6ecad729845513
+          archive_sha256: cb2fdf7bd72fe90cc569f48dbfde9fa85b392c188893d21c04aa15d3acc5b354
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/kupo"
       standalone: true
@@ -1648,9 +1738,9 @@ eidolons:
       repo: Rynaro/Gilgamesh
       default_ref: main
     versions:
-      latest: "1.0.0"
+      latest: "1.1.0"
       pins:
-        stable: "1.0.0"
+        stable: "1.1.0"
       releases:
         0.2.0:
           tag: v0.2.0
@@ -1679,6 +1769,15 @@ eidolons:
           provenance:
             github_attestation: false
             note: "shipped release — methodology identical to v0.3.0 (which cleared the two-arm gate, independently attested); version-bumped to 1.0.0 at the in_construction → shipped flip"
+        1.1.0:
+          tag: v1.1.0
+          commit: facc37aa0961490579a1eb06dd75c1d3d3728838
+          tree: 017ae8a41cce97c86641eb12ed134ca62bd247e5
+          archive_sha256: a78063ce2210692237fde623f2476bc11821cf8ba25470750b3b18688e80a6a5
+          manifest_sha256:
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
     install:
       target_default: "./.eidolons/gilgamesh"
       standalone: true
