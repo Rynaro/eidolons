@@ -201,7 +201,11 @@ jobs:
 
           unreleased = re.search(r"^## \[Unreleased\]\s*$", text, re.MULTILINE)
           if not unreleased:
-              raise SystemExit("CHANGELOG.md missing [Unreleased] section")
+              first_release = re.search(r"^## \[", text, re.MULTILINE)
+              insert_at = first_release.start() if first_release else len(text)
+              prefix = "## [Unreleased]\n"
+              text = text[:insert_at] + prefix + "\n" + text[insert_at:]
+              unreleased = re.search(r"^## \[Unreleased\]\s*$", text, re.MULTILINE)
           start = unreleased.end()
           # Slice from end of [Unreleased] heading to next ## heading (or EOF).
           next_section = re.search(r"^## ", text[start:], re.MULTILINE)
