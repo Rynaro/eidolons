@@ -83,6 +83,106 @@ mcp_catalogue_get_field() {
   mcp_catalogue_get "$name" | jq -r "$field // empty"
 }
 
+# _mcp_runtime_resolve NAME PROJECT_ROOT — emit the resolved OCI runtime receipt.
+# Precedence is per-entry override > project default > unlimited. The absent
+# default deliberately preserves the legacy Docker argv byte-for-byte.
+_mcp_runtime_resolve() {
+  local name="$1"
+  local project_root="$2"
+  local manifest="${project_root}/eidolons.yaml"
+  local profile=""
+
+  if [ -f "$manifest" ]; then
+    local manifest_json
+    manifest_json="$(yaml_to_json "$manifest" 2>/dev/null)" \
+      || { warn "Cannot read ${manifest} while resolving MCP resources"; return 1; }
+    profile="$(printf '%s' "$manifest_json" | jq -r --arg n "$name" '
+      ((.mcps // []) | map(select(.name == $n)) | first | .resource_profile) //
+      .mcp_runtime.resource_profile // empty')"
+  fi
+
+  profile="${profile:-unlimited}"
+  case "$profile" in
+    unlimited)
+      jq -nc '{resource_profile:"unlimited"}'
+      return 0
+      ;;
+    minimal|standard|full) ;;
+    *)
+      warn "${name}: unknown MCP resource profile '${profile}' (expected minimal, standard, full, or unlimited)"
+      return 1
+      ;;
+  esac
+
+  local limits
+  limits="$(mcp_catalogue_get "$name" \
+    | jq -c --arg p "$profile" '.runtime.resource_profiles[$p] // empty')"
+  if [ -z "$limits" ] \
+     || ! printf '%s' "$limits" | jq -e '
+       (.cpus | type == "string" and length > 0) and
+       (.memory | type == "string" and length > 0) and
+       (.pids | type == "number" and . > 0)' >/dev/null 2>&1; then
+    warn "${name}: catalogue has no valid '${profile}' OCI resource limits"
+    return 1
+  fi
+
+  jq -nc --arg p "$profile" --argjson limits "$limits" \
+    '{resource_profile:$p, limits:$limits}'
+}
+
+# _mcp_runtime_normalize RECEIPT_JSON — old lock entries mean unlimited.
+_mcp_runtime_normalize() {
+  local receipt="${1:-}"
+  if [ -z "$receipt" ] || [ "$receipt" = "null" ]; then
+    jq -nc '{resource_profile:"unlimited"}'
+  else
+    printf '%s' "$receipt" | jq -cS .
+  fi
+}
+
+# _mcp_runtime_args RECEIPT_JSON — Docker argv for a bounded profile.
+_mcp_runtime_args() {
+  local receipt="$1"
+  printf '%s' "$receipt" | jq -c '
+    if .resource_profile == "unlimited" then [] else
+      ["--cpus", .limits.cpus,
+       "--memory", .limits.memory,
+       "--memory-swap", .limits.memory,
+       "--pids-limit", (.limits.pids | tostring)]
+    end'
+}
+
+# _mcp_runtime_apply NAME PROJECT_ROOT RENDERED_JSON — insert Docker resource
+# flags after `docker run`. Unlimited returns the rendered object unchanged.
+_mcp_runtime_apply() {
+  local name="$1"
+  local project_root="$2"
+  local rendered="$3"
+  local receipt args
+  receipt="$(_mcp_runtime_resolve "$name" "$project_root")" || return 1
+  args="$(_mcp_runtime_args "$receipt")" || return 1
+  printf '%s' "$rendered" | jq -c --arg n "$name" --argjson extra "$args" '
+    if ($extra | length) == 0 then .
+    else .mcpServers[$n].args |= (.[0:1] + $extra + .[1:])
+    end'
+}
+
+# _mcp_runtime_is_current NAME PROJECT_ROOT — compare the desired receipt with
+# the committed install receipt. Legacy entries normalize to unlimited.
+_mcp_runtime_is_current() {
+  local name="$1"
+  local project_root="$2"
+  local expected locked lock_path
+  expected="$(_mcp_runtime_resolve "$name" "$project_root")" || return 1
+  lock_path="${project_root}/eidolons.mcp.lock"
+  locked=""
+  if [ -f "$lock_path" ]; then
+    locked="$(yaml_to_json "$lock_path" 2>/dev/null \
+      | jq -c --arg n "$name" '(.mcps // [])[] | select(.name == $n) | .runtime // empty')"
+  fi
+  [ "$(_mcp_runtime_normalize "$expected")" = "$(_mcp_runtime_normalize "$locked")" ]
+}
+
 # ─── Lockfile helpers ─────────────────────────────────────────────────────────
 
 # mcp_lock_read — emit the full lockfile as JSON; '{}' when absent or unreadable.
@@ -275,7 +375,7 @@ _mcp_cli_version() {
 
 # mcp_lock_write_from_array JSON_ARRAY_STR — write the lockfile from a JSON array
 # of mcp entries. Sorts entries by name. Preserves installed_at for entries whose
-# other fields (kind, version, source, integrity, target) are unchanged.
+# other fields (kind, version, source, integrity, target, runtime) are unchanged.
 #
 # This is the canonical write path. All other writes funnel through here to
 # guarantee sorted, deterministic output (F3.4 invariant).
@@ -356,6 +456,24 @@ mcp_lock_write_from_array() {
         done <<< "$ehosts"
       fi
 
+      # Resolved OCI resource receipt. Limits are catalogue data captured in
+      # the lock so catalogue-only ceiling changes reconcile deterministically.
+      local eruntime_profile eruntime_cpus eruntime_memory eruntime_pids
+      eruntime_profile="$(printf '%s' "$entry" | jq -r '.runtime.resource_profile // ""')"
+      if [ -n "$eruntime_profile" ]; then
+        printf '    runtime:\n'
+        printf '      resource_profile: "%s"\n' "$eruntime_profile"
+        eruntime_cpus="$(printf '%s' "$entry" | jq -r '.runtime.limits.cpus // ""')"
+        eruntime_memory="$(printf '%s' "$entry" | jq -r '.runtime.limits.memory // ""')"
+        eruntime_pids="$(printf '%s' "$entry" | jq -r '.runtime.limits.pids // ""')"
+        if [ -n "$eruntime_cpus" ] && [ -n "$eruntime_memory" ] && [ -n "$eruntime_pids" ]; then
+          printf '      limits:\n'
+          printf '        cpus: "%s"\n' "$eruntime_cpus"
+          printf '        memory: "%s"\n' "$eruntime_memory"
+          printf '        pids: %s\n' "$eruntime_pids"
+        fi
+      fi
+
       printf '    installed_at: "%s"\n' "$einstalled"
 
       # ESL enforcement block (only emitted when recorded by 'mcp assess').
@@ -414,9 +532,9 @@ mcp_lock_upsert() {
     # installed_at on every install.
     local old_sig new_sig
     old_sig="$(printf '%s' "$old_entry" \
-      | jq -cS '{kind,version,source,integrity,target,hosts_wired:(.hosts_wired // [] | sort)}')"
+      | jq -cS '{kind,version,source,integrity,target,runtime:(.runtime // {resource_profile:"unlimited"}),hosts_wired:(.hosts_wired // [] | sort)}')"
     new_sig="$(printf '%s' "$new_entry" \
-      | jq -cS '{kind,version,source,integrity,target,hosts_wired:(.hosts_wired // [] | sort)}')"
+      | jq -cS '{kind,version,source,integrity,target,runtime:(.runtime // {resource_profile:"unlimited"}),hosts_wired:(.hosts_wired // [] | sort)}')"
 
     if [ "$old_sig" = "$new_sig" ]; then
       # No-op: preserve the original installed_at. Skip write.
@@ -1083,6 +1201,8 @@ _mcp_oci_render_and_merge() {
     -e "s|__UID_GID__|${_uid_gid}|g" \
     -e "s|__HOME__|${HOME}|g" \
     "$tmpl")"
+  rendered="$(_mcp_runtime_apply "$name" "$project_root" "$rendered")" \
+    || { warn "${name}: failed to apply MCP resource profile"; return 1; }
 
   # Write .mcp.json (primary target). R1/R2 (the cure): this is the ONE call
   # whose failure must be loud — a failed write here means the caller's
@@ -1162,6 +1282,14 @@ mcp_driver_oci_image_install() {
   local tmpl_rel
   tmpl_rel="$(mcp_catalogue_get_field "$name" '.install.template')"
 
+  # Resolve before any Docker work so invalid profiles fail fast.
+  local runtime_receipt runtime_current
+  runtime_receipt="$(_mcp_runtime_resolve "$name" "$project_root")" || return 1
+  runtime_current=false
+  if _mcp_runtime_is_current "$name" "$project_root"; then
+    runtime_current=true
+  fi
+
   if [ "$name" = "atlas-aci" ]; then
     # atlas-aci: auto-pull support (OQ-2) — when image is missing and --no-pull is
     # not set, auto-pull before delegating to mcp_atlas_aci.sh.
@@ -1181,7 +1309,14 @@ mcp_driver_oci_image_install() {
       fi
     fi
     local aci_args="--project-root ${project_root}"
-    if [ "$force" = "true" ]; then
+    local aci_managed=false
+    if [ -f "${project_root}/eidolons.mcp.lock" ] \
+       && [ -n "$(yaml_to_json "${project_root}/eidolons.mcp.lock" 2>/dev/null \
+         | jq -r --arg n "$name" '(.mcps // [])[] | select(.name == $n) | .name')" ]; then
+      aci_managed=true
+    fi
+    if [ "$force" = "true" ] \
+       || { [ "$aci_managed" = "true" ] && [ "$runtime_current" != "true" ]; }; then
       aci_args="${aci_args} --force"
     fi
     if [ -n "$digest" ]; then
@@ -1218,7 +1353,9 @@ mcp_driver_oci_image_install() {
     if [ "$force" = "false" ] && [ -n "$digest" ]; then
       local existing_mcpjson_digest
       existing_mcpjson_digest="$(_mcp_oci_mcpjson_digest "$name" "$project_root")"
-      if [ -n "$existing_mcpjson_digest" ] && [ "$existing_mcpjson_digest" = "$digest" ]; then
+      if [ -n "$existing_mcpjson_digest" ] \
+         && [ "$existing_mcpjson_digest" = "$digest" ] \
+         && [ "$runtime_current" = "true" ]; then
         info "${name}: .mcp.json digest unchanged (${digest}) — unchanged, skipping render"
       else
         _mcp_oci_render_and_merge "$name" "$project_root" "${digest:-}" "$tmpl_rel" "$force" \
@@ -1280,6 +1417,7 @@ mcp_driver_oci_image_install() {
     --arg digv "${digest:-}" \
     --arg tgt ".mcp.json" \
     --argjson hw "$_hw_json" \
+    --argjson runtime "$runtime_receipt" \
     --arg iat "$installed_at" \
     '{
       name: $nm,
@@ -1289,6 +1427,7 @@ mcp_driver_oci_image_install() {
       integrity: {algo: $algo, value: $digv},
       target: $tgt,
       hosts_wired: $hw,
+      runtime: $runtime,
       installed_at: $iat
     }')"
 

@@ -64,6 +64,42 @@
         }
       }
     },
+    "mcp_runtime": {
+      "type": "object",
+      "description": "Default runtime policy for explicitly installed OCI MCP servers.",
+      "additionalProperties": false,
+      "properties": {
+        "resource_profile": {
+          "type": "string",
+          "enum": ["minimal", "standard", "full", "unlimited"],
+          "description": "Per-container resource ceiling. Absent defaults to unlimited for backwards compatibility."
+        }
+      }
+    },
+    "mcps": {
+      "type": "array",
+      "description": "MCPs installed explicitly by 'eidolons mcp sync'.",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]*$"
+          },
+          "version": {
+            "type": "string",
+            "description": "Optional SemVer constraint; defaults to the catalogue stable pin."
+          },
+          "resource_profile": {
+            "type": "string",
+            "enum": ["minimal", "standard", "full", "unlimited"],
+            "description": "Override mcp_runtime.resource_profile for this OCI MCP."
+          }
+        }
+      }
+    },
     "host_tier": {
       "type": "string",
       "enum": ["thinking", "standard"],

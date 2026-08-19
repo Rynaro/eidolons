@@ -14,13 +14,15 @@ survive as deprecated aliases through nexus v2.9.x).
 ## Catalogue (`roster/mcps.yaml`)
 
 The catalogue lives in `roster/mcps.yaml` alongside `roster/index.yaml`. It
-is a closed set — adding third-party MCPs is out of scope (NG6). v1.3 ships
-two entries:
+is a closed set — adding third-party MCPs is out of scope (NG6).
 
 | Name | Kind | Description |
 |---|---|---|
 | `atlas-aci` | `oci-image` | Stdio MCP exposing structural codebase intelligence (codegraph + symbol index). Docker-based. |
 | `junction` | `binary` | Container-isolated agent harness with ReasoningStep / plan.json dispatch. |
+| `crystalium` | `oci-image` | Cross-session memory and retrieval server. |
+| `tonberry` | `oci-image` | Eidolons Spec Lifecycle server. |
+| `atomos` | `oci-image` | Eidolons Context Management compose/verify server. |
 
 ```
 eidolons mcp list          # browse the catalogue + installed status
@@ -117,6 +119,57 @@ eidolons mcp sync
 > **Note:** `eidolons sync` (the top-level Eidolon sync command) does **not**
 > call `eidolons mcp sync` automatically (NG3). MCP install is always
 > explicit.
+
+### OCI resource profiles
+
+Codex and the other local MCP hosts use the MCP `stdio` transport. Each loaded
+host session therefore starts its own process for every enabled OCI MCP; for
+Eidolons that process is `docker run --rm -i ...`. Multiple loaded Codex
+sessions can consequently produce multiple containers. This is expected
+session isolation, not a Docker leak: the containers stop when their owning
+Codex processes exit, including when the app is closed.
+
+Projects on resource-constrained machines can bound each container explicitly:
+
+```yaml
+# eidolons.yaml
+mcp_runtime:
+  resource_profile: standard
+
+mcps:
+  - name: atlas-aci
+    version: "^2.0.0"
+  - name: crystalium
+    version: "^2.2.0"
+    resource_profile: full  # per-MCP override
+```
+
+Precedence is the per-MCP override, then the project default, then
+`unlimited`. `unlimited` is also the compatibility behavior when the setting
+is absent; `standard` is recommended for new projects but is never enabled
+silently. Profiles do not install, remove, or disable MCPs.
+
+| OCI MCP | `minimal` | `standard` | `full` |
+|---|---:|---:|---:|
+| `atlas-aci` | 0.50 CPU / 512 MiB / 128 PIDs | 1.00 CPU / 1 GiB / 256 PIDs | 2.00 CPU / 2 GiB / 512 PIDs |
+| `crystalium` | 0.50 CPU / 1 GiB / 128 PIDs | 1.00 CPU / 2 GiB / 256 PIDs | 2.00 CPU / 4 GiB / 512 PIDs |
+| `tonberry` | 0.25 CPU / 128 MiB / 64 PIDs | 0.50 CPU / 256 MiB / 96 PIDs | 1.00 CPU / 512 MiB / 128 PIDs |
+| `atomos` | 0.25 CPU / 128 MiB / 64 PIDs | 0.50 CPU / 256 MiB / 96 PIDs | 1.00 CPU / 512 MiB / 128 PIDs |
+
+Each bounded profile renders Docker `--cpus`, `--memory`, `--memory-swap`, and
+`--pids-limit` arguments. The memory and memory+swap ceilings are equal so the
+container cannot consume a second memory allowance through swap. These are
+ceilings, not reservations.
+
+Run `eidolons mcp sync` after changing a profile. The resolved receipt is stored
+in `eidolons.mcp.lock`, so profile changes and catalogue-only ceiling changes
+regenerate the host configuration even if the image version is unchanged.
+Already-running containers retain their original limits until their Codex
+session is closed and restarted.
+
+Resource profiles limit the impact of each container; they do not reuse a
+container across sessions. Cross-session reuse would require moving these MCPs
+from local `stdio` to a persistent Streamable HTTP service.
 
 ---
 
