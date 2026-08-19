@@ -21,7 +21,8 @@ eidolons:
       name: ATLAS
       version: "1.0"
       cycle: "A→T→L→A→S"
-      summary: "Read-only codebase intelligence. Structural mapping, bounded probes, evidence-anchored findings."
+      summary: "Read-only codebase intelligence. Structural mapping, bounded probes,
+        evidence-anchored findings."
     source:
       type: github
       repo: Rynaro/ATLAS
@@ -267,7 +268,8 @@ eidolons:
       name: SPECTRA
       version: "4.9"
       cycle: "S→P→E→C→T→R→A"
-      summary: "Decision-ready specifications. Scoring rubrics, validation gates, GIVEN/WHEN/THEN stories."
+      summary: "Decision-ready specifications. Scoring rubrics, validation gates,
+        GIVEN/WHEN/THEN stories."
     source:
       type: github
       repo: Rynaro/SPECTRA
@@ -475,7 +477,10 @@ eidolons:
       name: "RAMZA"
       version: "1.0"
       cycle: "RS→S→P→E→C→T→R→A"
-      summary: "Mechanized planning. Tier-gated cycle (mechanical right-sizing), code-enforced gates — rubric arithmetic, EARS criteria lint, SHA-256 criteria freeze/amend, plan-vs-diff drift, maker≠checker critique. Successor to SPECTRA (retained as conservative fallback)."
+      summary: "Mechanized planning. Tier-gated cycle (mechanical right-sizing), code-enforced
+        gates — rubric arithmetic, EARS criteria lint, SHA-256 criteria freeze/amend,
+        plan-vs-diff drift, maker≠checker critique. Successor to SPECTRA (retained
+        as conservative fallback)."
     source:
       type: github
       repo: Rynaro/Ramza
@@ -542,7 +547,8 @@ eidolons:
       name: "APIVR-Δ"
       version: "3.0"
       cycle: "A→P→I→V→Δ/R"
-      summary: "Brownfield feature implementation. Test-anchored, pattern-first, bounded failure recovery."
+      summary: "Brownfield feature implementation. Test-anchored, pattern-first, bounded
+        failure recovery."
     source:
       type: github
       repo: Rynaro/APIVR-Delta
@@ -725,7 +731,10 @@ eidolons:
       name: "Vivi"
       version: "1.0"
       cycle: "A→P→I→V→Δ/R"
-      summary: "Loop-native coding. Closed, autonomous, bounded edit-run-test loop (localized feedback, fresh-context retry, anti-reward-hacking, pass^k); loop-native successor to APIVR-Δ, inheriting its discipline spine. APIVR-Δ retained as the conservative opt-in fallback."
+      summary: "Loop-native coding. Closed, autonomous, bounded edit-run-test loop
+        (localized feedback, fresh-context retry, anti-reward-hacking, pass^k); loop-native
+        successor to APIVR-Δ, inheriting its discipline spine. APIVR-Δ retained as
+        the conservative opt-in fallback."
     source:
       type: github
       repo: Rynaro/Vivi
@@ -1216,7 +1225,8 @@ eidolons:
       name: VIGIL
       version: "1.0"
       cycle: "V→I→G→I→L"
-      summary: "Forensic root-cause attribution. Reproduction-gated, counterfactual-verified, dependency-graph-ranked."
+      summary: "Forensic root-cause attribution. Reproduction-gated, counterfactual-verified,
+        dependency-graph-ranked."
     source:
       type: github
       repo: Rynaro/VIGIL
@@ -1417,7 +1427,10 @@ eidolons:
       name: CRYSTALIUM
       version: "1.0"
       cycle: "recall→commit→consolidate→forget"
-      summary: "Shared four-layer memory substrate (episodic/semantic/procedural/execution). Tier-gated writes through one enforcement chokepoint, hybrid recall, Dream consolidation, principled forgetting; ingests roster ECL handoffs preserving provenance + MIN trust tier."
+      summary: "Shared four-layer memory substrate (episodic/semantic/procedural/execution).
+        Tier-gated writes through one enforcement chokepoint, hybrid recall, Dream
+        consolidation, principled forgetting; ingests roster ECL handoffs preserving
+        provenance + MIN trust tier."
     source:
       type: github
       repo: Rynaro/crystalium
@@ -1623,7 +1636,10 @@ eidolons:
       name: KUPO
       version: "1.0"
       cycle: "K→U→P→O"
-      summary: "Low-effort localized executor. The orchestrator dispatches a quick verifier-backed micro-task (Eidolons flag, orchestrator brokers); Kupo patches an ephemeral sandbox, proves it externally, and proposes a verified patch for the orchestrator to apply."
+      summary: "Low-effort localized executor. The orchestrator dispatches a quick
+        verifier-backed micro-task (Eidolons flag, orchestrator brokers); Kupo patches
+        an ephemeral sandbox, proves it externally, and proposes a verified patch
+        for the orchestrator to apply."
     source:
       type: github
       repo: Rynaro/Kupo
@@ -1732,7 +1748,11 @@ eidolons:
       name: GILGAMESH
       version: "1.0.0"
       cycle: "Gauge → Inventory → Lock → Grind → Attest (G→I→L→G→A)"
-      summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first, PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream: [] — worker, never router)."
+      summary: "Bounded-authority, specialist-preferring fallthrough generalist. Dispatched
+        only via Dispatch Protocol Step-2(a) (no specialist scores ≥ τ, mechanical
+        presence-based predicate — methodology/cortex/dispatch-predicate.md); sandbox-first,
+        PROPOSE-only across the authority line; never routes or spawns onward (handoffs.downstream:
+        [] — worker, never router)."
     source:
       type: github
       repo: Rynaro/Gilgamesh
@@ -1750,7 +1770,8 @@ eidolons:
           manifest_sha256:
           provenance:
             github_attestation: false
-            note: "tag hand-pushed during P4 remediation; no release workflow run yet — attested release lands with the v1.0.0 shipped flip"
+            note: "tag hand-pushed during P4 remediation; no release workflow run
+              yet — attested release lands with the v1.0.0 shipped flip"
         0.3.0:
           tag: v0.3.0
           commit: 1333672de90e605d4caa9002fb6b4146c19857c6
@@ -1759,7 +1780,8 @@ eidolons:
           manifest_sha256:
           provenance:
             github_attestation: false
-            note: "anchor-precision remediation (attempt-5 residual fix); tag hand-pushed during P4, attested release lands with the v1.0.0 shipped flip"
+            note: "anchor-precision remediation (attempt-5 residual fix); tag hand-pushed
+              during P4, attested release lands with the v1.0.0 shipped flip"
         1.0.0:
           tag: v1.0.0
           commit: b4ec6fe0506ee7524b31edf1c5e9a54a61324b87
@@ -1768,7 +1790,9 @@ eidolons:
           manifest_sha256:
           provenance:
             github_attestation: false
-            note: "shipped release — methodology identical to v0.3.0 (which cleared the two-arm gate, independently attested); version-bumped to 1.0.0 at the in_construction → shipped flip"
+            note: "shipped release — methodology identical to v0.3.0 (which cleared
+              the two-arm gate, independently attested); version-bumped to 1.0.0 at
+              the in_construction → shipped flip"
         1.1.0:
           tag: v1.1.0
           commit: facc37aa0961490579a1eb06dd75c1d3d3728838
@@ -1805,11 +1829,11 @@ eidolons:
 # after tagging; placeholders here are a bootstrap-window sentinel that
 # nexus_verify_release() detects and skips gracefully.
 nexus:
-  version: "3.0.0"
+  version: "3.1.0"
   versions:
-    latest: "3.0.0"
+    latest: "3.1.0"
     pins:
-      stable: "3.0.0"
+      stable: "3.1.0"
     releases:
       "1.0.0":
         tag: "v1.0.0"
@@ -2299,6 +2323,11 @@ nexus:
         tree: 13c684a5d3294a8d9edac392dddd7861cc1696a2
         archive_sha256: 66b1e51bede4666ba19f8761ecfec5de09f27de85be9101fff6f1d3426b945ef
         released_at: "2026-08-18T21:38:10Z"
+      3.1.0:
+        commit: 4993a9b3bbe7da157d7fbbd1ffe047fbc1518bcf
+        tree: c7f398d74993a0062c54b57e8ef10b96248954a5
+        archive_sha256: 933115e882e3cc1a28251b633b8bdcd60307241084a0d06273733967350d2d9f
+        released_at: "2026-08-19T13:42:37Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:
@@ -2306,13 +2335,18 @@ presets:
     description: "Solo scout. For read-only exploration of unfamiliar codebases."
     members: [atlas]
   pipeline:
-    description: "Full pipeline. Scout → Plan → Build → Chronicle. (RAMZA is the default planner and Vivi the default coder; SPECTRA/APIVR-Δ stay opt-in via `eidolons add spectra|apivr`.)"
+    description: "Full pipeline. Scout → Plan → Build → Chronicle. (RAMZA is the default
+      planner and Vivi the default coder; SPECTRA/APIVR-Δ stay opt-in via `eidolons
+      add spectra|apivr`.)"
     members: [atlas, ramza, vivi, idg]
   plan-and-build:
     description: "Skip scouting and documentation. Plan and implement only."
     members: [ramza, vivi]
   full:
-    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL), the Kupo executor, and the Gilgamesh fallthrough generalist. Single-planner/single-coder by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons add spectra|apivr`)."
+    description: "The default crew — pipeline plus lateral specialists (FORGE, VIGIL),
+      the Kupo executor, and the Gilgamesh fallthrough generalist. Single-planner/single-coder
+      by design; SPECTRA and APIVR-Δ are the opt-in conservative fallbacks (`eidolons
+      add spectra|apivr`)."
     members: [atlas, ramza, vivi, idg, forge, vigil, kupo, gilgamesh]
   research:
     description: "Scout + chronicle. For understanding and documenting, not changing."
@@ -2321,5 +2355,6 @@ presets:
     description: "Debug-focused bundle. Implementation + forensic attribution."
     members: [apivr, vigil, forge]
   errands:
-    description: "Pipeline plus the low-effort executor — delegate quick localized micro-tasks to Kupo (in_construction until eval-gated)."
+    description: "Pipeline plus the low-effort executor — delegate quick localized
+      micro-tasks to Kupo (in_construction until eval-gated)."
     members: [atlas, ramza, apivr, kupo]
