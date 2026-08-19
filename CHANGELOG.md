@@ -21,6 +21,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - spectra v4.12.0 published in the roster with release integrity metadata.
 - atlas v1.14.0 published in the roster with release integrity metadata.
 
+## [3.1.0] — 2026-08-19 — bounded MCP sessions
+
+### Added
+- Opt-in `minimal`, `standard`, `full`, and `unlimited` resource profiles for OCI MCP containers, with project defaults and per-MCP overrides.
+- Docker CPU, memory/swap, and PID ceilings propagated consistently to `.mcp.json`, Codex, Cursor, and OpenCode wiring.
+
+### Changed
+- `eidolons mcp sync` now reconciles resource-profile and catalogue-limit changes even when the installed image version is unchanged.
+- MCP documentation now explains Codex's per-session stdio container lifecycle and the persistent HTTP transport required for cross-session reuse.
+
 ## [3.0.0] — 2026-08-17 — one Eidolon, one source
 
 ### Changed
