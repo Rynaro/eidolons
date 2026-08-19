@@ -84,6 +84,11 @@ printf '%s' "$manifest_json" | jq -c '(.mcps // [])[]' | while IFS= read -r ment
     warn "MCP '$mname' not found in catalogue — skipping"
     continue
   fi
+  mkind="$(mcp_catalogue_get_field "$mname" '.kind')"
+  entry_profile="$(printf '%s' "$mentry" | jq -r '.resource_profile // empty')"
+  if [ -n "$entry_profile" ] && [ "$mkind" != "oci-image" ]; then
+    die "MCP '$mname' is kind=${mkind}; resource_profile is valid only for OCI MCPs"
+  fi
 
   # Simple caret/tilde resolution: use stable if version constraint starts with ^ or ~.
   resolved_ver="$stable"
@@ -93,10 +98,17 @@ printf '%s' "$manifest_json" | jq -c '(.mcps // [])[]' | while IFS= read -r ment
     *)     resolved_ver="${mver_constraint#v}" ;;
   esac
 
-  # Check if already installed at resolved version.
+  # Check version and the resolved OCI runtime receipt. A profile or catalogue
+  # limit change at the same image version still requires regeneration.
   current="$(mcp_lock_entry "$mname" | jq -r '.version // ""')"
   if [ "$current" = "$resolved_ver" ]; then
-    info "$mname@${resolved_ver} already installed — no-op"
+    if [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; then
+      info "$mname@${resolved_ver} already installed — no-op"
+      continue
+    fi
+    say "Reconciling $mname@${resolved_ver} resource profile..."
+    bash "$SELF_DIR/mcp_install.sh" "${mname}@${resolved_ver}" --force
+    changed=$((changed + 1))
     continue
   fi
 

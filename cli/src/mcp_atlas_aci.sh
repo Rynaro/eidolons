@@ -33,6 +33,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp_atlas_aci.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp.sh"
 
 # ─── Constants ────────────────────────────────────────────────────────────
 # Default image reference and digest — bump here (one place) on Atlas-ACI image version bumps.
@@ -249,6 +251,8 @@ _RENDERED="$(sed \
   -e "s|__UID_GID__|${UID_GID}|g" \
   -e "s|__HOME__|${HOME}|g" \
   "$TEMPLATE_FILE")"
+_RENDERED="$(_mcp_runtime_apply "atlas-aci" "$PROJECT_ROOT" "$_RENDERED")" \
+  || die "Failed to apply the Atlas-ACI MCP resource profile"
 
 _MCP_TMP="$(mktemp)"
 

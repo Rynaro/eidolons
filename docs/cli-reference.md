@@ -937,6 +937,14 @@ eidolons mcp health [<name>|--all]   # run health probes; exit code always 0
 eidolons mcp run <name> [<args>]     # pass-through to binary MCP (junction only in v1.3)
 ```
 
+OCI MCP installs also honor `mcp_runtime.resource_profile` in
+`eidolons.yaml` (`minimal`, `standard`, `full`, or `unlimited`) and a
+per-entry `mcps[].resource_profile` override. The setting applies Docker
+CPU/memory/PID ceilings per MCP container. An absent setting remains
+`unlimited`; run `eidolons mcp sync` to reconcile profile changes. See
+[`docs/mcp.md`](mcp.md#oci-resource-profiles) for values and Codex lifecycle
+behavior.
+
 ### Environment
 
 | Variable | Purpose |

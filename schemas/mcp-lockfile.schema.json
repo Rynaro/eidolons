@@ -40,6 +40,35 @@
             "items": { "type": "string" },
             "description": "Files that received marker-bounded sections (relative paths)."
           },
+          "runtime": {
+            "type": "object",
+            "required": ["resource_profile"],
+            "additionalProperties": false,
+            "properties": {
+              "resource_profile": {
+                "enum": ["minimal", "standard", "full", "unlimited"]
+              },
+              "limits": {
+                "type": "object",
+                "required": ["cpus", "memory", "pids"],
+                "additionalProperties": false,
+                "properties": {
+                  "cpus": { "type": "string" },
+                  "memory": { "type": "string" },
+                  "pids": { "type": "integer", "minimum": 1 }
+                }
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": { "resource_profile": { "enum": ["minimal", "standard", "full"] } },
+                  "required": ["resource_profile"]
+                },
+                "then": { "required": ["limits"] }
+              }
+            ]
+          },
           "installed_at": { "type": "string", "format": "date-time" }
         }
       }
