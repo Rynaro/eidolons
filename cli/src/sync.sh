@@ -223,7 +223,7 @@ if [[ "$SKIP_PREVIEW" != "true" && "$DRY_RUN" != "true" ]]; then
         ;;
       codex)
         # Codex wires both a root AGENTS.md (shared dispatch) AND a per-
-        # Eidolon subagent file under .codex/agents/<name>.md. AGENTS.md
+        # Eidolon subagent file under .codex/agents/<name>.toml. AGENTS.md
         # is shown unconditionally because EFFECTIVE_SHARED_DISPATCH is
         # always true when codex is wired (T.12 override).
         if [[ -f "AGENTS.md" ]]; then
@@ -234,7 +234,7 @@ if [[ "$SKIP_PREVIEW" != "true" && "$DRY_RUN" != "true" ]]; then
         [[ -d ".codex/agents" ]] || preview_paths+=(".codex/agents/")
         while read -r _m; do
           _mn="$(echo "$_m" | jq -r '.name')"
-          preview_paths+=(".codex/agents/${_mn}.md")
+          preview_paths+=(".codex/agents/${_mn}.toml")
         done <<< "$MEMBERS_JSON"
         ;;
     esac
@@ -434,11 +434,8 @@ while read -r member; do
   # didn't produce .claude/agents/<name>.md, write a minimal dispatch stub so
   # the agent is at least callable. Never overwrite an existing file.
   #
-  # Codex has its own analogous file (.codex/agents/<name>.md) but a parallel
-  # safety net is intentionally NOT mirrored here (T.6 of openai-codex-host-
-  # support spec): the per-Eidolon install.sh owns Codex subagent emission,
-  # and adding a nexus-side fallback would mask non-conformant Eidolons.
-  # Add it only if observed empirically to be needed.
+  # Codex's canonical analogous descriptor is .codex/agents/<name>.toml; its
+  # safety net is handled below because legacy member installers emitted .md.
   if [[ ",$HOSTS_CSV," == *",claude-code,"* ]] && [[ ! -f ".claude/agents/$name.md" ]]; then
     mkdir -p .claude/agents
     display="$(echo "$entry" | jq -r '.display_name // .name')"
@@ -603,17 +600,6 @@ if [ -f "$(mcp_lockfile)" ]; then
   mcp_wiring_reapply_all
 fi
 
-# ─── Model frontmatter wiring ────────────────────────────────────────────────
-# Apply model: managed blocks to every wired host's agent files AFTER the MCP
-# wiring pass (so model: lands last, on top of all other frontmatter patches).
-# Sync-time drift policy: warn-and-preserve hand-authored model: lines.
-# Skipped when no models block is present in eidolons.yaml (performance fast-path).
-if model_resolve_init 2>/dev/null; then
-  if model_has_block 2>/dev/null; then
-    model_wiring_apply_all 0 2>/dev/null || true
-  fi
-fi
-
 # ─── Append hosts block to lockfile (R3 Block 1) ─────────────────────────
 # Mirrors manifest hosts configuration at sync time for traceability.
 # pointer_targets written only when non-empty (preserves backward compat).
@@ -706,6 +692,15 @@ unset _lb _lb_text
 [[ "${VERBOSITY:-default}" == "verbose" ]] && ui_section "LOCK  eidolons.lock"
 mv "$LOCK_TMP" "$PROJECT_LOCK"
 chmod 0644 "$PROJECT_LOCK" 2>/dev/null || true
+
+# LOCK_TMP is assembled from installer metadata and intentionally replaces the
+# previous lock wholesale. Wire from its final installed-member set (important
+# when this sync adds a member absent from the old lock), then persist model
+# provenance into this same final lock. Both remain best-effort during sync.
+if model_resolve_init 2>/dev/null && model_has_block 2>/dev/null; then
+  model_wiring_apply_all 0 2>/dev/null || true
+  model_wiring_update_lock_all 2>/dev/null || true
+fi
 ok "Wrote $PROJECT_LOCK"
 
 # ─── MIRROR stage ────────────────────────────────────────────────────────

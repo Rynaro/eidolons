@@ -61,7 +61,7 @@ EOF
   [[ "$output" =~ "--no-shared-dispatch ignored for hosts.wire containing codex" ]]
 }
 
-@test "sync --dry-run: codex preview lists AGENTS.md and .codex/agents/<name>.md" {
+@test "sync --dry-run: codex plan includes all members destined for TOML descriptors" {
   cat > eidolons.yaml <<'EOF'
 version: 1
 hosts:
@@ -92,6 +92,52 @@ EOF
   seed_codex_manifest
   run eidolons sync --dry-run
   grep -q 'shared_dispatch: false' eidolons.yaml
+}
+
+@test "sync: OpenAI model wiring persists TOML assignment and final lock provenance for D9" {
+  setup_fake_git_for_upgrade
+  # The fake upgrade nexus normally carries only index.yaml; model resolution
+  # needs the two sibling roster files as well.
+  cp "$EIDOLONS_ROOT/roster/model-profiles.yaml" "$EIDOLONS_NEXUS/roster/model-profiles.yaml"
+  cp "$EIDOLONS_ROOT/roster/routing.yaml" "$EIDOLONS_NEXUS/roster/routing.yaml"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+  shared_dispatch: true
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+  - name: spectra
+    version: "^4.2.0"
+    source: github:Rynaro/SPECTRA
+EOF
+
+  # Reproduce an upgrade of an existing one-member project: the old lock omits
+  # the newly added spectra member. Wiring must use the final rebuilt lock.
+  seed_lock
+
+  run eidolons sync --yes
+  [ "$status" -eq 0 ]
+  [ -f .codex/agents/atlas.toml ]
+  grep -q '^# eidolons:managed model$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/atlas.toml
+  [ -f .codex/agents/spectra.toml ]
+  grep -q '^# eidolons:managed model$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-5.6-sol"$' .codex/agents/spectra.toml
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-5.6-terra" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.tier' eidolons.lock)" = "standard" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.profile' eidolons.lock)" = "openai" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.source' eidolons.lock)" = "roster-tier" ]
+  [ "$(yq eval '.members[] | select(.name == "spectra") | .model.effective_model' eidolons.lock)" = "gpt-5.6-sol" ]
+  [ "$(stat -f '%Lp' eidolons.lock 2>/dev/null || stat -c '%a' eidolons.lock)" = "644" ]
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "D9 atlas (codex): model: matches lock (gpt-5.6-terra)" ]]
+  [[ ! "$output" =~ "D9 atlas (codex): managed model" ]]
 }
 
 # ─── G11: fresh cache — no re-clone on sync ────────────────────────────────

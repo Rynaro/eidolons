@@ -148,6 +148,38 @@ _profiles_json() {
   [ -n "$sm" ] && [ "$sm" != "null" ]
 }
 
+@test "model-profiles: openai tiers map Luna, Terra, and Sol in capability order" {
+  run _profiles_json
+  [ "$status" -eq 0 ]
+  local json="$output"
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.light')" = "gpt-5.6-luna" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.standard')" = "gpt-5.6-terra" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.deep')" = "gpt-5.6-sol" ]
+}
+
+@test "model-profiles: all ten current Eidolons have the designated capability tier" {
+  local routing
+  if command -v yq >/dev/null 2>&1; then
+    routing="$(yq eval -o json "$EIDOLONS_ROOT/roster/routing.yaml")"
+  else
+    routing="$(python3 -c "import json,yaml; print(json.dumps(yaml.safe_load(open('$EIDOLONS_ROOT/roster/routing.yaml').read())))")"
+  fi
+  local actual_ids expected_ids
+  actual_ids="$(printf '%s' "$routing" | jq -r '.eidolons | keys | join(" ")')"
+  expected_ids="apivr atlas forge gilgamesh idg kupo ramza spectra vigil vivi"
+  [ "$actual_ids" = "$expected_ids" ]
+  local pair id expected actual
+  for pair in \
+    ramza:deep spectra:deep forge:deep vigil:deep \
+    atlas:standard vivi:standard apivr:standard gilgamesh:standard \
+    idg:light kupo:light; do
+    id="${pair%%:*}"
+    expected="${pair#*:}"
+    actual="$(printf '%s' "$routing" | jq -r --arg id "$id" '.eidolons[$id].suggested_tier // empty')"
+    [ "$actual" = "$expected" ]
+  done
+}
+
 # ─── GOOGLE-EXT: extensibility (zero code change) ─────────────────────────────
 
 @test "model-profiles: a google fixture validates against the schema" {

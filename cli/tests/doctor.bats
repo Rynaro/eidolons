@@ -113,7 +113,7 @@ EOF
   [[ "$output" =~ "MISMATCH" ]]
 }
 
-@test "doctor: codex host passes when .codex/agents/*.md present" {
+@test "doctor: codex legacy .md-only wiring fails with migration remediation" {
   # Write a manifest wired for codex only.
   cat > eidolons.yaml <<'EOF'
 version: 1
@@ -129,8 +129,9 @@ EOF
   mkdir -p .codex/agents
   echo "---" > .codex/agents/atlas.md
   run eidolons doctor
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "codex wired (.codex/agents/*.md present)" ]]
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "legacy .codex/agents/*.md descriptors are ignored" ]]
+  [[ "$output" =~ "eidolons sync" ]]
 }
 
 @test "doctor: codex host passes via AGENTS.md shared dispatch" {
@@ -167,7 +168,7 @@ EOF
   # No .codex/agents/ and no AGENTS.md — should fail.
   run eidolons doctor
   [ "$status" -ne 0 ]
-  [[ "$output" =~ "codex declared but no .codex/agents/*.md or AGENTS.md found" ]]
+  [[ "$output" =~ "codex declared but no .codex/agents/*.toml, legacy *.md, or AGENTS.md found" ]]
 }
 
 # ─── ghcr.io registry reachability probe (T10) ────────────────────────────
@@ -1353,7 +1354,7 @@ YAML
   seed_lock
   seed_agent_install_manifest atlas
   mkdir -p .codex/agents
-  echo "---" > .codex/agents/atlas.md
+  echo 'name = "atlas"' > .codex/agents/atlas.toml
   # Also create AGENTS.md install manifest path.
   mkdir -p .eidolons/atlas
 
@@ -1477,7 +1478,7 @@ CLAUDEMD
   [ "$status" -eq 0 ]
 }
 
-# ─── D9: model frontmatter gate ───────────────────────────────────────────────
+# ─── D9: model descriptor gate ───────────────────────────────────────────────
 # D9 is only exercised under --deep; without --deep it is SKIP.
 
 _setup_d9_project() {
@@ -1649,6 +1650,146 @@ AGENTEOF
   [[ ! "$output" =~ "D9 FAIL" ]]
 }
 
+@test "D9: managed Codex TOML model matches lock effective_model → PASS" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_lock_with_model "gpt-5.6-terra"
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  cat > .codex/agents/atlas.toml <<'TOML'
+name = "atlas"
+# eidolons:managed model
+model = "gpt-5.6-terra"
+developer_instructions = "Test"
+TOML
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "D9 atlas (codex): model: matches lock" ]]
+  [[ ! "$output" =~ "!= lock effective_model" ]]
+}
+
+@test "D9: drifted managed Codex TOML model → FAIL under --deep" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_lock_with_model "gpt-5.6-terra"
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  cat > .codex/agents/atlas.toml <<'TOML'
+name = "atlas"
+# eidolons:managed model
+model = "gpt-5.6-luna"
+developer_instructions = "Test"
+TOML
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "managed model: 'gpt-5.6-luna' != lock effective_model 'gpt-5.6-terra'" ]]
+  [ "$status" -ne 0 ]
+}
+
+@test "D9: unmanaged Codex TOML model warns without claiming drift" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_lock_with_model "gpt-5.6-terra"
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  cat > .codex/agents/atlas.toml <<'TOML'
+name = "atlas"
+model = "user-owned"
+developer_instructions = "Test"
+TOML
+
+  run eidolons doctor --deep
+  [[ "$output" =~ "hand-authored model" ]]
+  [[ ! "$output" =~ "!= lock effective_model" ]]
+}
+
+@test "D9: matching managed Codex model plus duplicate top-level key is FAIL, never PASS" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_lock_with_model "gpt-5.6-terra"
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  cat > .codex/agents/atlas.toml <<'TOML'
+name = "atlas"
+# eidolons:managed model
+model = "gpt-5.6-terra"
+model = "duplicate"
+TOML
+  run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "duplicate or conflicting top-level TOML model assignment" ]]
+  [[ ! "$output" =~ "D9 atlas (codex): model: matches lock" ]]
+}
+
+@test "D9: legacy Codex .md does not substitute for missing canonical TOML" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'YAML'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+YAML
+  _seed_lock_with_model "gpt-5.6-terra"
+  seed_agent_install_manifest atlas
+  mkdir -p .codex/agents
+  cat > .codex/agents/atlas.md <<'MD'
+---
+# eidolons:managed model
+model: gpt-5.6-terra
+---
+MD
+  run eidolons doctor --deep
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "legacy .md descriptor is ignored" ]]
+  [[ "$output" =~ ".codex/agents/atlas.toml" ]]
+  [[ ! "$output" =~ "D9 atlas (codex): model: matches lock" ]]
+}
+
 # ─── Check 15: Agent tools: line coverage ─────────────────────────────────────
 # Non-fatal warn: installed member's .claude/agents/<name>.md has no tools: line
 # in frontmatter → warn about inherit-all semantics and MCP skip.
@@ -1732,7 +1873,7 @@ EOF
   seed_lock
   seed_agent_install_manifest atlas
   mkdir -p .codex/agents
-  echo "---" > .codex/agents/atlas.md
+  echo 'name = "atlas"' > .codex/agents/atlas.toml
 
   run eidolons doctor
   [ "$status" -eq 0 ]

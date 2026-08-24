@@ -1,6 +1,6 @@
 #!/usr/bin/env bats
 #
-# cli/tests/model_wiring.bats — model frontmatter write-adapter tests.
+# cli/tests/model_wiring.bats — host-native model descriptor write-adapter tests.
 #
 # Stories:
 #   USE-WIRES      model use spectra@standard rewrites .claude/agents/spectra.md
@@ -9,7 +9,7 @@
 #   PROFILE-REWRITE profile openai re-resolves all members
 #   COPILOT-NOOP   copilot-only project exits 0, no model: written
 #   CURSOR-NOOP    cursor: no model: written
-#   CODEX-WIRES    codex host gets .codex/agents/<id>.md managed block
+#   CODEX-WIRES    codex host gets .codex/agents/<id>.toml managed assignment
 #   DRIFT-PRESERVE sync-time preserves hand-authored model: (warn)
 #   DRIFT-CLOBBER  explicit use clobbers hand-authored model:
 #
@@ -82,7 +82,11 @@ members:
     version: "^4.0.0"
 EOF
   mkdir -p .codex/agents
-  _write_agent_file .codex/agents/spectra.md
+  cat > .codex/agents/spectra.toml <<'EOF'
+name = "spectra"
+description = "Test agent"
+developer_instructions = "Body text here."
+EOF
 }
 
 # ─── USE-WIRES ────────────────────────────────────────────────────────────────
@@ -177,17 +181,120 @@ EOF
 
 # ─── CODEX-WIRES ──────────────────────────────────────────────────────────────
 
-@test "model wiring: codex host writes managed block to .codex/agents/spectra.md" {
+@test "model wiring: codex host writes quoted top-level model to .codex/agents/spectra.toml" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_codex_project
   # openai profile applies to codex.
   eidolons model profile openai >/dev/null 2>&1 || true
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
-  # File should exist and have sentinel.
-  if [ -f ".codex/agents/spectra.md" ]; then
-    grep -q "# eidolons:managed model" .codex/agents/spectra.md
-  fi
+  [ -f ".codex/agents/spectra.toml" ]
+  grep -q "# eidolons:managed model" .codex/agents/spectra.toml
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+}
+
+@test "model wiring: codex TOML write is byte-idempotent" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  eidolons model profile openai >/dev/null 2>&1
+  eidolons model use spectra@deep >/dev/null 2>&1
+  local before after
+  before="$(cat .codex/agents/spectra.toml)"
+  eidolons model use spectra@deep >/dev/null 2>&1
+  after="$(cat .codex/agents/spectra.toml)"
+  [ "$before" = "$after" ]
+  [ "$(grep -c '^model = ' .codex/agents/spectra.toml)" -eq 1 ]
+}
+
+@test "model wiring: codex sync preserves an unmanaged top-level model" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: openai
+EOF
+  printf '\nmodel = "user-owned"\n' >> .codex/agents/spectra.toml
+  local before after
+  before="$(cat .codex/agents/spectra.toml)"
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  after="$(cat .codex/agents/spectra.toml)"
+  [ "$before" = "$after" ]
+}
+
+@test "model wiring: explicit codex use adopts an unmanaged top-level model" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  eidolons model profile openai >/dev/null 2>&1
+  printf '\nmodel = "user-owned"\n' >> .codex/agents/spectra.toml
+  run eidolons model use spectra@light
+  [ "$status" -eq 0 ]
+  ! grep -q 'user-owned' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-5.6-luna"$' .codex/agents/spectra.toml
+  [ "$(grep -c '^# eidolons:managed model$' .codex/agents/spectra.toml)" -eq 1 ]
+}
+
+@test "model wiring: TOML model inside a table is not treated as top-level ownership" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  cat >> .codex/agents/spectra.toml <<'EOF'
+
+[metadata]
+model = "descriptive-only"
+EOF
+  eidolons model profile openai >/dev/null 2>&1
+  run eidolons model use spectra@standard
+  [ "$status" -eq 0 ]
+  grep -q '^model = "descriptive-only"$' .codex/agents/spectra.toml
+  [ "$(grep -c '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml)" -eq 1 ]
+}
+
+@test "model wiring: Codex TOML quotes and backslashes round-trip safely" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_wiring_patch_agent_file codex .codex/agents/spectra.toml 'model\"with\\path' 1; [ \"\$(_model_wiring_read_managed .codex/agents/spectra.toml)\" = 'model\"with\\path' ]"
+  [ "$status" -eq 0 ]
+  grep -Fq 'model = "model\"with\\path"' .codex/agents/spectra.toml
+}
+
+@test "model wiring: explicit same-model use normalizes a duplicate top-level TOML key" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: openai
+EOF
+  cat >> .codex/agents/spectra.toml <<'EOF'
+# eidolons:managed model
+model = "gpt-5.6-terra"
+model = "user-owned-duplicate"
+EOF
+  run eidolons model use spectra@standard
+  [ "$status" -eq 0 ]
+  [ "$(grep -c '^model = ' .codex/agents/spectra.toml)" -eq 1 ]
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+  ! grep -q 'user-owned-duplicate' .codex/agents/spectra.toml
+}
+
+@test "model wiring: passive sync preserves and warns on duplicate top-level TOML keys" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: openai
+EOF
+  cat >> .codex/agents/spectra.toml <<'EOF'
+# eidolons:managed model
+model = "gpt-5.6-terra"
+model = "user-owned-duplicate"
+EOF
+  local before after
+  before="$(cat .codex/agents/spectra.toml)"
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "hand-authored top-level model present" ]]
+  after="$(cat .codex/agents/spectra.toml)"
+  [ "$before" = "$after" ]
 }
 
 # ─── DRIFT-PRESERVE ───────────────────────────────────────────────────────────
