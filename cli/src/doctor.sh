@@ -47,7 +47,7 @@ Deep checks (--deep):
   D6   skills/ dual-write SHA parity             MUST match between .eidolons/<n>/skills/*.md and .claude/skills/<n>-<basename>/SKILL.md
   D7   ACI boundary conformance                 roster security block MUST match the capability class's ACI contract (roster/aci.yaml; SWE-agent rubric)
   D8   ECL receiver verify-incoming             every installed receiver Eidolon MUST ship a blocking verify-incoming skill (roster/ecl.yaml; ECL 6.2.2, frontier N3)
-  D9   Model frontmatter drift                 managed model: in agent files MUST match lock's effective_model (SKIP when no models block)
+  D9   Model descriptor drift                  managed model in agent files MUST match lock's effective_model (SKIP when no models block)
   D10  host-tier gate structural check          when ≥2 coders exist and one requires a host_tier, assert a conservative fallback coder is present (routing tiebreak invariant)
   D11  coder edit-gate ACI conformance          coder-class members MUST declare requires_edit_gate:true in ACI + reference the lint gate in SPEC.md (S1.3 declarative contract)
   D12  harness lock⇄files consistency           shims exist+exec, settings/hooks/opencode.json valid+entries present, strict surfaces only on verified-sound hosts, effective-tier report
@@ -184,12 +184,12 @@ for host in $hosts; do
       # per the T.12 override in sync.sh). Accept either as sufficient.
       if [[ -d ".codex/agents" ]] && ls .codex/agents/*.toml >/dev/null 2>&1; then
         pass "codex wired (.codex/agents/*.toml present)"
-      elif [[ -d ".codex/agents" ]] && ls .codex/agents/*.md >/dev/null 2>&1; then
-        pass "codex wired (.codex/agents/*.md present)"
       elif [[ "$SHARED_DISPATCH" == "true" ]] && [[ -f "AGENTS.md" ]]; then
         pass "codex wired (AGENTS.md shared dispatch)"
+      elif [[ -d ".codex/agents" ]] && ls .codex/agents/*.md >/dev/null 2>&1; then
+        err "codex legacy .codex/agents/*.md descriptors are ignored; run 'eidolons sync' to create canonical *.toml descriptors"
       else
-        err "codex declared but no .codex/agents/*.md or AGENTS.md found"
+        err "codex declared but no .codex/agents/*.toml, legacy *.md, or AGENTS.md found"
       fi
       ;;
   esac
@@ -1158,12 +1158,12 @@ if [[ "$DEEP" == "true" ]]; then
         ERRORS=$((ERRORS + _d8_rc))
       done <<< "$_deep_members"
 
-      # D9 — Model frontmatter drift (model management gate)
+      # D9 — Model descriptor drift (model management gate)
       # SKIP when no models block is present in eidolons.yaml.
       # PASS  — every applicable managed model: == lock effective_model.
       # WARN  — hand-authored model: without sentinel, or host-inapplicable managed line.
       # FAIL  — managed model: (sentinel present) != lock effective_model (fatal in --deep).
-      echo "  D9 — Model frontmatter drift"
+      echo "  D9 — Model descriptor drift"
       _d9_model_block=false
       model_resolve_init 2>/dev/null || true
       if model_has_block 2>/dev/null; then
@@ -1198,11 +1198,9 @@ if [[ "$DEEP" == "true" ]]; then
             [[ -z "$_d9_host" ]] && continue
             case "$_d9_host" in
               claude-code) _d9_agent_file=".claude/agents/${_dm}.md" ;;
-              codex)       _d9_agent_file=".codex/agents/${_dm}.md" ;;
+              codex)       _d9_agent_file=".codex/agents/${_dm}.toml" ;;
               *)           continue ;;
             esac
-
-            [[ -f "$_d9_agent_file" ]] || continue
 
             # Check applies_to_hosts.
             if ! model_profile_applies_to_host "$_d9_active_profile" "$_d9_host" 2>/dev/null; then
@@ -1211,6 +1209,15 @@ if [[ "$DEEP" == "true" ]]; then
               if [[ -n "$_d9_managed" ]]; then
                 printf "  %s·%s D9 WARN %s (%s): profile '%s' does not apply but managed model: present\n" \
                   "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host" "$_d9_active_profile"
+              fi
+              continue
+            fi
+
+            if [[ ! -f "$_d9_agent_file" ]]; then
+              if [[ "$_d9_host" == "codex" ]] && [[ -f ".codex/agents/${_dm}.md" ]]; then
+                err "D9 ${_dm} (codex): legacy .md descriptor is ignored; run 'eidolons sync' to create .codex/agents/${_dm}.toml"
+              elif [[ "$_d9_host" == "codex" ]]; then
+                err "D9 ${_dm} (codex): missing canonical .codex/agents/${_dm}.toml (run 'eidolons sync')"
               fi
               continue
             fi
@@ -1227,6 +1234,15 @@ if [[ "$DEEP" == "true" ]]; then
                 printf "  %s·%s D9 %s (%s): no managed model: line (run 'eidolons sync' to write)\n" \
                   "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host"
               fi
+              continue
+            fi
+
+            # A canonical managed TOML assignment plus any additional
+            # top-level model key is invalid/ambiguous. Never report PASS just
+            # because the first owned value happens to match the lock.
+            if [[ "$_d9_agent_file" == *.toml ]] && \
+               _model_wiring_has_unmanaged_model "$_d9_agent_file" 2>/dev/null; then
+              err "D9 ${_dm} (${_d9_host}): duplicate or conflicting top-level TOML model assignment. Run 'eidolons model use ${_dm}@${_d9_lock_model}' to take ownership and normalize."
               continue
             fi
 

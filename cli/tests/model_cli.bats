@@ -24,6 +24,18 @@ load helpers
 setup_model_project() {
   seed_manifest
   # Start with no models block.
+  mkdir -p .claude/agents
+  local id
+  for id in atlas spectra apivr; do
+    cat > ".claude/agents/${id}.md" <<EOF
+---
+name: $id
+description: Test agent
+---
+
+Test agent.
+EOF
+  done
 }
 
 # ─── HELP ─────────────────────────────────────────────────────────────────────
@@ -228,6 +240,17 @@ setup_model_project() {
   [ "$prof" = "openai" ]
 }
 
+@test "model profile openai: refreshes effective model provenance for every lock member" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_model_project
+  seed_lock
+  run eidolons model profile openai
+  [ "$status" -eq 0 ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-5.6-terra" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.tier' eidolons.lock)" = "standard" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.profile' eidolons.lock)" = "openai" ]
+}
+
 @test "model profile: unknown profile exits 2" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_model_project
@@ -273,6 +296,66 @@ setup_model_project() {
   setup_model_project
   run eidolons model reset
   [ "$status" -eq 0 ]
+}
+
+@test "model reset one: refreshes the member's lock provenance" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_model_project
+  seed_lock
+  eidolons model use atlas@light >/dev/null 2>&1
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "haiku" ]
+  run eidolons model reset atlas
+  [ "$status" -eq 0 ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "sonnet" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.tier' eidolons.lock)" = "standard" ]
+}
+
+@test "model use: missing canonical Codex TOML descriptor exits 4" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  cat > eidolons.yaml <<'EOF'
+version: 1
+hosts:
+  wire: [codex]
+models:
+  profile: openai
+members:
+  - name: atlas
+    version: "^1.0.0"
+    source: github:Rynaro/ATLAS
+EOF
+  mkdir -p .codex/agents
+  printf '%s\n' '---' 'model: legacy-only' '---' > .codex/agents/atlas.md
+  run eidolons model use atlas@standard
+  [ "$status" -eq 4 ]
+  [[ "$output" =~ "required descriptor .codex/agents/atlas.toml not found" ]]
+  [[ ! "$output" =~ "Re-applied model wiring" ]]
+}
+
+@test "model use: lock write failure exits 4 without success claim" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_model_project
+  seed_lock
+  local real_yq fake_bin
+  real_yq="$(command -v yq || true)"
+  [ -n "$real_yq" ] || skip "yq required for deterministic failure shim"
+  fake_bin="$BATS_TEST_TMPDIR/failing-yq"
+  mkdir -p "$fake_bin"
+  cat > "$fake_bin/yq" <<'SH'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case "$arg" in
+    *eidolons.lock) exit 1 ;;
+  esac
+done
+exec "$REAL_YQ" "$@"
+SH
+  chmod +x "$fake_bin/yq"
+  export REAL_YQ="$real_yq"
+  export PATH="$fake_bin:$PATH"
+  run eidolons model use atlas@deep
+  [ "$status" -eq 4 ]
+  [[ "$output" =~ "Lock model provenance update failed" ]]
+  [[ ! "$output" =~ "Re-applied model wiring" ]]
 }
 
 # ─── NON-INTERACTIVE ──────────────────────────────────────────────────────────

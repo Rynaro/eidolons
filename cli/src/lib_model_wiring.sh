@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# cli/src/lib_model_wiring.sh — model frontmatter write-adapter.
+# cli/src/lib_model_wiring.sh — host-native model descriptor write-adapter.
 #
 # SOURCE this file; do NOT execute it directly.
 # Requires lib.sh and lib_model_resolve.sh to have been sourced first.
@@ -15,14 +15,14 @@
 #   model_wiring_apply_all         [clobber]
 #     Re-apply model wiring for every installed Eidolon member.
 #
-# Managed sentinel: "# eidolons:managed model" (immediately before model: line).
+# Managed sentinel: "# eidolons:managed model" immediately before the owned key.
 # Idempotency: compare-before-write; byte-identical on repeat runs.
 # Drift policy:
 #   sync-time:        hand-authored model: (no sentinel) → warn-and-preserve.
 #   explicit command: clobber mode → replace any existing model: with managed block.
 #   doctor:           reports drift; does not auto-fix.
 #
-# Host support: claude-code (.claude/agents/<id>.md) + codex (.codex/agents/<id>.md).
+# Host support: Claude YAML frontmatter (.md) + Codex top-level TOML (.toml).
 # Explicit NO-OP for copilot, cursor, opencode.
 #
 # Bash 3.2 compatible — no declare -A, no ${var,,}/^^, no readarray/mapfile, no &>>.
@@ -42,6 +42,9 @@ MANAGED_SENTINEL="# eidolons:managed model"
 # Echo the managed model value if the sentinel is present; empty otherwise.
 _model_wiring_read_managed() {
   local file="$1"
+  case "$file" in
+    *.toml) _model_wiring_read_managed_toml "$file"; return $? ;;
+  esac
   # Look for the sentinel comment in frontmatter, then read the next model: line.
   awk '
   BEGIN { infm=0; seen_fence=0; found_sentinel=0 }
@@ -61,10 +64,47 @@ _model_wiring_read_managed() {
   ' "$file" 2>/dev/null || true
 }
 
+# _model_wiring_read_managed_toml FILE
+# Read only a sentinel-owned, quoted, top-level TOML model assignment. A model
+# inside a table is deliberately ignored: Codex descriptors require this key at
+# the document root.
+_model_wiring_read_managed_toml() {
+  local file="$1"
+  awk '
+  function decode_basic(s, out, i, ch, nextch) {
+    out=""
+    for (i=1; i<=length(s); i++) {
+      ch=substr(s,i,1)
+      if (ch != "\\" || i == length(s)) { out=out ch; continue }
+      nextch=substr(s,++i,1)
+      if (nextch == "n") out=out "\n"
+      else if (nextch == "r") out=out "\r"
+      else if (nextch == "t") out=out "\t"
+      else out=out nextch
+    }
+    return out
+  }
+  BEGIN { top=1; owned=0 }
+  /^[[:space:]]*\[/ { top=0 }
+  top && $0 == "# eidolons:managed model" { owned=1; next }
+  top && owned && /^[[:space:]]*model[[:space:]]*=[[:space:]]*"([^"\\]|\\.)*"[[:space:]]*(#.*)?$/ {
+    val=$0
+    sub(/^[[:space:]]*model[[:space:]]*=[[:space:]]*"/, "", val)
+    sub(/"[[:space:]]*(#.*)?$/, "", val)
+    print decode_basic(val)
+    exit
+  }
+  top && owned { owned=0 }
+  ' "$file" 2>/dev/null || true
+}
+
 # _model_wiring_has_unmanaged_model FILE
 # Return 0 if the file has a model: line in frontmatter WITHOUT the sentinel.
 _model_wiring_has_unmanaged_model() {
   local file="$1"
+  case "$file" in
+    *.toml) _model_wiring_has_unmanaged_model_toml "$file"; return $? ;;
+  esac
   awk '
   BEGIN { infm=0; seen_fence=0; prev_sentinel=0; result=1 }
   /^---[[:space:]]*$/ {
@@ -78,6 +118,28 @@ _model_wiring_has_unmanaged_model() {
   }
   infm { prev_sentinel=0 }
   END { exit result }
+  ' "$file" 2>/dev/null
+}
+
+# Return 0 for a top-level TOML model assignment not immediately owned by the
+# sentinel. Assignments below the first table header are unrelated and ignored.
+_model_wiring_has_unmanaged_model_toml() {
+  local file="$1"
+  awk '
+  BEGIN { top=1; owned=0; model_count=0; result=1 }
+  /^[[:space:]]*\[/ { top=0 }
+  top && $0 == "# eidolons:managed model" { owned=1; next }
+  top && /^[[:space:]]*model[[:space:]]*=/ {
+    model_count++
+    if (!owned) result=0
+    owned=0
+    next
+  }
+  top && owned { owned=0 }
+  END {
+    if (model_count > 1) result=0
+    exit result
+  }
   ' "$file" 2>/dev/null
 }
 
@@ -187,6 +249,68 @@ _model_wiring_patch_frontmatter() {
   mv "$tmpfile" "$file"
 }
 
+# _model_wiring_patch_toml FILE EFFECTIVE_MODEL CLOBBER
+# Owns exactly one quoted top-level `model = "..."` assignment. Existing
+# hand-authored assignments are preserved during sync and adopted only after an
+# explicit model command passes CLOBBER=1.
+_model_wiring_patch_toml() {
+  local file="$1"
+  local model="$2"
+  local clobber="${3:-0}"
+  local current_managed has_unmanaged=0 tmpfile
+
+  current_managed="$(_model_wiring_read_managed_toml "$file" 2>/dev/null || true)"
+  if _model_wiring_has_unmanaged_model_toml "$file"; then
+    has_unmanaged=1
+    if [ "$clobber" != "1" ]; then
+      warn "$(basename "$file"): hand-authored top-level model present (no sentinel) — preserving. Use 'eidolons model use' to take ownership."
+      return 0
+    fi
+  fi
+
+  # Only short-circuit after scanning the complete top-level document. A
+  # matching managed key followed by a duplicate user-owned key is invalid
+  # TOML and must be reconciled in clobber mode (or preserved with a warning).
+  if [ "$current_managed" = "$model" ] && [ "$has_unmanaged" = "0" ]; then
+    return 0
+  fi
+
+  tmpfile="$(mktemp)"
+  EIDOLONS_WIRING_TOML_MODEL="$model" awk -v sentinel="# eidolons:managed model" -v clobber="$clobber" '
+  BEGIN {
+    model=ENVIRON["EIDOLONS_WIRING_TOML_MODEL"]
+    gsub(/\\/, "\\\\", model)
+    gsub(/"/, "\\\"", model)
+    gsub(/\t/, "\\t", model)
+    gsub(/\r/, "\\r", model)
+    gsub(/\n/, "\\n", model)
+    top=1; owned=0; emitted=0
+  }
+  function emit() {
+    if (!emitted) {
+      print sentinel
+      print "model = \"" model "\""
+      emitted=1
+    }
+  }
+  /^[[:space:]]*\[/ {
+    if (top) { emit(); top=0 }
+  }
+  top && $0 == sentinel { owned=1; next }
+  top && owned && /^[[:space:]]*model[[:space:]]*=/ { emit(); owned=0; next }
+  top && owned { emit(); owned=0 }
+  top && /^[[:space:]]*model[[:space:]]*=/ {
+    if (clobber == "1") { emit(); next }
+  }
+  { print }
+  END { emit() }
+  ' "$file" > "$tmpfile" || { rm -f "$tmpfile"; return 1; }
+
+  chmod --reference="$file" "$tmpfile" 2>/dev/null || \
+    chmod "$(stat -f '%A' "$file" 2>/dev/null || echo 644)" "$tmpfile" 2>/dev/null || true
+  mv "$tmpfile" "$file"
+}
+
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 # model_wiring_patch_agent_file HOST AGENT_FILE EFFECTIVE_MODEL [clobber]
@@ -198,19 +322,33 @@ model_wiring_patch_agent_file() {
   local clobber="${4:-0}"
 
   if [ ! -f "$agent_file" ]; then
+    if [ "$clobber" = "1" ]; then
+      warn "model wiring: required descriptor ${agent_file} not found"
+      return 1
+    fi
     info "model wiring: ${agent_file} not found — skipping"
     return 0
   fi
 
   if [ ! -w "$agent_file" ]; then
     warn "model wiring: ${agent_file} is read-only — skipping"
+    [ "$clobber" = "1" ] && return 1
     return 0
   fi
 
   case "$host" in
-    claude-code|codex)
+    claude-code)
       _model_wiring_patch_frontmatter "$agent_file" "$effective_model" "$clobber" || {
-        warn "model wiring: patch failed for ${agent_file} — continuing"
+        warn "model wiring: patch failed for ${agent_file}"
+        [ "$clobber" = "1" ] && return 1
+        return 0
+      }
+      info "model wiring: $(basename "$agent_file") → $effective_model (host=$host)"
+      ;;
+    codex)
+      _model_wiring_patch_toml "$agent_file" "$effective_model" "$clobber" || {
+        warn "model wiring: patch failed for ${agent_file}"
+        [ "$clobber" = "1" ] && return 1
         return 0
       }
       info "model wiring: $(basename "$agent_file") → $effective_model (host=$host)"
@@ -267,7 +405,7 @@ model_wiring_apply_for_member() {
   fi
 
   # For each wired host, check applies_to_hosts and patch.
-  local host
+  local host wiring_rc=0
   for host in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
     [ -z "$host" ] && continue
     case "$host" in
@@ -279,7 +417,7 @@ model_wiring_apply_for_member() {
         local agent_file=".claude/agents/${id}.md"
         ;;
       codex)
-        local agent_file=".codex/agents/${id}.md"
+        local agent_file=".codex/agents/${id}.toml"
         ;;
       *)
         info "model wiring: unknown host '$host' — skipping"
@@ -293,8 +431,9 @@ model_wiring_apply_for_member() {
       continue
     fi
 
-    model_wiring_patch_agent_file "$host" "$agent_file" "$effective_model" "$clobber"
+    model_wiring_patch_agent_file "$host" "$agent_file" "$effective_model" "$clobber" || wiring_rc=1
   done
+  return "$wiring_rc"
 }
 
 # model_wiring_apply_all [clobber]
@@ -308,17 +447,22 @@ model_wiring_apply_all() {
     members_list="$(yaml_to_json "${PROJECT_LOCK:-eidolons.lock}" \
       | jq -r '(.members // [])[].name' 2>/dev/null || true)"
   fi
+  if [ -z "$members_list" ] && [ -n "${CONSUMER_JSON:-}" ]; then
+    members_list="$(printf '%s' "$CONSUMER_JSON" \
+      | jq -r '(.members // [])[].name' 2>/dev/null || true)"
+  fi
   if [ -z "$members_list" ]; then
     members_list="$(model_list_ids 2>/dev/null || true)"
   fi
 
-  local id
+  local id wiring_rc=0
   while IFS= read -r id; do
     [ -z "$id" ] && continue
-    model_wiring_apply_for_member "$id" "$clobber" 2>/dev/null || true
+    model_wiring_apply_for_member "$id" "$clobber" || wiring_rc=1
   done <<EOF
 $members_list
 EOF
+  return "$wiring_rc"
 }
 
 # model_wiring_update_lock_for_member EIDOLON_ID
@@ -357,10 +501,69 @@ model_wiring_update_lock_for_member() {
        (.members[] | select(.name == \"${id}\")).model.tier = \"${tier}\" |
        (.members[] | select(.name == \"${id}\")).model.profile = \"${profile}\" |
        (.members[] | select(.name == \"${id}\")).model.source = \"${source}\"" \
-      "$lock_file" > "$tmplock" 2>/dev/null \
-    && mv "$tmplock" "$lock_file" && return 0
+      "$lock_file" > "$tmplock" 2>/dev/null
+    if [ $? -eq 0 ]; then
+      chmod --reference="$lock_file" "$tmplock" 2>/dev/null || \
+        chmod "$(stat -f '%A' "$lock_file" 2>/dev/null || echo 644)" "$tmplock" 2>/dev/null || true
+      mv "$tmplock" "$lock_file"
+      return 0
+    fi
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 - "$lock_file" "$tmplock" "$id" "$effective_model" "$tier" "$profile" "$source" <<'PY'
+import sys
+import yaml
+
+source_path, output_path, member_id, model, tier, profile, provenance = sys.argv[1:]
+with open(source_path, encoding="utf-8") as stream:
+    document = yaml.safe_load(stream) or {}
+
+found = False
+for member in document.get("members", []):
+    if member.get("name") == member_id:
+        member["model"] = {
+            "effective_model": model,
+            "tier": tier,
+            "profile": profile,
+            "source": provenance,
+        }
+        found = True
+        break
+
+if not found:
+    raise SystemExit(1)
+with open(output_path, "w", encoding="utf-8") as stream:
+    yaml.safe_dump(document, stream, sort_keys=False)
+PY
+    if [ $? -eq 0 ]; then
+      chmod --reference="$lock_file" "$tmplock" 2>/dev/null || \
+        chmod "$(stat -f '%A' "$lock_file" 2>/dev/null || echo 644)" "$tmplock" 2>/dev/null || true
+      mv "$tmplock" "$lock_file"
+      return 0
+    fi
   fi
 
-  # Fallback: skip lock update silently (doctor will report drift).
+  # No safe write fallback: report failure so explicit commands cannot claim
+  # success while leaving a stale lock. Passive sync deliberately softens this.
   rm -f "$tmplock"
+  return 1
+}
+
+# model_wiring_update_lock_all
+# Refresh model provenance for every member already present in the lock. This
+# intentionally uses the lock's installed-member set, never the full routing
+# roster, so profile/reset/sync cannot synthesize entries for absent Eidolons.
+model_wiring_update_lock_all() {
+  local lock_file="${PROJECT_LOCK:-eidolons.lock}"
+  local members_list id update_rc=0
+  [ -f "$lock_file" ] || return 0
+
+  members_list="$(yaml_to_json "$lock_file" \
+    | jq -r '(.members // [])[].name' 2>/dev/null || true)"
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    model_wiring_update_lock_for_member "$id" || update_rc=1
+  done <<EOF
+$members_list
+EOF
+  return "$update_rc"
 }

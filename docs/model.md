@@ -8,7 +8,7 @@
 
 ## Overview
 
-`eidolons model` is the management surface for binding each Eidolon to a concrete model. Eidolons themselves stay vendor-neutral — they are assigned a cognitive *tier* (`light`, `standard`, or `deep`), never a vendor model name (prime-directive #162: no vendor model names in any Eidolon methodology or the always-loaded cortex). The nexus owns the mapping from tier to model: it lives in `roster/model-profiles.yaml` as **profiles** (one per vendor), and the resolved model is written into the host agent's frontmatter as a managed block.
+`eidolons model` is the management surface for binding each Eidolon to a concrete model. Eidolons themselves stay vendor-neutral — they are assigned a cognitive *tier* (`light`, `standard`, or `deep`), never a vendor model name (prime-directive #162: no vendor model names in any Eidolon methodology or the always-loaded cortex). The nexus owns the mapping from tier to model: it lives in `roster/model-profiles.yaml` as **profiles** (one per vendor), and the resolved model is written into the host-native agent descriptor as a managed block.
 
 This decouples methodology from vendor choice — you can swap the active profile (e.g. Anthropic Claude → OpenAI) without touching any Eidolon's code or specification, and every member re-resolves in one command.
 
@@ -37,7 +37,10 @@ The roster (`roster/routing.yaml`) assigns each Eidolon a **suggested tier**:
 | **IDG** | light | documentation scriber; low load; cheap to re-run |
 | **Kupo** | light | PROPOSE-only micro-task executor; high throughput |
 | **ATLAS** | standard | read-only scout; bounded local reasoning |
+| **RAMZA** | deep | default planner; mission-critical requirements and decision quality |
 | **APIVR-Δ** | standard | brownfield coder (deep is a benchmark-gated candidate — see `loop_native`) |
+| **Vivi** | standard | default coder; iterative implementation and verification |
+| **Gilgamesh** | standard | bounded fallback generalist; autonomous non-specialist work |
 | **SPECTRA** | deep | spec composition; long reasoning; fans out to all downstream |
 | **FORGE** | deep | structured deliberation; multi-hypothesis stress-testing |
 | **VIGIL** | deep | root-cause graph search + counterfactual intervention |
@@ -62,12 +65,12 @@ profiles:
       standard: sonnet
       deep:     opus
   openai:
-    description: "OpenAI GPT-5 family"
+    description: "OpenAI GPT-5.6 Codex capability tiers"
     applies_to_hosts: [codex]
     tiers:
-      light:    gpt-5-mini
-      standard: gpt-5
-      deep:     gpt-5
+      light:    gpt-5.6-luna
+      standard: gpt-5.6-terra
+      deep:     gpt-5.6-sol
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -104,10 +107,10 @@ Profiles:
     haiku       sonnet      opus
 
   openai
-    OpenAI GPT-5 family
+    OpenAI GPT-5.6 Codex capability tiers
     applies to: codex
     light       standard    deep
-    gpt-5-mini  gpt-5       gpt-5
+    gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol
 ```
 
 ### `eidolons model show [<eidolon>]`
@@ -124,15 +127,18 @@ EIDOLON       TIER        PROFILE       SOURCE            EFFECTIVE MODEL
 apivr         standard    anthropic     roster-tier       sonnet
 atlas         standard    anthropic     roster-tier       sonnet
 forge         deep        anthropic     roster-tier       opus
+gilgamesh     standard    anthropic     roster-tier       sonnet
 idg           light       anthropic     roster-tier       haiku
 kupo          light       anthropic     roster-tier       haiku
+ramza         deep        anthropic     roster-tier       opus
 spectra       deep        anthropic     roster-tier       opus
+vivi          standard    anthropic     roster-tier       sonnet
 vigil         deep        anthropic     roster-tier       opus
 ```
 
 ### `eidolons model use <eidolon>@<tier>`
 
-Set a per-member tier override (`<tier>` ∈ `light` / `standard` / `deep`). Resolves through the active profile, writes `eidolons.yaml` + the lock, and patches frontmatter.
+Set a per-member tier override (`<tier>` ∈ `light` / `standard` / `deep`). Resolves through the active profile, writes `eidolons.yaml` + the lock, and patches the host descriptor.
 
 ```bash
 eidolons model use spectra@standard
@@ -158,7 +164,7 @@ eidolons model use apivr@sonnet
 
 ### `eidolons model profile <name>`
 
-Switch the active profile. All members re-resolve through the new profile and frontmatter is re-applied (host-gated — see below). Persisted under `models.profile`.
+Switch the active profile. All members re-resolve through the new profile and descriptor wiring is re-applied (host-gated — see below). Persisted under `models.profile`.
 
 ```bash
 eidolons model profile openai
@@ -189,7 +195,7 @@ eidolons model reset
 | 0 | success |
 | 2 | bad arguments / unknown Eidolon or profile |
 | 3 | resolve hard-miss (the active profile is missing the requested tier even after resolve-up) |
-| 4 | frontmatter write failed |
+| 4 | explicit agent-descriptor or lock-provenance write failed |
 
 ---
 
@@ -210,17 +216,24 @@ If a profile omits the requested tier, resolution **resolves up** (`light → st
 
 - **Suggested tier** — the roster's recommended tier for an Eidolon; shown in `eidolons model show`.
 - **Default** — what ships if you change nothing (suggested tier resolved through the default profile).
-- **Effective model** — the fully resolved concrete model, persisted in `eidolons.lock` (`members[].model.effective_model`, with its `tier` / `profile` / `source`) and written to the agent frontmatter.
+- **Effective model** — the fully resolved concrete model, persisted in `eidolons.lock` (`members[].model.effective_model`, with its `tier` / `profile` / `source`) and written to the host-native agent descriptor.
 
 ---
 
 ## How the model reaches the agent
 
-The nexus patches a managed block into each host agent's frontmatter:
+For Claude Code, the nexus patches YAML frontmatter:
 
 ```
 # eidolons:managed model
 model: <effective_model>
+```
+
+For Codex, it patches a quoted top-level TOML assignment:
+
+```toml
+# eidolons:managed model
+model = "<effective_model>"
 ```
 
 The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes are **idempotent** — `eidolons model …` and `eidolons sync` produce byte-identical output when nothing changed.
@@ -228,27 +241,31 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 ### Host behavior
 
 - **`claude-code`** → writes `.claude/agents/<id>.md`.
-- **`codex`** → writes `.codex/agents/<id>.md`.
+- **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
 - **`copilot`, `cursor`** → no per-agent model concept; model management is a clean **no-op** for these hosts.
+
+Legacy `.codex/agents/<id>.md` files are migration artifacts only and are ignored by Codex and by active model wiring. Run `eidolons sync` to create the canonical TOML descriptor; explicit model commands fail with exit `4` while it is missing.
+
+Every successful sync with a `models:` block records `effective_model`, `tier`, `profile`, and resolution `source` for each installed member in the final `eidolons.lock`. Profile changes and resets refresh the same provenance for all affected members.
 
 ### Profile host-gating
 
-If the active profile does not apply to a wired host (e.g. the `openai` profile, which applies to `codex`, on a claude-code project), the writer **skips** that host rather than writing a model string the host can't use. The lock still records the resolved model; only the frontmatter write is gated.
+If the active profile does not apply to a wired host (e.g. the `openai` profile, which applies to `codex`, on a claude-code project), the writer **skips** that host rather than writing a model string the host can't use. The lock still records the resolved model; only the descriptor write is gated.
 
 ---
 
 ## Drift & the `eidolons doctor` D9 gate
 
-A hand-authored `model:` line **without** the sentinel is **preserved with a warning** during a passive `eidolons sync` — the nexus does not clobber user content. An explicit `eidolons model use` / `profile` / `reset` is treated as consent and **clobbers**.
+A hand-authored model assignment **without** the sentinel is **preserved with a warning** during a passive `eidolons sync` — the nexus does not clobber user content. An explicit `eidolons model use` / `profile` / `reset` is treated as consent and **clobbers**.
 
-`eidolons doctor --deep` runs the **D9** gate, comparing the managed `model:` against the lock's `effective_model`:
+`eidolons doctor --deep` runs the **D9** gate, comparing the managed YAML or TOML model value against the lock's `effective_model`:
 
 | Status | Meaning |
 |---|---|
 | **skip** | no `models` block configured, or no lock model entry yet (run `eidolons sync`) |
-| **PASS** | managed `model:` matches the lock |
-| **WARN** | hand-authored `model:` without the sentinel, or a managed line on a host the profile doesn't apply to |
-| **FAIL** | managed `model:` (sentinel present) drifted from the lock — fatal under `--deep` |
+| **PASS** | managed model matches the lock |
+| **WARN** | hand-authored model without the sentinel, or a managed assignment on a host the profile doesn't apply to |
+| **FAIL** | sentinel-owned model drifted from the lock — fatal under `--deep` |
 
 D9 never auto-fixes; it reports and lets you re-run `eidolons model` or `eidolons sync`.
 

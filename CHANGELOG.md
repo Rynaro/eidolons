@@ -8,7 +8,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+No changes yet.
+
+## [3.2.0] — 2026-08-24 — capability-tier model wiring
+
 ### Added
+- Complete ten-member tier designations: RAMZA, SPECTRA, FORGE, and VIGIL use `deep`; ATLAS, Vivi, APIVR-Δ, and Gilgamesh use `standard`; IDG and Kupo use `light`.
+- Codex model profile mapping: `light` → `gpt-5.6-luna`, `standard` → `gpt-5.6-terra`, and `deep` → `gpt-5.6-sol`.
+- D9 coverage for managed, drifted, and user-owned Codex TOML model assignments.
 - gilgamesh v1.1.0 published in the roster with release integrity metadata.
 - kupo v1.4.0 published in the roster with release integrity metadata.
 - crystalium v2.2.0 published in the roster with release integrity metadata.
@@ -20,6 +27,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 - ramza v1.1.0 published in the roster with release integrity metadata.
 - spectra v4.12.0 published in the roster with release integrity metadata.
 - atlas v1.14.0 published in the roster with release integrity metadata.
+
+### Changed
+- Codex model wiring now targets the canonical `.codex/agents/<id>.toml` descriptor and owns exactly one quoted top-level `model = "..."` assignment. Passive sync preserves and warns on hand-authored or duplicate values; explicit model commands adopt and normalize them; repeat writes are byte-idempotent. Legacy Codex `.md` descriptors are migration-only and never count as active wiring. Claude Markdown frontmatter behavior is unchanged.
+- Sync now resolves every final installed member into `eidolons.lock` after atomic lock replacement, preserving `0644` mode; profile/reset commands refresh all affected lock provenance and surface descriptor or lock-write failures as exit `4`.
 
 ## [3.1.0] — 2026-08-19 — bounded MCP sessions
 
