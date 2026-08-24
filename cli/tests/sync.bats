@@ -133,7 +133,7 @@ EOF
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.profile' eidolons.lock)" = "openai" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.source' eidolons.lock)" = "roster-tier" ]
   [ "$(yq eval '.members[] | select(.name == "spectra") | .model.effective_model' eidolons.lock)" = "gpt-5.6-sol" ]
-  [ "$(stat -f '%Lp' eidolons.lock 2>/dev/null || stat -c '%a' eidolons.lock)" = "644" ]
+  [ "$(stat -c '%a' eidolons.lock 2>/dev/null || stat -f '%Lp' eidolons.lock)" = "644" ]
 
   run eidolons doctor --deep
   [[ "$output" =~ "D9 atlas (codex): model: matches lock (gpt-5.6-terra)" ]]
