@@ -89,6 +89,22 @@ _init_resolve() {
   [ "$tier" = "light" ]
 }
 
+@test "resolve: all ten current Eidolons map to Luna, Terra, or Sol under openai" {
+  _init_resolve
+  CONSUMER_JSON='{"models":{"profile":"openai"}}'
+  export CONSUMER_JSON
+  local pair id expected actual
+  for pair in \
+    ramza:gpt-5.6-sol spectra:gpt-5.6-sol forge:gpt-5.6-sol vigil:gpt-5.6-sol \
+    atlas:gpt-5.6-terra vivi:gpt-5.6-terra apivr:gpt-5.6-terra gilgamesh:gpt-5.6-terra \
+    idg:gpt-5.6-luna kupo:gpt-5.6-luna; do
+    id="${pair%%:*}"
+    expected="${pair#*:}"
+    actual="$(model_resolve_for "$id" | cut -f1)"
+    [ "$actual" = "$expected" ]
+  done
+}
+
 @test "resolve: spectra default anthropic profile resolves model" {
   _init_resolve
   local line em

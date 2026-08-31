@@ -419,12 +419,15 @@ _cmd_use() {
   info "Resolved: ${em} (tier=${ti}, profile=${pr}, source=${so})"
 
   # Patch frontmatter (clobber mode — explicit command consent).
-  model_wiring_apply_for_member "$eid" 1 2>/dev/null || {
-    warn "Frontmatter write failed for $eid"
+  model_wiring_apply_for_member "$eid" 1 || {
+    warn "Agent descriptor write failed for $eid"
     exit 4
   }
   # Update lock provenance.
-  model_wiring_update_lock_for_member "$eid" 2>/dev/null || true
+  model_wiring_update_lock_for_member "$eid" || {
+    warn "Lock model provenance update failed for $eid"
+    exit 4
+  }
 }
 
 # ─── Subcommand: profile ──────────────────────────────────────────────────────
@@ -455,7 +458,14 @@ _cmd_profile() {
   export CONSUMER_JSON
 
   # Re-apply model wiring for all members (clobber mode).
-  model_wiring_apply_all 1 2>/dev/null || true
+  model_wiring_apply_all 1 || {
+    warn "Agent descriptor write failed while applying profile '$pname'"
+    exit 4
+  }
+  model_wiring_update_lock_all || {
+    warn "Lock model provenance update failed while applying profile '$pname'"
+    exit 4
+  }
   ok "Re-applied model wiring for all members (profile=${pname})"
 }
 
@@ -496,9 +506,23 @@ _cmd_reset() {
   export CONSUMER_JSON
 
   if [ -n "$target_id" ]; then
-    model_wiring_apply_for_member "$target_id" 1 2>/dev/null || true
+    model_wiring_apply_for_member "$target_id" 1 || {
+      warn "Agent descriptor write failed for $target_id"
+      exit 4
+    }
+    model_wiring_update_lock_for_member "$target_id" || {
+      warn "Lock model provenance update failed for $target_id"
+      exit 4
+    }
   else
-    model_wiring_apply_all 1 2>/dev/null || true
+    model_wiring_apply_all 1 || {
+      warn "Agent descriptor write failed while resetting models"
+      exit 4
+    }
+    model_wiring_update_lock_all || {
+      warn "Lock model provenance update failed while resetting models"
+      exit 4
+    }
   fi
 }
 

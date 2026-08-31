@@ -101,7 +101,7 @@ Fails fast on any prompt. Use `--preset` or `--members` to provide all required 
 | `CLAUDE.md` | Each Eidolon appends a pointer line | ✅ yes |
 | `.cursor/rules/<n>.mdc` | Per-Eidolon | ✅ yes |
 | `.opencode/agents/<n>.md` | Per-Eidolon | ✅ yes |
-| `.codex/agents/<n>.md` | Per-Eidolon (Codex subagent) | ✅ yes |
+| `.codex/agents/<n>.toml` | Per-Eidolon (Codex subagent) | ✅ yes |
 
 Rule of thumb: if the CLI wrote it, commit it.
 
