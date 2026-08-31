@@ -10,6 +10,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [3.2.1] — 2026-08-31 — Gilgamesh joins the roster gallery
+
+### Added
+- Add Gilgamesh's original six-blade ASCII sigil to roster cards, completing the ten-member Eidolon art set.
+
 ## [3.2.0] — 2026-08-24 — capability-tier model wiring
 
 ### Added
