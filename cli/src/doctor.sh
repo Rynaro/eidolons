@@ -205,8 +205,16 @@ FRESHNESS_FILES=("AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" ".cur
 for f in "${FRESHNESS_FILES[@]}"; do
   [[ -e "$f" ]] || continue
   if [[ -L "$f" ]]; then
-    err "$f is a symlink — shared dispatch files must be real composable files. Re-run 'eidolons sync'."
-    continue
+    case "$f:$(readlink "$f" 2>/dev/null || true)" in
+      CLAUDE.md:AGENTS.md|GEMINI.md:AGENTS.md|.github/copilot-instructions.md:../AGENTS.md)
+        pass "$f links to canonical AGENTS.md"
+        continue
+        ;;
+      *)
+        err "$f has an unsupported shared-instruction symlink. Re-run 'eidolons sync'."
+        continue
+        ;;
+    esac
   fi
   if grep -Eq '@?\.?/?agents/(atlas|apivr|spectra|idg|scribe|forge)/' "$f" 2>/dev/null; then
     err "$f contains legacy agents/<name>/ pointers (pre-v1.1 paths). Delete the Eidolon block(s) and re-run 'eidolons sync'."

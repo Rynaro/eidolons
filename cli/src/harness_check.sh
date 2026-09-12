@@ -32,6 +32,7 @@ while IFS= read -r shim; do
   case "$shim" in
     *claude-code*) surface=".claude/settings.json" ;;
     *codex*)       surface=".codex/hooks.json" ;;
+    *copilot*)     surface=".github/hooks/eidolons.json" ;;
     *)             surface="" ;;
   esac
   if [[ -n "$surface" ]]; then

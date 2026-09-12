@@ -92,6 +92,9 @@ mcps:
     hosts_wired: []
     installed_at: "2026-05-19T00:00:00Z"
 EOF
+  cat > .mcp.json <<'EOF'
+{"mcpServers":{"junction":{"command":"junction","args":[]}}}
+EOF
 }
 
 @test "mcp sync: help exits 0" {
@@ -138,6 +141,18 @@ EOF
   [ "$status" -eq 0 ]
   # Lockfile must be byte-identical (idempotency gate G-S7).
   diff eidolons.mcp.lock.before eidolons.mcp.lock
+}
+
+@test "mcp sync reports repairs when a same-version project registration is missing" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_sync
+  seed_manifest_with_mcp
+  seed_junction_lock_for_sync "$FAKE_JUNCTION_VERSION"
+  rm -f .mcp.json
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_sync.sh"
+  [ "$status" -eq 0 ]
+  echo "$output$stderr" | grep -qi 'complete (1 installed)'
+  [ -f .mcp.json ]
 }
 
 @test "mcp sync NG3: eidolons sync does NOT call mcp sync" {

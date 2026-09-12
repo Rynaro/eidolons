@@ -11,7 +11,8 @@
 #     (used by explicit model commands). Default (sync-time) = warn-and-preserve.
 #   model_wiring_apply_for_member  EIDOLON_ID [clobber]
 #     Patch every (host, agent_file) for the given Eidolon with its resolved
-#     effective model. Skips hosts where the active profile doesn't apply.
+#     effective model. Selects a compatible profile per host when no profile
+#     was explicitly selected by the consumer.
 #   model_wiring_apply_all         [clobber]
 #     Re-apply model wiring for every installed Eidolon member.
 #
@@ -379,20 +380,6 @@ model_wiring_apply_for_member() {
   local id="$1"
   local clobber="${2:-0}"
 
-  # Resolve effective model for this member.
-  local resolve_line effective_model tier profile source
-  resolve_line="$(model_resolve_for "$id" 2>/dev/null || true)"
-  if [ -z "$resolve_line" ]; then
-    warn "model wiring: could not resolve model for '$id' — skipping"
-    return 0
-  fi
-
-  # Parse the tab-separated resolve output.
-  effective_model="$(printf '%s' "$resolve_line" | cut -f1)"
-  tier="$(printf '%s' "$resolve_line" | cut -f2)"
-  profile="$(printf '%s' "$resolve_line" | cut -f3)"
-  source="$(printf '%s' "$resolve_line" | cut -f4)"
-
   # Determine wired hosts from CONSUMER_JSON / PROJECT_MANIFEST.
   local hosts_csv=""
   if [ -n "${CONSUMER_JSON:-}" ]; then
@@ -404,13 +391,14 @@ model_wiring_apply_for_member() {
       | jq -r '(.hosts.wire // []) | join(",")' 2>/dev/null || true)"
   fi
 
-  # For each wired host, check applies_to_hosts and patch.
-  local host wiring_rc=0
+  # Resolve and patch per host. This prevents the default Anthropic profile
+  # from silently skipping Codex in a mixed-host project.
+  local host wiring_rc=0 resolve_line effective_model tier profile source
   for host in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
     [ -z "$host" ] && continue
     case "$host" in
       copilot|cursor|opencode)
-        model_wiring_noop_host "$host" "$profile"
+        model_wiring_noop_host "$host" "n/a"
         continue
         ;;
       claude-code)
@@ -425,10 +413,27 @@ model_wiring_apply_for_member() {
         ;;
     esac
 
-    # Check profile applies_to_hosts.
-    if ! model_profile_applies_to_host "$profile" "$host"; then
-      model_wiring_noop_host "$host" "$profile"
+    resolve_line="$(model_resolve_for_host "$id" "$host" 2>/dev/null || true)"
+    if [ -z "$resolve_line" ]; then
+      warn "model wiring: could not resolve model for '$id' on host '$host'"
+      wiring_rc=1
       continue
+    fi
+    effective_model="$(printf '%s' "$resolve_line" | cut -f1)"
+    tier="$(printf '%s' "$resolve_line" | cut -f2)"
+    profile="$(printf '%s' "$resolve_line" | cut -f3)"
+    source="$(printf '%s' "$resolve_line" | cut -f4)"
+
+    # A concrete pin is intentionally host-specific. An explicitly selected
+    # incompatible profile remains a supported partial-host configuration:
+    # leave that descriptor alone, as the profile command must not fail merely
+    # because another wired host has no mapping.
+    if ! model_profile_applies_to_host "$profile" "$host"; then
+      if [ "$source" != "pin" ]; then
+        model_wiring_noop_host "$host" "$profile"
+        continue
+      fi
+      info "model wiring: applying explicit model pin for '$id' on $host"
     fi
 
     model_wiring_patch_agent_file "$host" "$agent_file" "$effective_model" "$clobber" || wiring_rc=1

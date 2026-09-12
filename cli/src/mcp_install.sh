@@ -76,6 +76,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+if [ -n "$project_root" ]; then
+  [ -d "$project_root" ] || die "--project-root is not a directory: $project_root"
+  project_root="$(cd "$project_root" && pwd)"
+else
+  project_root="$(pwd)"
+fi
+
 # Parse name[@version].
 case "$name_ver" in
   *@*)
@@ -99,25 +106,21 @@ say "Installing ${mcp_name}@${mcp_ver} (kind=${kind})"
 case "$kind" in
   oci-image)
     if [ "$force" = "true" ] && [ "$no_pull" = "true" ]; then
-      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --force --no-pull \
-        ${project_root:+--project-root "$project_root"}
+      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --force --no-pull --project-root "$project_root"
     elif [ "$force" = "true" ]; then
-      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --force \
-        ${project_root:+--project-root "$project_root"}
+      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --force --project-root "$project_root"
     elif [ "$no_pull" = "true" ]; then
-      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --no-pull \
-        ${project_root:+--project-root "$project_root"}
+      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --no-pull --project-root "$project_root"
     else
-      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" \
-        ${project_root:+--project-root "$project_root"}
+      mcp_driver_oci_image_install "$mcp_name" "$mcp_ver" --project-root "$project_root"
     fi
     ;;
   binary)
     # --no-pull is accepted and ignored for kind=binary (no OCI concept here).
     if [ "$force" = "true" ]; then
-      mcp_driver_binary_install "$mcp_name" "$mcp_ver" --force
+      (cd "$project_root" && mcp_driver_binary_install "$mcp_name" "$mcp_ver" --force)
     else
-      mcp_driver_binary_install "$mcp_name" "$mcp_ver"
+      (cd "$project_root" && mcp_driver_binary_install "$mcp_name" "$mcp_ver")
     fi
     ;;
   script)
@@ -132,7 +135,7 @@ esac
 # Apply after the per-kind driver returns success.
 # Soft failure: mcp_wiring_apply_for_mcp warns on individual file errors but
 # never aborts the parent command (see spec §10.4).
-mcp_wiring_apply_for_mcp "$mcp_name"
+(cd "$project_root" && mcp_wiring_apply_for_mcp "$mcp_name")
 
 # ─── ESL auto-assess self-escalation (M4-S1) ─────────────────────────────────
 # When the installed MCP is tonberry, fire 'eidolons mcp assess tonberry' once so
@@ -146,5 +149,5 @@ mcp_wiring_apply_for_mcp "$mcp_name"
 if [ "$mcp_name" = "tonberry" ] && [ "${EIDOLONS_SKIP_AUTO_ASSESS:-0}" != "1" ]; then
   info "Auto-assessing ESL enforcement for ${mcp_name} (install cadence)..."
   bash "$SELF_DIR/mcp_assess.sh" "$mcp_name" \
-    ${project_root:+--project-root "$project_root"} || true
+    --project-root "$project_root" || true
 fi

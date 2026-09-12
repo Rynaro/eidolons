@@ -60,24 +60,27 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+if [ -n "$project_root" ]; then
+  [ -d "$project_root" ] || die "--project-root is not a directory: $project_root"
+  project_root="$(cd "$project_root" && pwd)"
+else
+  project_root="$(pwd)"
+fi
+
 kind="$(mcp_resolve_kind "$mcp_name")"
 
 # ─── MCP-to-Eidolon tool-surface unwiring (spec §10.1) ───────────────────────
 # Run BEFORE the per-kind driver so hosts_wired[] is still in the lockfile.
 # The driver removes the lockfile entry; unapply reads it first.
 # Soft failure: warns on individual file errors but never aborts (spec §10.4).
-mcp_wiring_unapply_for_mcp "$mcp_name"
+(cd "$project_root" && mcp_wiring_unapply_for_mcp "$mcp_name")
 
 case "$kind" in
   oci-image)
-    if [ -n "$project_root" ]; then
-      mcp_driver_oci_image_uninstall "$mcp_name" --project-root "$project_root"
-    else
-      mcp_driver_oci_image_uninstall "$mcp_name"
-    fi
+    mcp_driver_oci_image_uninstall "$mcp_name" --project-root "$project_root"
     ;;
   binary)
-    mcp_driver_binary_uninstall "$mcp_name"
+    (cd "$project_root" && mcp_driver_binary_uninstall "$mcp_name")
     ;;
   script)
     die "kind=script MCPs are not supported in v1.3"

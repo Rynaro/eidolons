@@ -143,9 +143,14 @@ jobs:
         id: notes
         run: |
           VERSION="${{ steps.ver.outputs.version }}"
-          # Extract the [VERSION] section from CHANGELOG.md.
-          NOTES="$(awk "/^## \[$VERSION\]/,/^## \[/{if(/^## \[/ && !/^## \[$VERSION\]/) exit; print}" CHANGELOG.md \
-            | tail -n +2 | head -n -1 || echo "See CHANGELOG.md for details.")"
+          # Extract the body of the [VERSION] section. A two-address awk range
+          # cannot be used here because both its start and end expressions
+          # match the release heading, yielding an empty section immediately.
+          NOTES="$(awk -v version="$VERSION" '
+            $0 ~ "^## \\[" version "\\]" { in_section=1; next }
+            in_section && /^## \[/ { exit }
+            in_section { print }
+          ' CHANGELOG.md || echo "See CHANGELOG.md for details.")"
           # Write to file so multiline passes cleanly to the next step.
           printf '%s\n' "$NOTES" > /tmp/release-notes.md
           echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"

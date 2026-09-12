@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [3.2.2] — 2026-09-12 — MCP and host wiring stability
+
+### Fixed
+- Codex MCP configuration now emits valid, marker-bounded TOML: independently rendered MCP tables stay on separate lines, environment values use TOML inline-table syntax, and rewrites preserve user content following the managed block. Incomplete or duplicate managed markers now refuse mutation rather than risking configuration loss.
+- MCP install, uninstall, and grant wiring consistently honor `--project-root`; same-version `mcp sync` repairs missing project registrations and honors declared exact, caret, and tilde version constraints without silently upgrading compatible installations.
+- Codex persona descriptors use the required `developer_instructions` field. When no project model profile is selected, Codex resolves a compatible OpenAI profile instead of inheriting the default Anthropic profile; explicit model pins retain precedence.
+- MCP health reports invalid OCI bind sources even when the Docker daemon is unavailable, and harness validation now detects a missing Copilot hook registration.
+- The Nexus release workflow now extracts the selected changelog section correctly for GitHub Release notes.
+
+### Changed
+- Pointer-only vendor instruction files may now resolve as symlinks to canonical `AGENTS.md`; substantive vendor guidance remains preserved for a deliberate migration.
+- Codex per-agent MCP grants are reported as advisory rather than claiming enforcement through obsolete YAML descriptors.
+- Cortex deep-reference resources are mirrored to the paths referenced by composed project instructions.
+
 ## [3.2.1] — 2026-08-31 — Gilgamesh joins the roster gallery
 
 ### Added

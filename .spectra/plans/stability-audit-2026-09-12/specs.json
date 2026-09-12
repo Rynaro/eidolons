@@ -1,0 +1,277 @@
+{
+  "schema_version": "1.0",
+  "audit_date": "2026-09-12",
+  "checkout": {
+    "version": "3.2.1",
+    "commit": "fd02811"
+  },
+  "objective": "Investigate stability defects and define concise independent fixes; no implementation.",
+  "release_blockers": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09"
+  ],
+  "specs": [
+    {
+      "id": "S01",
+      "priority": "P0",
+      "title": "Preserve valid Codex TOML and user configuration",
+      "status": "proposed",
+      "evidence": "reproduced",
+      "depends_on": [],
+      "acceptance": "Parser-valid multi-MCP/env/escaping fixtures; unowned prefix/suffix bytes preserved; ambiguous markers abort without mutation.",
+      "spec_path": "specs.md",
+      "section": "S01",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S02",
+      "priority": "P1",
+      "title": "Generate discoverable Codex agents",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [
+        "S01"
+      ],
+      "acceptance": "Both writers emit required developer_instructions; actual host discovers installed agent and loads its canonical persona; upgrades preserve user customization.",
+      "spec_path": "specs.md",
+      "section": "S02",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S03",
+      "priority": "P1",
+      "title": "Enforce MCP grants on the actual host surface",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [
+        "S01",
+        "S02"
+      ],
+      "acceptance": "Generated-agent allowed/denied/inherited capability matrix matches reported enforcement; sync/uninstall reconcile exposure.",
+      "spec_path": "specs.md",
+      "section": "S03",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S04",
+      "priority": "P1",
+      "title": "Honor model selection and report what actually ran",
+      "status": "proposed",
+      "evidence": "reproduced",
+      "depends_on": [
+        "S02"
+      ],
+      "acceptance": "Host defaults/pins/calibration/inheritance/preserved overrides/unavailable models tested; desired, written and observed settings distinct; selected worker model reaches dispatch.",
+      "spec_path": "specs.md",
+      "section": "S04",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S05",
+      "priority": "P1",
+      "title": "Diagnose and verify MCP startup",
+      "status": "proposed",
+      "evidence": "confirmed_with_runtime_gap",
+      "depends_on": [
+        "S01",
+        "S07"
+      ],
+      "acceptance": "Validate config/mount/executable and bounded MCP handshake; distinguish failure stages; real isolated server starts and cleans up.",
+      "spec_path": "specs.md",
+      "section": "S05",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S06",
+      "priority": "P1",
+      "title": "Apply installation to the requested project only",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [
+        "S01",
+        "S03"
+      ],
+      "acceptance": "CWD A installation into B changes only B, for OCI and binary drivers; spaces and relocation tested.",
+      "spec_path": "specs.md",
+      "section": "S06",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S07",
+      "priority": "P1",
+      "title": "Make MCP sync repair drift and report truthfully",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [
+        "S01",
+        "S02",
+        "S03",
+        "S06",
+        "S08"
+      ],
+      "acceptance": "Missing/drifted owned artifacts reconcile at same version; accurate counters/errors; second run byte-stable; plain versus combined sync explicit.",
+      "spec_path": "specs.md",
+      "section": "S07",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S08",
+      "priority": "P1",
+      "title": "Respect declared MCP version constraints",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [],
+      "acceptance": "Exact/caret/tilde/zero-major/prerelease constraints stay compatible; unsatisfied constraints preserve installed state.",
+      "spec_path": "specs.md",
+      "section": "S08",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S09",
+      "priority": "P1",
+      "title": "Install every referenced routing resource",
+      "status": "proposed",
+      "evidence": "confirmed",
+      "depends_on": [],
+      "acceptance": "Recursive local references resolve in an empty consumer without source checkout; missing resources fail validation; repeat sync stable.",
+      "spec_path": "specs.md",
+      "section": "S09",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S10",
+      "priority": "P2",
+      "title": "Bound MCP lifecycle and container cost",
+      "status": "proposed",
+      "evidence": "architecture_confirmed_leak_unverified",
+      "depends_on": [
+        "S05"
+      ],
+      "acceptance": "Four attributable clients remain isolated; broker mode has one backing instance per isolation/config identity; disconnect/crash cleanup tested; no direct shared stdio.",
+      "spec_path": "specs.md",
+      "section": "S10",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S11",
+      "priority": "P2",
+      "title": "Make Junction selection deterministic",
+      "status": "proposed",
+      "evidence": "augmentation",
+      "depends_on": [
+        "S03",
+        "S04",
+        "S05"
+      ],
+      "acceptance": "Qualifying non-named prompt chooses configured transport; nonqualifying/unavailable cases give bounded explicit fallback.",
+      "spec_path": "specs.md",
+      "section": "S11",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S12",
+      "priority": "P2",
+      "title": "Activate ATOMOS only for its defined context work",
+      "status": "proposed",
+      "evidence": "augmentation",
+      "depends_on": [
+        "S05",
+        "S09"
+      ],
+      "acceptance": "Relevant compose/verify lifecycle transition invokes and validates output; ordinary prompts skip; kernel fallback avoids retry/startup loops.",
+      "spec_path": "specs.md",
+      "section": "S12",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S13",
+      "priority": "P2",
+      "title": "Make AGENTS.md the shared instruction authority",
+      "status": "proposed",
+      "evidence": "augmentation",
+      "depends_on": [
+        "S09"
+      ],
+      "acceptance": "Compatible vendors follow relative links; preserve preexisting guidance; verify relocation and declared no-symlink fallback; structured host formats remain valid.",
+      "spec_path": "specs.md",
+      "section": "S13",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S14",
+      "priority": "P2",
+      "title": "Complete canonical hook attachment and verification",
+      "status": "proposed",
+      "evidence": "partly_implemented",
+      "depends_on": [
+        "S06",
+        "S13"
+      ],
+      "acceptance": "Canonical executables attach via supported links/registrations and fire once; broken/missing/duplicate registration detected per host; preserve user hooks.",
+      "spec_path": "specs.md",
+      "section": "S14",
+      "implementation_authorized": false
+    },
+    {
+      "id": "S15",
+      "priority": "P2",
+      "title": "Budget the context actually loaded",
+      "status": "proposed",
+      "evidence": "confirmed_accounting_gap",
+      "depends_on": [
+        "S04",
+        "S09",
+        "S13",
+        "S14"
+      ],
+      "acceptance": "Measure actual host injection including adapters/tools/handoffs, budget representative task without losing pins, compare quality/cost and mark missing telemetry unknown.",
+      "spec_path": "specs.md",
+      "section": "S15",
+      "implementation_authorized": false
+    }
+  ],
+  "augments": [
+    {
+      "id": "A01",
+      "title": "Generated-consumer acceptance matrix"
+    },
+    {
+      "id": "A02",
+      "title": "One diagnostic receipt"
+    },
+    {
+      "id": "A03",
+      "title": "Reproducible dogfood consumer"
+    }
+  ],
+  "validation": {
+    "existing_tests": {
+      "passed": 56,
+      "suites": [
+        "eiis_v3.bats",
+        "eiis_v3_effectiveness.bats",
+        "model_resolve.bats",
+        "model_wiring.bats"
+      ]
+    },
+    "isolated_reproductions": [
+      "multi-MCP TOML parse failure",
+      "environment JSON invalid in TOML",
+      "subsequent rewrite deletes trailing user profile",
+      "Codex model pin skipped by incompatible default profile",
+      "absent models block skips wiring"
+    ]
+  },
+  "gaps": [
+    "MCP tools unavailable in audit session",
+    "Docker client ownership and live server handshake unverified",
+    "Billed model and full host context injection unobserved"
+  ]
+}

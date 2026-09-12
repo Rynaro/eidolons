@@ -20,8 +20,11 @@
 #   (b) claude-code none-replace — `tools: none` → `tools: mcp__X__*`
 #   (c) claude-code skip+warn    — no `tools:` line → leave file unchanged (inherit-all),
 #                                  update sentinel, emit warning to stderr
-#   (d) codex block-seq append   — `tools:\n  - A` → append `  - mcp__X__*` item
-#                                  (no tools: block → skip+warn, same as (c))
+#   (d) codex advisory           — Codex TOML agent descriptors inherit project
+#                                  MCP servers. Its current descriptor schema has
+#                                  no per-agent tool allowlist, so catalogue grants
+#                                  cannot be enforced there. We report that fact
+#                                  instead of writing legacy YAML/Markdown files.
 #
 # Idempotency anchor: `x-eidolons-mcp-wired: [<sorted mcp names>]` in frontmatter.
 #
@@ -769,8 +772,8 @@ mcp_wiring_grant_targets() {
           [ -f "$cf" ] && printf '%s\t%s\n' "$host" "$cf"
           ;;
         codex)
-          local xf=".codex/agents/${eidolon}.md"
-          [ -f "$xf" ] && printf '%s\t%s\n' "$host" "$xf"
+          local xf=".codex/agents/${eidolon}.toml"
+          [ -f "$xf" ] && printf '%s\t%s\n' "$host" "__codex_advisory__"
           ;;
         cursor)
           printf '%s\t%s\n' "cursor" "__cursor_info__"
@@ -902,6 +905,7 @@ mcp_wiring_apply_for_mcp() {
 
   local cursor_info_emitted=0
   local opencode_info_emitted=0
+  local codex_info_emitted=0
   local line host agent_file
 
   while IFS= read -r line; do
@@ -923,11 +927,18 @@ mcp_wiring_apply_for_mcp() {
         fi
         continue
         ;;
+      codex)
+        if [ "$codex_info_emitted" = "0" ]; then
+          warn "${mcp_name}: Codex agent descriptors inherit project MCP servers; grants/exclusions are advisory until Codex exposes per-agent MCP allowlists."
+          codex_info_emitted=1
+        fi
+        continue
+        ;;
     esac
 
     # Skip the special info markers.
     case "$agent_file" in
-      __cursor_info__|__opencode_info__) continue ;;
+      __cursor_info__|__opencode_info__|__codex_advisory__) continue ;;
     esac
 
     mcp_wiring_patch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"
@@ -978,6 +989,7 @@ mcp_wiring_unapply_for_mcp() {
     case "$agent_file" in
       .claude/agents/*.md)  host="claude-code" ;;
       .codex/agents/*.md)   host="codex" ;;
+      .codex/agents/*.toml) host="codex" ;;
       *)                    continue ;;  # skip non-agent-file entries (e.g. harness manifest)
     esac
     mcp_wiring_unpatch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"

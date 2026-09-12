@@ -950,7 +950,8 @@ _mcp_merge_into_opencode_json() {
 
 # _mcp_codex_config_toml_merge NAME PROJECT_ROOT RENDERED_JSON
 # Writes/updates the [mcp_servers.<name>] table in .codex/config.toml using
-# a marker-bounded managed-section rewrite (no TOML parser).
+# a marker-bounded managed-section rewrite. The generated values are TOML, not
+# JSON: in particular, TOML inline tables use `=` rather than `:`.
 # Markers: # eidolon:mcp start / # eidolon:mcp end
 # Rebuild-from-lock strategy: reads all installed MCPs from eidolons.mcp.lock
 # and regenerates the full managed section (AC-R11-3, R11-6).
@@ -970,7 +971,8 @@ _mcp_codex_config_toml_merge() {
   # Build the managed section content from ALL installed MCPs (rebuild-from-lock).
   # This handles multi-MCP coexistence and makes uninstall trivially correct.
   local lock_file="${project_root}/eidolons.mcp.lock"
-  local section_body=""
+  local section_file
+  section_file="$(mktemp)"
 
   # First, build the entry for the current MCP being installed from rendered_json.
   # We build a map of name→rendered for all installed MCPs.
@@ -996,21 +998,28 @@ _mcp_codex_config_toml_merge() {
     local env_json
     env_json="$(printf '%s' "$entry_json" | jq -c '.env // empty' 2>/dev/null)"
 
+    # jq's JSON string syntax is also valid TOML basic-string syntax.
+    # It prevents a command or environment value from escaping its assignment.
     printf '[mcp_servers.%s]\n' "$mcp_name"
-    printf 'command = "%s"\n' "$cmd"
+    printf 'command = %s\n' "$(jq -Rn --arg value "$cmd" '$value')"
     printf 'args = %s\n' "$args_json"
     if [ -n "$env_json" ] && [ "$env_json" != "null" ]; then
-      printf 'env = %s\n' "$env_json"
+      # Convert object entries to a TOML inline table. Quoting keys permits
+      # normal environment-variable names as well as vendor-specific names.
+      printf 'env = {'
+      printf '%s' "$env_json" | jq -r 'to_entries | sort_by(.key)[] | "\(.key|@json) = \(.value|tostring|@json)"' \
+        | awk 'BEGIN { first=1 } { if (!first) printf ", "; printf "%s", $0; first=0 }'
+      printf '}\n'
     fi
     printf '\n'
   }
 
-  # Build table for the current MCP (always use freshly rendered JSON).
-  local current_table
-  current_table="$(_build_toml_table_for_rendered "$name" "$rendered_json")"
+  # Build the current table directly into a file. Do not capture its stdout:
+  # command substitution strips trailing newlines and previously joined tables
+  # and markers onto the preceding assignment.
+  _build_toml_table_for_rendered "$name" "$rendered_json" > "$section_file"
 
   # Build tables for all other already-installed MCPs from lockfile.
-  local other_tables=""
   if [ -f "$lock_file" ]; then
     local other_names
     other_names="$(yaml_to_json "$lock_file" 2>/dev/null \
@@ -1026,67 +1035,69 @@ _mcp_codex_config_toml_merge() {
           # Wrap as mcpServers object for the helper.
           local other_rendered
           other_rendered="$(jq -n --arg n "$_oname" --argjson e "$other_entry_json" '{mcpServers: {($n): $e}}')"
-          local other_table
-          other_table="$(_build_toml_table_for_rendered "$_oname" "$other_rendered")"
-          if [ -n "$other_table" ]; then
-            other_tables="${other_tables}${other_table}"
-          fi
+          _build_toml_table_for_rendered "$_oname" "$other_rendered" >> "$section_file"
         fi
       fi
     done
   fi
 
-  section_body="${current_table}${other_tables}"
-
-  # Strip trailing newline from section body for clean marker placement.
-  local new_section
-  new_section="# eidolon:mcp start
-${section_body}# eidolon:mcp end"
+  # Markers are deliberately own lines so a future rewrite can find them.
+  local managed_file
+  managed_file="$(mktemp)"
+  {
+    printf '%s\n' '# eidolon:mcp start'
+    cat "$section_file"
+    printf '%s\n' '# eidolon:mcp end'
+  } > "$managed_file"
 
   if [ ! -f "$toml_file" ]; then
-    printf '%s\n' "$new_section" > "$toml_file"
+    mv "$managed_file" "$toml_file"
+    rm -f "$section_file"
     ok "${name} .codex/config.toml managed section written"
     return 0
   fi
 
-  # File exists: check for existing markers.
-  if grep -qF "# eidolon:mcp start" "$toml_file" 2>/dev/null; then
-    # Rebuild-from-markers: replace the marker-bounded region with new_section.
-    local tmp_toml
-    tmp_toml="$(mktemp)"
-    awk '
-      /^# eidolon:mcp start/ { skip=1; next }
-      /^# eidolon:mcp end/ { skip=0; next }
-      !skip { print }
-    ' "$toml_file" > "$tmp_toml"
-
-    # Build final file: user content + new section.
-    # Determine if user content has trailing newline.
-    local user_content
-    user_content="$(cat "$tmp_toml")"
-    rm -f "$tmp_toml"
-
-    local final_content
-    if [ -n "$user_content" ]; then
-      final_content="${user_content}
-${new_section}"
-    else
-      final_content="$new_section"
+  local start_lines end_lines start_line end_line final_file
+  start_lines="$(grep -c '^# eidolon:mcp start$' "$toml_file" 2>/dev/null || true)"
+  end_lines="$(grep -c '^# eidolon:mcp end$' "$toml_file" 2>/dev/null || true)"
+  if [ "$start_lines" = "0" ] && [ "$end_lines" = "0" ]; then
+    # No owned region yet: append the new region after user content.
+    final_file="$(mktemp)"
+    cat "$toml_file" > "$final_file"
+    [ -s "$final_file" ] && printf '\n' >> "$final_file"
+    cat "$managed_file" >> "$final_file"
+  elif [ "$start_lines" = "1" ] && [ "$end_lines" = "1" ]; then
+    start_line="$(grep -n '^# eidolon:mcp start$' "$toml_file" | cut -d: -f1)"
+    end_line="$(grep -n '^# eidolon:mcp end$' "$toml_file" | cut -d: -f1)"
+    if [ "$start_line" -ge "$end_line" ]; then
+      rm -f "$section_file" "$managed_file"
+      warn ".codex/config.toml has inverted Eidolons MCP markers; refusing to rewrite it"
+      return 1
     fi
-
-    # Idempotency check.
-    local existing_content
-    existing_content="$(cat "$toml_file")"
-    if [ "$existing_content" = "$final_content" ]; then
-      info ".codex/config.toml managed section unchanged (no-op)"
+    # Replace in place; bytes outside the marker-bounded region remain in
+    # their original order, including user content following the region.
+    final_file="$(mktemp)"
+    if [ "$start_line" -gt 1 ]; then
+      sed -n "1,$((start_line - 1))p" "$toml_file" > "$final_file"
     else
-      printf '%s\n' "$final_content" > "$toml_file"
-      ok "${name} .codex/config.toml managed section updated"
+      : > "$final_file"
     fi
+    cat "$managed_file" >> "$final_file"
+    sed -n "$((end_line + 1)),\$p" "$toml_file" >> "$final_file"
   else
-    # No markers yet: append the new section.
-    printf '\n%s\n' "$new_section" >> "$toml_file"
-    ok "${name} .codex/config.toml managed section appended"
+    rm -f "$section_file" "$managed_file"
+    warn ".codex/config.toml has incomplete or duplicate Eidolons MCP markers; refusing to rewrite it"
+    return 1
+  fi
+
+  if cmp -s "$toml_file" "$final_file"; then
+    info ".codex/config.toml managed section unchanged (no-op)"
+    rm -f "$section_file" "$final_file" "$managed_file"
+  else
+    chmod --reference="$toml_file" "$final_file" 2>/dev/null || true
+    mv "$final_file" "$toml_file"
+    rm -f "$section_file" "$managed_file"
+    ok "${name} .codex/config.toml managed section updated"
   fi
 }
 
@@ -1726,6 +1737,11 @@ mcp_driver_oci_image_health() {
       overall="degraded"
     fi
 
+    # Configuration errors are actionable even when Docker itself is down.
+    # Run the UID and bind-source probes before the daemon/image branch so a
+    # stale absolute host mount is never masked as only a daemon failure.
+    _mcp_driver_oci_uid_bind_probes "$name"
+
     # probe: image_local (only if daemon reachable)
     if [ "$daemon_rc" -eq 0 ]; then
       local digest source_image locked_entry
@@ -1747,11 +1763,6 @@ mcp_driver_oci_image_health() {
         printf '%s  image_local      missing   no lockfile entry\n' "$name"
         overall="missing"
       fi
-
-      # probes: mcp_uid_pin, mcp_bind_path_exists, mcp_bind_path_readable
-      # Reads .mcp.json in CWD; silently no-ops if absent/malformed/no atlas-aci key.
-      # The probe lines use err|warn|ok status words (separate from ok|degraded|missing).
-      _mcp_driver_oci_uid_bind_probes "$name"
 
       # probe: registry_reachable (soft; if full_ref available)
       if [ -n "${full_ref:-}" ]; then
