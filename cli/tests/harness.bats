@@ -1124,6 +1124,17 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "harness: check detects a missing Copilot hook registration" {
+  seed_copilot_manifest
+  seed_lock
+  run eidolons harness install --hosts copilot --non-interactive
+  [ "$status" -eq 0 ]
+  rm -f .github/hooks/eidolons.json
+  run eidolons harness check
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ ".github/hooks/eidolons.json" ]]
+}
+
 @test "harness: copilot install prints upstream-bug caveat" {
   seed_copilot_manifest
   seed_lock

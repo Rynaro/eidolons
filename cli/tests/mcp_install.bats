@@ -816,6 +816,41 @@ EOF
   [ "$_before" = "$_after" ]
 }
 
+@test "mcp: codex managed TOML preserves a following user table across rewrite" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_fake_curl_and_gh_for_install
+  seed_manifest_with_hosts "codex"
+  mkdir -p .codex
+  cat > .codex/config.toml <<'EOF'
+# eidolon:mcp start
+[mcp_servers.legacy]
+command = "legacy"
+args = []
+# eidolon:mcp end
+
+[profiles.user]
+model = "user-choice"
+EOF
+  run bash "$EIDOLONS_ROOT/cli/src/mcp_install.sh" "junction@${FAKE_JUNCTION_VERSION}"
+  [ "$status" -eq 0 ]
+  grep -qF '[profiles.user]' .codex/config.toml
+  grep -qF 'model = "user-choice"' .codex/config.toml
+  run python3 -c 'import pathlib, tomllib; tomllib.loads(pathlib.Path(".codex/config.toml").read_text())'
+  [ "$status" -eq 0 ]
+}
+
+@test "mcp: codex managed TOML serializes environment values as TOML" {
+  mkdir -p .codex
+  run bash -c '
+    . "$1/cli/src/lib.sh"
+    . "$1/cli/src/lib_mcp.sh"
+    _mcp_codex_config_toml_merge envtest "$PWD" '\''{"mcpServers":{"envtest":{"command":"echo","args":[],"env":{"A_B":"value"}}}}'\''
+  ' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  run python3 -c 'import pathlib, tomllib; d=tomllib.loads(pathlib.Path(".codex/config.toml").read_text()); assert d["mcp_servers"]["envtest"]["env"]["A_B"] == "value"'
+  [ "$status" -eq 0 ]
+}
+
 @test "mcp: codex config.toml not written when codex not wired" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_install

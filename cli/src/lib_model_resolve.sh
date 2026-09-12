@@ -11,6 +11,9 @@
 #   model_resolve_for           EIDOLON_ID
 #                               Echo "model<TAB>tier<TAB>profile<TAB>source"
 #                               for the given Eidolon using full precedence.
+#   model_resolve_for_host      EIDOLON_ID HOST
+#                               Resolve for a host, selecting a compatible
+#                               profile when the consumer did not select one.
 #   model_tier_for              EIDOLON_ID
 #                               Echo the resolved tier name (light|standard|deep).
 #   model_tier_source           EIDOLON_ID
@@ -226,6 +229,34 @@ model_resolve_for() {
   # Hard miss — profile doesn't cover this tier even after resolve-UP.
   warn "model_resolve_for: no model found for '$_id' (profile=$_profile tier=$_tier)"
   return 1
+}
+
+# model_resolve_for_host EIDOLON_ID HOST
+# In a mixed-host project, the roster default is not an executable universal
+# profile. Preserve an explicit models.profile, but otherwise choose the first
+# profile that declares the target host. Pins/calibrations retain precedence.
+model_resolve_for_host() {
+  local _id="$1" _host="$2" _explicit _profile _saved _patched _result
+  _explicit=$(printf '%s' "$CONSUMER_JSON" | jq -r '.models.profile // empty' 2>/dev/null || true)
+  if [ -n "$_explicit" ]; then
+    model_resolve_for "$_id"
+    return $?
+  fi
+  _profile=$(printf '%s' "$PROFILES_JSON" | jq -r --arg h "$_host" \
+    '.profiles | to_entries[] | select((.value.applies_to_hosts // []) | any(. == $h)) | .key' \
+    2>/dev/null | head -1 || true)
+  if [ -z "$_profile" ]; then
+    model_resolve_for "$_id"
+    return $?
+  fi
+  _saved="$CONSUMER_JSON"
+  _patched=$(printf '%s' "$CONSUMER_JSON" | jq -c --arg p "$_profile" '.models = (.models // {}) | .models.profile = $p')
+  CONSUMER_JSON="$_patched"
+  export CONSUMER_JSON
+  _result=$(model_resolve_for "$_id")
+  CONSUMER_JSON="$_saved"
+  export CONSUMER_JSON
+  printf '%s\n' "$_result"
 }
 
 # ─── Utility ──────────────────────────────────────────────────────────────────

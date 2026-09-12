@@ -326,6 +326,16 @@ USER_CLAUDE
   diff -q copilot.first   .github/copilot-instructions.md
 }
 
+@test "dispatch pointer: pointer-only CLAUDE.md links to canonical AGENTS.md" {
+  run bash -c '
+    . "$1/cli/src/lib.sh"
+    apply_dispatch_pointers "AGENTS.md,CLAUDE.md"
+  ' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  [ -L CLAUDE.md ]
+  [ "$(readlink CLAUDE.md)" = "AGENTS.md" ]
+}
+
 # G-A1.2 — dispatch-pointer coexists with cortex block (different marker names,
 # both present, both round-trip).
 @test "dispatch pointer coexists with cortex: both markers present in CLAUDE.md" {

@@ -1852,6 +1852,47 @@ apply_dispatch_pointers() {
     fi
     collapse_consecutive_blanks "$vendor"
   done
+
+  # AGENTS.md is the single shared instruction source. Replace only an
+  # Eidolons-owned pointer-only vendor file: user-authored guidance remains a
+  # real file and is never discarded during a sync.
+  for vendor in $(echo "$pointer_targets_csv" | tr ',' ' '); do
+    [[ "$vendor" = "AGENTS.md" ]] && continue
+    link_vendor_pointer_to_agents "$vendor"
+  done
+}
+
+# link_vendor_pointer_to_agents VENDOR_FILE
+# Link a vendor instruction entrypoint to AGENTS.md when it contains no content
+# beyond Eidolons' own dispatch-pointer block. Returns success for safe no-ops.
+link_vendor_pointer_to_agents() {
+  local vendor="$1" target residual tmp
+  [[ "${EIDOLONS_NO_SYMLINKS:-0}" != "1" ]] || return 0
+  [[ -f AGENTS.md && ! -L AGENTS.md && -f "$vendor" && ! -L "$vendor" ]] || return 0
+  case "$vendor" in
+    CLAUDE.md|GEMINI.md) target="AGENTS.md" ;;
+    .github/copilot-instructions.md) target="../AGENTS.md" ;;
+    *) return 0 ;;
+  esac
+  tmp="$(mktemp)"
+  awk '
+    /^<!-- eidolon:dispatch-pointer start -->$/ { skip=1; next }
+    /^<!-- eidolon:dispatch-pointer end -->$/ { skip=0; next }
+    !skip { print }
+  ' "$vendor" > "$tmp"
+  residual="$(tr -d '[:space:]' < "$tmp")"
+  rm -f "$tmp"
+  if [[ -n "$residual" ]]; then
+    info "  preserving $vendor as a regular file because it contains user guidance"
+    return 0
+  fi
+  rm -f "$vendor"
+  if ln -s "$target" "$vendor" 2>/dev/null && [[ -e "$vendor" ]]; then
+    ok "Linked $vendor → AGENTS.md"
+  else
+    rm -f "$vendor"
+    warn "Could not link $vendor to AGENTS.md; leaving a pointer fallback on next sync"
+  fi
 }
 
 # ─── Installer subprocess capture ───────────────────────────────────────

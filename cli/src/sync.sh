@@ -462,7 +462,7 @@ STUB
     summary="$(echo "$entry" | jq -r '.methodology.summary // ""')"
     printf 'name = "%s"\n' "$name" > ".codex/agents/$name.toml"
     printf 'description = "%s"\n' "$display — $summary" >> ".codex/agents/$name.toml"
-    printf 'instructions = "See %s for the canonical persona and .eidolons/%s/SPEC.md for its methodology."\n' "$_persona_path" "$name" \
+    printf 'developer_instructions = "See %s for the canonical persona and .eidolons/%s/SPEC.md for its methodology."\n' "$_persona_path" "$name" \
       >> ".codex/agents/$name.toml"
     info "  wrote .codex/agents/$name.toml (nexus safety net, G10)"
   fi
@@ -697,9 +697,9 @@ chmod 0644 "$PROJECT_LOCK" 2>/dev/null || true
 # previous lock wholesale. Wire from its final installed-member set (important
 # when this sync adds a member absent from the old lock), then persist model
 # provenance into this same final lock. Both remain best-effort during sync.
-if model_resolve_init 2>/dev/null && model_has_block 2>/dev/null; then
-  model_wiring_apply_all 0 2>/dev/null || true
-  model_wiring_update_lock_all 2>/dev/null || true
+if model_resolve_init 2>/dev/null; then
+  model_wiring_apply_all 0 || warn "model wiring completed with unresolved host descriptors"
+  model_wiring_update_lock_all 2>/dev/null || warn "model provenance lock update failed"
 fi
 ok "Wrote $PROJECT_LOCK"
 
@@ -719,6 +719,7 @@ CORTEX_ROOT_DEST="./EIDOLONS.md"
 CORTEX_DEST="./.eidolons/cortex/EIDOLONS.md"
 CORTEX_DEEP_SRC="$NEXUS/methodology/cortex"
 CORTEX_DEEP_DEST="./.eidolons/cortex"
+CORTEX_DEEP_REF_DEST="./methodology/cortex"
 if [[ "$DRY_RUN" == "true" ]]; then
   info "  [dry-run] would install canonical cortex at $CORTEX_ROOT_DEST"
   info "  [dry-run] would link compatibility path $CORTEX_DEST to the root cortex"
@@ -738,19 +739,23 @@ elif [[ -f "$CORTEX_SRC" ]]; then
     ln -s "../../EIDOLONS.md" "$CORTEX_DEST"
     ok "Linked cortex compatibility path → $CORTEX_DEST"
   fi
-  # Mirror deep companion tables if the source directory exists.
+  # Mirror every deep companion table rather than maintaining a stale hand
+  # list. EIDOLONS.md references methodology/cortex/ relative to the project
+  # root, while older adapters use .eidolons/cortex/, so both supported paths
+  # receive the same canonical payload.
   if [[ -d "$CORTEX_DEEP_SRC" ]]; then
-    for _deep_file in trance-matrix.md handoff-graph.md validation-gates.md README.md memory-protocol.md esl-protocol.md tier-execution.md; do
-      _src="$CORTEX_DEEP_SRC/$_deep_file"
-      _dst="$CORTEX_DEEP_DEST/$_deep_file"
-      if [[ -f "$_src" ]]; then
+    mkdir -p "$CORTEX_DEEP_DEST" "$CORTEX_DEEP_REF_DEST"
+    for _src in "$CORTEX_DEEP_SRC"/*.md; do
+      [[ -f "$_src" ]] || continue
+      _deep_file="$(basename "$_src")"
+      for _dst in "$CORTEX_DEEP_DEST/$_deep_file" "$CORTEX_DEEP_REF_DEST/$_deep_file"; do
         if [[ ! -f "$_dst" ]] || ! diff -q "$_src" "$_dst" >/dev/null 2>&1; then
           cp "$_src" "$_dst"
           ok "Mirrored cortex deep table → $_dst"
         else
           info "Cortex deep table already up-to-date: $_dst"
         fi
-      fi
+      done
     done
   fi
 else

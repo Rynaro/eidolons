@@ -155,21 +155,15 @@ description: Safety-net stub.
 EOF
 }
 
-# Seed a codex agent file with tools as a YAML block sequence.
+# Seed a current Codex TOML agent descriptor.
 seed_codex_agent() {
   local name="$1"
   mkdir -p ".codex/agents"
-  cat > ".codex/agents/${name}.md" <<EOF
----
-name: ${name}
-description: Codex agent for ${name}.
-tools:
-  - Read
-  - Grep
-model: gpt-5
----
-
-# ${name} codex body.
+  cat > ".codex/agents/${name}.toml" <<EOF
+name = "${name}"
+description = "Codex agent for ${name}."
+developer_instructions = "Load canonical instructions."
+model = "gpt-5"
 EOF
 }
 
@@ -726,7 +720,7 @@ EOF
 
 # ─── W6.x — codex hosts ──────────────────────────────────────────────────────
 
-@test "W6.1: codex hosts.wire patches .codex/agents/atlas.md with atlas-aci (allowlist MCP, case d)" {
+@test "W6.1: Codex grants are reported advisory and never patch a legacy YAML descriptor" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -745,9 +739,11 @@ EOF
 
   # claude-code agent patched with atlas-aci.
   grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
-  # codex agent patched with atlas-aci as block-sequence item.
-  grep -q 'mcp__atlas_aci__\*' .codex/agents/atlas.md
-  grep -q 'x-eidolons-mcp-wired:.*atlas-aci' .codex/agents/atlas.md
+  # Codex inherits project MCP servers and has no per-agent allowlist surface.
+  # The generated TOML descriptor stays valid and is never replaced by .md.
+  [ -f .codex/agents/atlas.toml ]
+  ! grep -q 'mcp__atlas_aci__\*' .codex/agents/atlas.toml
+  [ ! -e .codex/agents/atlas.md ]
 
   # No junction in any agent file.
   ! grep -q 'mcp__junction__' .claude/agents/atlas.md

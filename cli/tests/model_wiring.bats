@@ -193,6 +193,28 @@ EOF
   grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
 }
 
+@test "model wiring: Codex selects its compatible profile when models is absent" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  grep -q '^model = "gpt-5.6-sol"$' .codex/agents/spectra.toml
+}
+
+@test "model wiring: explicit Codex model pin is applied despite default profile" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_codex_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  members:
+    spectra:
+      model: "pinned-codex-model"
+EOF
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  grep -q '^model = "pinned-codex-model"$' .codex/agents/spectra.toml
+}
+
 @test "model wiring: codex TOML write is byte-idempotent" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_codex_project

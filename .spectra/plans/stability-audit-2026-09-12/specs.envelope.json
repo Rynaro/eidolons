@@ -1,0 +1,44 @@
+{
+  "envelope_version": "1.0",
+  "message_id": "8c6a2870-7d5b-4bea-830c-dd96dbcf85ab",
+  "thread_id": "4ef10dc1-acf1-4cee-b9da-a8068a97ee05",
+  "parent_id": null,
+  "from": {
+    "eidolon": "spectra",
+    "version": "4.9.1"
+  },
+  "to": {
+    "eidolon": "apivr",
+    "version": "n/a"
+  },
+  "performative": "PROPOSE",
+  "edge_origin": "roster",
+  "objective": "Review fifteen prioritized stability fix specifications; implementation is not authorized.",
+  "artifact": {
+    "kind": "spec",
+    "schema_version": "1.0",
+    "path": ".spectra/plans/stability-audit-2026-09-12/specs.md",
+    "sha256": "aecaef8cbeb9a7557c03aba5ee7c9699767080f759706b8fdefc2b754205d7c4",
+    "size_bytes": 19441
+  },
+  "integrity": {
+    "method": "sha256",
+    "value": "aecaef8cbeb9a7557c03aba5ee7c9699767080f759706b8fdefc2b754205d7c4"
+  },
+  "trace": {
+    "ts": "2026-09-12T20:53:16Z",
+    "host": "codex",
+    "model": "orchestrator runtime model unobserved; SPECTRA critique requested gpt-5.6-sol",
+    "tier": "standard"
+  },
+  "assumptions": [
+    "Read-only audit of implementation; only specification artifacts were added.",
+    "No live Docker or MCP runtime behavior was verified.",
+    "Configured and requested models are not independent evidence of provider billing."
+  ],
+  "expected_response": {
+    "performative": "CRITIQUE",
+    "shape_hint": "Review scope and acceptance only; do not implement."
+  },
+  "x_execution_authorized": false
+}

@@ -78,7 +78,7 @@ eiis_v3_render_adapters() {
         {
           printf 'name = "%s"\n' "$name"
           printf 'description = "%s"\n' "$description"
-          printf 'instructions = "Load %s/PERSONA.md and %s/SPEC.md."\n' "$root" "$root"
+          printf 'developer_instructions = "Load %s/PERSONA.md and %s/SPEC.md."\n' "$root" "$root"
           printf '# generated_by: eidolons\n'
         } > ".codex/agents/$name.toml"
         adapter_lines="${adapter_lines}pointer\t.codex/agents/$name.toml\t$root/PERSONA.md\n"
