@@ -128,6 +128,26 @@ load helpers
   [ "$pinned" = "$expected" ]
 }
 
+@test "atomos config receipt: a stale user pin is not current" {
+  local project="$BATS_TEST_TMPDIR/atomos-currentness-project"
+  mkdir -p "$project"
+  local digest="sha256:b3f67b4ef64230ebe91aa37efea14e386f178950a2750e0c26c8d29d7ea4a639"
+
+  run bash -c "
+    set -euo pipefail
+    export EIDOLONS_NEXUS='$EIDOLONS_ROOT'
+    export NEXUS='$EIDOLONS_ROOT'
+    . '$EIDOLONS_ROOT/cli/src/lib.sh'
+    . '$EIDOLONS_ROOT/cli/src/lib_mcp.sh'
+    _mcp_oci_render_and_merge atomos '$project' '$digest' 'cli/templates/mcp/atomos.mcp.json.tmpl'
+    _mcp_oci_config_is_current atomos 0.2.0 '$project'
+    jq '(.mcpServers.atomos.args | index(\"--user\")) as \$i | .mcpServers.atomos.args[\$i + 1] = \"1000:1000\"' '$project/.mcp.json' > '$project/stale.json'
+    mv '$project/stale.json' '$project/.mcp.json'
+    ! _mcp_oci_config_is_current atomos 0.2.0 '$project'
+  "
+  [ "$status" -eq 0 ]
+}
+
 # ─── Render: both entries coexist in the same .mcp.json (merge does not clobber) ──
 
 @test "uid-pin render: tonberry + atomos coexist in .mcp.json, both carry the current uid:gid" {

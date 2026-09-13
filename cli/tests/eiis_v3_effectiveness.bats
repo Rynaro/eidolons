@@ -29,6 +29,14 @@ JSON
   done
 }
 
+@test "v3 effectiveness: Claude adapter projects ATLAS's read-only capability class" {
+  setup_effective_package
+  run bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas claude-code' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  grep -q '^tools: \[Read, Glob, Grep\]$' .claude/agents/atlas.md
+  ! grep -q 'Bash\|Edit\|Write' .claude/agents/atlas.md
+}
+
 @test "v3 effectiveness: skill content loads identically through symlink and pointer fallback" {
   setup_effective_package
   bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas claude-code' _ "$EIDOLONS_ROOT"

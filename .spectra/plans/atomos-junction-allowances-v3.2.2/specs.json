@@ -1,0 +1,285 @@
+{
+  "schema_version": "1.0",
+  "status": "in_progress",
+  "execution_authorized": true,
+  "baseline": {
+    "branch": "main",
+    "commit": "c195bd25fc9a3fea80fbc98e67cc6ffb7846fc71",
+    "tag": "v3.2.2",
+    "version": "3.2.2"
+  },
+  "created_at": "2026-09-13T00:07:14Z",
+  "scope": "Implement shared P1 registration and allowance safety first; Atomos primary, MCP allowances and Junction secondary.",
+  "priority_order": [
+    "MCP-01",
+    "GRANT-01",
+    "GRANT-02",
+    "GRANT-03",
+    "GRANT-04",
+    "ATOMOS-01",
+    "ATOMOS-02",
+    "ATOMOS-03",
+    "JUNCTION-01",
+    "JUNCTION-02",
+    "JUNCTION-03"
+  ],
+  "specs": [
+    {
+      "id": "MCP-01",
+      "priority": "P1",
+      "title": "Reconcile executable registrations across every selected host",
+      "evidence": [
+        "cli/src/mcp_sync.sh:117-126,154-158",
+        "cli/src/lib_mcp.sh:172-183,1652-1658,1833-1871",
+        ".mcp.json:82-101"
+      ],
+      "problem": "Atomos passes static verification and sync no-ops despite stale mount/UID; any server entry masks absent Codex registration. Junction can likewise retain a nonexistent binary path.",
+      "scope": "mcp_sync, mcp_verify, OCI/binary installation and host read-back; shared registration comparison.",
+      "requirements": "Compare normalized expected command, argv, identity mounts, working directory, user and digest against each selected host. Recognize -u/--user and supported equivalent forms. Reconcile from selected local cache without unnecessary downloads. Keep diagnostics read-only; report per-host failures without a complete-success receipt. Static validity, process readiness and live tool availability must remain separate verdicts.",
+      "acceptance": [
+        "Copied Atomos registration with a foreign mount or wrong --user fails static comparison; requested sync repairs it, and a second sync is byte-stable.",
+        "With Claude and Codex selected, valid .mcp.json plus missing/malformed Codex config cannot pass; foreign content is preserved on repair failure.",
+        "A stale Junction command with a valid version-matched local cache repairs without download; a missing cache reports the actual prerequisite."
+      ],
+      "depends_on": [],
+      "classification": "confirmed defect"
+    },
+    {
+      "id": "GRANT-01",
+      "priority": "P1",
+      "title": "Parse and validate agent tool fields before mutation",
+      "evidence": [
+        "cli/src/lib_mcp_wiring.sh:219-234,293-304"
+      ],
+      "problem": "CSV concatenation changes tools: [Read, Grep] into invalid YAML; multi-line lists are also not handled as structured data.",
+      "scope": "Claude descriptor parser/writer and mcp_wiring regression fixtures.",
+      "requirements": "Normalize supported scalar, inline-list and block-list representations while preserving non-owned fields/body and original tool membership. Reject ambiguous, duplicate or malformed frontmatter without replacing the file. Validate output before atomic replacement. Define empty-tool behavior per supported host/version: none is a legacy convention, not assumed universal host syntax; use a supported deny-all representation or refuse safely, never silently switch to inheritance.",
+      "acceptance": [
+        "Scalar, inline-list and block-list fixtures remain parseable and retain built-ins after one MCP grant; repeat apply is byte-stable.",
+        "Malformed/duplicate tools fields produce a named failure with byte-identical original file.",
+        "Removing a managed grant preserves unrelated tools; explicit empty/none input either retains the host-supported no-tool restriction or refuses safely without changing bytes."
+      ],
+      "depends_on": [],
+      "classification": "confirmed defect"
+    },
+    {
+      "id": "GRANT-02",
+      "priority": "P1",
+      "title": "Project canonical capability policy into host adapters",
+      "evidence": [
+        "cli/src/lib_eiis_v3.sh:6-15,66-83",
+        "cli/src/sync.sh:418-423,593-601",
+        "roster/index.yaml:254-258",
+        "roster/aci.yaml:31-65"
+      ],
+      "problem": "EIIS v3 discovery adapters omit explicit capabilities; Claude inherits parent tools, so installing adapters can lose restrictions while missing the requested allowance lines.",
+      "scope": "Schema-validated host capability mapping, lib_eiis_v3 rendering, roster/ACI policy reconciliation, selected host adapters.",
+      "requirements": "Use existing roster security plus ACI class boundaries as policy inputs; add a versioned host projection map rather than assuming an unverified package capability field. Generate host-native tool metadata alongside canonical instruction pointers. Effective MCP grants must not override class/operation restrictions; surface conflicts such as tool-less classes versus catalogue all-grants. Preserve required built-ins. Report unsupported host enforcement as advisory, never invent native fields. Define supported host/version contracts before claiming enforcement. Removing Edit/Write while allowing unrestricted Bash or write-capable MCP operations is not sufficient evidence of read-only enforcement.",
+      "acceptance": [
+        "Render -> wire -> parse preserves a scout's read-only boundaries and a coder's required edit/test capabilities; granting memory never creates an MCP-only tools list.",
+        "Tool-less/class-policy conflict is explicitly reported and never silently widens authority; no duplicated persona or methodology content is introduced.",
+        "Each supported host has a versioned capability test; unsupported enforcement reports advisory. Claude reuse references an existing parent server instead of creating duplicate inline connections where appropriate."
+      ],
+      "depends_on": [
+        "GRANT-01"
+      ],
+      "classification": "confirmed defect; host projection design required"
+    },
+    {
+      "id": "GRANT-03",
+      "priority": "P1",
+      "title": "Reconcile actual grants, exclusions and truthful receipts",
+      "evidence": [
+        "cli/src/lib_mcp_wiring.sh:209-212,599-618,753-763,944-947,1007-1029"
+      ],
+      "problem": "A stale sentinel prevents repair; skipped/failed patch attempts can still enter the receipt. Exclusions suppress new additions but do not revoke previously managed grants.",
+      "scope": "MCP grant desired-state reconciliation and receipt/status schema.",
+      "requirements": "Recompute desired versus observed tool access on every reconciliation; treat markers as ownership hints, not proof. Record applied, inherited, advisory, excluded, blocked or failed states with reason and host/agent identity. Remove only managed grants when policy/exclusions change. For inheritance, either enforce a host-native restriction or report exclusion as unenforced. Upgrade old receipts without treating their stamps as evidence. Capture ownership before adding grants: identical pre-existing user grants never become installer-owned. Uninstall cleans only managed grants and receipts.",
+      "acceptance": [
+        "A descriptor with a Crystalium sentinel but no Crystalium access is repaired; deleting a glob after install is detected on the next check.",
+        "Apply -> exclude -> restore -> uninstall -> repeat preserves user-owned tools and reconciles managed grants/receipts idempotently. An identical pre-existing user grant survives exclusion/uninstall, with the exclusion reported as conflicting/unenforced.",
+        "Missing/read-only descriptor or writer failure yields failed/blocked state, not applied; partial host success remains distinguishable."
+      ],
+      "depends_on": [
+        "GRANT-01",
+        "GRANT-02"
+      ],
+      "classification": "confirmed defect"
+    },
+    {
+      "id": "GRANT-04",
+      "priority": "P2",
+      "title": "Separate tool exposure from host execution approval",
+      "evidence": [
+        "cli/src/lib_mcp_wiring.sh:915-947",
+        "roster/mcps.yaml:105-106,465-466",
+        "https://code.claude.com/docs/en/permissions#mcp",
+        "https://code.claude.com/docs/en/mcp#project-scope"
+      ],
+      "problem": "Catalogue grants affect exposure, not permissions.allow or project-server approval; present wording makes these independent states look equivalent.",
+      "scope": "Documented permission contract, diagnostic output and optional managed host approval projection.",
+      "requirements": "Default approval behavior remains unchanged. Report registered/exposed/approval-required/denied independently. If automatic approvals are offered, require an explicit project policy selecting exact permitted operations, preserve user/admin denies and unrelated rules, and make unsupported hosts advisory. An allowance/exclusion never authorizes broader operations than the member policy. Atomos and Junction remain orchestrator-facing by default. Report approval as unknown/unverified when effective host, user or admin settings and runtime decisions are unavailable; project files alone do not establish effective approval.",
+      "acceptance": [
+        "An exposed but unapproved tool reports approval-required rather than missing or ready-to-execute; a user/admin deny wins. Unobservable effective permission state reports unknown/unverified.",
+        "If the optional approval projection is implemented, opt-in writes only chosen managed rules and removes only those on uninstall; no global allow-all or prompt bypass is introduced.",
+        "No-policy projects keep identical approval settings, and documentation explains connection approval separately from tool permission."
+      ],
+      "depends_on": [
+        "GRANT-02",
+        "GRANT-03"
+      ],
+      "classification": "contract gap; proposed opt-in behavior"
+    },
+    {
+      "id": "ATOMOS-01",
+      "priority": "P2",
+      "title": "Define Atomos composition result and persistence handoff",
+      "evidence": [
+        "roster/mcps.yaml:456-499",
+        "cli/src/context_handoff.sh:104-115",
+        "cli/src/context_externalize.sh:115-196",
+        "https://github.com/Rynaro/atomos/blob/v0.2.0/internal/server/server.go",
+        "https://github.com/Rynaro/atomos#parity-contract"
+      ],
+      "problem": "Atomos is an alternate composer, but the kernel currently composes directly; calling Atomos alone would omit the kernel's persistence/ledger work.",
+      "scope": "Versioned internal request/result contract between Atomos-capable host adapter and existing context lifecycle code.",
+      "requirements": "Define typed semantic inputs, caller identity, request ID, fixed timestamps and result hashes for compose_handoff and compose_externalize_manifest. Prefer write_sidecar=false so the kernel is the sole artifact writer. Validate schema/hash before adopting output; preserve envelope identity, thread and tool-origin provenance. Kernel keeps persistence, ledger and context triggers. Bound deadlines; reuse the same frozen request on kernel fallback. Track persistence receipt/idempotency so a retry does not double-ingest; if the backend cannot guarantee this, expose uncertainty rather than claiming exactly-once delivery.",
+      "acceptance": [
+        "Pinned parity fixtures, including Unicode, multi-line content and tool-origin provenance, produce the same canonical bytes/SHA through Atomos and kernel paths.",
+        "Malformed result, SHA mismatch or timeout cannot adopt partial output; fallback uses identical frozen inputs and reports its reason.",
+        "Accepted output enters the existing persist/ledger path once per successful receipt; retry/ambiguous persistence is visible and does not silently duplicate durable writes."
+      ],
+      "depends_on": [
+        "MCP-01"
+      ],
+      "classification": "confirmed missing integration; proposed design"
+    },
+    {
+      "id": "ATOMOS-02",
+      "priority": "P2",
+      "title": "Select Atomos for eligible context operations without naming it in prompts",
+      "evidence": [
+        "cli/src/context.sh:54-55",
+        "cli/src/harness_hook.sh:113-128",
+        "schemas/eidolons.yaml.schema.json:108-134",
+        "methodology/cortex/context-protocol.md:20-32",
+        "docs/specs/ecm/decisions/atomos-go-no-go.md:17-45"
+      ],
+      "problem": "No executor selection path exists. Installation neither enables ECM nor tells the host when to choose Atomos; the current checkout has no project manifest and therefore fails the ECM opt-in gate.",
+      "scope": "Proposed context.executor setting (kernel|auto|atomos), schema, host request dispatcher, concise discovery guidance and usage receipt.",
+      "requirements": "Keep absent setting=kernel for compatibility. With ECM enabled and executor=auto, deterministically select Atomos for its supported operations only when the current host has an implemented tool dispatcher, registration, permission and tool availability; otherwise run kernel with a named reason. executor=atomos must disclose unavailability rather than silently claim Atomos use, while retaining the safe kernel continuity path. Reuse the host's MCP connection; do not launch a new docker run per policy event. Install/status must explain ECM opt-in and executor selection. Record requested/selected backend, actual completion, duration and fallback; never attribute kernel output to Atomos. A prose hint alone is not an implemented dispatcher.",
+      "acceptance": [
+        "An eligible operation on a supported host with ECM+auto invokes the actual Atomos tool without a prompt naming Atomos and consumes the ATOMOS-01 result contract.",
+        "Disabled ECM, absent Atomos, denied permission, unavailable dispatcher and unsupported operation each select the documented path with a distinct reason; explicit atomos selection does not falsely report success.",
+        "Repeated events reuse the host connection and deduplicate operation IDs; live smoke evidence is required before advertising support for a host."
+      ],
+      "depends_on": [
+        "MCP-01",
+        "ATOMOS-01",
+        "GRANT-04"
+      ],
+      "classification": "confirmed missing selection; proposed opt-in integration"
+    },
+    {
+      "id": "ATOMOS-03",
+      "priority": "P2",
+      "title": "Consume verification verdicts at receiver and post-compaction gates",
+      "evidence": [
+        "https://github.com/Rynaro/atomos/blob/v0.2.0/internal/verify/envelope.go",
+        "https://github.com/Rynaro/atomos/blob/v0.2.0/internal/verify/pins.go",
+        "methodology/cortex/context-protocol.md:81-93",
+        "cli/src/verify_envelope.sh"
+      ],
+      "problem": "Atomos returns advisory data: a successful MCP call does not mean integrity passed, and pin verification neither reinjects nor repairs context.",
+      "scope": "Host-owned consumption of verify_envelope and verify_pins, existing ECL enforcement and pin recovery integration.",
+      "requirements": "Dispatch through ATOMOS-02 using canonical pin set and actual receiver/post-operation artifact. Interpret semantic verdict, missing pins and blocked flags separately from transport success. Existing kernel/host policy decides whether to block, recover or continue; Atomos gains no meter, policy, injection, compaction or persistence authority. Missing/empty pin set or unavailable post-op evidence is indeterminate, not success. Preserve the canonical verifier's block behavior on fallback.",
+      "acceptance": [
+        "Tampered, inconsistent and missing payload cases never pass a blocking receiver solely because tools/call succeeded; canonical verdict matrix parity is checked.",
+        "A dropped required pin requests host-owned recovery and verifies again; absent evidence/empty expected pins never reports survival.",
+        "Unavailable Atomos uses the existing verifier with unchanged enforcement; telemetry distinguishes check, recovery, fallback and final outcome."
+      ],
+      "depends_on": [
+        "ATOMOS-02"
+      ],
+      "classification": "integration gap; advisory semantics confirmed"
+    },
+    {
+      "id": "JUNCTION-01",
+      "priority": "P2",
+      "title": "Align tool declarations with the pinned Junction release",
+      "evidence": [
+        "roster/mcps.yaml:96-113",
+        "https://github.com/Rynaro/Junction/blob/v0.4.0/internal/mcp/tools.go"
+      ],
+      "problem": "Catalogue plan_dispatch/reasoning_step declarations do not match the pinned release registry, which registers harness.plan_from_prompt, harness.run, harness.verify and harness.inject; plan_from_prompt is a permanent stub.",
+      "scope": "Versioned catalogue tool declarations, generated instructions and released-binary contract check.",
+      "requirements": "Record canonical MCP names separately from host-normalized names. Match pinned tools/list, retain the permanent stub as non-executable metadata, and generate instructions only for real supported operations. Verify the pinned binary before claiming runtime parity; source comparison is current evidence.",
+      "acceptance": [
+        "Release-pinned tools/list comparison detects an added, removed or renamed tool; canonical and host-normalized identifiers are separately tested.",
+        "Generated dispatch never calls plan_dispatch/reasoning_step or relies on plan_from_prompt for planning.",
+        "A catalogue/registry mismatch reports incompatible readiness and prevents unsupported dispatch."
+      ],
+      "depends_on": [
+        "MCP-01"
+      ],
+      "classification": "confirmed source/catalogue mismatch; live binary check pending"
+    },
+    {
+      "id": "JUNCTION-02",
+      "priority": "P2",
+      "title": "Make eligible parent dispatch explicit and provider-aware",
+      "evidence": [
+        "methodology/cortex/handoff-graph.md:78-99",
+        "cli/src/lib_mcp_wiring.sh:711-718",
+        "https://github.com/Rynaro/Junction/blob/v0.4.0/internal/reasoning/provider.go",
+        "https://github.com/Rynaro/Junction/blob/v0.4.0/internal/reasoning/mcp_sampling.go"
+      ],
+      "problem": "Parent dispatch is prescribed in a deep document but no automatic execution bridge was found; installing the server does not configure reasoning/provider capability.",
+      "scope": "Opt-in parent execution adapter, validated plans, provider capability checks and result/verification receipts.",
+      "requirements": "Construct and validate plans in the parent, check task eligibility, required isolation and provider/sampling support, then call discovered harness.run. Missing prerequisites produce a named fallback before execution. Preserve one-writer authority, scoped workspace access and ECL validation. Keep transport out of worker tool grants. Record requested model, reported/observed model and unknown states separately. Provider none is eligible only for a proven non-reasoning operation.",
+      "acceptance": [
+        "Opted-in eligible chain dispatches without user naming Junction; ineligible tasks do not dispatch, and the permanent planning stub is never used.",
+        "Missing provider, unsupported sampling, incompatible tool surface or required Docker absence produces a specific fallback without starting implementation.",
+        "Result verification and model provenance are recorded; worker descriptors never gain orchestration powers as a utilization workaround."
+      ],
+      "depends_on": [
+        "JUNCTION-01",
+        "GRANT-04"
+      ],
+      "classification": "confirmed integration gap; proposed opt-in behavior"
+    },
+    {
+      "id": "JUNCTION-03",
+      "priority": "P3",
+      "title": "Derive the harness marker from the selected project receipt",
+      "evidence": [
+        "cli/src/sync.sh:1038-1042",
+        ".eidolons/harness/manifest.json:1",
+        "eidolons.mcp.lock:61"
+      ],
+      "problem": "The first cache directory wins, so marker version 0.2.0 can disagree with a project locked to 0.4.0.",
+      "scope": "Junction discovery marker generation and status comparison.",
+      "requirements": "Use the validated project-selected executable/version, never cache enumeration order. Missing selected executable reports not-ready without silently substituting another version; retain hook ownership and unrelated harness files.",
+      "acceptance": [
+        "With 0.2.0 and 0.4.0 cached and 0.4.0 selected, marker and status resolve 0.4.0.",
+        "A missing selected executable reports not-ready without selecting 0.2.0 or deleting hooks.",
+        "Repeated reconciliation is byte-stable and no longer depends on cache directory order."
+      ],
+      "depends_on": [
+        "MCP-01"
+      ],
+      "classification": "confirmed defect"
+    }
+  ],
+  "open_validation": [
+    "Live MCP tools/list and tools/call are unavailable in this session; source registration is not proof of live runtime readiness.",
+    "Host capability/approval contracts must be verified against supported host versions before implementation claims.",
+    "The normative upstream EIIS capability schema was not verified; use known roster/ACI authority and explicitly define any new projection."
+  ],
+  "non_goals": [
+    "No code, configuration, version or release changes.",
+    "No installs, container starts/stops, commits, PRs or publication.",
+    "No granting Atomos/Junction orchestration powers to all workers.",
+    "No new Atomos tools, policy engine, persistence backend or injection authority."
+  ]
+}

@@ -887,7 +887,7 @@ EOF
 
 # ─── Additional unit tests for lib internals ─────────────────────────────────
 
-@test "lib: strategy (c) skip+warn — no tools: line in safety-net stub: file unchanged except sentinel, warning emitted" {
+@test "lib: missing tools metadata refuses a grant and writes no sentinel" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -915,7 +915,7 @@ EOF
     $(_source_wiring_libs)
     mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__* 2>&1
   "
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
 
   # tools: line MUST NOT be synthesized — no tools: line means inherit-all.
   ! grep -q '^tools:' .claude/agents/atlas.md
@@ -923,11 +923,11 @@ EOF
   # mcp glob MUST NOT appear anywhere in the file body.
   ! grep -q 'mcp__atlas_aci__' .claude/agents/atlas.md
 
-  # Sentinel MUST be written (idempotency anchor for future runs).
-  grep -q 'x-eidolons-mcp-wired:.*atlas-aci' .claude/agents/atlas.md
+  # A marker without an actual allowance is a false receipt and is forbidden.
+  ! grep -q 'x-eidolons-mcp-wired:' .claude/agents/atlas.md
 
   # Warning MUST be emitted on stderr (captured in $output via 2>&1).
-  [[ "$output" =~ "no tools: line" ]] || [[ "$output" =~ "skipping allowlist injection" ]]
+  [[ "$output" =~ "missing or ambiguous tools metadata" ]]
 }
 
 @test "lib: sentinel sorted alphabetically when two MCPs are wired" {
@@ -961,6 +961,27 @@ EOF
   aci_pos="$(echo "$sentinel_line" | grep -bo 'atlas-aci' | head -1 | cut -d: -f1)"
   cry_pos="$(echo "$sentinel_line" | grep -bo 'crystalium' | head -1 | cut -d: -f1)"
   [ "$aci_pos" -lt "$cry_pos" ]
+}
+
+@test "lib: stale managed sentinel without its glob is repaired" {
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
+  mkdir -p "$EIDOLONS_NEXUS"
+  cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
+  cp -r "$EIDOLONS_ROOT/schemas" "$EIDOLONS_NEXUS/schemas"
+  seed_mcps_catalogue "$EIDOLONS_NEXUS"
+  seed_manifest_claude
+  seed_claude_agent "atlas" "Read, Grep"
+  sed -i.bak '2i\
+x-eidolons-mcp-wired: [atlas-aci]' .claude/agents/atlas.md
+  rm -f .claude/agents/atlas.md.bak
+
+  run bash -c "
+    $(_source_wiring_libs)
+    mcp_wiring_patch_agent_file claude-code .claude/agents/atlas.md atlas-aci mcp__atlas_aci__*
+  "
+  [ "$status" -eq 0 ]
+  grep -q '^tools: \[Read, Grep, mcp__atlas_aci__\*\]$' .claude/agents/atlas.md
+  grep -q 'x-eidolons-mcp-wired: \[atlas-aci\]' .claude/agents/atlas.md
 }
 
 @test "T7-G1: atlas.md contains no mcp__junction__ token after full apply_for_mcp cycle" {
@@ -1377,11 +1398,7 @@ EOF
   grep -q 'mcp__atlas_aci__\*' .claude/agents/atlas.md
 }
 
-# ─── B1.x — strategy (c) skip+warn: no tools: line in claude-code agent ─────
-#
-# When crystalium (grants_to_eidolons: all) wires an agent that has NO tools:
-# line, the driver must NOT synthesize one (would convert inherit-all to a
-# strict crystalium-only allowlist). Instead: update sentinel only + warn.
+# ─── B1.x — missing tools metadata must never create a false receipt ─────────
 
 # Seed a codex agent file with NO tools: block.
 seed_codex_agent_no_tools() {
@@ -1398,7 +1415,7 @@ model: gpt-5
 EOF
 }
 
-@test "B1.1: crystalium + claude-code agent with no tools: line — NO tools: synthesized, warning emitted, sentinel written" {
+@test "B1.1: crystalium + claude-code agent with no tools: line — no grant or sentinel" {
   export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/nexus"
   mkdir -p "$EIDOLONS_NEXUS"
   cp -r "$EIDOLONS_ROOT/cli" "$EIDOLONS_NEXUS/cli"
@@ -1447,11 +1464,10 @@ AGENTEOF
   # mcp glob must NOT appear in the file.
   ! grep -q 'mcp__crystalium__' .claude/agents/spectra.md
 
-  # Sentinel MUST be written (idempotency).
-  grep -q 'x-eidolons-mcp-wired:.*crystalium' .claude/agents/spectra.md
+  # Receipt must not claim exposure that did not happen.
+  ! grep -q 'x-eidolons-mcp-wired:' .claude/agents/spectra.md
 
-  # Warning must mention the no tools: line situation.
-  [[ "$output" =~ "no tools: line" ]] || [[ "$output" =~ "skipping allowlist injection" ]]
+  [[ "$output" =~ "missing or ambiguous tools metadata" ]]
 
   # Body lines (non-sentinel) must be unchanged.
   local body_after

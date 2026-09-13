@@ -191,130 +191,135 @@ _mcp_wiring_remove_from_sentinel() {
   '
 }
 
+# _mcp_wiring_tools_json FILE
+# Emit the Claude frontmatter `tools` value as a JSON array.  Both scalar CSV
+# and YAML sequence forms are accepted; callers must reject a missing or
+# malformed field rather than silently changing inheritance semantics.
+_mcp_wiring_tools_json() {
+  local file="$1" frontmatter parsed tools tmp
+  frontmatter="$(awk '
+    /^---$/ { fences++; if (fences == 1) { next }; if (fences == 2) { exit } }
+    fences == 1 { print }
+  ' "$file")"
+  [ -n "$frontmatter" ] || return 1
+  tmp="$(mktemp)"
+  printf '%s\n' "$frontmatter" > "$tmp"
+  parsed="$(yaml_to_json "$tmp" 2>/dev/null || true)"
+  rm -f "$tmp"
+  [ -n "$parsed" ] || return 1
+  tools="$(printf '%s' "$parsed" | jq -c '
+    if (.tools | type) == "array" and all(.tools[]; type == "string") then .tools
+    elif (.tools | type) == "string" and .tools == "none" then []
+    elif (.tools | type) == "string" then .tools | split(",") | map(gsub("^[[:space:]]+|[[:space:]]+$"; "")) | map(select(length > 0))
+    else empty end
+  ' 2>/dev/null || true)"
+  [ -n "$tools" ] || return 1
+  printf '%s\n' "$tools"
+}
+
+# _mcp_wiring_validate_tools_field FILE
+# Require exactly one tools field within exactly one YAML frontmatter block.
+_mcp_wiring_validate_tools_field() {
+  local file="$1" result
+  result="$(awk '
+    /^---$/ { fences++; next }
+    fences == 1 && /^tools:[[:space:]]*($|[^:])/ { tools++ }
+    END { if (fences == 2 && tools == 1) print "ok" }
+  ' "$file")"
+  [ "$result" = "ok" ]
+}
+
+# _mcp_wiring_tools_render JSON_ARRAY
+# Render the supported, canonical flow-sequence form. MCP and built-in tool
+# identifiers are plain YAML scalars; anything else was rejected by jq above.
+_mcp_wiring_tools_render() {
+  local tools_json="$1"
+  printf '%s' "$tools_json" | jq -r 'join(", ")' 2>/dev/null
+}
+
+# _mcp_wiring_replace_claude_tools FILE TOOLS_JSON SENTINEL_CSV
+# Atomically replace a scalar or block tools field with one canonical flow
+# sequence and upsert the ownership marker. The caller has already parsed and
+# validated the input, so an unsuccessful rewrite leaves the source untouched.
+_mcp_wiring_replace_claude_tools() {
+  local file="$1" tools_json="$2" sentinel_csv="$3" rendered tmp
+  rendered="$(_mcp_wiring_tools_render "$tools_json")" || return 1
+  tmp="$(mktemp)"
+  awk -v rendered="$rendered" -v sentinel="$sentinel_csv" '
+    BEGIN { fences=0; in_front=0; skipping_tools_children=0; sentinel_done=0 }
+    /^---$/ {
+      fences++
+      if (fences == 1) { in_front=1; print; next }
+      if (fences == 2) {
+        if (!sentinel_done && sentinel != "") print "x-eidolons-mcp-wired: [" sentinel "]"
+        in_front=0; print; next
+      }
+    }
+    in_front && /^tools:[[:space:]]*($|[^:])/ {
+      print "tools: [" rendered "]"
+      skipping_tools_children=1
+      next
+    }
+    in_front && skipping_tools_children && /^[[:space:]]+- / { next }
+    in_front && skipping_tools_children { skipping_tools_children=0 }
+    in_front && /^x-eidolons-mcp-wired:/ {
+      if (sentinel != "") print "x-eidolons-mcp-wired: [" sentinel "]"
+      sentinel_done=1
+      next
+    }
+    { print }
+  ' "$file" > "$tmp" || { rm -f "$tmp"; return 1; }
+  # Verify the rewritten frontmatter parses and keeps exactly the requested set.
+  local observed
+  observed="$(_mcp_wiring_tools_json "$tmp" 2>/dev/null || true)"
+  if [ -z "$observed" ] || [ "$(printf '%s' "$observed" | jq -cS . 2>/dev/null)" != "$(printf '%s' "$tools_json" | jq -cS . 2>/dev/null)" ]; then
+    rm -f "$tmp"
+    return 1
+  fi
+  mv "$tmp" "$file"
+}
+
 # _mcp_wiring_patch_claude_code FILE MCP_GLOB MCP_NAME → patch claude-code agent file.
-# Handles strategies (a), (b), (c), and sentinel upsert.
-# Atomic: writes to tmpfile then mv.
-#
-# Strategy (c) — no tools: line:
-#   Under Claude Code semantics, no tools: line = inherit-all tools.
-#   Inserting one would convert the agent to a strict MCP-only allowlist,
-#   starving it of Read/Edit/Bash/etc. Instead: update only the sentinel,
-#   leave the tools surface unchanged, and emit a warning to stderr.
+# A receipt is only written after this function has verified that the requested
+# glob is present. Missing or malformed `tools` metadata is deliberately a
+# failed grant: a marker alone must never claim an MCP was exposed.
 _mcp_wiring_patch_claude_code() {
   local file="$1"
   local glob="$2"
   local mcp_name="$3"
 
-  # Idempotency: already wired?
-  if _mcp_wiring_sentinel_has_inline "$file" "$mcp_name"; then
-    info "$(basename "$file"): ${mcp_name} already wired (sentinel present) — skipping"
-    return 0
+  if ! _mcp_wiring_validate_tools_field "$file"; then
+    warn "Wiring: ${file} has missing or ambiguous tools metadata; refusing to claim ${mcp_name} was granted"
+    return 2
+  fi
+
+  local tools_json
+  tools_json="$(_mcp_wiring_tools_json "$file" 2>/dev/null || true)"
+  if [ -z "$tools_json" ]; then
+    warn "Wiring: ${file} has malformed tools metadata; refusing to change it"
+    return 2
   fi
 
   local existing_csv
   existing_csv="$(_mcp_wiring_read_sentinel "$file")"
-  local new_sentinel
-  new_sentinel="$(_mcp_wiring_build_sentinel "$existing_csv" "$mcp_name")"
+  local has_glob has_sentinel new_tools new_sentinel
+  has_glob="$(printf '%s' "$tools_json" | jq --arg g "$glob" 'index($g) != null' 2>/dev/null || true)"
+  has_sentinel="$(printf '%s' "$existing_csv" | tr ',' '\n' | awk -v n="$mcp_name" '{gsub(/^[[:space:]]+|[[:space:]]+$/, ""); if ($0 == n) print "1"}')"
 
-  # Detect whether a tools: line is present in the frontmatter.
-  local has_tools_line
-  has_tools_line="$(awk '
-    /^---$/ { fc++; if (fc==1) { in_fm=1; next } if (fc==2) { exit } }
-    in_fm && /^tools:[[:space:]]/ { print "1"; exit }
-  ' "$file" || true)"
-
-  # Strategy (c): no tools: line — inherit-all semantics. Do NOT insert one.
-  # Only update the sentinel so idempotency is preserved, then warn.
-  if [ "${has_tools_line:-}" != "1" ]; then
-    # Emit warning to stderr (use warn helper if available, else printf).
-    if command -v warn >/dev/null 2>&1; then
-      warn "agent file has no tools: line — inherits all tools; skipping allowlist injection (${file})"
-    else
-      printf 'WARNING: agent file has no tools: line — inherits all tools; skipping allowlist injection (%s)\n' "$file" >&2
-    fi
-    # Still update the sentinel so we don't re-warn on every sync.
-    local tmpfile
-    tmpfile="$(mktemp)"
-    awk -v new_sentinel="$new_sentinel" '
-    BEGIN { fence_count=0; in_front=0; sentinel_done=0 }
-    /^---$/ {
-      fence_count++
-      if (fence_count == 1) { in_front=1; print; next }
-      if (fence_count == 2) {
-        if (!sentinel_done) {
-          print "x-eidolons-mcp-wired: [" new_sentinel "]"
-          sentinel_done=1
-        }
-        in_front=0; print; next
-      }
-    }
-    in_front && /^x-eidolons-mcp-wired:/ {
-      print "x-eidolons-mcp-wired: [" new_sentinel "]"
-      sentinel_done=1
-      next
-    }
-    { print }
-    ' "$file" > "$tmpfile"
-    mv "$tmpfile" "$file"
+  # A pre-existing user grant is sufficient exposure but remains unmanaged: do
+  # not adopt it, and therefore never remove it during uninstall.
+  if [ "$has_glob" = "true" ] && [ -z "$has_sentinel" ]; then
+    info "$(basename "$file"): ${glob} already present without an Eidolons receipt — leaving user grant unmanaged"
+    return 0
+  fi
+  if [ "$has_glob" = "true" ] && [ -n "$has_sentinel" ]; then
+    info "$(basename "$file"): ${mcp_name} grant already verified"
     return 0
   fi
 
-  local tmpfile
-  tmpfile="$(mktemp)"
-
-  # Use awk to perform the in-frontmatter edit.
-  # Strategy: scan the frontmatter (between first and second ---), apply edit,
-  # emit rest unchanged.
-  awk -v glob="$glob" -v mcp_name="$mcp_name" -v new_sentinel="$new_sentinel" '
-  BEGIN {
-    fence_count = 0
-    in_front = 0
-    tools_done = 0
-    sentinel_done = 0
-  }
-  /^---$/ {
-    fence_count++
-    if (fence_count == 1) {
-      in_front = 1
-      print
-      next
-    }
-    if (fence_count == 2) {
-      # Upsert sentinel before closing --- (tools: already handled inline above)
-      if (!sentinel_done) {
-        print "x-eidolons-mcp-wired: [" new_sentinel "]"
-        sentinel_done = 1
-      }
-      in_front = 0
-      print
-      next
-    }
-  }
-  in_front && /^tools:[[:space:]]/ {
-    # Read current value
-    val = substr($0, index($0, ":") + 1)
-    # Trim leading space
-    while (substr(val, 1, 1) == " ") val = substr(val, 2)
-    if (val == "none") {
-      # Strategy (b): replace
-      print "tools: " glob
-    } else {
-      # Strategy (a): append
-      print "tools: " val ", " glob
-    }
-    tools_done = 1
-    next
-  }
-  in_front && /^x-eidolons-mcp-wired:/ {
-    # Upsert sentinel line
-    print "x-eidolons-mcp-wired: [" new_sentinel "]"
-    sentinel_done = 1
-    next
-  }
-  { print }
-  ' "$file" > "$tmpfile"
-
-  mv "$tmpfile" "$file"
+  new_tools="$(printf '%s' "$tools_json" | jq -c --arg g "$glob" '. + [$g]')" || return 1
+  new_sentinel="$(_mcp_wiring_build_sentinel "$existing_csv" "$mcp_name")"
+  _mcp_wiring_replace_claude_tools "$file" "$new_tools" "$new_sentinel" || return 1
   info "Wired ${mcp_name} (${glob}) into $(basename "$file")"
 }
 
@@ -336,51 +341,15 @@ _mcp_wiring_unpatch_claude_code() {
   local new_sentinel
   new_sentinel="$(_mcp_wiring_remove_from_sentinel "$existing_csv" "$mcp_name")"
 
-  local tmpfile
-  tmpfile="$(mktemp)"
-
-  awk -v glob="$glob" -v mcp_name="$mcp_name" -v new_sentinel="$new_sentinel" '
-  BEGIN {
-    fence_count = 0
-    in_front = 0
-  }
-  /^---$/ {
-    fence_count++
-    if (fence_count == 1) { in_front = 1; print; next }
-    if (fence_count == 2) { in_front = 0; print; next }
-  }
-  in_front && /^tools:[[:space:]]/ {
-    val = substr($0, index($0, ":") + 1)
-    while (substr(val, 1, 1) == " ") val = substr(val, 2)
-    # Remove the glob from the CSV
-    # Split on ", " and rebuild without the glob entry
-    n = split(val, parts, ", ")
-    result = ""
-    for (i=1; i<=n; i++) {
-      if (parts[i] != glob) {
-        if (result == "") result = parts[i]
-        else result = result ", " parts[i]
-      }
-    }
-    if (result == "") {
-      # Was only the glob — restore to "none"
-      print "tools: none"
-    } else {
-      print "tools: " result
-    }
-    next
-  }
-  in_front && /^x-eidolons-mcp-wired:/ {
-    if (new_sentinel != "") {
-      print "x-eidolons-mcp-wired: [" new_sentinel "]"
-    }
-    # When new_sentinel is empty, omit the line entirely (clean removal)
-    next
-  }
-  { print }
-  ' "$file" > "$tmpfile"
-
-  mv "$tmpfile" "$file"
+  if ! _mcp_wiring_validate_tools_field "$file"; then
+    warn "Unwiring: ${file} has missing or ambiguous tools metadata; preserving it"
+    return 2
+  fi
+  local tools_json new_tools
+  tools_json="$(_mcp_wiring_tools_json "$file" 2>/dev/null || true)"
+  [ -n "$tools_json" ] || return 2
+  new_tools="$(printf '%s' "$tools_json" | jq -c --arg g "$glob" 'map(select(. != $g))')" || return 1
+  _mcp_wiring_replace_claude_tools "$file" "$new_tools" "$new_sentinel" || return 1
   info "Unwired ${mcp_name} from $(basename "$file")"
 }
 
@@ -589,7 +558,8 @@ _mcp_wiring_unpatch_codex() {
 # ─── Public API ───────────────────────────────────────────────────────────────
 
 # mcp_wiring_patch_agent_file HOST AGENT_FILE MCP_NAME EXPOSES_GLOB
-# Patch one agent file for one MCP. Soft-fail on errors (warn + return).
+# Patch one agent file for one MCP. A non-zero result means no managed grant was
+# verified, so callers must not record the file in hosts_wired[].
 mcp_wiring_patch_agent_file() {
   local host="$1"
   local agent_file="$2"
@@ -598,26 +568,20 @@ mcp_wiring_patch_agent_file() {
 
   if [ ! -f "$agent_file" ]; then
     info "Wiring: ${agent_file} not found — skipping"
-    return 0
+    return 2
   fi
 
   if [ ! -w "$agent_file" ]; then
     warn "Wiring: ${agent_file} is read-only — skipping (re-run with write permissions)"
-    return 0
+    return 2
   fi
 
   case "$host" in
     claude-code)
-      _mcp_wiring_patch_claude_code "$agent_file" "$exposes_glob" "$mcp_name" || {
-        warn "Wiring: patch failed for ${agent_file} (${mcp_name}) — continuing"
-        return 0
-      }
+      _mcp_wiring_patch_claude_code "$agent_file" "$exposes_glob" "$mcp_name" || return $?
       ;;
     codex)
-      _mcp_wiring_patch_codex "$agent_file" "$exposes_glob" "$mcp_name" || {
-        warn "Wiring: patch failed for ${agent_file} (${mcp_name}) — continuing"
-        return 0
-      }
+      _mcp_wiring_patch_codex "$agent_file" "$exposes_glob" "$mcp_name" || return $?
       ;;
     cursor)
       info "cursor uses workspace-global MCP permissions; enable ${exposes_glob} in Cursor → Settings → MCP."
@@ -635,7 +599,8 @@ mcp_wiring_patch_agent_file() {
 }
 
 # mcp_wiring_unpatch_agent_file HOST AGENT_FILE MCP_NAME EXPOSES_GLOB
-# Remove wiring from one agent file. Soft-fail on errors.
+# Remove wiring from one agent file. A non-zero result retains the receipt for
+# retry because the managed mutation could not be confirmed.
 mcp_wiring_unpatch_agent_file() {
   local host="$1"
   local agent_file="$2"
@@ -644,25 +609,25 @@ mcp_wiring_unpatch_agent_file() {
 
   if [ ! -f "$agent_file" ]; then
     info "Unwiring: ${agent_file} not found — skipping"
-    return 0
+    return 2
   fi
 
   if [ ! -w "$agent_file" ]; then
     warn "Unwiring: ${agent_file} is read-only — skipping"
-    return 0
+    return 2
   fi
 
   case "$host" in
     claude-code)
       _mcp_wiring_unpatch_claude_code "$agent_file" "$exposes_glob" "$mcp_name" || {
         warn "Unwiring: patch failed for ${agent_file} (${mcp_name}) — continuing"
-        return 0
+        return 1
       }
       ;;
     codex)
       _mcp_wiring_unpatch_codex "$agent_file" "$exposes_glob" "$mcp_name" || {
         warn "Unwiring: patch failed for ${agent_file} (${mcp_name}) — continuing"
-        return 0
+        return 1
       }
       ;;
     *)
@@ -941,13 +906,42 @@ mcp_wiring_apply_for_mcp() {
       __cursor_info__|__opencode_info__|__codex_advisory__) continue ;;
     esac
 
-    mcp_wiring_patch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"
-
-    # Update lockfile to track the patched file.
-    _mcp_wiring_update_lockfile_add "$mcp_name" "$agent_file" 2>/dev/null || true
+    if mcp_wiring_patch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"; then
+      # Receipt only a verified managed mutation. A pre-existing user grant is
+      # intentionally unmanaged and is not included in hosts_wired[].
+      if _mcp_wiring_sentinel_has_inline "$agent_file" "$mcp_name"; then
+        _mcp_wiring_update_lockfile_add "$mcp_name" "$agent_file" 2>/dev/null || true
+      fi
+    else
+      warn "Wiring: ${mcp_name} was not granted to ${agent_file}; no lock receipt recorded"
+    fi
   done < "$tmp_targets"
 
-  rm -f "$tmp_targets"
+  # Desired-state reconciliation: exclusions and narrowed grant rosters must
+  # revoke prior Eidolons-managed allowances. User-owned grants have no marker
+  # or receipt and are never selected here. Keep a receipt when the descriptor
+  # is unavailable so a later reconciliation can retry rather than claiming a
+  # successful revoke.
+  local tmp_previous previous_file previous_host still_desired
+  tmp_previous="$(mktemp)"
+  mcp_lock_entry "$mcp_name" | jq -r '(.hosts_wired // [])[]' 2>/dev/null > "$tmp_previous" || true
+  while IFS= read -r previous_file; do
+    case "$previous_file" in
+      .claude/agents/*.md) previous_host="claude-code" ;;
+      .codex/agents/*.md|.codex/agents/*.toml) previous_host="codex" ;;
+      *) continue ;;
+    esac
+    still_desired="$(awk -F '\t' -v p="$previous_file" '$2 == p { print "1"; exit }' "$tmp_targets")"
+    [ -n "$still_desired" ] && continue
+    if mcp_wiring_unpatch_agent_file "$previous_host" "$previous_file" "$mcp_name" "$exposes_glob"; then
+      _mcp_wiring_update_lockfile_remove "$mcp_name" "$previous_file" 2>/dev/null || true
+      info "Unwired ${mcp_name} from ${previous_file} because it is no longer granted"
+    else
+      warn "Wiring: ${mcp_name} remains recorded for ${previous_file}; managed revoke did not complete"
+    fi
+  done < "$tmp_previous"
+
+  rm -f "$tmp_targets" "$tmp_previous"
 }
 
 # mcp_wiring_unapply_for_mcp MCP_NAME
@@ -992,9 +986,13 @@ mcp_wiring_unapply_for_mcp() {
       .codex/agents/*.toml) host="codex" ;;
       *)                    continue ;;  # skip non-agent-file entries (e.g. harness manifest)
     esac
-    mcp_wiring_unpatch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"
-    # Remove the agent file from the lockfile's hosts_wired[].
-    _mcp_wiring_update_lockfile_remove "$mcp_name" "$agent_file" 2>/dev/null || true
+    if mcp_wiring_unpatch_agent_file "$host" "$agent_file" "$mcp_name" "$exposes_glob"; then
+      # Remove the agent file from the lockfile's hosts_wired[] only after the
+      # managed allowance was actually removed.
+      _mcp_wiring_update_lockfile_remove "$mcp_name" "$agent_file" 2>/dev/null || true
+    else
+      warn "Unwiring: ${mcp_name} remains recorded for ${agent_file}; managed revoke did not complete"
+    fi
   done < "$tmp_wired"
 
   rm -f "$tmp_wired"

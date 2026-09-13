@@ -92,9 +92,7 @@ mcps:
     hosts_wired: []
     installed_at: "2026-05-19T00:00:00Z"
 EOF
-  cat > .mcp.json <<'EOF'
-{"mcpServers":{"junction":{"command":"junction","args":[]}}}
-EOF
+  printf '{"mcpServers":{"junction":{"command":"%s","args":[]}}}\n' "$cache_dir/junction" > .mcp.json
 }
 
 @test "mcp sync: help exits 0" {
