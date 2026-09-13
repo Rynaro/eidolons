@@ -1805,11 +1805,11 @@ eidolons:
 # after tagging; placeholders here are a bootstrap-window sentinel that
 # nexus_verify_release() detects and skips gracefully.
 nexus:
-  version: "3.2.2"
+  version: "3.2.3"
   versions:
-    latest: "3.2.2"
+    latest: "3.2.3"
     pins:
-      stable: "3.2.2"
+      stable: "3.2.3"
     releases:
       "1.0.0":
         tag: "v1.0.0"
@@ -2309,6 +2309,11 @@ nexus:
         tree: 7eee2327d9a8f062ef9cc932861077a53b1a180b
         archive_sha256: 4d1919c880080b98d767c4dbf3e1c63d0b654a4db86427b8332afbc021173098
         released_at: "2026-09-12T23:58:09Z"
+      3.2.3:
+        commit: 17c0eec16798509a9590852a5e90d76bb886081a
+        tree: d6e843402507b02c34683bba3f39bfdc7a3393c5
+        archive_sha256: 977831fc394d4976d165eb06c8eeda630c7a0040680d3625dd0fe6bd012f880a
+        released_at: "2026-09-13T14:13:28Z"
 # ─── Presets ───────────────────────────────────────────────────────────────────
 # Named bundles for `eidolons init --preset <name>`
 presets:
