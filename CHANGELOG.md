@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [3.2.3] — 2026-09-13 — MCP reconciliation hardening
+
+### Fixed
+- MCP sync now compares full rendered OCI and binary registrations, repairing stale Atomos user/mount settings and Junction executable paths instead of treating a server-name match as healthy.
+- Claude MCP allowances now parse and validate structured tool metadata before mutation. Managed receipts are written only after verified access, and stale managed grants are repaired or revoked when policy changes.
+- Junction now resolves its executable and project harness marker exclusively from the project lock receipt, preventing cache-order selection of a different version.
+
+### Changed
+- EIIS v3 Claude adapters receive an explicit, versioned capability-class tool projection before MCP grants are reconciled. Unsupported host enforcement remains advisory.
+- Junction v0.4.0 registry metadata distinguishes executable operations from the permanent planning stub; parent planning remains outside the transport worker surface.
+
 ## [3.2.2] — 2026-09-12 — MCP and host wiring stability
 
 ### Fixed

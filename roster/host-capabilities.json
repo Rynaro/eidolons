@@ -1,0 +1,17 @@
+{
+  "version": "1.0",
+  "hosts": {
+    "claude-code": {
+      "classes": {
+        "scout": ["Read", "Glob", "Grep"],
+        "planner": ["Read", "Glob", "Grep"],
+        "coder": ["Read", "Glob", "Grep", "Edit", "Write", "Bash"],
+        "scriber": [],
+        "reasoner": [],
+        "debugger": ["Read", "Glob", "Grep"],
+        "executor": ["Read", "Glob", "Grep"],
+        "generalist": ["Read", "Glob", "Grep"]
+      }
+    }
+  }
+}

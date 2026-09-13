@@ -4,15 +4,40 @@
 EIIS_V3_POINTER_MAX_BYTES=2048
 
 _eiis_v3_pointer_write() {
-  local path="$1" name="$2" description="$3" persona="$4" spec="$5"
+  local path="$1" name="$2" description="$3" persona="$4" spec="$5" tools_csv="${6:-}"
   mkdir -p "$(dirname "$path")"
   {
     printf '%s\n' '---'
     printf 'name: %s\n' "$name"
     printf 'description: %s\n' "$description"
+    [[ -z "$tools_csv" ]] || printf 'tools: [%s]\n' "$tools_csv"
     printf '%s\n' 'generated_by: eidolons' '---' ''
     printf 'Load `%s` and `%s`. This file is a disposable discovery adapter.\n' "$persona" "$spec"
   } > "$path"
+}
+
+# _eiis_v3_capability_class NAME
+# Resolve the roster-owned capability class without importing package prose.
+_eiis_v3_capability_class() {
+  local name="$1" roster="${EIDOLONS_NEXUS:-${NEXUS:-}}/roster/index.yaml"
+  [[ -f "$roster" ]] || return 1
+  awk -v wanted="$name" '
+    $0 ~ "^  - name: " wanted "$" { found=1; next }
+    found && /^  - name:/ { exit }
+    found && /^    capability_class:/ { sub(/^    capability_class:[[:space:]]*/, ""); print; exit }
+  ' "$roster"
+}
+
+# _eiis_v3_claude_tools NAME
+# The policy is versioned separately from package manifests. Unknown classes
+# fail closed to an explicit empty allowance rather than inheriting every tool.
+_eiis_v3_claude_tools() {
+  local name="$1" klass map tools
+  klass="$(_eiis_v3_capability_class "$name" 2>/dev/null || true)"
+  map="${EIDOLONS_NEXUS:-${NEXUS:-}}/roster/host-capabilities.json"
+  [[ -n "$klass" && -f "$map" ]] || { printf '%s' ''; return 0; }
+  tools="$(jq -r --arg c "$klass" '.hosts["claude-code"].classes[$c] // [] | join(", ")' "$map" 2>/dev/null || true)"
+  printf '%s' "$tools"
 }
 
 _eiis_v3_skill_adapter() {
@@ -64,8 +89,10 @@ eiis_v3_render_adapters() {
   for host in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
     case "$host" in
       claude-code)
+        local claude_tools
+        claude_tools="$(_eiis_v3_claude_tools "$name")"
         _eiis_v3_pointer_write ".claude/agents/$name.md" "$name" "$description" \
-          "$root/PERSONA.md" "$root/SPEC.md"
+          "$root/PERSONA.md" "$root/SPEC.md" "$claude_tools"
         adapter_lines="${adapter_lines}pointer\t.claude/agents/$name.md\t$root/PERSONA.md\n"
         while IFS=$'\t' read -r skill entry; do
           [[ -n "$skill" ]] || continue

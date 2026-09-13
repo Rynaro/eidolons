@@ -1033,15 +1033,21 @@ fi
 # The installed_at timestamp is intentionally OMITTED to keep the file
 # byte-stable across re-runs (stable content = no VCS noise).
 # If Junction is absent, the marker dir is removed (clean removal).
+# The project lock receipt selects Junction. Never derive this marker from the
+# first cache directory: multiple cached versions are normal after upgrades.
 _harness_cache_dir=""
 _harness_ver=""
-for _hdir in "${CACHE_DIR}/junction@"*/; do
-  if [[ -d "$_hdir" ]]; then
-    _harness_cache_dir="${_hdir%/}"
-    _harness_ver="${_harness_cache_dir##*/junction@}"
-    break
+if [[ -f eidolons.mcp.lock ]]; then
+  _harness_selected="$(yaml_to_json eidolons.mcp.lock 2>/dev/null | jq -r '(.mcps // [])[] | select(.name == "junction") | [.version, .target] | @tsv' 2>/dev/null || true)"
+  if [[ -n "$_harness_selected" ]]; then
+    IFS=$'\t' read -r _harness_ver _harness_cache_dir <<< "$_harness_selected"
+    if [[ ! -x "$_harness_cache_dir" ]]; then
+      warn "Junction ${_harness_ver} is selected but its executable is missing: ${_harness_cache_dir}"
+      _harness_cache_dir=""
+      _harness_ver=""
+    fi
   fi
-done
+fi
 
 HARNESS_MARKER="./.eidolons/harness/manifest.json"
 

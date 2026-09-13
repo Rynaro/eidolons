@@ -7,9 +7,8 @@
 # junction is the only such MCP. A generalised 'mcp run' for kind=oci-image
 # (docker run pass-through) is a future spec.
 #
-# Looks up junction's binary path from eidolons.mcp.lock (preferred) or
-# $EIDOLONS_HOME/cache/junction@*/junction (fallback) and exec's it with all
-# remaining args.
+# Looks up Junction's binary path from the project's validated lock receipt and
+# execs it with all remaining args. It never picks an arbitrary cache version.
 #
 # Bash 3.2 compatible — no declare -A, no ${var,,}/^^, no readarray/mapfile, no &>>.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -50,29 +49,17 @@ shift
 
 case "$mcp_name" in
   junction)
-    # Locate binary: prefer lockfile target, then cache glob.
+    # The project lock is the selection authority. A cache scan can select an
+    # older Junction release and make the marker, declared tools, and executable
+    # disagree, so it is intentionally not a fallback.
     bin=""
     lock_target="$(mcp_lock_entry "junction" | jq -r '.target // ""')"
     if [ -n "$lock_target" ] && [ -x "$lock_target" ]; then
       bin="$lock_target"
-    else
-      # Fallback: scan cache.
-      d=""
-      for d in "${CACHE_DIR}/junction@"*/; do
-        if [ -d "$d" ]; then
-          if [ -x "${d%/}/junction" ]; then
-            bin="${d%/}/junction"
-            break
-          elif [ -x "${d%/}/bin/junction" ]; then
-            bin="${d%/}/bin/junction"
-            break
-          fi
-        fi
-      done
     fi
 
     if [ -z "$bin" ]; then
-      die "Junction is not installed. Run: eidolons mcp install junction"
+      die "Junction is not ready for this project: its locked executable is missing. Run: eidolons mcp install junction --force"
     fi
 
     exec "$bin" "$@"

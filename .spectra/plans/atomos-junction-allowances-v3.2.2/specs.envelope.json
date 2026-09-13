@@ -1,0 +1,44 @@
+{
+  "envelope_version": "1.0",
+  "message_id": "019f1e10-0210-77b4-9287-40265b10b51e",
+  "thread_id": "019f1e10-0210-7a52-bb67-dfa5a31d871c",
+  "parent_id": null,
+  "from": {
+    "eidolon": "spectra",
+    "version": "4.9.1"
+  },
+  "to": {
+    "eidolon": "apivr",
+    "version": "n/a"
+  },
+  "performative": "PROPOSE",
+  "edge_origin": "roster",
+  "objective": "Implement the shared P1 registration and allowance safety tranche, then retain the remaining Atomos and Junction specifications for staged delivery.",
+  "artifact": {
+    "kind": "spec",
+    "schema_version": "1.0",
+    "path": ".spectra/plans/atomos-junction-allowances-v3.2.2/specs.md",
+    "sha256": "8d4492eb0420ca695eeeee6c39809724fd7d530be6d4488caaf58b5be20a63b8",
+    "size_bytes": 21774
+  },
+  "integrity": {
+    "method": "sha256",
+    "value": "8d4492eb0420ca695eeeee6c39809724fd7d530be6d4488caaf58b5be20a63b8"
+  },
+  "trace": {
+    "ts": "2026-09-13T00:07:14Z",
+    "host": "codex",
+    "model": "runtime model not independently observed",
+    "tier": "standard"
+  },
+  "expected_response": {
+    "performative": "CRITIQUE",
+    "shape_hint": "Review the delivered P1 tranche and remaining staged requirements."
+  },
+  "assumptions": [
+    "Baseline main equals published v3.2.2 at c195bd25fc9a3fea80fbc98e67cc6ffb7846fc71.",
+    "No live MCP or host permission execution was verified.",
+    "Shared P1 implementation is authorized; P2/P3 contracts remain staged."
+  ],
+  "x_execution_authorized": true
+}

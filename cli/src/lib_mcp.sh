@@ -1174,6 +1174,30 @@ _mcp_oci_confirm_wired() {
 # All log output goes to stderr per the lib.sh invariant; only paths are emitted
 # to stdout by callers that capture them.
 # Bash 3.2 compatible: no declare -A, no ${var,,}, no readarray/mapfile, no &>>.
+_mcp_oci_config_is_current() {
+  local name="$1" version="$2" project_root="$3"
+  local digest tmpl_rel tmpl _basename _project_slug _uid_gid expected actual
+  digest="$(mcp_catalogue_get "$name" | jq -r --arg v "$version" '.versions.releases[$v].digest // empty')"
+  tmpl_rel="$(mcp_catalogue_get_field "$name" '.install.template')"
+  tmpl="${NEXUS}/${tmpl_rel}"
+  [ -n "$digest" ] && [ -f "$tmpl" ] && [ -f "${project_root}/.mcp.json" ] || return 1
+
+  _basename="$(basename "$project_root")"
+  _project_slug="$(printf '%s' "$_basename" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's|^-||' -e 's|-$||')"
+  _uid_gid="$(id -u):$(id -g)"
+  expected="$(sed \
+    -e "s|__PROJECT_ROOT__|${project_root}|g" \
+    -e "s|__PROJECT_SLUG__|${_project_slug}|g" \
+    -e "s|__IMAGE_DIGEST__|${digest}|g" \
+    -e "s|__UID_GID__|${_uid_gid}|g" \
+    -e "s|__HOME__|${HOME}|g" \
+    "$tmpl")"
+  expected="$(_mcp_runtime_apply "$name" "$project_root" "$expected")" || return 1
+  actual="$(jq -c --arg n "$name" '.mcpServers[$n] // empty' "${project_root}/.mcp.json" 2>/dev/null || true)"
+  [ -n "$actual" ] || return 1
+  [ "$(printf '%s' "$expected" | jq -cS --arg n "$name" '.mcpServers[$n]')" = "$(printf '%s' "$actual" | jq -cS .)" ]
+}
+
 _mcp_oci_render_and_merge() {
   local name="$1"
   local project_root="$2"

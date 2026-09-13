@@ -97,7 +97,7 @@ mcps:
     display_name: "Junction"
     scope: system
     kind: binary
-    description: "Container-isolated agent harness with ReasoningStep / plan.json dispatch."
+    description: "Container-isolated orchestration harness; planning remains parent-owned."
     use_cases:
       - "Sandbox APIVR-Delta implementation work in a Docker container."
       - "Run multi-stage agent pipelines with plan.json."
@@ -107,10 +107,26 @@ mcps:
     exposes_tools:
       glob: "mcp__junction__*"
       list:
+        # Pinned Junction v0.4.0 registry names normalised for MCP hosts.
+        # plan_from_prompt is retained as non-executable metadata only: it is a
+        # permanent stub and must never be selected for planning.
+        - mcp__junction__harness_inject
         - mcp__junction__harness_run
         - mcp__junction__harness_verify
-        - mcp__junction__plan_dispatch
-        - mcp__junction__reasoning_step
+      canonical_operations:
+        - name: harness.inject
+          host_tool: mcp__junction__harness_inject
+          executable: true
+        - name: harness.run
+          host_tool: mcp__junction__harness_run
+          executable: true
+        - name: harness.verify
+          host_tool: mcp__junction__harness_verify
+          executable: true
+        - name: harness.plan_from_prompt
+          host_tool: mcp__junction__harness_plan_from_prompt
+          executable: false
+          reason: permanent planning stub; parent creates and validates plans
     source:
       type: github_release
       repo: "Rynaro/Junction"

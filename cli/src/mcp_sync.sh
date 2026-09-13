@@ -112,10 +112,22 @@ EOF
   esac
 }
 
-# _mcp_sync_config_present NAME — a same-version MCP is only in sync when its
-# project registration remains present. The lock alone cannot establish that.
+# _mcp_sync_config_present NAME VERSION — a same-version MCP is only in sync
+# when its project registration matches the rendered configuration. Presence
+# alone cannot detect stale UID pins, bind mounts, resource flags, or image argv.
 _mcp_sync_config_present() {
-  local name="$1"
+  local name="$1" version="$2" kind
+  kind="$(mcp_catalogue_get_field "$name" '.kind')"
+  if [ "$kind" = "oci-image" ]; then
+    _mcp_oci_config_is_current "$name" "$version" "$(pwd)"
+    return $?
+  fi
+  if [ "$kind" = "binary" ]; then
+    local selected
+    selected="$(mcp_lock_entry "$name" | jq -r '.target // empty')"
+    [ -n "$selected" ] || return 1
+    _mcp_binary_confirm_wired "$name" "$(pwd)" "$selected" || return 1
+  fi
   local file
   for file in .mcp.json .cursor/mcp.json; do
     [ -f "$file" ] || continue
@@ -153,7 +165,7 @@ while IFS= read -r mentry; do
   # a missing host registration or stale OCI runtime receipt at that version.
   current="$(mcp_lock_entry "$mname" | jq -r '.version // ""')"
   if [ -n "$current" ] && _mcp_sync_version_satisfies "$current" "$mver_constraint"; then
-    if _mcp_sync_config_present "$mname" && { [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; }; then
+    if _mcp_sync_config_present "$mname" "$current" && { [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; }; then
       info "$mname@${current} already installed — no-op"
       continue
     fi
@@ -183,7 +195,7 @@ while IFS= read -r mentry; do
   # Check version and the resolved OCI runtime receipt. A profile or catalogue
   # limit change at the same image version still requires regeneration.
   if [ "$current" = "$resolved_ver" ]; then
-    if _mcp_sync_config_present "$mname" && { [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; }; then
+    if _mcp_sync_config_present "$mname" "$resolved_ver" && { [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; }; then
       info "$mname@${resolved_ver} already installed — no-op"
       continue
     fi
