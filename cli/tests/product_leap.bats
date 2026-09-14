@@ -25,7 +25,7 @@ load helpers
 }
 
 @test "run: opt-in ledger records planned but not completed work" {
-  run env EIDOLONS_LEDGER=1 eidolons run "audit the loader" --json
+  run env EIDOLONS_LEDGER=1 "$EIDOLONS_BIN" run "audit the loader" --json
   [ "$status" -eq 0 ]
   id="$(jq -r '.semantic_decision_digest' <<< "$output")"
   run eidolons ledger status --run-id "$id" --json
