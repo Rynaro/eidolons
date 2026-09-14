@@ -283,7 +283,7 @@ if [[ -z "$REF" ]]; then
   fi
 fi
 
-# ─── Downgrade warning (OQ-7) ─────────────────────────────────────────────
+# ─── Downgrade detection + read-only check ─────────────────────────────────
 _is_downgrade=false
 if _is_semver_tag "$TARGET_REF" && _is_semver_tag "$CURRENT_VERSION"; then
   if semver_lt "$TARGET_VERSION" "$CURRENT_VERSION" 2>/dev/null; then
@@ -291,6 +291,28 @@ if _is_semver_tag "$TARGET_REF" && _is_semver_tag "$CURRENT_VERSION"; then
   fi
 fi
 
+# --check is strictly observational.  During release preparation the checkout
+# may legitimately be newer than the latest published tag; never prompt for a
+# downgrade (or fail on non-interactive stdin) merely to display that fact.
+if [[ "$CHECK" == true ]]; then
+  _cur_commit="$(nexus_current_commit)"
+  echo ""
+  echo "  NEXUS"
+  echo "    current:  $CURRENT_TAG  (commit ${_cur_commit:0:7})"
+  echo "    target:   $TARGET_REF"
+  CURRENT_BARE="$(_strip_v "$CURRENT_TAG")"
+  if [[ "$_is_downgrade" == true ]]; then
+    echo "    status:   newer local checkout; published target is $TARGET_REF"
+  elif [[ "$CURRENT_BARE" == "$TARGET_VERSION" ]]; then
+    echo "    status:   up-to-date"
+  else
+    echo "    status:   upgrade available -> $TARGET_REF"
+  fi
+  echo ""
+  exit 0
+fi
+
+# ─── Downgrade warning (OQ-7) ─────────────────────────────────────────────
 if [[ "$_is_downgrade" == true ]]; then
   warn "Downgrading nexus $CURRENT_VERSION -> $TARGET_VERSION"
   if [[ "$FORCE" != true && "$NON_INTERACTIVE" != true ]]; then
@@ -305,23 +327,6 @@ if [[ "$_is_downgrade" == true ]]; then
     echo "Downgrade requires --force in non-interactive mode." >&2
     exit 1
   fi
-fi
-
-# ─── --check mode (read-only) ─────────────────────────────────────────────
-if [[ "$CHECK" == true ]]; then
-  _cur_commit="$(nexus_current_commit)"
-  echo ""
-  echo "  NEXUS"
-  echo "    current:  $CURRENT_TAG  (commit ${_cur_commit:0:7})"
-  echo "    target:   $TARGET_REF"
-  CURRENT_BARE="$(_strip_v "$CURRENT_TAG")"
-  if [[ "$CURRENT_BARE" == "$TARGET_VERSION" ]] && ! [[ "$_is_downgrade" == true ]]; then
-    echo "    status:   up-to-date"
-  else
-    echo "    status:   upgrade available -> $TARGET_REF"
-  fi
-  echo ""
-  exit 0
 fi
 
 # ─── Fetch into nexus.new ─────────────────────────────────────────────────
