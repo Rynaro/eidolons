@@ -151,10 +151,16 @@ if [[ -n "$VERIFY_ENVELOPE" ]]; then
   _vrc=0
   _vjson="$(bash "$SELF_DIR/verify_envelope.sh" "$VERIFY_ENVELOPE" --mode "$VERIFY_MODE" --json 2>/dev/null)" || _vrc=$?
   VERIFY_VERDICT="$(printf '%s' "$_vjson" | jq -r '.verdict // "error"' 2>/dev/null || echo "error")"
-  if [[ "$_vrc" -eq 3 ]]; then
-    # Exit 3 mirrors the verify gate's "blocked" code (not die's generic 1).
-    warn "ecl verify blocked [$VERIFY_VERDICT]: refusing to route a hand-off that fails integrity ($VERIFY_ENVELOPE). Correct the upstream artifact or re-run in warn mode."
-    exit 3
+  if [[ "$_vrc" -ne 0 ]]; then
+    # A requested block gate is fail-closed: malformed input, an unavailable
+    # verifier, or an integrity rejection must never fall through to dispatch.
+    # Preserve the verifier's integrity code (3); use 2 for malformed/error.
+    if [[ "$_vrc" -eq 3 ]]; then
+      warn "ecl verify blocked [$VERIFY_VERDICT]: refusing to route a hand-off that fails integrity ($VERIFY_ENVELOPE). Correct the upstream artifact or re-run in warn mode."
+      exit 3
+    fi
+    warn "ecl verify failed [$VERIFY_VERDICT]: refusing to route because the requested verification gate did not complete ($VERIFY_ENVELOPE)."
+    exit 2
   fi
 fi
 
@@ -204,8 +210,13 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
         model_tier: ($v.suggested_tier // $v.model_tier // "standard"),
         downstream: ($v.downstream // []),
         refuse: ($v.refuse_verbs // []),
-        raw: ([ $v.trigger_verbs[] | select(. as $t | hasword($prompt; $t)) ] | length),
-        named: hasword($prompt; $nm) })) as $s0
+        # Explicit negative intent is an authority boundary, not a weak
+        # routing hint. A read-only audit that says "do not implement" must
+        # not wake a coder merely because it contains an implementation verb.
+        prohibited_write: ($prompt | test("\\b(do not|don't|never|without)\\b[^.!?]{0,80}\\b(fix|implement|build|patch|write|change|edit|modify|refactor|delete)\\b")),
+        raw: (if ($v.capability_class == "coder" and ($prompt | test("\\b(do not|don't|never|without)\\b[^.!?]{0,80}\\b(fix|implement|build|patch|write|change|edit|modify|refactor|delete)\\b")))
+              then 0 else ([ $v.trigger_verbs[] | select(. as $t | hasword($prompt; $t)) ] | length) end),
+        named: (hasword($prompt; $nm) and (($v.capability_class != "coder") or (($prompt | test("\\b(do not|don't|never|without)\\b[^.!?]{0,80}\\b(fix|implement|build|patch|write|change|edit|modify|refactor|delete)\\b")) | not))) })) as $s0
 # base curve + explicit-name bonus
 | ($s0 | map(. + {
     base: ((if .raw==0 then 0 elif .raw==1 then 0.8 elif .raw==2 then 0.9 else 0.97 end)
@@ -308,7 +319,8 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
      | group_by(.key)
      | map({key: .[0].key, value: (map(.value) | add)})
      | from_entries)) as $boost
-| ($s1 | map(. + { score: (.base + ($boost[.name] // 0)) })) as $scored
+| ($s1 | map(. + { score: (if ((.prohibited_write == true) and (.class == "coder"))
+                                then 0 else (.base + ($boost[.name] // 0)) end) })) as $scored
 | ($scored | sort_by(-.score)) as $ranked
 # default_for_class tiebreak (V15): among members tied at the TOP score (e.g. two
 # `coder`s — Vivi as default + APIVR-Δ as the conservative fallback), prefer the
@@ -364,6 +376,14 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
            | . + {spec: (.requires_classes | length)} ]
          | sort_by(-.spec) | if length > 0 then .[0] else null end)
    else null end) as $chain
+| (reduce ($scored | sort_by(-.score)[]) as $candidate ({};
+     if ($candidate.named and (($candidate.refuse | any(. as $r | hasword($prompt; $r))) | not))
+     then .[$candidate.class] = $candidate.name else . end)) as $named_for_class
+| (if $chain == null then null
+   else $chain + {resolved_steps: [ $chain.steps[] as $step
+          | ($R.eidolons[$step].capability_class) as $class
+          | ($named_for_class[$class] // $step) ]}
+   end) as $resolved_chain
 # Step 3 — refusal immutability: a NAMED Eidolon that refuses (V11) OR the top
 # Eidolon refusing reroutes to the highest-scoring NON-refusing Eidolon.
 | ([ $scored[] | select(.named and (.refuse | any(. as $r | hasword($prompt; $r)))) ]
@@ -377,20 +397,20 @@ def hasword($p; $t): ($p | test("\\b" + $t + "\\b"));
 # Step 2 — gate + Step 5 — emit. Priority: chain → refusal-reroute → dispatch
 # → clarify. Chain only fires when a template actually matched (else a 2-class
 # co-trigger falls through to a single dispatch of the strongest).
-| (if $chain != null
+| (if $resolved_chain != null
    then { decision: "chain",
-          selected: $chain.steps,
-          chain: [ $chain.steps[] as $st | ($R.eidolons[$st]) as $e
-                   | {eidolon:$st, role:$e.capability_class, edge_origin:"routing", template:$chain.name} ],
-          model_tier_per_step: [ $chain.steps[] as $st
+          selected: $resolved_chain.resolved_steps,
+          chain: [ $resolved_chain.resolved_steps[] as $st | ($R.eidolons[$st]) as $e
+                   | {eidolon:$st, role:$e.capability_class, edge_origin:"routing", template:$resolved_chain.name} ],
+          model_tier_per_step: [ $resolved_chain.resolved_steps[] as $st
                                   | ($R.eidolons[$st].suggested_tier // $R.eidolons[$st].model_tier // "standard") ],
-          degraded_mode_per_step: [ $chain.steps[] as $st | ($R.eidolons[$st].degraded_mode // null) ],
-          escalation: ($R.eidolons[$chain.steps[0]].escalation // null),
+          degraded_mode_per_step: [ $resolved_chain.resolved_steps[] as $st | ($R.eidolons[$st].degraded_mode // null) ],
+          escalation: ($R.eidolons[$resolved_chain.resolved_steps[0]].escalation // null),
           fallthrough_reason: null,
           confidence: ([ $contenders[].score ] | min | if . > 1 then 1 else . end),
           clarification_request: null,
           refusal_rerouting: false,
-          assumptions: ["chain selected by template '\($chain.name)': " + $chain.when] }
+          assumptions: ["chain selected by template '\($resolved_chain.name)': " + $resolved_chain.when] }
    elif ($reroute != null and $reroute.name != $refuser.name)
    then  # refusal reroute (V11): named/top Eidolon refuses → capable peer
      { decision: "refusal_reroute",

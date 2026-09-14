@@ -25,16 +25,17 @@ EIDOLONS_UI_THEME_LOADED=1
 #   2. NO_COLOR is unset (https://no-color.org/).
 #   3. CI is unset (most CIs strip ANSI from logs anyway).
 #   4. EIDOLONS_PLAIN is not "1" (manual override).
-# FORCE_COLOR=1 overrides #1 (useful for previews piped to less -R).
+# FORCE_COLOR=1 overrides automatic plain-mode detection (useful for previews
+# and deterministic visual tests). EIDOLONS_PLAIN remains the explicit veto.
 _eidolons_detect_fancy() {
   if [[ "${EIDOLONS_PLAIN:-0}" == "1" ]]; then
     return 1
   fi
-  if [[ -n "${NO_COLOR:-}" ]]; then
-    return 1
-  fi
   if [[ "${FORCE_COLOR:-0}" == "1" ]]; then
     return 0
+  fi
+  if [[ -n "${NO_COLOR:-}" ]]; then
+    return 1
   fi
   if [[ -n "${CI:-}" ]]; then
     return 1

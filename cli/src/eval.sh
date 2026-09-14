@@ -120,6 +120,12 @@ if [[ "$VALIDATE" == true ]]; then
         ( $tasks[] | select((.prompt // "") == "") | "\(.id): empty prompt" ),
         ( $tasks[] | select((.category // "") == "") | "\(.id): missing category" ),
         ( $tasks[] | select((.expect | type) != "object") | "\(.id): missing/invalid expect" ),
+        ( $tasks[] | select((.expect | type) == "object") | select((.expect | length) == 0)
+          | "\(.id): expect must assert at least one field" ),
+        ( $tasks[] | select((.expect | type) == "object")
+          | .id as $id | (.expect | keys[]) as $k
+          | select(["decision","selected","tier","refusal_rerouting"] | index($k) | not)
+          | "\($id): unknown expect field \($k)" ),
         ( $tasks[] | select((.expect | type) == "object") | select(.expect.decision != null)
           | .id as $id | .expect.decision as $d
           | select(["dispatch","chain","refusal_reroute","clarify"] | index($d) | not)

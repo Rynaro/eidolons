@@ -35,6 +35,7 @@
             },
             "expect": {
               "type": "object",
+              "minProperties": 1,
               "additionalProperties": false,
               "properties": {
                 "decision": { "type": "string", "enum": ["dispatch", "chain", "refusal_reroute", "clarify"] },

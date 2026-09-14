@@ -256,6 +256,16 @@ EOF
   [ "$status" -eq 0 ]
 }
 
+@test "context status inherits all policy state from a prior meter" {
+  run eidolons context status --used-percentage 34 --tool-result-share 0.42 --compaction-count 3 --budget-ceiling 120000 --json
+  [ "$status" -eq 0 ]
+  run eidolons context status --used-percentage 35 --json
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.tool_result_share_est')" = "0.42" ]
+  [ "$(echo "$output" | jq -r '.compaction_count')" = "3" ]
+  [ "$(echo "$output" | jq -r '.budget.ceiling_tokens')" = "120000" ]
+}
+
 # ─── AC-5: harness install writes ECM recipes idempotently ──────────────────
 
 @test "harness_install_idempotent" {

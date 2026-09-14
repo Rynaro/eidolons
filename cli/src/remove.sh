@@ -1,63 +1,62 @@
 #!/usr/bin/env bash
-# eidolons remove — remove an Eidolon from this project
-# ═══════════════════════════════════════════════════════════════════════════
-
+# eidolons remove — safely remove one managed Eidolon from this project.
 set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 
-NAME="${1:-}"
-[[ -z "$NAME" ]] && die "Usage: eidolons remove <name>"
+usage() {
+  cat <<'EOF'
+Usage: eidolons remove <name> [--non-interactive]
 
-# ─── Cortex host-doc block removal ────────────────────────────────────────
-# Remove the <!-- eidolon:cortex start/end --> block from all root host docs
-# that carry it. This runs before the per-Eidolon removal stub so that the
-# cortex is cleaned up even while the full remove pipeline is v1.1-stubbed.
-#
-# Policy: remove the cortex block only when the named Eidolon is the LAST
-# installed member. If other Eidolons remain, the cortex stays useful.
+Removes only Eidolons-managed project state for the named member, then
+regenerates eidolons.lock and host wiring with `eidolons sync`.
+EOF
+}
 
-_remaining="$(manifest_members 2>/dev/null | grep -v "^${NAME}$" | grep -v '^$' | wc -l | tr -d ' ')" || _remaining=0
+NAME=""
+NON_INTERACTIVE=false
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --non-interactive) NON_INTERACTIVE=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) die "Unknown option: $1 (see 'eidolons remove --help')" ;;
+    *) [[ -z "$NAME" ]] || die "Remove accepts one Eidolon name at a time."; NAME="$1"; shift ;;
+  esac
+done
+[[ -n "$NAME" ]] || { usage >&2; exit 2; }
+manifest_exists || die "No eidolons.yaml found. Run 'eidolons init' first."
+roster_get "$NAME" >/dev/null
+manifest_members | grep -Fxq "$NAME" || die "$NAME is not a member of $PROJECT_MANIFEST."
+
+# Validate the transformed document before replacing the original.
+_manifest_tmp="$(mktemp "${PROJECT_MANIFEST}.XXXXXX")"
+if ! EIDOLONS_REMOVE_NAME="$NAME" yq eval 'del(.members[] | select(.name == strenv(EIDOLONS_REMOVE_NAME)))' \
+      "$PROJECT_MANIFEST" > "$_manifest_tmp" \
+    || ! yq eval '.members | type == "!!seq"' "$_manifest_tmp" >/dev/null 2>&1; then
+  rm -f "$_manifest_tmp"
+  die "Could not remove $NAME from $PROJECT_MANIFEST structurally; it was left unchanged."
+fi
+mv -f "$_manifest_tmp" "$PROJECT_MANIFEST"
+
+# Only remove the package root that Eidolons owns. Host documents may contain
+# user-authored material; sync regenerates managed adapter surfaces instead of
+# attempting broad text deletion here.
+if [[ -d ".eidolons/$NAME" ]]; then
+  rm -rf ".eidolons/$NAME"
+  ok "Removed .eidolons/$NAME/"
+fi
+
+_remaining="$(manifest_members | sed '/^$/d' | wc -l | tr -d ' ')"
 if [[ "$_remaining" -eq 0 ]]; then
-  say "Last Eidolon — removing cortex + dispatch-pointer host-doc blocks and .eidolons/cortex/"
-  # Cortex block lived in the original three; the dispatch-pointer block
-  # also lives in GEMINI.md (added by PR-A1). Iterate both surfaces.
   for _host_doc in "AGENTS.md" "CLAUDE.md" ".github/copilot-instructions.md" "GEMINI.md"; do
     remove_marker_block "$_host_doc" "cortex"
     remove_marker_block "$_host_doc" "dispatch-pointer"
   done
-  # Remove the mirrored cortex directory.
-  if [[ -d ".eidolons/cortex" ]]; then
-    rm -rf ".eidolons/cortex"
-    ok "Removed .eidolons/cortex/"
-  fi
-  # Remove the .gitignore policy block — last Eidolon means the project
-  # no longer needs the eidolons-managed allowlist. Idempotent no-op
-  # when the block (or .gitignore itself) is absent.
+  [[ -d ".eidolons/cortex" ]] && rm -rf ".eidolons/cortex"
   remove_marker_block ".gitignore" "gitignore" "# "
-else
-  info "Other Eidolons remain — cortex + dispatch-pointer blocks preserved"
 fi
 
-# ─── Per-Eidolon removal (v1.1) ──────────────────────────────────────────
-# TODO: full implementation in v1.1
-# Planned behavior:
-#   - Remove member entry from eidolons.yaml
-#   - Remove .eidolons/<n>/ directory
-#   - Remove host dispatch sections scoped to this Eidolon (bounded by markers)
-#   - Regenerate eidolons.lock via `eidolons sync`
-
-die "eidolons remove — per-Eidolon removal not yet implemented (planned: v1.1).
-
-Cortex host-doc blocks have been cleaned up (if this was the last Eidolon).
-
-Workaround for per-Eidolon cleanup:
-  1. Edit eidolons.yaml and delete the member entry.
-  2. rm -rf .eidolons/<n>/
-  3. Manually clean host dispatch files (AGENTS.md, CLAUDE.md sections).
-  4. Run 'eidolons sync' to regenerate eidolons.lock.
-
-This will be automated once per-Eidolon install.sh writes install.manifest.json
-with per-file provenance (EIIS v1.0 already specifies this — we just need the
-reverse-lookup logic here)."
+say "Regenerating lockfile and managed host wiring"
+sync_args=()
+[[ "$NON_INTERACTIVE" == true ]] && sync_args=(--non-interactive)
+exec bash "$SELF_DIR/sync.sh" "${sync_args[@]}"

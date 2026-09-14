@@ -285,6 +285,6 @@ jobs:
           # --check is read-only; it may report "already on latest" or "upgrade
           # available" depending on the state of the upstream tag, but it must
           # exit 0 and never modify the nexus directory.
-          eidolons upgrade self --check || true
+          eidolons upgrade self --check
           # Verify nexus is untouched (nexus.new must not exist after --check).
           [ ! -d "${{ github.workspace }}/.us-home/nexus.new" ]

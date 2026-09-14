@@ -2,17 +2,16 @@
 
 load helpers
 
-@test "remove: prints stub message and exits non-zero" {
+@test "remove: requires a manifest before mutating project state" {
   run eidolons remove atlas
   [ "$status" -ne 0 ]
-  [[ "$output" =~ not\ yet\ implemented ]]
-  [[ "$output" =~ Workaround ]]
+  [[ "$output" =~ No\ eidolons\.yaml ]]
 }
 
-@test "remove: rm alias dispatches to same stub" {
+@test "remove: rm alias dispatches to the implemented command" {
   run eidolons rm atlas
   [ "$status" -ne 0 ]
-  [[ "$output" =~ not\ yet\ implemented ]]
+  [[ "$output" =~ No\ eidolons\.yaml ]]
 }
 
 # ─── G-A1.3: dispatch-pointer removed on last-Eidolon removal (PR-A1) ────

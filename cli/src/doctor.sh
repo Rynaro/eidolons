@@ -95,7 +95,7 @@ CLAUDE_WIRED=false
 if yaml_to_json "$PROJECT_MANIFEST" | jq -e '.hosts.wire | index("claude-code")' >/dev/null 2>&1; then
   CLAUDE_WIRED=true
 fi
-manifest_members | while read -r name; do
+while read -r name; do
   target="./.eidolons/$name"
   if [[ ! -d "$target" ]]; then
     err "$name declared but not installed at $target (per-Eidolon install.sh didn't run or failed)"
@@ -129,7 +129,7 @@ manifest_members | while read -r name; do
   if [[ "$CLAUDE_WIRED" == "true" ]] && [[ ! -f ".claude/agents/$name.md" ]]; then
     err "$name installed but .claude/agents/$name.md missing (per-Eidolon installer didn't wire claude-code)"
   fi
-done
+done < <(manifest_members)
 
 # Read shared_dispatch preference — defaults to false when the key is absent.
 SHARED_DISPATCH="$(yaml_to_json "$PROJECT_MANIFEST" | jq -r '.hosts.shared_dispatch // false')"

@@ -403,13 +403,17 @@ upgrade_install_member() {
     fi
   fi
 
+  local non_interactive_args=()
+  if [[ "$NON_INTERACTIVE" == true ]]; then
+    non_interactive_args=(--non-interactive)
+  fi
   (
     cd "$(pwd)"
     bash "$clone_dir/install.sh" \
       --target "$target" \
       --hosts "$hosts_csv" \
       "${shared_flag_args[@]}" \
-      ${NON_INTERACTIVE:+--non-interactive} \
+      "${non_interactive_args[@]}" \
       --force
   ) || { warn "$name install failed"; return 1; }
 

@@ -73,12 +73,12 @@ EOF
   [ "$status" -eq 3 ]
 }
 
-@test "unverifiable: placeholder SHA -> exit 0 even in block (parent must fill)" {
+@test "unverifiable: placeholder SHA -> block refuses" {
   env="$(_mkenv "$BATS_TEST_TMPDIR/ph")"
   tmp="$(jq '.integrity.value="PARENT_FILLS_SHA" | .artifact.sha256=""' "$env")"
   echo "$tmp" > "$env"
   run eidolons verify-envelope "$env" --block --json
-  [ "$status" -eq 0 ]
+  [ "$status" -eq 3 ]
   [ "$(_field '.verdict')" = "unverifiable" ]
 }
 
@@ -143,4 +143,12 @@ EOF
   run eidolons run "map the auth flow" --verify "$env" --verify-block
   [ "$status" -eq 3 ]
   [[ "$output" =~ "blocked" ]]
+}
+
+@test "run --verify-block: malformed envelope never dispatches" {
+  mkdir -p "$BATS_TEST_TMPDIR/rmal"
+  printf '{ broken' > "$BATS_TEST_TMPDIR/rmal/spec.envelope.json"
+  run eidolons run "map the auth flow" --verify "$BATS_TEST_TMPDIR/rmal/spec.envelope.json" --verify-block --json
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "refusing to route" ]]
 }

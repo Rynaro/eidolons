@@ -80,10 +80,13 @@ _mcp_sync_version_satisfies() {
   local op="exact" requested="$constraint"
   case "$requested" in
     ^*) op="caret"; requested="${requested#^}" ;;
-    ~*) op="tilde"; requested="${requested#~}" ;;
+    ~*) op="tilde"; requested="${requested:1}" ;;
   esac
   requested="${requested#v}"
-  [ "$op" = "exact" ] && [ "$version" = "$requested" ] && return 0
+  if [ "$op" = "exact" ]; then
+    [ "$version" = "$requested" ]
+    return $?
+  fi
   case "$version:$requested" in
     *-*:*) return 1 ;;
   esac
