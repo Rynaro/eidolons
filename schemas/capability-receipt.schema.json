@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Eidolons capability receipt",
+  "type": "object",
+  "required": ["receipt_version", "observed_at", "configuration_digest", "live_probe", "hosts", "members"],
+  "properties": {
+    "receipt_version": {"const": "1.0"},
+    "observed_at": {"type": "string"},
+    "configuration_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "live_probe": {"type": "boolean"},
+    "hosts": {"type": "array"},
+    "members": {"type": "array"}
+  },
+  "additionalProperties": true
+}

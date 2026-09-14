@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Eidolons run_event.v1",
+  "type": "object",
+  "required": ["schema_version", "event_id", "run_id", "sequence", "event_type", "timestamp", "requested", "observed", "evidence_refs", "event_digest"],
+  "properties": {
+    "schema_version": {"const": "1.0"}, "event_id": {"type":"string"}, "run_id":{"type":"string"},
+    "sequence":{"type":"integer","minimum":1}, "event_type":{"type":"string"}, "timestamp":{"type":"string"},
+    "previous_event_digest":{"type":["string","null"]}, "requested":{"type":"object"}, "observed":{"type":"object"},
+    "evidence_refs":{"type":"array"}, "event_digest":{"type":"string","pattern":"^[a-f0-9]{64}$"}
+  }, "additionalProperties": false
+}

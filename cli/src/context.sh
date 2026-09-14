@@ -30,6 +30,7 @@ Subcommands:
   policy        Evaluate roster/context-policy.yaml over the current meter
   externalize   Checkpoint identifiers to crystalium (file-floor when absent)
   handoff       Compose a session handoff brief + ECL envelope
+  checkpoint    Create or recover a complete, verifiable local checkpoint
 
 Options:
   -h, --help    Show this help
@@ -53,6 +54,7 @@ case "$subcmd" in
   policy)      exec bash "$SELF_DIR/context_policy.sh"      "$@" ;;
   externalize) exec bash "$SELF_DIR/context_externalize.sh" "$@" ;;
   handoff)     exec bash "$SELF_DIR/context_handoff.sh"     "$@" ;;
+  checkpoint)  exec bash "$SELF_DIR/context_checkpoint.sh"  "$@" ;;
   -h|--help|help)
     usage
     exit 0
@@ -64,7 +66,7 @@ case "$subcmd" in
   *)
     echo "Unknown context subcommand: $subcmd" >&2
     echo "" >&2
-    echo "Available subcommands: status policy externalize handoff" >&2
+    echo "Available subcommands: status policy externalize handoff checkpoint" >&2
     echo "Run 'eidolons context --help' for usage." >&2
     exit 2
     ;;
