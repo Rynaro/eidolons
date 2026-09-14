@@ -525,6 +525,42 @@ if [[ -n "$VERIFY_ENVELOPE" ]]; then
     '. + {incoming_verify: {verdict:$vv, mode:$vm, envelope:$ve}}')"
 fi
 
+# ── PL-02 — explicit authorization contract and semantic decision digest ─────
+# Routing may infer a useful worker, but it must not turn that inference into
+# authority.  Make the requested and prohibited operation sets visible to every
+# adapter.  In particular, a negative write instruction is represented as an
+# explicit boundary even if a downstream host cannot enforce it itself.
+_ROUTE_AUTHORIZATION="$(jq -n --arg prompt "$PROMPT_LC" '
+  ($prompt | test("\\b(fix|implement|build|patch|write|change|edit|modify|refactor|delete|create|remove)\\b")) as $requests_write
+  | ($prompt | test("\\b(do not|don.t|never|without)\\b[^.!?]{0,80}\\b(fix|implement|build|patch|write|change|edit|modify|refactor|delete|create|remove)\\b")) as $forbids_write
+  | {
+      version: "1.0",
+      requested_operations: (if $requests_write then ["read", "write"] else ["read"] end),
+      forbidden_operations: (if $forbids_write then ["write"] else [] end),
+      authorized_operations: (if $forbids_write then ["read"] elif $requests_write then ["read", "write"] else ["read"] end),
+      enforcement: "advisory-until-host-enforced"
+    }
+')"
+
+# A receipt is evidence about configured capability, never a grant of write
+# authority.  Keep only a path/state reference here so the route stays portable
+# and the semantic digest does not depend on receipt observation timestamps.
+_READINESS_PATH=".eidolons/.readiness/receipt.json"
+_READINESS_STATE="missing"
+[[ -f "$_READINESS_PATH" ]] && _READINESS_STATE="present"
+ARTIFACT="$(printf '%s' "$ARTIFACT" | jq \
+  --argjson authorization "$_ROUTE_AUTHORIZATION" \
+  --arg readiness_path "$_READINESS_PATH" --arg readiness_state "$_READINESS_STATE" \
+  '. + {route_contract: ($authorization + {capability_evidence:{receipt:$readiness_path,state:$readiness_state}})}')"
+
+# Hash the canonical decision, excluding diagnostic scores and transport-only
+# verification envelope data.  This is deliberately a route semantic digest,
+# not an integrity signature: identical routing input/configuration yields the
+# same digest and consumers can compare decisions without parsing prose.
+_SEMANTIC_DECISION="$(printf '%s' "$ARTIFACT" | jq -cS 'del(._scores, .incoming_verify, .semantic_decision_digest)')"
+_SEMANTIC_DECISION_DIGEST="$(printf '%s' "$_SEMANTIC_DECISION" | sha256_file /dev/stdin)"
+ARTIFACT="$(printf '%s' "$ARTIFACT" | jq --arg digest "$_SEMANTIC_DECISION_DIGEST" '. + {semantic_decision_digest:$digest}')"
+
 # ── Phase E — telemetry dispatch-time stamp (AC-F3-5) ────────────────────────
 # Gated: only when $EIDOLONS_HOME/telemetry/ dir exists OR EIDOLONS_TELEMETRY=1.
 # Side-effect-only: routing stdout / --json / hook-output are BYTE-IDENTICAL
@@ -620,6 +656,23 @@ _telemetry_dispatch_stamp() {
 }
 # Non-fatal wrapper: swallow any error so routing kernel never fails.
 { _telemetry_dispatch_stamp; } 2>/dev/null || true
+
+# Optional PL-03 instrumentation.  Routing remains side-effect-free by default;
+# when explicitly enabled, persist the route artifact first and let the ledger
+# record it as planned/unobserved.  A later host/checker must add observations.
+_ledger_route_stamp() {
+  [[ "${EIDOLONS_LEDGER:-0}" == "1" ]] || return 0
+  local _run _dir _route _tmp
+  _run="$(printf '%s' "$ARTIFACT" | jq -r '.semantic_decision_digest // empty' 2>/dev/null || true)"
+  [[ "$_run" =~ ^[a-f0-9]{64}$ ]] || return 0
+  _dir=".eidolons/.ledger/routes"; mkdir -p "$_dir" 2>/dev/null || return 0
+  _route="$_dir/${_run}.route.json"
+  if [[ ! -f "$_route" ]]; then
+    _tmp="${_route}.$$"; printf '%s' "$ARTIFACT" | jq 'del(._scores)' > "$_tmp" 2>/dev/null && mv "$_tmp" "$_route" || rm -f "$_tmp"
+  fi
+  [[ -f "$_route" ]] && bash "$SELF_DIR/ledger.sh" open --run-id "$_run" --route "$_route" >/dev/null 2>&1 || true
+}
+{ _ledger_route_stamp; } 2>/dev/null || true
 
 # ── Render ────────────────────────────────────────────────────────────────────
 if [[ "$EXPLAIN" == "1" ]]; then

@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [3.3.0] — 2026-09-14 — observable delegation and portable continuity
+
+### Added
+- Capability readiness receipts that separately report configuration, discovery, startup-test, and enforcement evidence.
+- Versioned routing authorization contracts and semantic decision digests; receipt evidence does not grant authority.
+- Opt-in local execution ledger, complete atomic context checkpoints, and bounded local capsule/recall primitives.
+- Replay-evidence validation, shadow-only policy candidate checks, and an explicitly disabled-by-default ACP compatibility receipt.
+
+### Changed
+- `eidolons run` can record a route as planned-but-unobserved when `EIDOLONS_LEDGER=1`; it never promotes a route intent to completed work.
+
 ## [3.2.3] — 2026-09-13 — MCP reconciliation hardening
 
 ### Fixed

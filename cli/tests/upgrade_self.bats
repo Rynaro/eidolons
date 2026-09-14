@@ -387,6 +387,20 @@ EOF
   [ ! -d "$EIDOLONS_HOME/nexus.new" ]
 }
 
+@test "upgrade self --check reports a published older target without prompting" {
+  setup_fixture_remote "1.0.0"
+  printf '2.0.0\n' > "$EIDOLONS_HOME/nexus/VERSION"
+  printf 'main\n' > "$EIDOLONS_HOME/nexus/.roster_ref"
+  printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$EIDOLONS_HOME/nexus/.gitignore"
+  git -C "$EIDOLONS_HOME/nexus" add -A
+  git -C "$EIDOLONS_HOME/nexus" commit -q -m "local release preparation"
+
+  run bash "$EIDOLONS_BIN" upgrade self --check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"newer local checkout"* ]]
+  [ ! -d "$EIDOLONS_HOME/nexus.new" ]
+}
+
 # ─── S1 partial: VERSION file from install ───────────────────────────────
 @test "S1/install: VERSION file exists in checkout" {
   # The VERSION file should exist at the nexus root (checkout).
