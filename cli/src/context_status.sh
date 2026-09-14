@@ -117,6 +117,7 @@ METER_PATH="$(context_meter_path "$PROJECT_ROOT" "$SESSION_ID" "$SUBAGENT")"
 _prev_compaction=0
 _prev_ceiling=null
 _prev_age=0
+_prev_tool_result_share=0
 # R2: a prior meter that is not valid JSON is treated as ABSENT (inherit
 # defaults) rather than partially read. Without this, a corrupt file makes
 # `jq -r '...' 2>/dev/null || echo 0` capture BOTH jq's partial stdout AND the
@@ -126,7 +127,7 @@ _prev_age=0
 # reaching the write -> the corrupt file can never be overwritten.
 #
 # ONE jq invocation does both jobs: it validates the whole file (jq exits
-# non-zero on trailing garbage) AND extracts all three inherited fields. On any
+# non-zero on trailing garbage) AND extracts all four inherited fields. On any
 # failure the `||` discards jq's partial stdout wholesale and the defaults above
 # stand, so the write below heals the file unconditionally.
 #
@@ -137,15 +138,17 @@ _prev_age=0
 if [ -f "$METER_PATH" ]; then
   _prev_triple="$(jq -r '[(.compaction_count // 0),
                           (.budget.ceiling_tokens // "null"),
-                          (.externalize_age_turns // 0)] | @tsv' \
+                          (.externalize_age_turns // 0),
+                          (.tool_result_share_est // 0)] | @tsv' \
                     "$METER_PATH" 2>/dev/null)" || _prev_triple=""
   # A multi-document file (two valid objects concatenated) would exit 0 and emit
   # two lines; treat that as corrupt too rather than inheriting from the first.
-  case "$_prev_triple" in
-    '' | *"$(printf '\n')"*) _prev_triple="" ;;
-  esac
+  # Command substitution removes trailing newlines, so testing against a
+  # command-substituted newline made the old glob match every non-empty value.
+  # A literal newline remains only for multi-document jq output.
+  case "$_prev_triple" in ''|*$'\n'*) _prev_triple="" ;; esac
   if [ -n "$_prev_triple" ]; then
-    IFS="$(printf '\t')" read -r _prev_compaction _prev_ceiling _prev_age <<EOF
+    IFS="$(printf '\t')" read -r _prev_compaction _prev_ceiling _prev_age _prev_tool_result_share <<EOF
 $_prev_triple
 EOF
   fi
@@ -155,7 +158,7 @@ fi
 if [ -z "$BUDGET_CEILING" ]; then
   BUDGET_CEILING="$_prev_ceiling"
 fi
-[ -n "$TOOL_RESULT_SHARE" ] || TOOL_RESULT_SHARE="0"
+[ -n "$TOOL_RESULT_SHARE" ] || TOOL_RESULT_SHARE="$_prev_tool_result_share"
 
 # ── D1 estimation ladder ───────────────────────────────────────────────────
 UTILIZATION=""

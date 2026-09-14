@@ -49,8 +49,10 @@ for name in "${NAMES[@]}"; do
   roster_get "$name" >/dev/null
 done
 
-# ─── Append to eidolons.yaml ─────────────────────────────────────────────
-# This is a simple line-oriented append. For complex cases we'd shell out to yq.
+# ─── Update eidolons.yaml structurally ───────────────────────────────────
+# A line append silently placed a member under whichever key happened to be
+# last, and could produce a second members: block. mikefarah/yq preserves the
+# surrounding document structure/comments while editing the members sequence.
 for name in "${NAMES[@]}"; do
   if manifest_members | grep -Fxq "$name"; then
     info "$name already in eidolons.yaml — skipping manifest update"
@@ -62,13 +64,19 @@ for name in "${NAMES[@]}"; do
   spec="${VERSION_SPEC:-^$latest}"
 
   say "Adding $name@$spec to $PROJECT_MANIFEST"
-  cat >> "$PROJECT_MANIFEST" <<ENTRY
-  - name: $name
-    version: "$spec"
-    source: github:$repo
-ENTRY
+  _manifest_tmp="$(mktemp "${PROJECT_MANIFEST}.XXXXXX")"
+  if ! EIDOLONS_ADD_NAME="$name" EIDOLONS_ADD_VERSION="$spec" EIDOLONS_ADD_SOURCE="github:$repo" \
+      yq eval '.members += [{"name": strenv(EIDOLONS_ADD_NAME), "version": strenv(EIDOLONS_ADD_VERSION), "source": strenv(EIDOLONS_ADD_SOURCE)}]' \
+        "$PROJECT_MANIFEST" > "$_manifest_tmp" \
+      || ! yq eval '.' "$_manifest_tmp" >/dev/null 2>&1; then
+    rm -f "$_manifest_tmp"
+    die "Could not update $PROJECT_MANIFEST structurally; it was left unchanged."
+  fi
+  mv -f "$_manifest_tmp" "$PROJECT_MANIFEST"
 done
 
 # ─── Delegate install to sync ────────────────────────────────────────────
 say "Running sync"
-exec bash "$SELF_DIR/sync.sh" ${NON_INTERACTIVE:+--non-interactive}
+sync_args=()
+[[ "$NON_INTERACTIVE" == true ]] && sync_args=(--non-interactive)
+exec bash "$SELF_DIR/sync.sh" "${sync_args[@]}"

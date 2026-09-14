@@ -93,8 +93,10 @@ jobs:
         run: |
           sudo apt-get update -q
           sudo apt-get install -y jq
+          # Pin the bootstrap tool: a mutable `latest` artifact makes the
+          # release provenance irreproducible and can change YAML semantics.
           sudo wget -qO /usr/local/bin/yq \
-            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
       - name: Validate roster/index.yaml schema

@@ -401,10 +401,9 @@ members:
     source: github:Rynaro/ATLAS
 EOF
 
-  # Remove exits non-zero (per-Eidolon removal still stubbed) but must
-  # clean up the cortex block before dying.
+  # Removal delegates final lock regeneration to sync, whose fixture outcome
+  # is deliberately outside this cortex-focused assertion.
   run eidolons remove atlas
-  [ "$status" -ne 0 ]
 
   # Cortex block must be gone from CLAUDE.md.
   ! grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"
@@ -425,7 +424,6 @@ members:
 EOF
 
   run eidolons remove atlas
-  [ "$status" -ne 0 ]
   [ ! -d ".eidolons/cortex" ]
 }
 
@@ -450,7 +448,6 @@ members:
 EOF
 
   run eidolons remove atlas
-  [ "$status" -ne 0 ]
 
   # Cortex block must still be present.
   grep -q '<!-- eidolon:cortex start -->' "CLAUDE.md"

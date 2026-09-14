@@ -2699,7 +2699,7 @@ deep_check_harness_consistency() {
         local _oc_mode
         _oc_mode="$(printf '%s' "$_strict_modes" | jq -r '.opencode // "absent"' 2>/dev/null || echo "absent")"
         if [[ "$_oc_mode" != "advisory" ]]; then
-          err "D12 opencode in strict[] but strict_modes.opencode != advisory ($__oc_mode) — unsound hard-block record"
+          err "D12 opencode in strict[] but strict_modes.opencode != advisory ($_oc_mode) — unsound hard-block record"
           rc=$((rc + 1))
         fi
         ;;

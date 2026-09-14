@@ -77,9 +77,11 @@ emit() {
   to="$(jq -r '.to.eidolon // "?"' "$ENVELOPE" 2>/dev/null || echo "?")"
   perf="$(jq -r '.performative // "?"' "$ENVELOPE" 2>/dev/null || echo "?")"
 
-  # Decide blocking: only genuine integrity failures block, and only in block mode.
+  # In block mode an envelope must be positively verifiable.  An unfilled
+  # parent-FILLS hash is useful during advisory rollout, but it is not an
+  # authorization to dispatch an unverified hand-off.
   case "$verdict" in
-    tamper|inconsistent|missing_payload|unsupported_algo)
+    tamper|inconsistent|missing_payload|unsupported_algo|unverifiable)
       [[ "$MODE" == "block" ]] && _blocked=true ;;
     malformed) ;;  # handled with exit 2 directly by callers
   esac
@@ -162,8 +164,8 @@ INTEGRITY_VALUE="$(jq -r '.integrity.value' "$ENVELOPE")"
 ARTIFACT_SHA="$(jq -r '.artifact.sha256 // ""' "$ENVELOPE")"
 
 # ── 4. Placeholder guard (parent-fills-SHA pattern) ───────────────────────────
-# The orchestrator patches artifact.sha256 + integrity.value post-handoff; never
-# fail an unfilled envelope — report it as unverifiable so the parent fills it.
+# The orchestrator patches artifact.sha256 + integrity.value post-handoff. In
+# warn mode this remains advisory; block mode rejects it in emit().
 case "$INTEGRITY_VALUE" in
   ""|PARENT_FILLS_*|"<"*|"TODO"*|null)
     emit "unverifiable" "integrity.value is a placeholder ('$INTEGRITY_VALUE') — parent must fill the SHA before verification" ;;

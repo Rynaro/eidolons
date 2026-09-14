@@ -195,8 +195,19 @@ else
   warn "context externalize: crystalium not gated in (.mcp.json + eidolons.mcp.lock) — writing file-floor manifest, continuing"
 fi
 
-if [ "$GATED_IN" = "false" ] || [ "$COMMIT_OK" = "false" ]; then
-  FILE_FLOOR_PATH="$(_write_file_floor "$( [ "$GATED_IN" = "false" ] && echo "crystalium absent" || echo "crystalium commit unreachable or timed out (${ECM_MEMORY_TIMEOUT_S}s budget)")")"
+# The proven Crystalium commit interface stores only the summary.  Preserve the
+# complete identifier manifest locally unless the full manifest was ingested as
+# part of an envelope hand-off; otherwise a fresh process cannot recover its
+# anchors, decisions, failed approaches, and open variables.
+if [ "$INGEST_OK" = "false" ]; then
+  if [ "$GATED_IN" = "false" ]; then
+    _floor_reason="crystalium absent"
+  elif [ "$COMMIT_OK" = "false" ]; then
+    _floor_reason="crystalium commit unreachable or timed out (${ECM_MEMORY_TIMEOUT_S}s budget)"
+  else
+    _floor_reason="crystalium acknowledged summary only; full recovery manifest retained locally"
+  fi
+  FILE_FLOOR_PATH="$(_write_file_floor "$_floor_reason")"
 fi
 
 # ── Budget ledger (D3/AC-14): append-only, unconditional ──────────────────

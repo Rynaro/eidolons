@@ -141,6 +141,16 @@ EOF
   diff eidolons.mcp.lock.before eidolons.mcp.lock
 }
 
+@test "mcp sync: tilde constraints accept the installed compatible patch" {
+  seed_manifest_with_mcp
+  sed -i.bak 's/\^0\.4\.0/~0.4.0/' eidolons.yaml
+  rm -f eidolons.yaml.bak
+  seed_junction_lock_for_sync "0.4.0"
+  run eidolons mcp sync
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ already\ installed ]]
+}
+
 @test "mcp sync reports repairs when a same-version project registration is missing" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_fake_curl_and_gh_for_sync

@@ -133,7 +133,9 @@ _plain() { sed 's/\x1b\[[0-9;]*m//g'; }
 }
 
 @test "AC-SL-5: colour IS emitted by default (stdout is a pipe, so a TTY probe would wrongly suppress it)" {
-  run bash -c "echo '$(_payload)' | '$EIDOLONS_BIN' statusline render | grep -c \$'\033' || true"
+  # The ambient developer/CI environment may set NO_COLOR. This test owns the
+  # opposite branch explicitly rather than letting inherited preference decide.
+  run bash -c "unset NO_COLOR; echo '$(_payload)' | '$EIDOLONS_BIN' statusline render | grep -c \$'\033' || true"
   [ "$output" -ge 1 ]
 }
 
@@ -401,7 +403,7 @@ _fresh_sid() { printf 'v2t%s%s' "$RANDOM" "$RANDOM"; }
 
 @test "AC-SL-14: a roster agent renders in its class colour (kupo = moogle pink)" {
   local pink; pink=$'\033[1;35m'
-  run bash -c "echo '$(_payload_v2 30 "$(_fresh_sid)" 10 ',"agent":{"name":"kupo"}')' | COLUMNS=110 EIDOLONS_STATUSLINE_NO_METER=1 '$EIDOLONS_BIN' statusline render"
+  run bash -c "unset NO_COLOR; echo '$(_payload_v2 30 "$(_fresh_sid)" 10 ',"agent":{"name":"kupo"}')' | COLUMNS=110 EIDOLONS_STATUSLINE_NO_METER=1 '$EIDOLONS_BIN' statusline render"
   [ "$status" -eq 0 ]
   [[ "$output" == *"${pink}kupo"* ]]
 }
