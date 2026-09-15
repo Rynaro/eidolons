@@ -10,6 +10,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [3.3.1] — 2026-09-15 — Crystalium recall contract
+
+### Added
+- crystalium v2.2.1 published in the roster with release integrity metadata.
+
 ## [3.3.0] — 2026-09-14 — observable delegation and portable continuity
 
 ### Added
