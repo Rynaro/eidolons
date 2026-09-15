@@ -185,10 +185,13 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.2.0"
+      latest: "2.2.1"
       pins:
-        stable: "2.2.0"
+        stable: "2.2.1"
       releases:
+        "2.2.1":
+          digest: "sha256:ee8ee208dbd9a2b1c0fc43e748d584d95dd338a4d3e6581a6c9e032566b16648"
+          released_at: "2026-09-15T21:02:05Z"
         "2.2.0":
           digest: "sha256:75077ffe6b9bcded8f50c0fcb7092ead204128ec4f72af5103df1dfd036f82d5"
           released_at: "2026-08-18T21:22:00Z"
