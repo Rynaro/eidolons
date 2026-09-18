@@ -1,0 +1,272 @@
+# Campaign metadata only. This file does not execute agents or authorize spend.
+# Phase documents own acceptance criteria; do not duplicate them here.
+schema_version: "1"
+kind: implementation-campaign
+campaign_id: gauge-verified-delivery
+prepared_on: "2026-09-18"
+status: proposed
+baseline:
+  repository: Rynaro/eidolons
+  commit: 752194ef5ceaa8cee1f5995fd0d374888696d8fc
+  sibling_revisions: capture_at_assignment_start
+objective: minimize_total_resources_to_verified_completion
+entrypoint: README.md
+handoff: HANDOFF.md
+authority:
+  implementation: selected_package_only
+  cross_repository: selected_slice_only
+  paid_trials: explicit_operator_allowance_required
+  merge_release_deploy: separate_authorization_required
+  defaults: opt_in_until_approved_G18_decision
+phase_gate_rule: all_required_packages_in_prior_phase_accepted_with_observed_evidence
+parallelism_policy: >-
+  G11, G12, and G14 may start after G10 in separate worktrees/repositories.
+  Serialize overlapping nexus paths and producer-consumer changes.
+  Other ordering follows depends_on; no package authorizes its successors.
+tracking_policy: >-
+  Initial proposed statuses are not execution evidence. Use actual code/PR
+  and acceptance receipts to establish predecessor completion. Keep criteria
+  in phase documents and link them from tracking issues instead of copying.
+phases:
+  - id: 1
+    title: Evidence and accounting foundations
+    plan: 01-foundations.md
+    depends_on_phases: []
+    packages: [G01, G02, G03]
+  - id: 2
+    title: Persistent policy and observation
+    plan: 02-policy-and-observation.md
+    depends_on_phases: [1]
+    packages: [G04, G05, G06]
+  - id: 3
+    title: One managed delivery path
+    plan: 03-managed-delivery.md
+    depends_on_phases: [2]
+    packages: [G07, G08, G09, G10]
+  - id: 4
+    title: Methodology and ecosystem adaptation
+    plan: 04-methodology-and-ecosystem.md
+    depends_on_phases: [3]
+    packages: [G11, G12, G13, G14, G15]
+  - id: 5
+    title: Evaluation and controlled rollout
+    plan: 05-evaluation-and-rollout.md
+    depends_on_phases: [4]
+    packages: [G16, G17, G18]
+packages:
+  - id: G01
+    phase: 1
+    kind: correctness-chore
+    title: Ordered atomic recoverable execution journal
+    primary_repository: Rynaro/eidolons
+    plan: 01-foundations.md
+    section: G01
+    depends_on: []
+    status: proposed
+  - id: G02
+    phase: 1
+    kind: correctness-chore
+    title: Current-candidate completion and verification provenance
+    primary_repository: Rynaro/eidolons
+    plan: 01-foundations.md
+    section: G02
+    depends_on: [G01]
+    status: proposed
+  - id: G03
+    phase: 1
+    kind: correctness-chore
+    title: Generated evidence views and mechanical pre-review gates
+    primary_repository: Rynaro/eidolons
+    plan: 01-foundations.md
+    section: G03
+    depends_on: [G02]
+    status: proposed
+  - id: G04
+    phase: 2
+    kind: augmentation
+    title: Persistent Gauge configuration and explainable resolution
+    primary_repository: Rynaro/eidolons
+    plan: 02-policy-and-observation.md
+    section: G04
+    depends_on: [G03]
+    status: proposed
+  - id: G05
+    phase: 2
+    kind: augmentation
+    title: Root-run identities and multidimensional usage observations
+    primary_repository: Rynaro/eidolons
+    plan: 02-policy-and-observation.md
+    section: G05
+    depends_on: [G04]
+    status: proposed
+  - id: G06
+    phase: 2
+    kind: qualification
+    title: Host capability probes shadow observations and frozen trial protocol
+    primary_repository: Rynaro/eidolons
+    plan: 02-policy-and-observation.md
+    section: G06
+    depends_on: [G05]
+    status: proposed
+    live_checks: separately_authorized_or_explicitly_blocked
+  - id: G07
+    phase: 3
+    kind: augmentation
+    title: Atomic shared reservations and verification headroom
+    primary_repository: Rynaro/eidolons
+    plan: 03-managed-delivery.md
+    section: G07
+    depends_on: [G06]
+    status: proposed
+  - id: G08
+    phase: 3
+    kind: augmentation
+    title: One qualified managed host adapter
+    primary_repository: Rynaro/eidolons
+    plan: 03-managed-delivery.md
+    section: G08
+    depends_on: [G07]
+    status: proposed
+    conditional_repository: Rynaro/Junction
+    live_checks: required_for_live_managed_claim
+  - id: G09
+    phase: 3
+    kind: augmentation
+    title: Bounded delivery loop with a runnable milestone
+    primary_repository: Rynaro/eidolons
+    plan: 03-managed-delivery.md
+    section: G09
+    depends_on: [G08]
+    status: proposed
+  - id: G10
+    phase: 3
+    kind: integration
+    title: Durable task succession and managed-path acceptance
+    primary_repository: Rynaro/eidolons
+    plan: 03-managed-delivery.md
+    section: G10
+    depends_on: [G09]
+    status: proposed
+    conditional_producers:
+      - Rynaro/eidolons-ecm
+      - Rynaro/eidolons-ecl
+    rule: compatible_upstream_amendment_before_consumer_when_required
+  - id: G11
+    phase: 4
+    kind: methodology
+    title: Economical consumable RAMZA-lite planning
+    primary_repository: Rynaro/Ramza
+    plan: 04-methodology-and-ecosystem.md
+    section: G11
+    depends_on: [G10]
+    status: proposed
+  - id: G12
+    phase: 4
+    kind: methodology
+    title: Explicit Vivi authority and continuity experiment
+    primary_repository: Rynaro/Vivi
+    plan: 04-methodology-and-ecosystem.md
+    section: G12
+    depends_on: [G10]
+    status: proposed
+  - id: G13
+    phase: 4
+    kind: integration
+    title: Need-based routing and targeted specialist adoption
+    primary_repository: Rynaro/eidolons
+    plan: 04-methodology-and-ecosystem.md
+    section: G13
+    depends_on: [G11, G12]
+    status: proposed
+    slice_assignment_required: true
+    slices:
+      - id: G13.a
+        repositories: [Rynaro/eidolons]
+        purpose: need_based_router_and_continuation
+      - id: G13.b
+        repositories: [Rynaro/ATLAS]
+        purpose: conditional_scouting_and_valid_evidence_reuse
+      - id: G13.c
+        repositories: [Rynaro/FORGE, Rynaro/VIGIL]
+        purpose: substantive_specialist_entry_and_failure_classification
+        separate_pr_per_repository: true
+      - id: G13.d
+        repositories: [Rynaro/IDG]
+        purpose: required_only_documentation_and_generated_evidence
+      - id: G13.e
+        repositories: [Rynaro/Kupo, Rynaro/Gilgamesh]
+        purpose: shared_budget_and_bounded_worker_adoption
+        separate_pr_per_repository: true
+      - id: G13.f
+        repositories: [Rynaro/SPECTRA, Rynaro/APIVR-Delta]
+        purpose: legacy_contract_compatibility_not_policy_duplication
+        separate_pr_per_repository: true
+      - id: G13.g
+        repositories: [Rynaro/eidolons-eiis, Rynaro/eidolons-ecl]
+        purpose: minimal_producer_amendment_only_when_needed
+        conditional: true
+        rule: land_before_any_consumer_that_requires_the_amendment
+      - id: G13.h
+        repositories: [Rynaro/eidolons]
+        purpose: published_version_adoption_and_composition_acceptance
+        after: [G13.a, G13.b, G13.c, G13.d, G13.e, G13.f]
+        additional_gate: G13.g_accepted_or_demonstrated_unnecessary
+  - id: G14
+    phase: 4
+    kind: optimization
+    title: Context and retrieval economy without losing task state
+    primary_repository: Rynaro/eidolons
+    plan: 04-methodology-and-ecosystem.md
+    section: G14
+    depends_on: [G10]
+    status: proposed
+    slice_assignment_required: true
+    conditional_repositories:
+      - Rynaro/eidolons-ecm
+      - Rynaro/atomos
+      - Rynaro/atlas-aci
+      - Rynaro/crystalium
+      - Rynaro/magicite
+    rule: required_core_first_then_only_evidence_justified_sibling_slices
+  - id: G15
+    phase: 4
+    kind: accessibility
+    title: Accessible CLI status and optional client presentation
+    primary_repository: Rynaro/eidolons
+    plan: 04-methodology-and-ecosystem.md
+    section: G15
+    depends_on: [G13, G14]
+    status: proposed
+    optional_public_clients: [Rynaro/GAMBIT]
+    external_clients: separate_opt_in_assignment_no_private_details_in_public_plan
+    optional_deferral: does_not_block_core_CLI_acceptance
+  - id: G16
+    phase: 5
+    kind: evaluation
+    title: Acceptance and economics evaluation harness
+    primary_repository: Rynaro/eidolons
+    plan: 05-evaluation-and-rollout.md
+    section: G16
+    depends_on: [G15]
+    status: proposed
+    protocol_source: G06
+  - id: G17
+    phase: 5
+    kind: evaluation
+    title: Controlled overhead ablations and preset calibration
+    primary_repository: Rynaro/eidolons
+    plan: 05-evaluation-and-rollout.md
+    section: G17
+    depends_on: [G16]
+    status: proposed
+    rule: calibrate_on_development_data_freeze_then_evaluate_holdout
+  - id: G18
+    phase: 5
+    kind: rollout
+    title: Evidence-scoped promotion migration and operational acceptance
+    primary_repository: Rynaro/eidolons
+    plan: 05-evaluation-and-rollout.md
+    section: G18
+    depends_on: [G17]
+    status: proposed
+    rule: no_default_promotion_without_evidence_and_explicit_approval
