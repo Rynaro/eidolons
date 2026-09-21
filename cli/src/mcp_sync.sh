@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # cli/src/mcp_sync.sh — reconcile eidolons.yaml mcps: block with installed state.
 #
-# Usage: eidolons mcp sync
+# Usage: eidolons mcp sync [--dry-run | --repair-wiring]
 #
 # Reads eidolons.yaml's optional `mcps:` block. For each declared MCP that is
 # not yet installed, installs it. Idempotent: second run is a no-op.
@@ -26,7 +26,7 @@ usage() {
   cat <<EOF
 eidolons mcp sync — reconcile eidolons.yaml mcps: block with installed state
 
-Usage: eidolons mcp sync
+Usage: eidolons mcp sync [--dry-run | --repair-wiring]
 
 Reads the optional 'mcps:' block from eidolons.yaml:
 
@@ -40,7 +40,9 @@ For each declared MCP not yet installed, installs it at the resolved version.
 Idempotent: re-running when everything is already installed is a no-op.
 
 Options:
-  -h, --help  Show this help
+  --dry-run        Preview installed runtime/grant drift without writing or installing.
+  --repair-wiring  Explicitly repair installed generated fields; preserve user additions.
+  -h, --help       Show this help
 
 Related:
   eidolons mcp install <name>    Install one MCP explicitly
@@ -48,8 +50,11 @@ Related:
 EOF
 }
 
+wiring_mode=""
 while [ $# -gt 0 ]; do
   case "$1" in
+    --dry-run) [ -z "$wiring_mode" ] || die "Choose --dry-run or --repair-wiring"; wiring_mode=preview; shift ;;
+    --repair-wiring) [ -z "$wiring_mode" ] || die "Choose --dry-run or --repair-wiring"; wiring_mode=repair; shift ;;
     -h|--help) usage; exit 0 ;;
     *) warn "Unknown option: $1"; usage >&2; exit 2 ;;
   esac
@@ -57,6 +62,11 @@ done
 
 if ! manifest_exists; then
   die "No eidolons.yaml found. Run 'eidolons init' first."
+fi
+
+if [ -n "$wiring_mode" ]; then
+  mcp_wiring_reconcile "$wiring_mode"
+  exit $?
 fi
 
 # Read the mcps: block from eidolons.yaml (optional; may not exist).
@@ -122,7 +132,10 @@ _mcp_sync_config_present() {
   local name="$1" version="$2" kind
   kind="$(mcp_catalogue_get_field "$name" '.kind')"
   if [ "$kind" = "oci-image" ]; then
-    _mcp_oci_config_is_current "$name" "$version" "$(pwd)"
+    _mcp_oci_config_is_current "$name" "$version" "$(pwd)" || return 1
+    local expected
+    expected="$(_mcp_oci_expected_config "$name" "$version" "$(pwd)")" || return 1
+    _mcp_wiring_secondary check "$name" "$expected"
     return $?
   fi
   if [ "$kind" = "binary" ]; then
@@ -172,6 +185,9 @@ while IFS= read -r mentry; do
       info "$mname@${current} already installed — no-op"
       continue
     fi
+    if [ "$mkind" = "oci-image" ] && [ -f .mcp.json ] && jq -e --arg n "$mname" '.mcpServers[$n] != null' .mcp.json >/dev/null 2>&1; then
+      die "$mname: runtime wiring drift; inspect with 'eidolons mcp sync --dry-run', then explicitly repair with 'eidolons mcp sync --repair-wiring' (user settings preserved)."
+    fi
     say "Repairing $mname@${current} project registration..."
     bash "$SELF_DIR/mcp_install.sh" "${mname}@${current}" --force
     changed=$((changed + 1))
@@ -201,6 +217,9 @@ while IFS= read -r mentry; do
     if _mcp_sync_config_present "$mname" "$resolved_ver" && { [ "$mkind" != "oci-image" ] || _mcp_runtime_is_current "$mname" "$(pwd)"; }; then
       info "$mname@${resolved_ver} already installed — no-op"
       continue
+    fi
+    if [ "$mkind" = "oci-image" ] && [ -f .mcp.json ] && jq -e --arg n "$mname" '.mcpServers[$n] != null' .mcp.json >/dev/null 2>&1; then
+      die "$mname: runtime wiring drift; inspect with 'eidolons mcp sync --dry-run', then explicitly repair with 'eidolons mcp sync --repair-wiring' (user settings preserved)."
     fi
     say "Repairing $mname@${resolved_ver} project registration..."
     bash "$SELF_DIR/mcp_install.sh" "${mname}@${resolved_ver}" --force

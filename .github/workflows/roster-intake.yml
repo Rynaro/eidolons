@@ -28,10 +28,13 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
+
+      - name: Validate authored registries and publication records
+        run: make schema PYTHON=/usr/bin/python3
 
       - name: Resolve roster source
         id: resolve
@@ -105,6 +108,7 @@ jobs:
       - name: Validate release manifest
         run: |
           set -euo pipefail
+          make schema PYTHON=/usr/bin/python3 RELEASE_RECORD=/tmp/eidolon-release/release-manifest.json
           jq -e \
             --arg repo "${{ steps.resolve.outputs.repo }}" \
             --arg version "${{ inputs.version }}" \
@@ -236,6 +240,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -b "$branch"
+          make schema PYTHON=/usr/bin/python3 PUBLISH="${name}@${version}"
           git add roster/index.yaml CHANGELOG.md
           git commit -m "fix(roster): publish ${name} v${version}"
           git push --set-upstream origin "$branch"

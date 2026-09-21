@@ -75,5 +75,30 @@
         }
       }
     }
+  },
+  "$defs": {
+    "publishableRelease": {
+      "type": "object",
+      "description": "Required for advertised latest/stable and explicit publication candidates; historical authored records may remain incomplete. Draft is not an exemption.",
+      "required": [
+        "commit",
+        "tree",
+        "archive_sha256"
+      ],
+      "properties": {
+        "commit": {
+          "type": "string",
+          "pattern": "^(?!0{40}$)[0-9a-f]{40}$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^(?!0{40}$)[0-9a-f]{40}$"
+        },
+        "archive_sha256": {
+          "type": "string",
+          "pattern": "^(?!0{64}$)[0-9a-f]{64}$"
+        }
+      }
+    }
   }
 }

@@ -37,6 +37,7 @@ if [ -n "${_LIB_MCP_WIRING_LOADED:-}" ]; then
   return 0
 fi
 _LIB_MCP_WIRING_LOADED=1
+_LIB_MCP_WIRING_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
@@ -1026,4 +1027,135 @@ mcp_wiring_reapply_all() {
   done < "$tmp_mcps"
 
   rm -f "$tmp_mcps"
+}
+
+# Read-only preview or explicit, offline repair of installed generated wiring.
+# Never install/upgrade an artifact or adopt user grants. Update only the runtime
+# receipt after successful repair; retain selected artifact and enforcement evidence.
+mcp_wiring_reconcile() {
+  local mode="$1" names name version kind expected target temp host file glob legacy tools desired sentinel receipt entry
+  names="$(mcp_lock_read | jq -r '(.mcps // [])[].name')"
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    version="$(mcp_lock_entry "$name" | jq -r '.version')"
+    kind="$(mcp_catalogue_get_field "$name" '.kind')"
+    if [ "$kind" = "oci-image" ] && ! _mcp_oci_config_is_current "$name" "$version" "$(pwd)"; then
+      info "$name: runtime wiring drift (.mcp.json); preview: eidolons mcp sync --dry-run; repair: eidolons mcp sync --repair-wiring"
+      if [ "$mode" = repair ]; then
+        expected="$(_mcp_oci_expected_config "$name" "$version" "$(pwd)")" || return 1
+        target=.mcp.json
+        # Refuse malformed user data; no silent replacement even with repair.
+        [ -f "$target" ] || printf '{}\n' > "$target"
+        temp="$(mktemp)"
+        if ! jq --arg n "$name" --argjson expected "$expected" '
+          .mcpServers[$n] = ((.mcpServers[$n] // {}) * $expected)
+        ' "$target" > "$temp"; then
+          rm -f "$temp"; return 1
+        fi
+        mv "$temp" "$target"
+      fi
+    fi
+    if [ "$kind" = "oci-image" ]; then
+      expected="$(_mcp_oci_expected_config "$name" "$version" "$(pwd)")" || return 1
+      _mcp_wiring_secondary "$mode" "$name" "$expected" || return 1
+      if ! _mcp_runtime_is_current "$name" "$(pwd)"; then
+        info "$name: runtime receipt drift"
+        if [ "$mode" = repair ]; then
+          receipt="$(_mcp_runtime_resolve "$name" "$(pwd)")" || return 1
+          entry="$(mcp_lock_entry "$name" | jq --argjson r "$receipt" '.runtime = $r')"
+          mcp_lock_upsert "$name" "$entry" || return 1
+        fi
+      fi
+    fi
+    glob="$(mcp_catalogue_get_field "$name" '.exposes_tools.glob')"
+    [ -n "$glob" ] || continue
+    legacy="$(printf '%s' "$name" | tr '-' '_')"
+    legacy="mcp__${legacy}__*"
+    # grant_targets respects active hosts and explicit user exclusions.
+    target="$(mktemp)"
+    mcp_wiring_grant_targets "$name" > "$target"
+    while IFS="$(printf '\t')" read -r host file; do
+      [ "$host" = claude-code ] && [ -f "$file" ] || continue
+      tools="$(_mcp_wiring_tools_json "$file")" || { warn "$file: unreadable grant metadata; preserving"; continue; }
+      if ! _mcp_wiring_sentinel_has_inline "$file" "$name"; then
+        if ! printf '%s' "$tools" | jq -e --arg g "$glob" 'index($g) != null' >/dev/null; then
+          warn "$name: grant wiring drift in $file (unmanaged; preserving user settings)"
+        fi
+        continue
+      fi
+      desired="$(printf '%s' "$tools" | jq -c --arg g "$glob" --arg old "$legacy" '
+        map(if . == $old then $g else . end) |
+        if index($g) == null then . + [$g] else . end |
+        reduce .[] as $v ([]; if $v == $g and index($g) != null then . else . + [$v] end)
+      ')"
+      if [ "$(printf '%s' "$tools" | jq -c 'sort')" != "$(printf '%s' "$desired" | jq -c 'sort')" ]; then
+        info "$name: grant wiring drift in $file (expected $glob)"
+        if [ "$mode" = repair ]; then
+          # Keep original order and remove only a duplicate managed glob.
+          desired="$(printf '%s' "$tools" | jq -c --arg g "$glob" --arg old "$legacy" '
+            map(if . == $old then $g else . end) |
+            if index($g) == null then . + [$g] else . end |
+            reduce .[] as $v ([]; if $v == $g and index($g) != null then . else . + [$v] end)
+          ')"
+          sentinel="$(_mcp_wiring_read_sentinel "$file")"
+          _mcp_wiring_replace_claude_tools "$file" "$desired" "$sentinel" || { rm -f "$target"; return 1; }
+        fi
+      fi
+    done < "$target"
+    rm -f "$target"
+  done <<< "$names"
+}
+
+# Preview/repair host projections using their existing ownership boundaries.
+# JSON extras survive recursive merge; Codex owns only its marked MCP region.
+_mcp_wiring_secondary() {
+  local mode="$1" name="$2" expected="$3" host target temp wanted
+  local drift=0
+  for host in cursor opencode codex; do
+    _mcp_host_is_wired "$host" "$(pwd)" || continue
+    case "$host" in
+      cursor) target=.cursor/mcp.json ;;
+      opencode) target=opencode.json ;;
+      codex) target=.codex/config.toml ;;
+    esac
+    temp="$(mktemp)"
+    if [ "$host" = codex ]; then
+      if ! printf '%s' "$expected" | python3 "$_LIB_MCP_WIRING_DIR/mcp_codex_wiring.py" "$target" "$name" > "$temp"; then
+        rm -f "$temp"
+        warn "$name: cannot compare $target managed region; preserving it"
+        return 1
+      fi
+    else
+      wanted="$expected"
+      if [ "$host" = opencode ]; then
+        wanted="$(printf '%s' "$expected" | jq '{type:"local",command:([.command]+.args)}')"
+      fi
+      if [ -f "$target" ]; then
+        if ! jq --arg n "$name" --arg h "$host" --argjson e "$wanted" '
+          if $h == "cursor" then .mcpServers[$n] = ((.mcpServers[$n] // {}) * $e)
+          else .mcp[$n] = ({enabled:true} * (.mcp[$n] // {}) * $e) end
+        ' "$target" > "$temp"; then
+          rm -f "$temp"; warn "$target: invalid JSON; preserving user settings"; return 1
+        fi
+      else
+        jq -n --arg n "$name" --arg h "$host" --argjson e "$wanted" '
+          if $h == "cursor" then {mcpServers:{($n):$e}} else {mcp:{($n):({enabled:true} * $e)}} end
+        ' > "$temp"
+      fi
+    fi
+    if [ -f "$target" ] && { cmp -s "$target" "$temp" || { [ "$host" != codex ] && [ "$(jq -cS . "$target")" = "$(jq -cS . "$temp")" ]; }; }; then
+      rm -f "$temp"
+    else
+      drift=1
+      info "$name: runtime wiring drift ($target)"
+      if [ "$mode" = repair ]; then
+        mkdir -p "$(dirname "$target")"
+        mv "$temp" "$target"
+      else
+        rm -f "$temp"
+      fi
+    fi
+  done
+  [ "$mode" != check ] || return "$drift"
+  return 0
 }

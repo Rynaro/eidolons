@@ -72,21 +72,18 @@ _write_mcp_json_atomos() {
     sha256:*) image_ref="ghcr.io/rynaro/atomos@${ref}" ;;
     *)        image_ref="ghcr.io/rynaro/atomos:${ref}" ;;
   esac
-  cat > .mcp.json <<EOF
-{
-  "mcpServers": {
-    "atomos": {
-      "command": "docker",
-      "args": [
-        "run", "--rm", "-i",
-        "--label", "eidolons.project=test",
-        "${image_ref}",
-        "serve"
-      ]
-    }
-  }
-}
-EOF
+  # A clean runtime now includes UID, mounts and resource flags as well as
+  # its digest. Keep negative cases by replacing just the reference below.
+  bash -c '
+    set -e
+    . "$EIDOLONS_NEXUS/cli/src/lib.sh"
+    . "$EIDOLONS_NEXUS/cli/src/lib_mcp.sh"
+    _mcp_oci_render_and_merge atomos "$PWD" "$1" cli/templates/mcp/atomos.mcp.json.tmpl
+  ' _ "${ref}"
+  local tmp
+  tmp="$(mktemp)"
+  jq --arg ref "$image_ref" '.mcpServers.atomos.args |= map(if startswith("ghcr.io/rynaro/atomos@") then $ref else . end)' .mcp.json > "$tmp"
+  mv "$tmp" .mcp.json
 }
 
 # _add_hand_added_server — append a non-catalogue MCP server entry to the

@@ -1174,13 +1174,20 @@ _mcp_oci_confirm_wired() {
 # All log output goes to stderr per the lib.sh invariant; only paths are emitted
 # to stdout by callers that capture them.
 # Bash 3.2 compatible: no declare -A, no ${var,,}, no readarray/mapfile, no &>>.
-_mcp_oci_config_is_current() {
+_mcp_oci_expected_config() {
   local name="$1" version="$2" project_root="$3"
   local digest tmpl_rel tmpl _basename _project_slug _uid_gid expected actual
-  digest="$(mcp_catalogue_get "$name" | jq -r --arg v "$version" '.versions.releases[$v].digest // empty')"
+  digest="${4:-}"
+  if [ -z "$digest" ] && [ -f "${project_root}/eidolons.mcp.lock" ]; then
+    digest="$(yaml_to_json "${project_root}/eidolons.mcp.lock" | jq -r --arg n "$name" --arg v "$version" '(.mcps // [])[] | select(.name == $n and .version == $v) | .integrity.value // empty')"
+  fi
+  if [ -z "$digest" ]; then
+    digest="$(mcp_catalogue_get "$name" | jq -r --arg v "$version" '.versions.releases[$v].digest // empty')"
+  fi
+  [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
   tmpl_rel="$(mcp_catalogue_get_field "$name" '.install.template')"
   tmpl="${NEXUS}/${tmpl_rel}"
-  [ -n "$digest" ] && [ -f "$tmpl" ] && [ -f "${project_root}/.mcp.json" ] || return 1
+  [ -n "$digest" ] && [ -f "$tmpl" ] || return 1
 
   _basename="$(basename "$project_root")"
   _project_slug="$(printf '%s' "$_basename" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-' | sed -e 's|^-||' -e 's|-$||')"
@@ -1193,9 +1200,19 @@ _mcp_oci_config_is_current() {
     -e "s|__HOME__|${HOME}|g" \
     "$tmpl")"
   expected="$(_mcp_runtime_apply "$name" "$project_root" "$expected")" || return 1
-  actual="$(jq -c --arg n "$name" '.mcpServers[$n] // empty' "${project_root}/.mcp.json" 2>/dev/null || true)"
-  [ -n "$actual" ] || return 1
-  [ "$(printf '%s' "$expected" | jq -cS --arg n "$name" '.mcpServers[$n]')" = "$(printf '%s' "$actual" | jq -cS .)" ]
+  printf '%s' "$expected" | jq -c --arg n "$name" '.mcpServers[$n]'
+}
+
+# User-owned extra settings/env are allowed. Only declared runtime fields are
+# compared; repairs use the same expected object and preserve those additions.
+_mcp_oci_config_is_current() {
+  local name="$1" version="$2" project_root="$3" expected
+  expected="$(_mcp_oci_expected_config "$name" "$version" "$project_root" "${4:-}")" || return 1
+  jq -e --arg n "$name" --argjson expected "$expected" '
+    .mcpServers[$n] as $actual |
+    ($actual.command == $expected.command) and ($actual.args == $expected.args) and
+    (($actual.env // {}) * ($expected.env // {}) == ($actual.env // {}))
+  ' "${project_root}/.mcp.json" >/dev/null 2>&1
 }
 
 _mcp_oci_render_and_merge() {
@@ -1343,7 +1360,7 @@ mcp_driver_oci_image_install() {
         mcp_driver_oci_image_pull "$name" --image-digest "$digest" || return $?
       fi
     fi
-    local aci_args="--project-root ${project_root}"
+    local aci_args=(--project-root "$project_root")
     local aci_managed=false
     if [ -f "${project_root}/eidolons.mcp.lock" ] \
        && [ -n "$(yaml_to_json "${project_root}/eidolons.mcp.lock" 2>/dev/null \
@@ -1352,13 +1369,12 @@ mcp_driver_oci_image_install() {
     fi
     if [ "$force" = "true" ] \
        || { [ "$aci_managed" = "true" ] && [ "$runtime_current" != "true" ]; }; then
-      aci_args="${aci_args} --force"
+      aci_args+=(--force)
     fi
     if [ -n "$digest" ]; then
-      aci_args="${aci_args} --image-digest ${digest}"
+      aci_args+=(--image-digest "$digest")
     fi
-    # shellcheck disable=SC2086
-    bash "$_LIB_MCP_DIR/mcp_atlas_aci.sh" $aci_args || return $?
+    bash "$_LIB_MCP_DIR/mcp_atlas_aci.sh" "${aci_args[@]}" || return $?
   else
     # Generic oci-image path (e.g. crystalium): Docker pre-flight + render + merge.
     # Auto-pull fires BEFORE .mcp.json wiring (ordering invariant).
@@ -1676,7 +1692,7 @@ _mcp_driver_oci_uid_bind_probes() {
   _pinned_uid_gid="$(jq -r --arg n "$name" '
     .mcpServers[$n].args as $arr
     | $arr | to_entries
-    | map(select(.value == "-u") | .key + 1)
+    | map(select(.value == "-u" or .value == "--user") | .key + 1)
     | map($arr[.])
     | .[0] // empty
   ' .mcp.json 2>/dev/null || true)"

@@ -15,7 +15,8 @@
 #   3  INDETERMINATE — could not verify (no .mcp.json, unreadable catalogue,
 #      no jq). NOT a pass. --strict promotes 3 -> 1.
 #
-# 'verify' executes NOTHING — no docker, no network, no subprocess beyond jq
+# 'verify' executes no server — no docker or network. Codex comparison uses
+# the optional read-only Python 3.11+ TOML helper; all other probes use shell/jq
 # (F4). That property is what makes it safe to run against an untrusted checkout.
 # --probe (a live tools/list probe, V-PROBE-SURFACE) is not implemented in this
 # release and is a hard usage error rather than an accepted no-op — see the
@@ -35,6 +36,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib_mcp.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_mcp_wiring.sh"
 
 usage() {
   cat >&2 <<EOF
@@ -59,6 +62,9 @@ Options:
   -h, --help            Show this help.
 
 What it checks (per lock entry):
+  V-GRANT-DRIFT               managed agent tool grant differs           BLOCK
+  V-HOST-CONFIG-DRIFT         declared host runtime projection differs    BLOCK
+  V-OCI-CONFIG-DRIFT          generated runtime fields differ           BLOCK
   V-OCI-WIRED-MISMATCH        wired digest vs lock.integrity.value      BLOCK
   V-OCI-WIRED-MALFORMED       0 or >=2 distinct @sha256: refs wired     BLOCK
   V-LOCK-INCOHERENT           lock digest resolves to a DIFFERENT
@@ -296,6 +302,22 @@ _verify_oci_entry() {
     return 0
   fi
 
+  # Compare current declared runtime fields without executing the server. A
+  # matching digest alone cannot detect missing UID pins or stale bind mounts.
+  if ! _mcp_oci_config_is_current "$name" "$lock_version" "$PROJECT_ROOT" "$lock_digest"; then
+    _add_finding "V-OCI-CONFIG-DRIFT" "block" "$name" \
+      "'${name}' runtime wiring differs from its generated definition (command, args, or declared env). User additions are preserved." \
+      "eidolons mcp sync --dry-run; eidolons mcp sync --repair-wiring"
+  fi
+
+  local expected_config
+  expected_config="$(_mcp_oci_expected_config "$name" "$lock_version" "$PROJECT_ROOT" "$lock_digest" 2>/dev/null || true)"
+  if [ -n "$expected_config" ] && ! (cd "$PROJECT_ROOT" && _mcp_wiring_secondary check "$name" "$expected_config") >/dev/null 2>&1; then
+    _add_finding "V-HOST-CONFIG-DRIFT" "block" "$name" \
+      "'${name}' declared host projection differs from its generated runtime definition." \
+      "eidolons mcp sync --dry-run; eidolons mcp sync --repair-wiring"
+  fi
+
   # Exactly one digest wired: the actual R4 comparison.
   local wired_digest
   wired_digest="$(printf '%s\n' "$digests" | head -1)"
@@ -405,6 +427,23 @@ _process_name() {
   local kind lock_version
   kind="$(printf '%s' "$lock_entry" | jq -r '.kind')"
   lock_version="$(printf '%s' "$lock_entry" | jq -r '.version')"
+
+  local grant_targets grant_host grant_file grant_tools grant_glob grant_legacy
+  grant_glob="$(mcp_catalogue_get_field "$name" '.exposes_tools.glob')"
+  grant_legacy="mcp__$(printf '%s' "$name" | tr '-' '_')__*"
+  grant_targets="$(cd "$PROJECT_ROOT" && mcp_wiring_grant_targets "$name")"
+  while IFS="$(printf '\t')" read -r grant_host grant_file; do
+    [ "$grant_host" = claude-code ] || continue
+    grant_file="${PROJECT_ROOT}/${grant_file}"
+    _mcp_wiring_sentinel_has_inline "$grant_file" "$name" || continue
+    grant_tools="$(_mcp_wiring_tools_json "$grant_file" 2>/dev/null || true)"
+    if [ -z "$grant_tools" ] || ! printf '%s' "$grant_tools" | jq -e --arg g "$grant_glob" --arg old "$grant_legacy" \
+      'index($g) != null and ($g == $old or index($old) == null)' >/dev/null; then
+      _add_finding "V-GRANT-DRIFT" "block" "$name" \
+        "Managed tool grant differs from ${grant_glob} in ${grant_file}." \
+        "eidolons mcp sync --dry-run; eidolons mcp sync --repair-wiring"
+    fi
+  done <<< "$grant_targets"
 
   case "$kind" in
     oci-image) _verify_oci_entry "$name" "$lock_entry" "$lock_version" ;;

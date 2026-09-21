@@ -92,17 +92,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           # Pin the bootstrap tool: a mutable `latest` artifact makes the
           # release provenance irreproducible and can change YAML semantics.
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Validate roster/index.yaml schema
-        run: |
-          jq empty schemas/*.json
-          yq eval '.' roster/index.yaml > /dev/null
+      - name: Validate authored registries and publication records
+        run: make schema PYTHON=/usr/bin/python3
 
       - name: Resolve commit and tree
         id: shas
@@ -157,6 +155,35 @@ jobs:
           printf '%s\n' "$NOTES" > /tmp/release-notes.md
           echo "notes_file=/tmp/release-notes.md" >> "$GITHUB_OUTPUT"
 
+      - name: Update roster/index.yaml with release metadata
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.ver.outputs.version }}"
+          COMMIT="${{ steps.shas.outputs.commit }}"
+          TREE="${{ steps.shas.outputs.tree }}"
+          SHA256="${{ steps.archive.outputs.archive_sha256 }}"
+          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+          # Use yq to update the release metadata in-place. Also advance the
+          # current-version pointers (version / versions.latest / pins.stable)
+          # to the version being released — VERSION on main is monotonic and was
+          # already validated to match the requested release above, so $VERSION
+          # is the latest. Without this, these pointers stay frozen at the first
+          # release and roster-health verifies the wrong (stale) tag forever.
+          yq e ".nexus.versions.releases[\"$VERSION\"].tag = \"v$VERSION\" |
+                .nexus.versions.releases[\"$VERSION\"].commit = \"$COMMIT\" |
+                .nexus.versions.releases[\"$VERSION\"].tree = \"$TREE\" |
+                .nexus.versions.releases[\"$VERSION\"].archive_sha256 = \"$SHA256\" |
+                .nexus.versions.releases[\"$VERSION\"].released_at = \"$NOW\" |
+                .nexus.version = \"$VERSION\" |
+                .nexus.versions.latest = \"$VERSION\" |
+                .nexus.versions.pins.stable = \"$VERSION\"" \
+            -i roster/index.yaml
+
+          make schema PYTHON=/usr/bin/python3 PUBLISH="nexus@$VERSION"
+
+          echo "Updated roster nexus release block + version pointers for v$VERSION"
+
       - name: Create tag
         # On workflow_dispatch we tag the current main HEAD here; on push:tags
         # the tag already exists (it's how the workflow was triggered) and we
@@ -178,32 +205,6 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
           echo "Created tag $TAG at $(git rev-parse 'HEAD')"
-
-      - name: Update roster/index.yaml with release metadata
-        run: |
-          set -euo pipefail
-          VERSION="${{ steps.ver.outputs.version }}"
-          COMMIT="${{ steps.shas.outputs.commit }}"
-          TREE="${{ steps.shas.outputs.tree }}"
-          SHA256="${{ steps.archive.outputs.archive_sha256 }}"
-          NOW="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-
-          # Use yq to update the release metadata in-place. Also advance the
-          # current-version pointers (version / versions.latest / pins.stable)
-          # to the version being released — VERSION on main is monotonic and was
-          # already validated to match the requested release above, so $VERSION
-          # is the latest. Without this, these pointers stay frozen at the first
-          # release and roster-health verifies the wrong (stale) tag forever.
-          yq e ".nexus.versions.releases[\"$VERSION\"].commit = \"$COMMIT\" |
-                .nexus.versions.releases[\"$VERSION\"].tree = \"$TREE\" |
-                .nexus.versions.releases[\"$VERSION\"].archive_sha256 = \"$SHA256\" |
-                .nexus.versions.releases[\"$VERSION\"].released_at = \"$NOW\" |
-                .nexus.version = \"$VERSION\" |
-                .nexus.versions.latest = \"$VERSION\" |
-                .nexus.versions.pins.stable = \"$VERSION\"" \
-            -i roster/index.yaml
-
-          echo "Updated roster nexus release block + version pointers for v$VERSION"
 
       - name: Commit and open PR for roster update
         env:

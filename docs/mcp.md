@@ -113,8 +113,31 @@ mcps:
 ```
 
 ```bash
-eidolons mcp sync
+eidolons mcp sync                  # install missing declared MCPs
+eidolons mcp verify                # diagnose installed wiring drift
+eidolons mcp sync --dry-run        # preview drift without writing
+eidolons mcp sync --repair-wiring  # explicitly repair managed wiring
 ```
+
+`--dry-run` and `--repair-wiring` require `eidolons.yaml`, operate on installed,
+locked MCPs, and do not install artifacts. The flags are mutually exclusive.
+Ordinary sync reports wiring drift; use the explicit repair after reviewing
+its preview. `eidolons mcp verify [name] [--json]` diagnoses generated runtime
+arguments, managed tool grants, and configured host projections without
+repairing them.
+
+Repair preserves user-owned fields (including environment settings and
+per-server timeouts), other servers, and content outside managed sections.
+It retains the locked OCI digest, including a locally installed unpublished
+image, and updates the runtime receipt after repair. An unreceipted legacy
+grant remains user-owned. Generated Atlas-ACI tool identifiers stay hyphenated;
+Docker arguments use the invoking UID:GID and preserve spaced paths and
+identity mounts.
+
+When Codex is active, drift comparison (`mcp verify` and `mcp sync`) and repair
+require Python 3.11+ with the standard-library `tomllib` parser.
+
+<!-- IDG provenance: V4-03 maker/reviewer handoffs and campaigns/gauge/receipts/V4-03.md. -->
 
 > **Note:** `eidolons sync` (the top-level Eidolon sync command) does **not**
 > call `eidolons mcp sync` automatically (NG3). MCP install is always
@@ -161,11 +184,12 @@ Each bounded profile renders Docker `--cpus`, `--memory`, `--memory-swap`, and
 container cannot consume a second memory allowance through swap. These are
 ceilings, not reservations.
 
-Run `eidolons mcp sync` after changing a profile. The resolved receipt is stored
-in `eidolons.mcp.lock`, so profile changes and catalogue-only ceiling changes
-regenerate the host configuration even if the image version is unchanged.
-Already-running containers retain their original limits until their Codex
-session is closed and restarted.
+After changing a profile, run `eidolons mcp sync --dry-run`, then
+`eidolons mcp sync --repair-wiring` to apply it. Profile changes and
+catalogue-only ceiling changes are reported as drift even when the image
+version is unchanged. Explicit repair updates the configured host wiring and
+the resolved runtime receipt in `eidolons.mcp.lock`. Already-running containers
+retain their original limits until their host session is closed and restarted.
 
 Resource profiles limit the impact of each container; they do not reuse a
 container across sessions. Cross-session reuse would require moving these MCPs
