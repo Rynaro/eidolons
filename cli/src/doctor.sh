@@ -67,6 +67,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Validate before other YAML reads can obscure a policy-parser failure.
+integrity_enforcement_mode >/dev/null || exit 1
+
 ERRORS=0
 err() { ERRORS=$((ERRORS + 1)); printf "  %s✗%s %s\n" "$RED" "$RESET" "$*"; }
 pass() { printf "  %s✓%s %s\n" "$GREEN" "$RESET" "$*"; }
@@ -229,8 +232,9 @@ done
 
 # ─── Check 5: release integrity ─────────────────────────────────────────
 # Read-only summary derived from eidolons.lock's `verification` field. We do
-# not re-fetch the roster or recompute hashes here — that's `eidolons verify`'s
-# job. Doctor surfaces what was recorded at sync/upgrade time so a stale lock
+# not recompute hashes here — that's `eidolons verify`'s job. The current
+# policy is validated so a broken policy cannot produce a healthy summary.
+# Doctor surfaces what was recorded at sync/upgrade time so a stale lock
 # is visible without leaving cwd. A `MISMATCH` outcome is treated as a hard
 # error (something has drifted since sync); `verified` and `legacy-warning`
 # are informational.
@@ -252,7 +256,7 @@ if [[ -f "$PROJECT_LOCK" ]]; then
           pass "$mname@$mver release integrity verified"
           ;;
         legacy-warning|"")
-          # Compatibility mode or pre-integrity lock — informational, not blocking.
+          # Historical advisory status stays informational; verify rechecks evidence.
           printf "  %s·%s %s@%s no roster release metadata (legacy)\n" \
             "${YELLOW:-}" "${RESET:-}" "$mname" "$mver"
           ;;

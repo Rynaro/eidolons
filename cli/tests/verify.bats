@@ -130,8 +130,8 @@ sha256_of() {
 }
 
 @test "verify: release metadata match passes" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
-  tree="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
+  tree="abc1234567890abcdef1234567890abcdef12345"
   add_atlas_release_metadata "1.0.0" "$commit" "$tree"
   write_lock_with_integrity "1.0.0" "$commit" "$tree"
   run eidolons verify atlas
@@ -142,10 +142,10 @@ sha256_of() {
 @test "verify: commit mismatch fails" {
   add_atlas_release_metadata "1.0.0" \
     "1111111111111111111111111111111111111111" \
-    "abc1234567890abcdef1234567890abcdef123456"
+    "abc1234567890abcdef1234567890abcdef12345"
   write_lock_with_integrity "1.0.0" \
-    "abc1234567890abcdef1234567890abcdef123456" \
-    "abc1234567890abcdef1234567890abcdef123456"
+    "abc1234567890abcdef1234567890abcdef12345" \
+    "abc1234567890abcdef1234567890abcdef12345"
   run eidolons verify atlas
   [ "$status" -ne 0 ]
   [[ "$output" =~ "commit mismatch" ]]
@@ -155,7 +155,7 @@ sha256_of() {
   setup_fake_git_for_upgrade
   add_atlas_release_metadata "1.0.0" \
     "1111111111111111111111111111111111111111" \
-    "abc1234567890abcdef1234567890abcdef123456"
+    "abc1234567890abcdef1234567890abcdef12345"
   # Use an exact pin so resolve_version_constraint returns 1.0.0 directly and
   # the integrity check compares against the metadata we just added.
   seed_manifest_with atlas=1.0.0
@@ -168,19 +168,19 @@ sha256_of() {
 # ─── Negative-path coverage (Story 5.L) ───────────────────────────────────
 
 @test "verify: tree mismatch fails" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
   add_atlas_release_metadata "1.0.0" "$commit" \
     "2222222222222222222222222222222222222222"
   write_lock_with_integrity "1.0.0" "$commit" \
-    "abc1234567890abcdef1234567890abcdef123456"
+    "abc1234567890abcdef1234567890abcdef12345"
   run eidolons verify atlas
   [ "$status" -ne 0 ]
   [[ "$output" =~ "tree mismatch" ]]
 }
 
 @test "verify: archive checksum mismatch fails" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
-  tree="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
+  tree="abc1234567890abcdef1234567890abcdef12345"
   expected_archive="1111111111111111111111111111111111111111111111111111111111111111"
   lock_archive="2222222222222222222222222222222222222222222222222222222222222222"
   add_atlas_release_metadata "1.0.0" "$commit" "$tree" "$expected_archive"
@@ -191,8 +191,8 @@ sha256_of() {
 }
 
 @test "verify: installed manifest changed since lock fails" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
-  tree="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
+  tree="abc1234567890abcdef1234567890abcdef12345"
   add_atlas_release_metadata "1.0.0" "$commit" "$tree"
   # Lock claims a manifest hash; on-disk manifest will hash to something else.
   fake_lock_hash="dead0beefdead0beefdead0beefdead0beefdead0beefdead0beefdead0beef0"
@@ -204,8 +204,8 @@ sha256_of() {
 }
 
 @test "verify: roster manifest_sha256 mismatch fails when manifest present" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
-  tree="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
+  tree="abc1234567890abcdef1234567890abcdef12345"
   expected_manifest="cafe0babecafe0babecafe0babecafe0babecafe0babecafe0babecafe0babe0"
   add_atlas_release_metadata "1.0.0" "$commit" "$tree" "" "$expected_manifest"
   seed_atlas_install_manifest "1.0.0"
@@ -217,8 +217,8 @@ sha256_of() {
 }
 
 @test "verify: missing install.manifest.json fails when roster pins manifest_sha256" {
-  commit="abc1234567890abcdef1234567890abcdef123456"
-  tree="abc1234567890abcdef1234567890abcdef123456"
+  commit="abc1234567890abcdef1234567890abcdef12345"
+  tree="abc1234567890abcdef1234567890abcdef12345"
   expected_manifest="0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
   add_atlas_release_metadata "1.0.0" "$commit" "$tree" "" "$expected_manifest"
   write_lock_with_integrity "1.0.0" "$commit" "$tree"

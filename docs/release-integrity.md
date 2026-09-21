@@ -32,9 +32,24 @@ per-Eidolon `install.sh` runs. A mismatch aborts the install.
 
 Existing roster entries without release metadata are still accepted while
 `integrity.enforcement: warn`. They emit a warning and write
-`verification: "legacy-warning"` into `eidolons.lock`. A future registry bump
-can switch enforcement to `strict`, at which point missing metadata becomes a
-hard failure.
+`verification: "legacy-warning"` into `eidolons.lock`. Under `strict`, missing
+or unusable integrity evidence is a hard failure.
+
+`EIDOLONS_INTEGRITY_ENFORCEMENT` overrides the roster policy. Both sources
+accept `strict` and `warn`, ignoring case and surrounding whitespace. A missing
+policy field retains the legacy `warn` default; an explicitly empty, unknown,
+or wrong-type value is an error. An unreadable roster or unavailable parser
+also produces an `integrity-policy error`, identifying the source on stderr
+without echoing its value or parser diagnostics. These failures do not select
+advisory mode, and self-upgrade's `--allow-unverified` cannot override them.
+
+Strict source admission requires at least one usable commit, tree, or archive
+hash. Supplied hashes must have the appropriate hexadecimal length; absent,
+null, or empty optional hashes remain optional. Installed verification can
+also use a manifest-only hash, which it compares against the actual installed
+file. `doctor` validates the current policy but reports historical lock
+statuses without recomputing release evidence; use `eidolons verify` to check
+the installed release.
 
 ## Lockfile Fields
 

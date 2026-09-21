@@ -28,6 +28,7 @@ fi
 
 [[ -f "$PROJECT_LOCK" ]] || die "No eidolons.lock found. Run 'eidolons sync' first."
 
+MODE="$(integrity_enforcement_mode)" || exit 1
 LOCK_JSON="$(yaml_to_json "$PROJECT_LOCK")"
 
 TARGETS=""
@@ -65,12 +66,18 @@ while IFS= read -r name; do
   meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
 
   if [[ -z "$meta" || "$meta" == "null" ]]; then
-    if [[ "$(integrity_enforcement_mode)" == "strict" ]]; then
+    if [[ "$MODE" == "strict" ]]; then
       warn "$name@$version missing roster release integrity metadata"
       failures=$((failures + 1))
     else
       warn "$name@$version has no roster release integrity metadata; compatibility verification is warning-only"
     fi
+    continue
+  fi
+
+  if [[ "$MODE" == "strict" ]] && ! release_integrity_metadata_valid "$meta" installed; then
+    warn "$name@$version has invalid required release integrity metadata"
+    failures=$((failures + 1))
     continue
   fi
 

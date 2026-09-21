@@ -124,6 +124,8 @@ fi
 # `eidolons upgrade` (and `--check`) report freshly visible member versions
 # instead of stale data from a locally cached roster snapshot.
 nexus_refresh
+# Validate before any roster lookup or installation/cache mutation.
+integrity_enforcement_mode >/dev/null || exit 1
 
 # ─── Helpers (file-local) ────────────────────────────────────────────────
 
@@ -452,7 +454,7 @@ emit_lock_fragment_from_target() {
     tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
     archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
     manifest_sha="$(lock_manifest_sha256 "$target/install.manifest.json" 2>/dev/null || echo "")"
-    verification="$(release_integrity_status "$name" "$ver")"
+    verification="$(release_integrity_status "$name" "$ver")" || exit 1
     cat <<LOCK
   - name: $name
     version: "$ver"

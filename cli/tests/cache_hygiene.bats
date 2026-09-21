@@ -236,7 +236,7 @@ presets: {}
 EOF
 
   export EIDOLONS_NEXUS="$custom_nexus"
-  export EIDOLONS_INTEGRITY_ENFORCEMENT=""
+  unset EIDOLONS_INTEGRITY_ENFORCEMENT
 
   # Seed stale cache: wrong commit SHA.
   seed_cache spectra 0.0.0 "stalestalestalestalestalestalestalestale"
@@ -348,7 +348,7 @@ GITWRAP
 @test "fetch_eidolon fatals when re-clone also mismatches roster (upstream-truth failure)" {
   # Use real roster with strict enforcement.
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  export EIDOLONS_INTEGRITY_ENFORCEMENT=""
+  unset EIDOLONS_INTEGRITY_ENFORCEMENT
 
   setup_fake_git_stub
 
@@ -389,7 +389,7 @@ GITWRAP
   [[ "${EIDOLONS_TEST_NETWORK:-0}" == "1" ]] || skip "network tests disabled (set EIDOLONS_TEST_NETWORK=1)"
 
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  export EIDOLONS_INTEGRITY_ENFORCEMENT=""
+  unset EIDOLONS_INTEGRITY_ENFORCEMENT
 
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; fetch_eidolon vigil 1.0.3" 2>&1
   [ "$status" -eq 0 ]
@@ -399,7 +399,7 @@ GITWRAP
 # ─── G7: strict mode — never silently downgrades ────────────────────────────
 @test "fetch_eidolon respects strict mode and never silently downgrades" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  export EIDOLONS_INTEGRITY_ENFORCEMENT=""
+  unset EIDOLONS_INTEGRITY_ENFORCEMENT
 
   setup_fake_git_stub
 

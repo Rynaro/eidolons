@@ -805,14 +805,14 @@ eidolons upgrade self --allow-unverified   # proceed when integrity has no evide
 | `--rollback` | Swap `~/.eidolons/nexus.prev` back into place. Only one previous version is retained. Exit 7 if no `nexus.prev` exists. |
 | `--force` | Skip the dirty-tree guard and downgrade confirmation. Required when the current nexus has uncommitted changes. |
 | `--non-interactive` | Fail instead of prompting (e.g. downgrade confirmation). Safe for CI use. |
-| `--allow-unverified` | Proceed when release integrity has no evidence either way (`absent`/`network`). Never overrides a detected mismatch or a corrupt clone — those always refuse regardless of this flag. |
+| `--allow-unverified` | Proceed when release integrity has no evidence either way (`absent`/`network`/`placeholder`). Never overrides an invalid integrity policy, a detected mismatch, or a corrupt clone. |
 
 **How it works.** `upgrade self` never modifies your current install until it is safe to do so:
 
 1. Resolves the target ref (default: latest stable tag via `git ls-remote`).
 2. Checks whether current version already matches — exits 0 (no-op) if so.
-3. Clones the target into `~/.eidolons/nexus.new/`.
-4. Verifies integrity by consulting **two sources** and requiring every non-placeholder value they report to agree: the **upstream default branch** (`origin HEAD`, reached through the remote the fresh clone already has — the only source that can structurally hold a release's own commit/tree/archive SHA-256, since the metadata-recording PR merges *after* the tag) and the **currently installed** nexus's own `roster/index.yaml` (the more independent witness, since it predates this fetch and so is the only source that can notice a tag that moved since the last sync). Adding the upstream source only ever makes verification *stricter* — it joins the installed roster, it does not replace it. When sources disagree about which kind of evidence they hold, the most severe wins: `mismatch > corrupt > absent > network > placeholder`. A detected mismatch always refuses (exit 5) regardless of enforcement mode or `--allow-unverified`. With no evidence anywhere, `strict` refuses (exit 5) unless `--allow-unverified` is passed or `EIDOLONS_INTEGRITY_ENFORCEMENT=warn`; a placeholder value in the release block (the bootstrap-window sentinel) always warns and proceeds, under either mode. The terminal summary always carries the outcome: `(integrity: verified)`, `(integrity: verified:local-only)`, or `(integrity: UNVERIFIED - <reason>)`.
+3. Validates the shared integrity policy, then clones the target into `~/.eidolons/nexus.new/`. An invalid policy refuses with exit 5 before fetching the replacement, including for non-tag refs and `--allow-unverified`.
+4. Verifies integrity by consulting **two sources** and requiring every non-placeholder value they report to agree: the **upstream default branch** (`origin HEAD`, reached through the remote the fresh clone already has — the only source that can structurally hold a release's own commit/tree/archive SHA-256, since the metadata-recording PR merges *after* the tag) and the **currently installed** nexus's own `roster/index.yaml` (the more independent witness, since it predates this fetch and so is the only source that can notice a tag that moved since the last sync). Adding the upstream source only ever makes verification *stricter* — it joins the installed roster, it does not replace it. When sources disagree about which kind of evidence they hold, the most severe wins: `mismatch > corrupt > absent > network > placeholder`. A detected mismatch always refuses (exit 5) regardless of enforcement mode or `--allow-unverified`. With no evidence anywhere, `strict` refuses (exit 5) unless `--allow-unverified` is passed or `EIDOLONS_INTEGRITY_ENFORCEMENT=warn`; placeholder-only release metadata (the bootstrap-window sentinel) follows the same rule: strict refuses without explicit opt-in, while advisory or explicitly allowed upgrades warn and proceed unverified. The terminal summary always carries the outcome: `(integrity: verified)`, `(integrity: verified:local-only)`, or `(integrity: UNVERIFIED - <reason>)`.
 5. Runs a smoke test: `bash ~/.eidolons/nexus.new/cli/eidolons --version --quiet` exits 0. Exit 6 on failure.
 6. Atomically swaps:
    - `~/.eidolons/nexus` → `~/.eidolons/nexus.prev`
@@ -833,7 +833,7 @@ On any failure before step 6, `~/.eidolons/nexus.new` is removed and the current
 | 1 | Generic failure (details on stderr) |
 | 2 | Already at the requested ref (no-op, same as 0 for no-op check) |
 | 4 | Network error — could not reach upstream |
-| 5 | Integrity verification failed, or no evidence and refused under strict |
+| 5 | Invalid integrity policy, integrity verification failed, or no evidence and refused under strict |
 | 6 | Smoke test failed on the new nexus |
 | 7 | Rollback requested but no `nexus.prev` exists |
 
