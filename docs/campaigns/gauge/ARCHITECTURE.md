@@ -1,68 +1,99 @@
-# Architecture decision frame — proposed, not implemented
+# Architecture decision frame — revision 3, proposed not implemented
 
-## Expertise is not execution
+## Product and boundary
 
-A **specialist profile** is versioned expertise, output expectations, method guidance and an authority ceiling. An **assignment** is a bounded task under an effective contract. A **worker** is a real native invocation. Its **context** is the information it actually received. **Authority** describes enforceable permitted operations; **evidence** records observations about a candidate. IDs for these objects are separate; different names do not establish different executions.
+Eidolons is a versioned, evidence-producing delivery layer around native coding harnesses. It may adapt methods, context, topology, and resources within a frozen authorized envelope. It does not replace the native reasoning/edit-test loop, grant itself authority, or equate a larger agent roster with better performance.
 
-Four execution forms are permitted by the target architecture: use a compatible method in the existing worker; ask a separate bounded consultant; launch an isolated writer; or launch a verification worker. One continuing maker can use localization and lite-planning methods without being represented as an independent ATLAS/RAMZA team. A separate worker is justified by required independence, context isolation, incompatible authority, a useful independent track, or a qualified model capability. Explicit user requests for a separate specialist remain binding within permitted scope.
+The immediate target remains one bounded brownfield assignment: an accepted runnable result, or recoverable and explicitly incomplete progress. Greenfield product creation and changed specialist refusals need a separate explicit charter decision. The requirements live in the stage tables; this document defines their shared terms and design rationale. Research support and limitations are in [RESEARCH.md](RESEARCH.md).
 
-Method fusion is not permission fusion. Effective capabilities intersect operator authorization, task scope, assignment permissions, specialist ceilings and what the host can enforce. The model can propose a transition, not authorize it. Unsupported revocation requires a new restricted execution. Role rebinding waits for an appropriate quiescent boundary; in-flight operations and reusable capabilities cannot be ignored. A context that has seen maker reasoning or privileged material cannot become clean merely by changing its label. Same-model checking is recorded honestly and makes no statistical-independence promise.
+## Stable control and revisable methods
 
-## The controller is operational software
+| Material | Owner and treatment |
+|---|---|
+| Authority, ceilings, candidate/evidence identities, acceptance obligations | Typed controller contracts, trusted authorization sources, enforcement, and negative tests. |
+| Model choice, method activation, topology, context strategy, search/retry bounds | Versioned strategy/configuration inside permitted limits; matched experiments before benefit claims. |
+| Intent, assumptions, trade-offs | Compact authored rationale. Unsupported assumptions remain visible rather than becoming invented requirements. |
 
-The Go controller owns policy resolution, root-run lineage, scoped budgets, durable dispatch intent, reconciliation, candidate state and evidence projection. Native harnesses retain their model/tool/edit-test loops. A semantic task interpretation or proposed execution graph can still be wrong; deterministic validation covers authority, budgets, dependencies and required evidence, not all natural-language meaning.
+The model can propose work or a strategy, not authorize it. Field-level grants originate only from the designated trusted authorizer. Other sources may constrain that grant. Operator, task, assignment, specialist ceiling, and host-enforceable capabilities intersect; missing required authorization fails closed. A repository file, retrieved note, tool response, behavioral auditor, or generated plan cannot populate a missing grant. A planning-ready decision is not a runtime execution grant.
 
-The first Go path is opt-in and narrow. The shipped shell layer receives urgent correctness fixes and supplies differential fixtures. Do not reproduce all future stateful behavior in Bash first or demand every old experimental command as a rewrite prerequisite. An explicit compatibility matrix identifies keep, shim, deprecate, and unsupported interfaces.
+A change in preset never changes mandatory acceptance or permissions. Revocation occurs only at a qualified quiescent boundary; otherwise create a new restricted invocation. A prompt instructing a worker to forget capabilities is not revocation. In-flight effects and reusable capabilities must be reconciled.
 
-Select a transactional local store with a documented installation and filesystem/durability boundary in V4-06. One authoritative writer/store governs active execution; no competing Bash/Go budget ledgers. Language-neutral fixtures and adapters preserve legacy evidence grades during migration. A database transaction does not make a native provider request transactional.
+## Four kinds of state, separate identities
 
-## Durable dispatch and accounting
-
-Commit reservation plus dispatch intent before external start. Record native identity after acknowledgement. Recovery reconciles an unresolved intent; unsupported lookup yields an unknown outcome, not a blind retry. Cancellation requested, execution confirmed stopped, and usage fully reconciled are different states. Do not keep a database transaction open across a model run.
-
-Budgets intersect per task, project, operator account-pool/window and concurrency. Tokens, context, money, provider allowance and time retain their own units, provenance and freshness. Unexposed quota stays unknown. Provider window resets do not refill the task's budget. Estimates can underpredict in-flight cost; stop new admissions and retain exposure rather than claiming an impossible exact external bill. Local guarantees do not cover other devices or unobserved third-party use.
-
-The Gauge selects economic preferences, not permissions. Protect verification/recovery headroom. Conserve may use a strong model when repeated cheap attempts cost more. Native retries, worker retries and controller retries need coordinated root accounting. No silent subscription-to-API spending fallback. An authenticated account is not sufficient evidence that a particular integration/billing mode is permitted.
-
-## Evidence is produced, not narrated
-
-Keep authored claims, observed events, and derived verdicts separate. Generate candidate/criteria/environment identities, timestamps, hashes and result references; write them once and generate views. Verification runs against a frozen candidate with writable build/temp outputs separated. A commit ID alone does not describe a dirty worktree. Define acceptance-relevant inputs conservatively, including required untracked files and relevant file modes/symlinks. Never exclude real source or tests just to keep a digest stable.
-
-Protect journal, oracle definitions and signing material from maker execution using an actual isolation boundary. A worktree, Go package, process name or private directory alone is not protection from a worker with unrestricted shell access. Where isolation/provenance cannot be proven, report a lower grade and reject tasks requiring stronger verification. Hash integrity is not identity authentication or semantic correctness. A successful test process does not prove the oracle is adequate. Test-origin and changed-test review remain relevant.
-
-The completion projector evaluates the current candidate/criteria and required check set. Missing, stale, cancelled, wrong-candidate or failed mandatory evidence prevents acceptance. Check reuse is dependency-bound; start with conservative invalidation and earn finer reuse through tests. Candidate application rechecks the target base and revalidates integration where needed. A signed receipt from an unprotected signer is not stronger evidence merely because it is signed.
-
-## Methodology has three destinations
-
-| Material | Destination | Limit |
+| State | Canonical purpose | Prohibited substitution |
 |---|---|---|
-| Mechanically enforceable rules | Runtime restrictions, schemas and negative tests | Tool hints and a model promise are not enforcement. |
-| Task/model-dependent heuristics | Short progressive skills plus controlled experiments | Fixed hypothesis counts and reset frequency are not immutable truths. |
-| Intent and trade-offs | Focused rationale and architecture notes | A test passing cannot prove the rationale fully captured the task. |
+| Durable operational history | Intents, observations, candidate lineage, checkpoints, decisions and exposure. | A generated narrative does not replace the journal. |
+| Working context | Selected task information in a particular native inference/session. | Compaction does not erase durable obligations or revoke previously seen information. |
+| Reusable knowledge | Scoped, source-linked procedures and experience with validity/supersession metadata. | Recall is not authorization, current test evidence, or an acceptance verdict. |
+| Authoritative policy and criteria | Effective grants, limits and protected acceptance definitions. | Model output and retrieved content cannot silently rewrite them. |
 
-Preserve useful methodology without certifying weak proxies. Running one search does not prove internal reuse was adequate. Reading a skill does not remove prior instructions from an append-only context. Each optional heuristic has an applicability and retirement condition. Existing immutable profile rules are amended explicitly and versioned; Gauge never overrides them silently.
+A profile is expertise plus a declared ceiling. An assignment is bounded work. A worker is an actual invocation; its context is what that invocation received. Task, profile/method version, worker, context, environment, policy, dispatch intent, candidate, and receipt identities remain separate. Replacing a process, environment, or context does not create a new budget root. Same-model and fresh-context review are recorded honestly, not advertised as statistical independence.
 
-## Consolidate maintenance, preserve trust and deployment
+The controller stores permitted metadata and references, not hidden reasoning or raw private transcripts. Native session history may remain in the native system under its configured policy. A portable checkpoint holds validated obligations, source/candidate references, decisions, failed approaches, pending effects/checks, policy identity, and resource exposure. Retention/redaction controls apply to accessible evidence artifacts too.
 
-A modular source repository can hold controller, first-party profiles, contract implementations, generated registries and tests. Portable skill sources remain canonical; host discovery files are adapters. Keep third-party package installation and protocol compatibility. Do not merge all MCP tools into a broad privileged server just because code shares a release.
+## Narrow controller, qualified adapters
 
-Inventory coupled changes before importing code: source/license history, consumers, contract versions, endpoints, replacement artifacts and migration evidence. Preserve independently deployable optional memory and UI. CRYSTALIUM knowledge is not the controller journal. Atomos remains compose/verify-only. Imported Tonberry/Junction behavior retains its declared limits. Source co-location does not grant any new permission.
+The opt-in Go seam owns policy resolution, root lineage, storage transactions, admission, dispatch intent, reconciliation, candidate/evidence projection, and operator status. Native harnesses retain model/tool/edit-test loops. Do not build all future stateful behavior in Bash first; fix the shipped correctness floor and reuse language-neutral fixtures. Keep/shim/deprecate/unsupported behavior is explicit in the compatibility matrix.
 
-Do not delete `.spectra/` wholesale: distinguish transient runtime debris from durable decisions, fixtures and referenced evidence. Restrict product distribution/search surfaces deliberately. Archive a sibling only after published replacement, tested consumers, support/rollback evidence and explicit operator authorization. Directory placement, repository count and Markdown bytes are maintenance indicators, not completion-quality metrics.
+One authoritative local transactional store governs active execution. V4-06 selects its implementation and supported filesystem/durability boundary through concurrency, interruption, packaging, and recovery tests. SQLite is a candidate, not an assumed prerequisite. No competing Bash/Go ledgers or database transaction held open across a provider call.
 
-## Decisions deliberately deferred to an executable package
+Qualification identifies the host, installed version, integration mode, protocol version, exposed method, effective permissions, execution boundary, control granularity, evidence, and support maturity. Authentication and permitted billing are separate. A qualified sandboxed method never implicitly qualifies a privileged sibling. MCP, ACP, and A2A describe different interfaces; syntax compatibility does not establish authority, resumability, or acceptance equivalence. A transport's completed event is execution state, not a passing acceptance oracle.
 
-| Decision | Owner | Required basis |
+A new native API or beta capability from the research is a discovery lead, not a selected dependency. Start with one qualified mode. Unsupported constraints reject managed execution or require an explicitly different authorized request; no silent downgrade, terminal scraping assumption, quota scraping, or subscription-to-API spending fallback.
+
+## Durable dispatch and resource policy
+
+Commit reservation plus dispatch intent before the external call; persist the observed acknowledgement and native identity afterward. Recovery first reconciles uncertainty. Stable operation identities support idempotency where the host actually offers it; without suitable lookup/idempotency, unresolved execution remains unresolved rather than being blindly replayed.
+
+Cancellation requested, execution confirmed stopped, and final resource reconciliation are different states. Cleanup operates only on identified owned resources. A provider-window reset does not refill the task budget. Local accounting cannot cover unobserved other-device consumption or guarantee an exact external bill from estimates.
+
+Keep money, inference/cache tokens, context/tool traffic, provider allowance, environment compute, latency, concurrency, and human interventions distinct. Report observation coverage. Unknown hard-limited resources need a permitted conservative bound or block admission. Protect verification/recovery headroom before optional implementation. Count failed candidates, native/worker/controller retries, integration, retrieval setup/refresh, and abandoned work; never optimize only the price of the first response.
+
+State-conditioned strategy selection can consider observed failures, pending checks, context pressure, and remaining allowance. Record the selected action, allowed alternatives, rule/version, reason and estimate provenance. That is an inspectable decision record, not hidden chain-of-thought. Fixed-model workflow comparisons come before adaptive model-routing claims.
+
+## Expertise without mandatory topology
+
+Permitted forms are an embedded method, bounded consultant, isolated writer, and protected verification worker. A method declares applicability, required inputs, bounded outputs/references, allowed execution forms, limits, and version. Inline reuse and isolated execution are separate variables to test.
+
+One maker remains the first demonstrator's default. Separate workers need a concrete purpose: context isolation, separate authority, useful independent track, qualified capability, or required independent review. Explicit user requests remain binding within scope. Consultants cannot dump uncontrolled transcripts into the maker; validate their result contract. Concurrent writers require isolated workspaces, an integration owner, and integration/check budget. Revalidate the integration candidate.
+
+Reading a skill does not prove that its guidance was followed. Executing one search does not prove adequate reuse. A new name or conversation fork does not make a checker independent. Existing specialist refusals, Atomos compose/verify-only behavior, and Tonberry/Junction contract limits remain intact until explicitly amended by their owner. Source co-location never adds authority.
+
+## Acceptance integrity and acceptance adequacy
+
+An acceptance package identifies requested behavior/exclusions, criteria, oracle origin/version, environment, check set, human review obligations where necessary, and invalidation dependencies. Candidate identity covers relevant tracked and required untracked content, file modes, symlinks, configuration, and integration base. Generated evidence/build outputs may be excluded; real source or tests cannot be excluded to preserve a convenient digest.
+
+Freeze the candidate; separate writable build/temp output; protect oracle definitions, authoritative journal, and credentials with actual enforced boundaries. Candidate-controlled build scripts cannot inherit signer/checker authority. A worktree, private directory, process label, signature, or Go package is not itself an isolation mechanism.
+
+Integrity asks whether the authorized runner performed the recorded check on the identified candidate. Adequacy asks whether those checks distinguish requested behavior from plausible defects. Use acceptable and representative defective fixtures, application/interaction/persistence checks where applicable, and authorized review of changed required tests. Inadequate or ambiguous criteria produce an acceptance-definition blocker, not invented behavior or a lower bar.
+
+Current-candidate acceptance requires all mandatory evidence at the required grade. Failures after passes, missing/skipped/cancelled checks, stale criteria, changed dependencies, unprotected provenance, and wrong-candidate results withhold acceptance. Hashes authenticate neither semantic correctness nor an unprotected signer. Test success remains scoped, not universal proof.
+
+## Information access and bounded learning
+
+Measure the actual supported host payload: active instructions, discovery descriptions, tool schemas, returned results, and reconstruction overhead. File bytes are not that payload. References preserve access to full permitted evidence; an available reference is not evidence the model read or understood it. Log observable discovery/retrieval/cited use, not inferred cognition.
+
+Memory items carry scope, source, applicability and supersession/expiry. Conflicts remain visible. Reused evidence is validated against source/criteria/environment dependencies. Optional indexes and recursive inspection are experiments with lifecycle cost accounting, root lineage, depth/fan-out/resource bounds and no additional authority. No mandatory external store, vector database, framework, or memory service is introduced.
+
+Experience may generate a versioned proposal over an explicitly allowed edit surface. It cannot rewrite active control logic, permissions, budgets, protected tests or acceptance definitions. Optional offline adaptation uses isolated development tasks, fixed allowances, regression/acceptance checks, untouched forward evaluation, explicit approval and a rollback target. Same-batch gains are adaptation, not demonstrated transfer. Automatic harness evolution, weight training, and a universal learned scheduler are not required for v4.
+
+## Measurement before migration
+
+V4-09 provides the minimal instrument and frozen protocol. V4-15 provides observable managed delivery and first authorized comparison. V4-21 expands evaluation immediately afterward. Only then does V4-10 perform broad inventory/import/compiler work. V4-20 extends, rather than introduces, operator visibility. Stage numbers organize files; the explicit package graph alone schedules prerequisites.
+
+Compare a strong feasible native control, original v3, fixed-model v4 workflow, and structural-only changes when implemented. Do not fabricate missing arms or weaken the native baseline. Record actual environment resource guarantees/ceilings, dependencies, cache state, permissions and billing. Separate candidate quality, selection success, autonomous completion, repeatability, delayed rework, intervention and total resource consumption. Include failed/cancelled/censored attempts; zero accepted outcomes make cost-per-accepted undefined. Unknown costs prohibit complete-cost claims.
+
+Correctness, authorized managed operation, and performance promotion are three separate gates. Null/inconclusive performance can justify an honest maintenance-only decision, not a benefit claim or default flip. Source migration preserves licensed provenance, consumers, external packages, independent deployments and rollback. No automatic .spectra/ purge or sibling retirement.
+
+## Bounded implementation decisions
+
+| Decision owner | Resolve before | Evidence needed |
 |---|---|---|
-| Supported local store and crash/durability guarantees | V4-06 | Tested concurrency, recovery, packaging and filesystem constraints. |
-| First native host/mode and billing eligibility | V4-09/V4-12 | Official interface documentation plus installed-version conformance and authorized live evidence. |
-| Required core imports versus optional sources | V4-10 | Actual consumer/dependency/license inventory and preserved boundaries. |
-| Candidate sandbox and trusted checker runner | V4-14 | Negative tests against maker mutation, with supported operating-system limits. |
-| Experimental margins, sample/stopping rules and spending allowance | V4-09 before V4-21/V4-22 | Predeclared protocol; operator approval before paid comparative outcomes. |
-| Default promotion and repository retirement | V4-23 | Evidence for named configurations and separate operator authorization. |
+| V4-06 | First authoritative store mutation | Storage/packaging choice, single writer, transaction/fault tests and filesystem limits. |
+| V4-09/V4-12 | First managed native dispatch | Exact method/version/permissions, billing eligibility, observed probes and explicit allowance. |
+| V4-09 | First comparative outcome inspection | Task splits/oracles, environment/arms, sample/stopping rules, meaningful margins and resource allowance. |
+| V4-14 | First trusted acceptance | Supported isolation, oracle qualification, protected ownership and negative controls. |
+| V4-10 | Each source relocation | Consumer/license/provenance inventory, comparison interpretation and canonical-source decision. |
+| V4-22/V4-23 | Strategy/default/release promotion | Frozen candidate, held-out evidence, exact support scope, rollback and separate operator approval. |
 
-These decisions do not require re-planning the whole campaign. Record the smallest consequential choice once at its owner. Runtime/API names in this plan are design seams, not claims that a host already implements them.
-
-## Current interface references to recheck at implementation
-
-[Codex App Server](https://developers.openai.com/codex/app-server/), [Claude Code documentation](https://code.claude.com/docs/en/overview), [Agent Skills](https://agentskills.io/specification), and existing EIIS/ECL/ESL/ECM sources are discovery references. Capture the exact document and installed version used in qualification. No present or future native capability, subscription entitlement, or interop guarantee is inferred from these links.
+Resolve each at its package with the smallest recorded decision; do not reopen the campaign or silently substitute an unqualified library. Runtime paths, flags, wire objects and APIs mentioned here are design seams until implemented and tested.
