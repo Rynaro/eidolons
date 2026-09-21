@@ -355,7 +355,7 @@ and PyYAML; use a virtual environment if PyYAML is not already available:
 ```bash
 python3 -m venv /tmp/eidolons-schema-venv
 . /tmp/eidolons-schema-venv/bin/activate
-python -m pip install PyYAML
+python -m pip install 'PyYAML==6.0.2'
 make schema
 ```
 

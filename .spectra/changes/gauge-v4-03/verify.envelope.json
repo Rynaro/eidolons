@@ -1,0 +1,26 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "v4_03_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify V4-03 authored publication gates and user-preserving wiring repairs",
+  "context_delta": {
+    "candidate": "e2f3f127570ca4c4b978a151410c1936667a64b4",
+    "ci": "https://github.com/Rynaro/eidolons/actions/runs/35668708325",
+    "receipt": "docs/campaigns/gauge/receipts/V4-03.md",
+    "review_context": "Initially fresh artifact-only context, followed by maker/parent coordination. Same-model review is not statistical independence. No live managed-host qualification.",
+    "reviewed_source_hashes": ".spectra/changes/gauge-v4-03/reviewed-source.sha256",
+    "roster_health": "https://github.com/Rynaro/eidolons/actions/runs/35668704498"
+  },
+  "ise": {
+    "verification": {
+      "fresh_context": true,
+      "checker": "v4_03_review",
+      "transcript_access": "artifact-only"
+    }
+  }
+}
