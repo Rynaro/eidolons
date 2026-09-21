@@ -709,8 +709,10 @@ EOF
 }
 
 @test "doctor: pending upgrades degrades gracefully when roster is unreachable" {
-  # Seed a valid manifest and lock but point EIDOLONS_NEXUS at a broken dir
-  # so roster_get always fails (empty roster). Doctor must not crash.
+  # Isolate the optional pending-upgrades lookup from the mandatory policy
+  # read: a valid explicit strict policy remains available while the roster
+  # is missing. An unreadable policy itself must fail closed (control below).
+  export EIDOLONS_INTEGRITY_ENFORCEMENT=strict
   seed_manifest
   seed_lock
   seed_agent_install_manifest atlas
@@ -734,8 +736,23 @@ EOF
   # upgrades section must not cause an unhandled exit.
   # Key assertion: output contains the section header and no unhandled error.
   [[ "$output" =~ "Pending upgrades" ]]
+  [[ "$output" != *"integrity-policy error"* ]]
   # Must not see an unhandled bash error about the roster.
   [[ ! "$output" =~ "roster/index.yaml: No such file" ]]
+}
+
+@test "doctor: missing roster without an explicit policy fails closed before optional checks" {
+  seed_manifest
+  seed_lock
+  unset EIDOLONS_INTEGRITY_ENFORCEMENT
+  export EIDOLONS_NEXUS="$BATS_TEST_TMPDIR/missing-policy-nexus"
+  mkdir -p "$EIDOLONS_NEXUS/roster"
+
+  run eidolons doctor
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"integrity-policy error"*"roster/index.yaml integrity.enforcement"* ]]
+  [[ "$output" != *"Pending upgrades"* ]]
+  [[ "$output" != *"All checks passed"* ]]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

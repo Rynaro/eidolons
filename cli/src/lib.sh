@@ -209,14 +209,64 @@ sha256_file() {
   fi
 }
 
+# Returns one canonical mode on stdout, or a source-only diagnostic on stderr.
+# A missing policy keeps legacy compatibility; an explicit invalid value never
+# does. Capture each parser separately so failure cannot be hidden by a pipeline
+# or by a caller invoking us in an `if` / `||` context (errexit disabled).
 integrity_enforcement_mode() {
-  if [[ -n "${EIDOLONS_INTEGRITY_ENFORCEMENT:-}" ]]; then
-    echo "$EIDOLONS_INTEGRITY_ENFORCEMENT"
-    return
+  local raw mode source
+  if [[ -n "${EIDOLONS_INTEGRITY_ENFORCEMENT+x}" ]]; then
+    source="EIDOLONS_INTEGRITY_ENFORCEMENT"
+    if ! raw="$(jq -n --arg value "$EIDOLONS_INTEGRITY_ENFORCEMENT" '$value' 2>/dev/null)"; then
+      warn "integrity-policy error: $source (policy parser unavailable)"
+      return 1
+    fi
+  else
+    source="roster/index.yaml integrity.enforcement"
+    if ! raw="$(yaml_to_json "$ROSTER_FILE" 2>/dev/null)"; then
+      warn "integrity-policy error: $source (cannot parse configured roster)"
+      return 1
+    fi
+    if ! raw="$(jq -ces '
+      if length != 1 then error("document count") else .[0] end |
+      if type != "object" then error("roster type")
+      elif has("integrity") | not then "warn"
+      elif (.integrity | type) != "object" then error("policy type")
+      elif .integrity | has("enforcement") then .integrity.enforcement
+      else "warn" end
+    ' <<< "$raw" 2>/dev/null)"; then
+      warn "integrity-policy error: $source (invalid policy structure or parser unavailable)"
+      return 1
+    fi
   fi
-  yaml_to_json "$ROSTER_FILE" 2>/dev/null \
-    | jq -r '.integrity.enforcement // "warn"' 2>/dev/null \
-    || echo "warn"
+  if ! mode="$(jq -er '
+    if type != "string" then error("mode type") else
+      gsub("^[[:space:]]+|[[:space:]]+$"; "") | ascii_downcase |
+      if . == "strict" or . == "warn" then . else error("mode") end
+    end
+  ' <<< "$raw" 2>/dev/null)"; then
+    warn "integrity-policy error: $source (expected strict or warn)"
+    return 1
+  fi
+  printf '%s\n' "$mode"
+}
+
+# Hash fields are independent (docs/release-integrity.md). Strict admission
+# needs at least one pre-install witness; null/empty optional fields remain
+# absent, and every supplied hash must be well formed. Installed verification
+# can also compare a manifest-only witness against the actual installed file.
+release_integrity_metadata_valid() {
+  jq -e --arg phase "${2:-source}" '
+    def hex($n): type == "string" and test("^[0-9a-fA-F]{" + ($n|tostring) + "}$");
+    def optional_hex($n): . == null or . == "" or hex($n);
+    type == "object"
+    and (.commit | optional_hex(40)) and (.tree | optional_hex(40))
+    and (.archive_sha256 | optional_hex(64))
+    and (.manifest_sha256 | optional_hex(64))
+    and ([.commit, .tree, .archive_sha256,
+          (if $phase == "installed" then .manifest_sha256 else null end)]
+         | any(. != null and . != ""))
+  ' <<< "$1" >/dev/null 2>&1
 }
 
 semver_tag_for() {
@@ -235,13 +285,18 @@ release_metadata_for() {
 }
 
 release_integrity_status() {
-  local name="$1" version="$2" meta
+  local name="$1" version="$2" meta mode
+  mode="$(integrity_enforcement_mode)" || return 1
   meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
   if [[ -n "$meta" && "$meta" != "null" ]]; then
+    if [[ "$mode" == "strict" ]] && ! release_integrity_metadata_valid "$meta"; then
+      warn "$name@$version has invalid required release integrity metadata"
+      return 1
+    fi
     echo "verified"
     return
   fi
-  if [[ "$(integrity_enforcement_mode)" == "strict" ]]; then
+  if [[ "$mode" == "strict" ]]; then
     echo "missing"
   else
     echo "legacy-warning"
@@ -288,6 +343,7 @@ release_archive_prefix() {
 # Internal variant that returns codes instead of calling die on cache drift.
 # Return codes:
 #   0  — verified (all checks pass)
+#   1  — integrity-policy error (never recover by re-cloning)
 #   2  — cache-stale (commit/tree/archive mismatch; clone is intact but wrong)
 #   3  — cache-corrupt (HEAD unresolvable; git plumbing failed)
 # Exits 1 (via die) only for invariant violations that are not cache drift:
@@ -300,7 +356,9 @@ _verify_release_integrity_internal() {
   local meta mode expected_tag expected_commit expected_tree expected_archive
   local actual_tag actual_commit actual_tree actual_archive
 
-  # Always check HEAD resolvability first, regardless of roster metadata.
+  mode="$(integrity_enforcement_mode)" || return 1
+
+  # Always check HEAD resolvability before release metadata.
   # A corrupt or partial clone (rc=3) always needs re-cloning, even in compat
   # mode where we cannot compare commits. This catches F2 (interrupted clone)
   # and F3 (corrupt .git) before the metadata gate.
@@ -312,12 +370,15 @@ _verify_release_integrity_internal() {
 
   meta="$(release_metadata_for "$name" "$version" 2>/dev/null || true)"
   if [[ -z "$meta" || "$meta" == "null" ]]; then
-    mode="$(integrity_enforcement_mode)"
     if [[ "$mode" == "strict" ]]; then
       die "$name@$version has no roster release integrity metadata"
     fi
     warn "$name@$version has no roster release integrity metadata; compatibility install is warning-only"
     return 0
+  fi
+
+  if [[ "$mode" == "strict" ]] && ! release_integrity_metadata_valid "$meta"; then
+    die "$name@$version has invalid required release integrity metadata"
   fi
 
   expected_tag="$(echo "$meta" | jq -r --arg v "$version" '.tag // ("v" + $v)')"
@@ -471,6 +532,7 @@ detect_hosts() {
 # Stdout is the cache path only. All log output via info/warn/say (stderr).
 fetch_eidolon() {
   local name="$1" version="${2:-latest}"
+  integrity_enforcement_mode >/dev/null || return 1
   local entry; entry="$(roster_get "$name")"
   local repo; repo="$(echo "$entry" | jq -r '.source.repo')"
   local ref meta_tag
@@ -497,6 +559,8 @@ fetch_eidolon() {
     if [[ "$_fe_rc" -eq 0 ]]; then
       info "Using cached $name@$version"
     else
+      # Policy/invariant failures must not be treated as recoverable cache drift.
+      [[ "$_fe_rc" -eq 2 || "$_fe_rc" -eq 3 ]] || return "$_fe_rc"
       # Cache is stale (rc=2) or corrupt (rc=3) — invalidate and re-clone once.
       local _status_label="stale"
       [[ "$_fe_rc" -eq 3 ]] && _status_label="corrupt"
@@ -1162,9 +1226,7 @@ _nexus_release_source_status() {
 #
 # Two-source classifier + severity rule (spec.yaml decision / severity_precedence
 # for change `upgrade-self-integrity-gate`). nexus_verify_release CLASSIFIES
-# evidence; upgrade_self.sh APPLIES policy at its own call site (mirrors
-# verify.sh:68 and doctor.sh:230, which both consult integrity_enforcement_mode
-# where they are called, not inside a shared helper).
+# evidence; upgrade_self.sh APPLIES the shared integrity policy at its call site.
 #
 # Sources consulted:
 #   installed — $ROSTER_FILE, the CURRENTLY INSTALLED nexus's roster. The more

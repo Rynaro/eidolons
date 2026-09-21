@@ -1,0 +1,37 @@
+{
+  "change_id": "gauge-v4-01",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "requirement_authority": "docs/campaigns/gauge/00-stabilization.md#v4-01 at pinned plan commit",
+  "scope": "V4-01 only",
+  "complexity": {
+    "scope": 1,
+    "ambiguity": 1,
+    "dependencies": 2,
+    "risk": 3,
+    "total": 7
+  },
+  "acceptance_checks": [
+    {
+      "id": "V4-01-R01",
+      "verify_method": "V4-01-T01: make test-file F=cli/tests/integrity_policy.bats P=V4-01-T01; relevant real-consumer suites listed in docs/campaigns/gauge/receipts/V4-01.md"
+    },
+    {
+      "id": "V4-01-R02",
+      "verify_method": "V4-01-T02: make test-file F=cli/tests/integrity_policy.bats P=V4-01-T02; relevant real-consumer suites listed in docs/campaigns/gauge/receipts/V4-01.md"
+    },
+    {
+      "id": "V4-01-R03",
+      "verify_method": "V4-01-T03: make test-file F=cli/tests/integrity_policy.bats P=V4-01-T03; relevant real-consumer suites listed in docs/campaigns/gauge/receipts/V4-01.md"
+    },
+    {
+      "id": "V4-01-R04",
+      "verify_method": "V4-01-T04: make test-file F=cli/tests/integrity_policy.bats P=V4-01-T04; relevant real-consumer suites listed in docs/campaigns/gauge/receipts/V4-01.md"
+    },
+    {
+      "id": "V4-01-R05",
+      "verify_method": "V4-01-T05: make test-file F=cli/tests/integrity_policy.bats P=V4-01-T05; relevant real-consumer suites listed in docs/campaigns/gauge/receipts/V4-01.md"
+    }
+  ],
+  "verification_receipt": "docs/campaigns/gauge/receipts/V4-01.md",
+  "late_lifecycle_adoption": true
+}

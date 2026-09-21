@@ -157,59 +157,6 @@ _is_semver_tag() {
 # Strip leading 'v' prefix.
 _strip_v() { echo "${1#v}"; }
 
-# _upgrade_self_enforcement_mode — the fail-closed enforcement read (AC-23),
-# normalised AT THIS CALL SITE ONLY. integrity_enforcement_mode (lib.sh) is
-# NOT changed: verify.sh:68 and doctor.sh:230 share it and the per-Eidolon
-# member integrity path is frozen anti-scope (risk R-6,
-# https://github.com/Rynaro/eidolons/issues/562). That helper echoes
-# EIDOLONS_INTEGRITY_ENFORCEMENT verbatim and returns the literal string
-# "warn" when $ROSTER_FILE is unreadable (`set -o pipefail` fires the
-# `|| echo "warn"` on a failing yaml_to_json) — indistinguishable at the call
-# site from a roster that genuinely says `warn`. Hence clause (ii)'s
-# independent parse check, rather than a smarter read of the helper's output.
-#
-# (i) EIDOLONS_INTEGRITY_ENFORCEMENT set: trim + lowercase (bash 3.2:
-#     `tr '[:upper:]' '[:lower:]'`, never `${var,,}`), accept ONLY
-#     strict/warn; anything else — including empty after trim — resolves to
-#     the REFUSING posture (strict).
-# (ii) Unset: consult integrity_enforcement_mode AND independently confirm
-#     $ROSTER_FILE parses (yaml_to_json succeeds). If it does not parse or
-#     does not exist, use strict regardless of what the helper returned.
-_upgrade_self_enforcement_mode() {
-  local raw normalized
-
-  # `${VAR+x}` (existence test) rather than `${VAR:-}` (value test) — the
-  # criterion's "including empty" clause covers the variable being SET to an
-  # empty string, which `-n "${VAR:-}"` cannot distinguish from unset. Unset
-  # falls through to clause (ii) below; set-but-empty is handled here and
-  # resolves to strict, same as any other unrecognised value.
-  if [[ -n "${EIDOLONS_INTEGRITY_ENFORCEMENT+x}" ]]; then
-    raw="${EIDOLONS_INTEGRITY_ENFORCEMENT}"
-    normalized="$(printf '%s' "$raw" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-    case "$normalized" in
-      strict|warn) echo "$normalized"; return 0 ;;
-      *)           echo "strict";      return 0 ;;
-    esac
-  fi
-
-  # Parenthesised (subshell) call: yaml_to_json's own last resort is
-  # die() -> exit 1 when no YAML backend is available at all, and an
-  # unparenthesised call here would take the whole script down with it
-  # instead of reporting "unparseable" to this function's caller. A subshell
-  # confines that exit to itself.
-  if ! ( yaml_to_json "$ROSTER_FILE" >/dev/null 2>&1 ); then
-    echo "strict"
-    return 0
-  fi
-
-  raw="$(integrity_enforcement_mode)"
-  normalized="$(printf '%s' "$raw" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
-  case "$normalized" in
-    strict|warn) echo "$normalized"; return 0 ;;
-    *)           echo "strict";      return 0 ;;
-  esac
-}
-
 # ─── Rollback path ────────────────────────────────────────────────────────
 if [[ "$ROLLBACK" == true ]]; then
   if [[ ! -d "$NEXUS_PREV" ]]; then
@@ -329,6 +276,14 @@ if [[ "$_is_downgrade" == true ]]; then
   fi
 fi
 
+# Policy errors are not an opt-in to advisory mode, even for a non-tag ref
+# or --allow-unverified. Validate before fetching any replacement.
+if ! _mode="$(integrity_enforcement_mode)"; then
+  echo "nexus@$TARGET_VERSION release integrity could not be verified (integrity-policy error)." >&2
+  echo "Refusing to swap. The previous nexus is intact." >&2
+  exit 5
+fi
+
 # ─── Fetch into nexus.new ─────────────────────────────────────────────────
 say "Upgrading nexus $CURRENT_VERSION -> $TARGET_VERSION"
 
@@ -347,9 +302,7 @@ fi
 # ─── Integrity verification ────────────────────────────────────────────────
 # nexus_verify_release (lib.sh) CLASSIFIES evidence from two sources (the
 # installed roster + the upstream default branch) and returns a token on
-# NEXUS_VERIFY_STATUS. Policy is applied HERE, at the call site — mirrors
-# verify.sh:68 and doctor.sh:230, which both consult integrity_enforcement_mode
-# where they are called rather than inside a shared helper.
+# NEXUS_VERIFY_STATUS. Policy is applied HERE using the shared validated mode.
 #
 # Every read of NEXUS_VERIFY_STATUS is ${NEXUS_VERIFY_STATUS:-}: on the
 # non-tag branch below, nexus_verify_release is never called, and
@@ -382,10 +335,16 @@ if _is_semver_tag "$TARGET_REF"; then
       ;;
     4)
       # No evidence anywhere. Policy depends on the token and on enforcement
-      # mode. The placeholder row is a separate, intentional bootstrap-window
-      # skip (anti-scope: not repurposed) and warns+proceeds under BOTH modes,
-      # unaffected by --allow-unverified.
+      # mode. Placeholder rows are no evidence too: strict requires explicit
+      # --allow-unverified, just as for absent or unreachable metadata.
       if [[ "${_verify_status:-}" == "placeholder" ]]; then
+        if [[ "$_mode" == "strict" && "$ALLOW_UNVERIFIED" != true ]]; then
+          echo "nexus@$TARGET_VERSION release integrity could not be verified (placeholder)." >&2
+          echo "Refusing to swap under strict enforcement. The previous nexus is intact." >&2
+          echo "  Re-run with --allow-unverified, or set EIDOLONS_INTEGRITY_ENFORCEMENT=warn, to proceed anyway." >&2
+          rm -rf "$NEXUS_NEW"
+          exit 5
+        fi
         warn "nexus@$TARGET_VERSION release metadata is a bootstrap placeholder — skipping verification."
         INTEGRITY_TOKEN="UNVERIFIED - placeholder"
       else
@@ -405,7 +364,6 @@ if _is_semver_tag "$TARGET_REF"; then
           _reason="absent, upstream unreachable"
         fi
 
-        _mode="$(_upgrade_self_enforcement_mode)"
         if [[ "$_mode" == "strict" && "$ALLOW_UNVERIFIED" != true ]]; then
           echo "" >&2
           echo "nexus@$TARGET_VERSION release integrity could not be verified (${_reason})." >&2

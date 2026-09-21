@@ -97,6 +97,8 @@ manifest_exists || die "No eidolons.yaml found. Run 'eidolons init' first."
 # see the latest published Eidolon versions.  Skipped when EIDOLONS_NEXUS is
 # set (local-checkout / test mode) or EIDOLONS_SKIP_REFRESH=1 (offline-first).
 nexus_refresh
+# Validate before any roster lookup or installation/cache mutation.
+integrity_enforcement_mode >/dev/null || exit 1
 
 MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
@@ -514,7 +516,7 @@ AGENTMD
     archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
     package_manifest_sha="$(sha256_file "$target/manifest.json")"
     receipt_sha="$(sha256_file "$target/install.receipt.json")"
-    verification="$(release_integrity_status "$name" "$ver")"
+    verification="$(release_integrity_status "$name" "$ver")" || exit 1
     cat >> "$LOCK_TMP" <<LOCK
   - name: $name
     version: "$ver"
@@ -536,7 +538,7 @@ LOCK
     tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
     archive_sha="$(release_metadata_for "$name" "$ver" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
     manifest_sha="$(lock_manifest_sha256 "$target/install.manifest.json" 2>/dev/null || echo "")"
-    verification="$(release_integrity_status "$name" "$ver")"
+    verification="$(release_integrity_status "$name" "$ver")" || exit 1
     cat >> "$LOCK_TMP" <<LOCK
   - name: $name
     version: "$ver"
@@ -554,7 +556,7 @@ LOCK
     commit="$(git -C "$clone_dir" rev-parse HEAD 2>/dev/null || echo unknown)"
     tree="$(git -C "$clone_dir" rev-parse 'HEAD^{tree}' 2>/dev/null || echo "")"
     archive_sha="$(release_metadata_for "$name" "$version" 2>/dev/null | jq -r '.archive_sha256 // empty' 2>/dev/null || echo "")"
-    verification="$(release_integrity_status "$name" "$version")"
+    verification="$(release_integrity_status "$name" "$version")" || exit 1
     cat >> "$LOCK_TMP" <<LOCK
   - name: $name
     version: "$version"

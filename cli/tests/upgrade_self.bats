@@ -85,7 +85,7 @@ setup_fixture_remote() {
   # Use a non-bare repo as the "remote" to avoid HEAD-points-to-nothing
   # issues with bare repos. git ls-remote works fine against a regular repo.
   mkdir -p "$FIXTURE_REMOTE"
-  git -C "$FIXTURE_REMOTE" init -q
+  git -c init.defaultBranch=master -C "$FIXTURE_REMOTE" init -q
   git -C "$FIXTURE_REMOTE" config user.email "remote@test.local"
   git -C "$FIXTURE_REMOTE" config user.name  "Remote"
   git -C "$FIXTURE_REMOTE" config receive.denyCurrentBranch ignore
@@ -796,7 +796,7 @@ _push_fixture_tag_then_tamper() {
   [[ "$output" == *"(integrity: UNVERIFIED - placeholder)"* ]]
 }
 
-@test "AC-9b: both sources placeholder (no absent) => skips under strict too" {
+@test "V4-01-T04: both sources placeholder require explicit opt-in under strict (supersedes AC-9b)" {
   setup_fixture_remote "1.0.0"
   push_fixture_tag "1.0.3"
   _set_fixture_release_fields "$EIDOLONS_NEXUS/roster/index.yaml" "1.0.3" \
@@ -804,6 +804,12 @@ _push_fixture_tag_then_tamper() {
 
   export EIDOLONS_INTEGRITY_ENFORCEMENT=strict
   run bash "$EIDOLONS_BIN" upgrade self --force
+  [ "$status" -eq 5 ]
+  [[ "$output" == *"could not be verified (placeholder)"* ]]
+  [ "$(cat "$EIDOLONS_NEXUS/VERSION")" = "1.0.0" ]
+  [ ! -d "$EIDOLONS_HOME/nexus.new" ]
+
+  run bash "$EIDOLONS_BIN" upgrade self --force --allow-unverified
   [ "$status" -eq 0 ]
   [[ "$output" == *"(integrity: UNVERIFIED - placeholder)"* ]]
 }
@@ -1401,4 +1407,20 @@ _seed_full_cli_tree_for_upgrade_probe() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"(integrity: UNVERIFIED - absent)"* ]]
   [[ "$output" != *"unexpected code"* ]]
+}
+
+@test "V4-01-T02 T05: invalid policy rejects allow-unverified and non-tag upgrade without swap" {
+  setup_fixture_remote "1.0.0"
+  push_fixture_tag "1.0.30"
+  export EIDOLONS_INTEGRITY_ENFORCEMENT=CANARY_POLICY_SECRET
+  local ref
+  for ref in v1.0.30 HEAD; do
+    run bash "$EIDOLONS_BIN" upgrade self --force --ref "$ref" --allow-unverified
+    [ "$status" -eq 5 ]
+    [[ "$output" == *'integrity-policy error'*'EIDOLONS_INTEGRITY_ENFORCEMENT'* ]]
+    [[ "$output" != *CANARY_POLICY_SECRET* ]]
+    [ "$(cat "$EIDOLONS_NEXUS/VERSION")" = "1.0.0" ]
+    [ ! -d "$EIDOLONS_HOME/nexus.new" ]
+    [ ! -d "$EIDOLONS_HOME/nexus.prev" ]
+  done
 }
