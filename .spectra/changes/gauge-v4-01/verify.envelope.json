@@ -1,0 +1,23 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "integrity_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify V4-01 policy behavior and corrected doctor regression using trustworthy Linux execution",
+  "context_delta": {
+    "candidate": "acda724e24078acd5fb36b2da433c0c101205642",
+    "checker_invocation": "integrity_review",
+    "doctor_test_sha256": "945d35ed46be81e86df6931747e9681abc3579f93b4b50671388a2e25cb6dfa6",
+    "limitations": "Same model/shared context; not statistical independence. Prior host Bats green unreliable. Full updated hosted CI pending. Lifecycle adopted after implementation when Docker became available.",
+    "observed_checks": [
+      "Linux Bash5.2.37/Bats1.11.1 negative control exit1",
+      "Distinct checker: corrected doctor tests 2 passed",
+      "Linux doctor + integrity acceptance: 81 passed, 7 skipped, 0 failed"
+    ],
+    "receipt": "docs/campaigns/gauge/receipts/V4-01.md"
+  }
+}
