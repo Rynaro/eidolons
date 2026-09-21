@@ -1,90 +1,140 @@
-# Phase 3 — One managed delivery path
+# Stage 3 — One managed delivery demonstrator
 
-Entry: Phase 2's policy/observability gates accepted; a real host qualification can remain blocked until an operator authorizes the required probe. Exit: G07–G10 accepted, including a separately authorized live pilot on one qualified host. Fake-host success is useful engineering evidence, not a live delivery claim. Read [HANDOFF.md](HANDOFF.md); [plan.yaml](plan.yaml) owns dependencies.
+Deliver the smallest useful native-harness path with durable reservations, conditional execution boundaries, protected verification, and recoverable task state.
 
-## G07 — Atomic shared reservations and verification headroom
+Read [HANDOFF.md](HANDOFF.md) and [ARCHITECTURE.md](ARCHITECTURE.md). [plan.yaml](plan.yaml) owns package identities, dependencies and source routing. Each table below owns its EARS requirements; verification entries are planned cases, not executed results. Assign one package, and one named slice where applicable.
 
-**Primary repository:** Rynaro/eidolons. Start with G01/G05 journal and observation interfaces, `cli/src/telemetry.sh`, `cli/src/lib_context.sh`, `roster/context-policy.yaml`, and relevant budget tests. Depends on G06.
+<a id="v4-11"></a>
 
-Implement an account-pool-aware controller that atomically checks ceilings and reserves capacity before dispatch, then reconciles observations afterward. Account pool is an operator-defined alias for a legitimately shared provider allowance, not credential sharing or quota circumvention. Keep task, project, account/window, and concurrency scopes independent and intersect applicable limits. Count a provider request once even when several scopes reference it. Tokens, money, and opaque provider allowances remain distinct units; no universal conversion is permitted.
+## V4-11 — Atomic reservations with verification and recovery headroom
 
-Reuse G01's append/transaction boundary when sufficient. A transaction must cover admission, reservation publication, and scope balances, not merely the final event append. Document the crash/reconciliation state machine. Choose durable storage appropriate to the tested concurrency/installation boundary; a database/daemon is not mandatory, and any new dependency needs an explicit packaging decision. The initial supported scope is coordinated local processes on a declared filesystem, not magically synchronized devices.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-08`, `V4-09`, `V4-10`. Stage gates also apply.
 
-Protect explicit verification and checkpoint/recovery headroom. New implementation work may consume only the unreserved portion; admitted verification can consume its designated reserve. Estimates can be wrong, so observed overruns stop new admissions and trigger reconciliation rather than negative balances disappearing. Unknown telemetry after a crash must not automatically release a possibly consumed reservation. A timeout is not proof a provider request never happened. Distinguish reserved, dispatched, reconciled, cancelled-before-dispatch, and uncertain/in-flight states.
+**Starting points:** `V4-06 controller store`, `V4-08 observation interface`, `roster/context-policy.yaml`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-Cancellation, resume, day/window rollover, delayed usage, and explicit operator limit changes all preserve already-consumed resources. Do not refill a task budget merely because a provider window reset. Do not automatically retry an ambiguous non-idempotent provider operation. Account use outside the controller remains explicitly unobserved.
+**Scope and decisions.** Implement transactionally consistent local admission across task/project/account/window/concurrency scopes. Reserve before dispatch, protect verification/recovery, and reconcile observed usage. The managed guarantee is limited to the proven adapter boundary; provider cost may exceed estimates. No automatic cross-device claim.
 
-| Acceptance | Required verification |
-|---|---|
-| G07-A1: Concurrent reservations cannot jointly admit beyond an applicable local ceiling. | Barrier-synchronized contenders across two projects and a shared pool; verify each scope and accepted ID set independently. |
-| G07-A2: Verification/recovery reserve is protected from new implementation work. | Near-limit workload rejects new work but admits permitted verification/checkpoint actions within their reserve. |
-| G07-A3: Crash, duplicate, late, and uncertain observations do not manufacture allowance. | Crash before/after dispatch, duplicate reconcile, partial usage, cancelled-before/after-send, and missing telemetry fixtures. |
-| G07-A4: Agent/session/provider switches inherit accounting. | Same-root descendants and resumed sessions across pool aliases; independent tasks remain separate. |
-| G07-A5: Window resets and price/usage uncertainty remain typed and conservative. | Late old-window event, stale allowance reading, missing price, and outside-controller consumption warning; no invented precision. |
-| G07-A6: Managed admission stops when required accounting is unavailable; advisory hooks retain their existing safety behavior. | Unwritable journal, lock timeout, corruption, and unavailable measurement surfaces. |
+**Implementation sequence.** Define reservation lifecycle and estimate provenance. Implement atomic admission and updates with the selected store. Test contention, interruption, stale data, rollover, and operator amendments independently of model calls.
 
-**Stop/rollback:** no live automatic dispatch until G08. Never promise an exact external bill or cross-device enforcement. Preserve reservations and unreconciled exposure when disabling a controller; do not roll back into an overspending path.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-11-R01 | WHEN concurrent assignments request capacity, admission SHALL reserve resources without jointly exceeding any applicable known local ceiling. | **V4-11-T01:** Barrier-synchronized contenders across two projects sharing a pool; verify accepted identities and each scoped balance. |
+| V4-11-R02 | WHILE verification or recovery headroom is reserved, admission SHALL exclude that headroom from new optional implementation work. | **V4-11-T02:** Near-limit cases reject new exploration but admit authorized verification within its designated reserve. |
+| V4-11-R03 | IF observed consumption exceeds its estimate, THEN admission SHALL stop new work that would exceed an applicable ceiling. | **V4-11-T03:** Overrun, delayed usage, and correction fixtures; balances retain actual exposure rather than clamping it away. |
+| V4-11-R04 | IF a dispatched reservation has an unknown outcome, THEN reconciliation SHALL retain its uncertain exposure. | **V4-11-T04:** Crash, timeout, lost callback and cancellation-after-send; no automatic release or blind duplicate reconcile. |
+| V4-11-R05 | WHEN a provider allowance window resets, accounting SHALL preserve the root task consumption already incurred. | **V4-11-T05:** Late old-window event and new-window reading; only the provider window changes, not task limits. |
+| V4-11-R06 | IF authoritative accounting is unavailable, THEN managed admission SHALL reject new dispatch. | **V4-11-T06:** Store corruption, lock timeout, storage full and read-only state; optional advisory collection keeps its separately documented error policy. |
 
-## G08 — Qualify and implement one managed host adapter
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-**Primary repository:** Rynaro/eidolons. Start with the G06 capability matrix, current host adapters, `cli/src/harness_hook.sh`, readiness/canaries, and existing sandbox/dispatch entrypoints. Junction is a conditional integration slice only when it owns the execution boundary actually used. Depends on G07.
+**Stop and rollback.** Preserve spent resources and uncertain reservations when disabling the controller. Unknown consumption never becomes new allowance.
 
-Select exactly one initial host/mode using G06's observed capabilities and implementation reuse. Record the decision and tested version. No unconditional choice of Claude Code or Codex is made by this plan. Validate current official host interfaces before implementing; do not invent flags, hidden quota APIs, or guarantees from hook registration. Fixture-backed development must remain possible without credentials.
+---
 
-Implement a small typed adapter boundary for preflight, start/resume, observed events, cancellation, and terminal outcome. Request model/effort/permissions only through supported native controls. Record requested versus actually observed values; an unsupported field is not a successful setting. Reserve before each boundary the adapter controls. If the native run internally makes requests that cannot be individually admitted, enforce the supported run boundary and advertise that granularity; do not claim a per-request hard cap.
+<a id="v4-12"></a>
 
-Capture native invocation identities and scope the independent-checker evidence to the actual separation observed. Keep policy, accounting, authority, and untrusted model output in distinct channels. Do not let a tool result, generated plan, or prompt mutate trusted ceilings. Scope subprocesses/worktrees and clean up only resources owned by this run; cancellation must reconcile unknown side effects and in-flight charges.
+## V4-12 — One native adapter with durable dispatch and cancellation
 
-The Gauge never relaxes specialist charters. Existing parent-applies-proposal workflows may apply an authorized candidate inside an isolated worktree; Vivi's own charter remains unchanged until G12. Pushing, merging, releasing, deployment, dependency downloads with external spend, and broad approval changes are not implicitly authorized.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-09`, `V4-11`. Stage gates also apply.
 
-| Acceptance | Required verification |
-|---|---|
-| G08-A1: Start, event capture, terminal states, and cancellation are exercised through the actual adapter. | Fake-host contract suite plus a separately authorized, pinned-version live smoke run. |
-| G08-A2: Required unsupported controls stop preflight rather than silently degrading. | Missing usage/cancellation/authority boundary and ignored model setting fixtures. |
-| G08-A3: One reservation is associated with each controlled dispatch boundary. | Instrumented adapter trace, duplicate callback, partial startup, and ambiguous-send recovery. |
-| G08-A4: Permissions and owned-resource cleanup are effective within the declared boundary. | Attempt forbidden write/network action; cancel a run beside unrelated processes/worktrees and verify they survive. |
-| G08-A5: Execution/checker labels reflect observed provenance and granularity. | Same-process renamed checker is not independent; separate invocation without context proof remains appropriately qualified. |
+**Starting points:** `V4-06 adapter interfaces`, `V4-09 capability evidence`, `cli/src/harness_hook.sh`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-**Stop/rollback:** one supported host/mode, not nominal parity across all hosts. Missing live access leaves the live criterion blocked. Disable the new path and restore pre-existing host settings without deleting native sessions or accounting.
+**Scope and decisions.** Qualify exactly one native host/version/mode and legitimate billing path. Preserve native reasoning/tool loops rather than rewriting them. Commit dispatch intent and reservation before external start; execute outside the store transaction. Do not promise exactly-once external execution when the host lacks reconciliation/idempotency.
 
-## G09 — Bounded delivery loop with a runnable milestone
+**Implementation sequence.** Implement preflight/start/resume/events/interrupt with a fake adapter. Add a durable outbox-style intent and recovery query at the native boundary. Run separately authorized live smoke evidence on the selected mode.
 
-**Primary repository:** Rynaro/eidolons. Start with G08, current sandbox loop implementation, routing/mission contracts, `roster/routing.yaml`, and G02/G03 verification records. Depends on G08.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-12-R01 | WHEN a managed assignment is admitted, the controller SHALL commit its reservation and dispatch intent before requesting native execution. | **V4-12-T01:** Inject crash on each side of commit/send/ack; native-call counter proves no send preceded the durable intent. |
+| V4-12-R02 | IF execution outcome is ambiguous after recovery, THEN the controller SHALL reconcile the existing intent before redispatching it. | **V4-12-T02:** Host supports lookup positive case and unsupported-lookup case; unsupported becomes unknown, not automatic retry. |
+| V4-12-R03 | WHEN native execution reports an event, the adapter SHALL record observed values separately from requested settings. | **V4-12-T03:** Ignored model/effort setting, duplicated events, child usage gaps, and terminal errors; no assumed settings. |
+| V4-12-R04 | WHEN cancellation is requested, the controller SHALL retain a nonterminal cancellation state until the native outcome is established. | **V4-12-T04:** Request accepted but process still running, lost acknowledgement, final usage delayed, and confirmed-stop controls. |
+| V4-12-R05 | WHEN owned execution resources are cleaned up, the adapter SHALL preserve unrelated processes and workspaces. | **V4-12-T05:** Adjacent native session/worktree and process-tree fixtures; permission/network restrictions exercised on the actual boundary. |
+| V4-12-R06 | IF an adapter cannot enforce a required control at the requested granularity, THEN managed preflight SHALL reject that requirement. | **V4-12-T06:** Turn-only versus request-level budgets, unsupported tool denial and version drift; truthful downgrade only with an explicitly different operator request. |
 
-Implement an opt-in controller for one bounded brownfield task: accept goal/constraints/authority and named oracles; validate the environment; obtain only necessary discovery/planning; implement in an isolated authorized tree; produce a runnable vertical slice; verify; repair from real failures; run required independent checks; and return current evidence. Reuse current specialist methods and native execution tools rather than implementing another reasoning engine. The host may make multiple useful internal calls without the user repeatedly saying 'continue'.
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-A task requesting only diagnosis or planning must remain read-only. A user's explicit deliverables, separate-review request, or significant design choice may not be silently removed for economy. For a multi-slice task, record that a slice is complete while the total task remains incomplete. Do not redefine success to the easiest slice.
+**Stop and rollback.** Uncertain native sends remain pending reconciliation. Cleanup touches only owned processes/workspaces; it does not erase state or unrelated native sessions.
 
-Classify failures before recovery: input/schema, environment, permission, transient provider, implementation test, persistent causal uncertainty, or acceptance/design conflict. Mechanical failures get bounded deterministic recovery where safe; ordinary test failures return to the maker; persistent substantive uncertainty can justify a specialist. Repeated identical failure without new evidence triggers a changed approach or checkpoint, not a fresh budget. Reserve-funded verification remains mandatory; a budget-limited result is partial, not accepted.
+---
 
-Model-authored prose is not a runnable milestone. The named smoke/demo/test must exercise actual requested behavior across the relevant boundary. Keep proposed process states separate from ESL's normative lifecycle; do not add ESL states or performatives inside this package. Greenfield remains out of this pilot.
+<a id="v4-13"></a>
 
-| Acceptance | Required verification |
-|---|---|
-| G09-A1: A bounded implementation reaches the named runnable behavior and required checks from one authorized user brief. | Instrumented fixture task plus authorized live pilot; record all user interventions, not just the final answer. |
-| G09-A2: Requested scope and read-only intent survive routing. | Diagnosis-only, explicit review, multi-deliverable, and ambiguous consequential-decision tasks. |
-| G09-A3: Failures use the right bounded recovery and shared budget. | Missing executable, malformed envelope, failed assertion, repeated failure signature, permission denial, and provider interruption. |
-| G09-A4: Partial slices, protected-test edits, or skipped mandatory checks cannot produce completion. | Mutate/omit each independently and assert G02's current-candidate gate stays non-success. |
-| G09-A5: Status reports observable work and concrete blockers, not fabricated progress percentages. | Compare reported milestones/actions with executed events and evidence artifacts. |
+## V4-13 — Compile assignments without mandatory agent chains
 
-**Stop/rollback:** no charter revision, automatic default activation, broad agent swarm, or benchmark claim. An irreducible product decision or authority boundary can require a user answer; continuation prompts for routine phases do not.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-06`, `V4-07`, `V4-12`. Stage gates also apply.
 
-## G10 — Durable task succession and end-to-end managed-path acceptance
+**Starting points:** `EIDOLONS.md`, `roster/routing.yaml`, `methodology/cortex/chain-templates.md`, `V4-06 typed contracts`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-**Primary repository:** Rynaro/eidolons. Start with G09, `cli/src/context.sh`, checkpoint/externalize/handoff implementations, G05 lineage, and ECM policy/pins. Depends on G09.
+**Scope and decisions.** Compile compatible methods into a continuing maker; create separate consultations, isolated writers, or verification workers only for a declared need or requirement. Semantic task interpretation remains fallible; the controller validates the proposed plan rather than claiming natural-language determinism. Use versioned test profiles until real specialist charter changes are accepted in Stage 4.
 
-Carry root task identity, effective policy identity, remaining limits/reservations, candidate/criteria identities, failed approaches, pending checks, authorized scope, and next action through checkpoints and host resumption. Use existing extensibility only where supported. If a public ECM/ECL shape must change, propose the smallest upstream compatible amendment, test it, and sequence producer before consumer; never put undocumented fields into a supposedly conformant payload. Atomos remains compose/verify-only.
+**Implementation sequence.** Implement typed method-use and worker-start operations with explicit authority. Add fusion/reuse and boundary selection using inspectable rules. Test role rebinding at quiescent supported boundaries and independent-checker exclusions.
 
-On recovery, verify payload integrity and re-read current candidate/criteria/environment state. Resume reconciles rather than trusting stale 'complete' prose. Rehydrate the minimum actionable context; references point to current artifacts, not vanished scratch paths. Native replay, child escalation, context succession, and provider switching cannot reset task accounting or duplicate an uncertain side effect. Cross-provider resume is enabled only where both adapters are actually qualified; otherwise produce a portable checkpoint and a clear unsupported reason.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-13-R01 | WHEN compatible methods are applied within one authorized assignment, the compiler SHALL permit their execution in the existing worker. | **V4-13-T01:** One maker uses localization and lite planning; no forced second worker; required independent consultation control still separates. |
+| V4-13-R02 | WHEN an execution boundary is required, the compiler SHALL create a separately identified assignment with its reason recorded. | **V4-13-T02:** Independent verification, incompatible authority, isolated writer, and context separation fixtures; every spawn names its purpose. |
+| V4-13-R03 | WHEN effective assignment authority is resolved, the controller SHALL intersect operator, task, assignment, specialist, and host-enforceable capabilities. | **V4-13-T03:** Deny widening through role card, model message, repository config, or a high-permission parent. |
+| V4-13-R04 | IF role rebinding cannot safely revoke prior capabilities at a supported boundary, THEN the controller SHALL require a new appropriately restricted execution. | **V4-13-T04:** In-flight tool action, reusable old capability, and unsupported host transition; no prompt-only revocation claim. |
+| V4-13-R05 | IF a worker inherits maker conversation or privileged information, THEN the evidence classifier SHALL withhold clean-context verification status. | **V4-13-T05:** New label, conversation fork, and genuine fresh-context invocation controls; same-model use is recorded without statistical-independence claims. |
+| V4-13-R06 | WHEN method use is reported, status SHALL distinguish it from a separate specialist invocation. | **V4-13-T06:** One worker using ATLAS-derived skill is not described as an independent ATLAS audit; actual invocation IDs remain visible. |
 
-Expose a terminal-readable managed-run status/receipt before building GUIs. Distinguish planned, implemented, runnable, current checks passed, ready-for-review, and released using observed facts; only the existing authorized release process can establish released. Implement honest blocked/partial and cancellation outcomes with recovery instructions.
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-| Acceptance | Required verification |
-|---|---|
-| G10-A1: Interrupted/resumed work preserves lineage, scope, pending checks, and consumption. | Terminate after edit, before verification, after provider send, and after checkpoint publication; resume each case. |
-| G10-A2: Stale or tampered checkpoint evidence cannot produce accepted completion or refill a budget. | Mutate checkpoint, code, criteria, native-session reference, and stored policy independently. |
-| G10-A3: Missing memory/MCP/native capability degrades explicitly without destroying local recovery data. | File-only checkpoint roundtrip and missing/failed CRYSTALIUM/atomos/native-session fixtures. |
-| G10-A4: The complete first-host path is demonstrated, not inferred from isolated unit tests. | Authorized task from intake through runnable candidate, independent checks, budget-limited partial case, interruption, and resume; cite adapter/config/version and actual evidence. |
-| G10-A5: Opt-out behavior and rollback preserve user work and truthful completion/accounting. | Existing consumer project on/off comparison, dirty-worktree preservation, and rollback while an uncertain reservation exists. |
+**Stop and rollback.** Preserve explicitly requested deliverables and genuine independent-review requirements. A named role cannot grant tools, erase context, bypass greenfield refusals, or reset budgets.
 
-**Phase 3 exit:** one real qualified host/mode, fixture suite plus authorized live evidence, explicit limitations, and an inspectable result. Do not wait for every sibling or interface to support Gauge before completing this vertical slice; do not claim those unsupported surfaces are managed.
+---
+
+<a id="v4-14"></a>
+
+## V4-14 — Freeze candidates and run protected verification
+
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-05`, `V4-12`, `V4-13`. Stage gates also apply.
+
+**Starting points:** `V4-05 evidence contract`, `existing sandbox/apply/loop code under cli/src/`, `V4-06 workspace and runner interfaces`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
+
+**Scope and decisions.** Run checks against a frozen candidate with separate writable build/temp output. Protect authoritative journal, verification definitions, and optional signing material from the maker. A worktree, process name, or another directory is not a security boundary. Choose a real supported isolation mechanism; downgrade evidence when isolation is unavailable.
+
+**Implementation sequence.** Implement candidate manifests and source freeze. Run controlled oracles in a restricted runner and bind actual invocation/context provenance. Generate receipts and exercise revalidation before promotion to a user branch.
+
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-14-R01 | WHEN mandatory verification begins, the runner SHALL bind the check to a frozen candidate and acceptance/environment identities. | **V4-14-T01:** Attempt concurrent maker edits; tracked/untracked/config/mode mutations; logs identify exactly which source snapshot ran. |
+| V4-14-R02 | WHILE candidate execution is active, the execution boundary SHALL deny writes to authoritative evidence and protected verification definitions. | **V4-14-T02:** Maker shell attempts journal, receipt, oracle and signing-key modification; exercise filesystem/process controls, not tool labels alone. |
+| V4-14-R03 | WHEN a runner finishes a check, the evidence producer SHALL record its actual outcome and invocation provenance. | **V4-14-T03:** Pass/fail/error/cancelled/skipped fixtures; hand-authored success prose cannot replace an observation. |
+| V4-14-R04 | IF required runner isolation or provenance is unavailable, THEN acceptance SHALL withhold the corresponding trusted verification grade. | **V4-14-T04:** Separate label/directory without enforced access controls; missing context evidence and supported-isolation positive case. |
+| V4-14-R05 | IF the target base has changed before authorized candidate application, THEN the application gate SHALL require revalidation of the integration candidate. | **V4-14-T05:** Base moved after checks; dirty target and patch conflict; never apply a previously green diff as an unchecked merge. |
+| V4-14-R06 | WHEN a receipt is projected into a human report, the renderer SHALL preserve distinct integrity, provenance, and acceptance fields. | **V4-14-T06:** Round-trip through canonical record; matching digest does not imply author authentication or semantic correctness. |
+
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
+
+**Stop and rollback.** No automatic merge, push, release, or deployment. Test success is scoped evidence, not proof of oracle adequacy or universal correctness.
+
+---
+
+<a id="v4-15"></a>
+
+## V4-15 — Deliver a runnable slice and resume without losing control
+
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-11`, `V4-12`, `V4-13`, `V4-14`. Stage gates also apply.
+
+**Starting points:** `existing sandbox loop`, `cli/src/context.sh`, `cli/src/context_externalize.sh`, `V4-06 task-state interfaces`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
+
+**Scope and decisions.** One bounded brownfield task from brief to runnable candidate, required checks, or preserved partial/blocker result. One maker owns a coherent patch; classify schema/environment/permission/provider/test/causal/acceptance failures before recovery. Keep current charters: authorized parent application may use proposals; experimental profiles must be explicitly identified until Stage 4 adoption.
+
+**Implementation sequence.** Exercise an instrumented no-model fixture end to end. Add durable checkpoints with lineage, candidate, policy, reservations, pending checks and failed approaches. Run the separately authorized live demonstration on the single qualified adapter.
+
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-15-R01 | WHEN a bounded implementation assignment has sufficient authority and inputs, the delivery loop SHALL progress through its authorized internal phases without requesting routine continuation. | **V4-15-T01:** Record user interventions for fixture and live task; missing consequential product decision is an explicit exception. |
+| V4-15-R02 | WHEN a runnable milestone is reported, the controller SHALL reference an executed check of the requested behavior. | **V4-15-T02:** Stub-only scaffold, prose completion, fake green log and real smoke/integration behavior controls. |
+| V4-15-R03 | IF remaining resources cannot support mandatory work, THEN the delivery loop SHALL preserve progress as a nonaccepted partial or blocked result. | **V4-15-T03:** Exhaust budget before verification and after one completed slice; whole-task acceptance stays incomplete. |
+| V4-15-R04 | IF repeated failure yields no new evidence within the configured bound, THEN recovery SHALL stop repeating that approach. | **V4-15-T04:** Stable failure signature across worker/context switches; mechanical failure does not automatically start costly forensics. |
+| V4-15-R05 | WHEN a task resumes, recovery SHALL preserve its root accounting, authority, candidate identities, and outstanding verification obligations. | **V4-15-T05:** Interrupt before/after send, edit, freeze, check and checkpoint; reconcile uncertain execution before continuing. |
+| V4-15-R06 | IF a checkpoint is stale, tampered, or lacks a usable native session, THEN recovery SHALL report the exact limitation without discarding valid local artifacts. | **V4-15-T06:** Tampered payload, changed criteria, missing native history and optional memory outage; portable checkpoint remains available. |
+
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
+
+**Stop and rollback.** No background promise or silent scope reduction. Missing credentials/irreducible product choices are concrete blockers; routine authorized phases do not require another continue message.
+
+---

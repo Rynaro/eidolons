@@ -1,63 +1,85 @@
-# Phase 1 — Evidence and accounting foundations
+# Stage 1 — Evidence floor and a narrow Go seam
 
-Entry: campaign accepted for planning; no runtime Gauge feature is required. Exit: G01–G03 accepted with observed regression evidence. These are correctness/chore packages, not model-performance experiments. Use [HANDOFF.md](HANDOFF.md); dependencies are owned by [plan.yaml](plan.yaml).
+Fix the existing journal and receipt semantics, then reuse their fixtures at a narrow typed Go boundary. Do not implement future budget state twice.
 
-## G01 — Make the execution journal ordered, atomic, and recoverable
+Read [HANDOFF.md](HANDOFF.md) and [ARCHITECTURE.md](ARCHITECTURE.md). [plan.yaml](plan.yaml) owns package identities, dependencies and source routing. Each table below owns its EARS requirements; verification entries are planned cases, not executed results. Assign one package, and one named slice where applicable.
 
-**Primary repository:** Rynaro/eidolons. **Scope:** `cli/src/ledger.sh`, relevant `cli/tests/` fixtures, directly associated schema/CLI documentation. Start with `commit_event` and the `open|record|status` handlers. New helper/test filenames must follow the actual tree; none is assumed to exist.
+<a id="v4-04"></a>
 
-**Source finding to reproduce:** sequence allocation counts files, predecessor discovery sorts filenames lexicographically, and writers have no shared transaction. The inspection suggests races and incorrect predecessor selection beyond single-digit sequences; write tests before asserting their exact effects.
+## V4-04 — Repair journal ordering and preserve the legacy evidence floor
 
-Implement one serialized append boundary, deterministic numeric ordering, explicit event identity/idempotency, and bounded recovery. Choose the least invasive mechanism that is valid on supported macOS/Linux filesystems and Bash 3.2. Document lock/transaction ownership, timeout, stale-owner recovery, and the supported filesystem boundary. Do not introduce a database or daemon merely because it is convenient. Reuse this append primitive later rather than building competing journals.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-01`. Stage gates also apply.
 
-Atomic publication must not be described as power-loss durability unless sync and recovery behavior actually support that claim. Unknown-run reads must not create directories. Incomplete/corrupt records remain visible as recovery errors, not silently discarded successful history. Retain a non-destructive legacy-read/import story and never overwrite an existing event with another writer's event.
+**Starting points:** `cli/src/ledger.sh`, `cli/src/run.sh`, `schemas/`, `cli/tests/`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-| Acceptance | Required verification |
-|---|---|
-| G01-A1: Sequential appends preserve one numeric order and correct predecessor linkage past 9 and 99. | Append at least 120 events; independently recompute the chain and verify every event. |
-| G01-A2: Concurrent accepted appends are lossless; duplicate request IDs are idempotent. | Concurrent writers with distinct IDs plus repeated identical IDs; compare the resulting ID set, not merely a count. |
-| G01-A3: Interrupted append/lock ownership recovers deterministically without accepting partial JSON or losing published records. | Fault injection before publication, after publication, and during lock ownership; inspect exit status and recovery output. |
-| G01-A4: A read of an unknown run has no filesystem side effects. | Snapshot the fixture tree before/after `status` and compare. |
-| G01-A5: Legacy and platform behavior are explicit. | Read legacy fixtures; run supported Bash/macOS/Linux gates; unsupported filesystems produce a diagnostic rather than an invented guarantee. |
+**Scope and decisions.** Minimal current-kernel repair for G01. Serialize allocation and publication, validate predecessor linkage, and make read paths side-effect-free. Preserve a reusable conformance fixture suite for the Go implementation; do not build future budget transactions twice in Bash.
 
-**Stop/rollback:** no reservations, host control, or routing changes. Preserve original records during migration and allow disabling the new writer only with a documented compatible reader. Return the focused regression suite and a PR.
+**Implementation sequence.** Reproduce numeric-order and concurrent-writer faults. Add a bounded ownership/append primitive and legacy reader checks. Freeze language-neutral input/output and failure fixtures for V4-06.
 
-## G02 — Bind completion to current artifacts and real verification provenance
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-04-R01 | WHEN accepted events are appended to a run, the journal SHALL preserve a unique numeric order with valid predecessor linkage. | **V4-04-T01:** Append 120 events; independently recompute the full chain across 9/10 and 99/100 boundaries. |
+| V4-04-R02 | WHEN concurrent writers submit distinct event identities, the journal SHALL retain every accepted identity exactly once. | **V4-04-T02:** Barrier-synchronized writers plus duplicate submissions; compare identity sets and payloads, not only counts. |
+| V4-04-R03 | IF a writer is interrupted during append, THEN recovery SHALL classify incomplete state without losing published events. | **V4-04-T03:** Inject failure before publication, after publication, and while owning the lock; test stale-owner handling and bounded timeout. |
+| V4-04-R04 | WHEN an unknown run is inspected, the journal reader SHALL leave the filesystem unchanged. | **V4-04-T04:** Snapshot before/after status on absent run; assert explicit unknown result and no new directory. |
+| V4-04-R05 | IF event history is corrupt or unsupported, THEN the reader SHALL withhold a successful evidence projection. | **V4-04-T05:** Malformed JSON, broken chain, duplicate sequence, legacy-version and valid legacy controls; no silent discard. |
 
-**Primary repository:** Rynaro/eidolons. Start with `cli/src/ledger.sh`, `cli/src/run.sh`, ledger/checkpoint schemas under `schemas/`, and existing independent-check fixtures. Depends on G01.
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-**Source finding to reproduce:** `status` remembers an earlier passing checker event even after a later failed check. The checker-independence calculation compares a caller label with an optional environment variable. Neither establishes a current verified candidate or trusted invocation separation.
+**Stop and rollback.** Keep original events readable and never overwrite history during repair/import. Document supported filesystems and distinguish atomic rename from proven power-loss durability.
 
-Define a candidate identity over the declared acceptance-affecting inputs: base revision, tracked and relevant untracked content, test/criteria identity, relevant file modes/symlinks, and verification environment/configuration. A Git HEAD alone is insufficient for a dirty worktree. Exclude the receipt's own output by an explicit rule to avoid recursive hashes; do not exclude actual acceptance-affecting docs or fixtures. Define the latest applicable outcome for each mandatory check and fail conservatively on missing, stale, contradictory, or unreconciled evidence.
+---
 
-Separate caller claims, tool-observed tests, and trusted adapter-observed checker invocations. Missing maker identity or unverifiable checker provenance cannot earn an independent grade. Phase 1 may exercise a trusted fixture adapter; live host provenance remains unavailable until G08. Document the threat boundary: local hashes detect changed bytes; they do not authenticate meaning or defeat an attacker with unrestricted access to the coordinator's files.
+<a id="v4-05"></a>
 
-| Acceptance | Required verification |
-|---|---|
-| G02-A1: A pass followed by an applicable fail is not complete; a later valid recheck can recover. | Exercise pass→fail→pass against the same candidate and mandatory check set. |
-| G02-A2: Candidate/criteria/environment mutation invalidates the affected evidence. | Change tracked code, a required untracked file, protected criteria, and relevant verification configuration independently. |
-| G02-A3: Renamed/missing identities do not manufacture checker independence. | Same invocation with two labels; absent maker; forged caller metadata; genuine separate fixture invocation/context. |
-| G02-A4: All mandatory checks must pass for the current candidate. | Mixed old/new candidate receipts, missing check, cancelled check, unknown side effect, unrelated old failures. |
-| G02-A5: Status remains a projection of evidence rather than model prose. | Change narrative claims without evidence; replay events in valid order; malformed evidence gives a non-success state. |
+## V4-05 — Current-candidate completion and generated evidence
 
-**Stop/rollback:** no new ESL lifecycle states, permissions, or live host claims. Preserve legacy receipts as legacy/unverified rather than laundering them into the new grade. Rollback may remove a new view but must not reintroduce stale-green acceptance.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-04`. Stage gates also apply.
 
-## G03 — Generate evidence views and run cheap gates before review
+**Starting points:** `cli/src/ledger.sh`, `cli/src/check_change_specs.sh`, `schemas/`, `Makefile`, `.github/workflows/ci.yml`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-**Primary repository:** Rynaro/eidolons. Start with `cli/src/check_change_specs.sh`, `Makefile`, `.github/workflows/ci.yml`, `schemas/`, existing ECL builder/verification entrypoints, and the archived `chain-scout-debug-fix/verification.md` referenced by the campaign README. Depends on G02.
+**Scope and decisions.** Correct G02/G03 semantics before Go migration. Distinguish authored claims, observed checks, and derived verdicts. Store volatile evidence once and render views. A legacy/manual checker label is not trusted invocation provenance; record its lower grade honestly. Actual protected execution arrives in V4-14.
 
-Create a minimal canonical completion/evidence record using G02's identities. Record actual commands, exit status, timestamps, environment/version references, check scope, and evidence paths once. Generate volatile summaries from that record rather than hand-maintaining counts, hashes, and verdicts in multiple Markdown/YAML files. Reuse ECL/tonberry builders when they are installed; retain a local file path without requiring an MCP. Record unavailable commands honestly.
+**Implementation sequence.** Characterize pass/fail projection and candidate identity. Add conservative invalidation and explicit evidence grades. Generate summaries and exercise schema/reference/negative gates before review.
 
-Add parsing, actual schema validation, duplicate-key rejection for the new configuration/evidence surfaces, reference checks, and generated-view drift checks where relevant. Syntax-only `jq empty` is not schema validation. Coordinate with existing issue #564 rather than silently broadening this package into a repo-wide YAML-parser migration. Wire each new gate into both the local entrypoint and the real PR workflow; prove a broken fixture fails the actual gate. Leave frozen archived records unchanged.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-05-R01 | WHEN an applicable mandatory check fails after a previous pass, the completion projector SHALL report the candidate as not accepted. | **V4-05-T01:** Pass-fail-pass for the same mandatory check; unrelated historical failure and different-candidate controls. |
+| V4-05-R02 | WHEN acceptance-relevant candidate inputs change, the completion projector SHALL invalidate dependent verification evidence. | **V4-05-T02:** Tracked and required untracked source, symlink/mode, criteria, and relevant environment/configuration mutations; conservative invalidation is acceptable initially. |
+| V4-05-R03 | IF checker provenance is only a supplied label or maker identity is absent, THEN the projector SHALL withhold an independent-verification grade. | **V4-05-T03:** Same invocation renamed twice, absent maker, forged fields, and trusted fixture invocation with recorded context access. |
+| V4-05-R04 | WHEN an evidence view is generated, the renderer SHALL derive volatile fields from the canonical observation record. | **V4-05-T04:** Injected clock/golden fixtures; change a result or hand-edit a view and verify regeneration/drift detection. |
+| V4-05-R05 | IF a mandatory check is missing, stale, cancelled, or tied to another candidate, THEN the completion projector SHALL withhold acceptance. | **V4-05-T05:** Mixed receipts, missing evidence objects, empty check set, and cancelled runner; no prose claim overrides the result. |
+| V4-05-R06 | WHEN a completion claim is rendered, the CLI SHALL distinguish artifact integrity, execution provenance, and acceptance status. | **V4-05-T06:** Assert independent typed fields; a matching hash or successful command alone cannot set all fields to verified. |
 
-Before any behavioral change or paid trial, record the original nexus control SHA from README plus actual installed sibling/host/model/config versions and a development-task manifest. Freeze metric definitions: accepted completion, runnable milestone, total usage including failures, elapsed/active/human-wait time, avoidable user intervention, correctness/maintainability review, and invalid completion. This prepares the baseline, not an optimization result. Detailed trial parameters must be frozen in G06 before live comparisons.
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-| Acceptance | Required verification |
-|---|---|
-| G03-A1: Identical semantic inputs generate stable views; genuine changes update all derived views. | Golden fixtures and repeat generation; volatile time is an explicit injected input. |
-| G03-A2: Invalid/missing/duplicate-key evidence and stale references cannot pass validation. | Independent negative fixtures; test shape, required nonempty checks, and cross-reference identity, not parsing alone. |
-| G03-A3: Generated counts and verdicts cannot drift silently. | Mutate a source check result and a generated view separately; regeneration/check mode detects the discrepancy. |
-| G03-A4: New gates execute in local validation and the PR workflow. | Targeted command evidence plus actual workflow outcome; workflow absence remains a blocker to this criterion. |
-| G03-A5: The pre-change control and measurement definitions survive later implementation. | Validate the recorded baseline manifest; ensure no model calls, credentials, or raw private transcripts are required. |
+**Stop and rollback.** Keep legacy records marked legacy/self-attested; never silently upgrade them. Exclude only declared evidence/build outputs from candidate hashing, not acceptance-affecting source/tests/docs.
 
-**Stop/rollback:** no historical cleanup campaign, fabricated test results, automatic workflow dispatch spending, or default routing changes. The producer record is authoritative; derived output can be rebuilt. Exit Phase 1 only when current-candidate correctness and journal integrity are demonstrated.
+---
+
+<a id="v4-06"></a>
+
+## V4-06 — Introduce a thin Go controller and typed execution contracts
+
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-04`, `V4-05`. Stage gates also apply.
+
+**Starting points:** `cli/eidolons`, `cli/src/ledger.sh`, `schemas/`, `docs/architecture.md`, `Junction: internal/ (inspect actual tree)`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
+
+**Scope and decisions.** Introduce a narrow opt-in Go command seam, not full CLI parity. Define separate profile, assignment, worker, context, authority, candidate, receipt, and root-task identities. Choose and document one transactional local storage implementation and supported filesystem/durability boundary; SQLite is a candidate, not assumed installed. Reuse verified Junction/tonberry/atomos code only after license and dependency review. Keep protocols modular; no single-page spec constraint.
+
+**Implementation sequence.** Freeze typed interfaces and compatible version rules from existing fixtures. Implement a local vertical seam with injected clock/ID/adapter dependencies and a single authoritative writer. Run differential and recovery fixtures through legacy and Go paths.
+
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-06-R01 | WHEN a profile is loaded, the controller SHALL represent its identity separately from worker and context identities. | **V4-06-T01:** One worker with two methods and two workers with one profile; assert distinct identifiers and references. |
+| V4-06-R02 | WHEN an opt-out consumer invokes an existing command, the CLI SHALL preserve its established behavior. | **V4-06-T02:** Supported command compatibility fixtures, stdout/stderr/exit codes, and no-Gauge install controls. |
+| V4-06-R03 | IF controller state uses an unsupported version, THEN the controller SHALL reject managed execution without mutating that state. | **V4-06-T03:** Future schema, missing migration, and partially imported fixture with read-only diagnostic. |
+| V4-06-R04 | WHEN legacy journal state is imported explicitly, the migration SHALL preserve event identity and original evidence grade. | **V4-06-T04:** Repeat import, interruption, rollback read, and one-writer tests against V4-04/V4-05 fixtures. |
+| V4-06-R05 | WHEN an authoritative state mutation commits, the store SHALL publish its dependent state updates atomically within the declared storage boundary. | **V4-06-T05:** Fault injection, concurrent mutation and replay tests; document actual durability settings and network-filesystem exclusions. |
+| V4-06-R06 | WHEN fixture execution completes through the Go seam, the controller SHALL emit observed results without invoking an LLM for bookkeeping. | **V4-06-T06:** Fake adapter with model-call counter; hash, status, retry count, and receipt generation create no model request. |
+
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
+
+**Stop and rollback.** Opt-out consumers stay on the shell path. Migration is explicit and resumable; no dual-write source of truth and no automatic upgrade of evidence trust.
+
+---

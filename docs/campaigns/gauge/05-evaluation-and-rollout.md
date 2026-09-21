@@ -1,69 +1,84 @@
-# Phase 5 — Evaluation, calibration, and controlled rollout
+# Stage 5 — Evaluation, migration, and evidence-scoped rollout
 
-Entry: Phase 4's required slices accepted, the G06 protocol frozen, and operator-authorized live allowances supplied when needed. Exit: G16–G18 accepted for the evidence-supported scope. An inconclusive/no-win evaluation can complete the investigation without authorizing default promotion. Read [HANDOFF.md](HANDOFF.md); [plan.yaml](plan.yaml) owns dependencies.
+Separate structural changes from workflow changes and model routing. An inconclusive investigation can finish without authorizing a default flip or release.
 
-## G16 — Build the acceptance-and-economics evaluation harness
+Read [HANDOFF.md](HANDOFF.md) and [ARCHITECTURE.md](ARCHITECTURE.md). [plan.yaml](plan.yaml) owns package identities, dependencies and source routing. Each table below owns its EARS requirements; verification entries are planned cases, not executed results. Assign one package, and one named slice where applicable.
 
-**Primary repository:** Rynaro/eidolons. Start with existing `evals/`, CLI eval runners, live-eval workflow, G03 evidence records, G05 telemetry, and G06's frozen protocol. Depends on G15.
+<a id="v4-21"></a>
 
-Implement the prerecorded protocol without tuning its success margins after seeing outcomes. The main comparison arms are native host without Eidolons, original Eidolons control pinned before this campaign, Gauge Balanced, and Gauge Conserve. Accelerate is a separate candidate comparison when its intended latency benefit and extra budget are authorized. Keep host/model/version, task, environment, acceptance oracle, timeout, permissions, and billing mode comparable. Report any unavoidable difference as a confound rather than attributing it to Gauge.
+## V4-21 — Evaluation instrument with auditable denominators
 
-Start with the same model to isolate workflow effects; model selection is evaluated separately in G17. Stratify tasks across localized repairs, unfamiliar bugs, multi-file features, environment failures, flaky/nondeterministic tests, and higher-risk changes in disposable environments. The primary pilot scope remains bounded brownfield work. Hidden/held-out checks must be independent of the maker and inaccessible for editing; useful visible tests remain available to the maker. Separate development, calibration, and held-out task sets. Prevent online memory or repeated exposure from leaking held-out answers; test realistic warm-memory performance separately with controlled state.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-09`, `V4-15`, `V4-20`. Stage gates also apply.
 
-Measure the original task outcome, not merely the first easy slice. Count all attempted tasks and all associated resources, including planning, failed runs, checkers, cancelled/abandoned work, and reconstruction. Report total consumption divided by independently accepted tasks in each compatible unit; if none are accepted, report undefined/no accepted completions rather than a misleading zero. Do not blend opaque subscription allowance with token or money estimates. Report completion rate, time to first runnable behavior, end-to-end and active/human-wait latency, avoidable user interventions, invalid-completion rate, regressions, and maintainability/delayed-rework review with its observation window.
+**Starting points:** `evals/`, `.github/workflows/live-eval.yml`, `vivi-measurement: RESULTS.md and runners (locate)`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-Use paired/randomized order where appropriate, repeated trials for stochastic behavior, uncertainty intervals, and a clear treatment of censored/timeout runs. Small samples may be descriptive only; a p95 from insufficient observations is not a stable service claim. An extra review has a recorded cost. Fixture runs are labeled simulated and never counted as real model outcomes. No provider trial runs without explicit account/pool, limit, allowed models, and retention authorization.
+**Scope and decisions.** Implement the V4-09 preregistered protocol. Compare native host, original Eidolons, structural-only consolidation, and Gauge/workflow changes before adaptive model selection. A structural-only arm needs its recorded intermediate ref or valid isolated flags; do not infer a structural gain from a bundled treatment. Import measurement fixtures only with provenance/rights. Keep public regressions, calibration and untouched holdout distinct.
 
-| Acceptance | Required verification |
-|---|---|
-| G16-A1: Every arm uses the intended pinned implementation/configuration and original task/oracle. | Provenance manifest, differential fixtures, baseline clone verification, and hidden-check isolation test. |
-| G16-A2: Failed, interrupted, and zero-success runs remain in the metrics. | Synthetic known-outcome dataset with independent expected totals, denominators, censoring, and mixed-unit negatives. |
-| G16-A3: Scope, model, memory, and environment confounds are surfaced. | Deliberately mismatched arm and contamination fixtures; reports refuse unsupported equivalence. |
-| G16-A4: Protocol/margins/stopping rules precede comparative outcome inspection. | Verify G06 protocol digest/timestamp and calibration/holdout access history; deviations are recorded before a new trial. |
-| G16-A5: Budget/authority caps and privacy are preserved during evaluation. | Budget-exhaustion and sandbox escape controls, log redaction, no-credential fixture mode, and separately authorized real run. |
+**Implementation sequence.** Build known-outcome metric fixtures and leakage checks. Add pinned arm/environment/permission/billing manifests. Run live trials only within explicit allowances and report blocked or inconclusive results honestly.
 
-**Stop/rollback:** no public performance claims or default flips from synthetic, confounded, or insufficient results. Missing live allowance produces a runnable evaluator and a blocked live-evaluation criterion, not fabricated data.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-21-R01 | WHEN evaluation arms are executed, the evaluator SHALL record their actual model, harness, policy, environment, acceptance and billing identities. | **V4-21-T01:** Intentional mismatched arm, pinned control and requested-versus-observed model fixtures; report confounds. |
+| V4-21-R02 | WHEN cost per accepted task is computed, the evaluator SHALL include consumption from all attempted tasks in each compatible unit. | **V4-21-T02:** Failures, abandoned/cancelled/timeouts, checker work and zero successes; zero-success ratio is undefined, not zero. |
+| V4-21-R03 | WHEN a held-out task runs, the evaluation boundary SHALL isolate its answers from maker-accessible memory, reference patches, and prior run artifacts. | **V4-21-T03:** Leakage canaries and visible-test positive controls; production failures used for tuning remain development cases. |
+| V4-21-R04 | IF a run uses a gold patch or simulated host, THEN the evaluator SHALL classify it as plumbing evidence rather than model capability. | **V4-21-T04:** Existing --smoke workflow plus actual live-run discriminator; unavailable live credentials remain blocked. |
+| V4-21-R05 | WHEN results are reported, the evaluator SHALL include completion, runnable latency, total latency, interventions, invalid acceptance, and quality-review outcomes with uncertainty. | **V4-21-T05:** Independent recomputation of known datasets, censored outcomes, small-sample limitations and delayed-rework observation window. |
 
-## G17 — Ablate overhead and calibrate the candidate presets
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-**Primary repository:** Rynaro/eidolons; targeted member changes only for already-defined flags in RAMZA/Vivi or other accepted Phase 4 slices. Depends on G16.
+**Stop and rollback.** No smoke/gold-patch run counted as capability evidence. Private tasks are not assumed contamination-free.
 
-Run experiments in bounded batches on development/calibration tasks before the untouched held-out evaluation. Isolate the mechanisms rather than changing everything simultaneously: generated versus manual evidence workflow; lean versus current planning; continuing versus fresh maker context; need-based versus current specialist chains; reuse versus rediscovery; and only then adaptive model/effort selection. Hold acceptance, authority, and the external oracle constant. Keep negative/inconclusive results, not just winning tasks.
+---
 
-Evaluate sequential escalation versus deliberate strong-model-first execution on task strata. A small per-call saving is not enough when retries or user intervention erase it. Test parallelism only on genuinely independent work and measure both critical-path latency and total usage; include merge/coordination cost. Preserve an explicit requested specialist or deliverable even when a cheaper route exists. Routing confidence is heuristic until calibration supports an interpretation; do not present arbitrary rubric thresholds as success probabilities.
+<a id="v4-22"></a>
 
-Derive conservative candidate limits and reserves from observed distributions on the calibration set. Record sample size, task/host scope, model availability, capability granularity, and uncertainty. Keep the three presets understandable and their quality floor unchanged. An unqualified model or unavailable host feature is excluded; do not silently substitute and then attribute results to the selected configuration. Freeze selected parameters before using holdout outcomes.
+## V4-22 — Ablate heuristics and calibrate economic presets
 
-The decision report must state win/no-win/inconclusive per mechanism and per task stratum, the actual quality/cost/latency trade-off, and which changes should remain off. Publish only redacted permitted evidence; do not expose native session transcripts, credentials, private repository contents, or hidden evaluation answers prematurely.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-21`. Stage gates also apply.
 
-| Acceptance | Required verification |
-|---|---|
-| G17-A1: Each claimed benefit is linked to a specific controlled comparison. | Machine-readable arm/flag/config IDs, actual observed model, all attempt records, and independent metric recomputation. |
-| G17-A2: Preset calibration does not relax acceptance or exploit holdout leakage. | Compare oracle/authority digests and parameter-freeze history; inspect memory/task-set isolation. |
-| G17-A3: Lower-cost policy is evaluated on end-to-end accepted work, not only cheap responses. | Include rework, specialist/checker consumption, failures, and user interventions; stratified quality review. |
-| G17-A4: Parallelism and context claims include their actual overhead. | Wall/active time, critical-path trace, total consumption, merge/reconstruction cost, and no-progress controls. |
-| G17-A5: Negative/inconclusive results remain visible and defaults unchanged. | Full task/arm manifest and decision report; reject missing failed arms and cherry-picked summaries. |
+**Starting points:** `evals/`, `V4-09 frozen protocol`, `V4-16/V4-17/V4-18 strategy flags`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
 
-**Stop/rollback:** stop a trial at its predeclared budget or safety/quality boundary. Revert candidate flags, not test expectations. A mechanism that fails to earn adoption stays off; the investigation is still valuable.
+**Scope and decisions.** Compare one mechanism at a time on development/calibration tasks: generated evidence, method fusion, lean planning, maker continuity, targeted context, and deliberate parallelism; model/effort selection follows workflow isolation. Heuristics have applicability and retirement conditions. Do not buy reduced cost by removing mandatory verification.
 
-## G18 — Scope-limited rollout, migration, and operational acceptance
+**Implementation sequence.** Run bounded matched batches in preregistered order. Freeze candidate parameters before holdout access. Produce win/no-win/inconclusive findings per supported task/host configuration.
 
-**Primary repository:** Rynaro/eidolons. Conditional producer/consumer release slices use the repository versions actually adopted in Phase 4. Depends on G17.
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-22-R01 | WHEN a mechanism is evaluated, the comparison SHALL hold mandatory acceptance and authority constant across its arms. | **V4-22-T01:** Oracle/permission digests and budget/host manifest comparison; lowered acceptance invalidates the claim. |
+| V4-22-R02 | WHEN preset parameters are selected, calibration SHALL use only the designated development and calibration data. | **V4-22-T02:** Freeze-before-holdout chronology, memory state controls and prohibited holdout-driven tuning test. |
+| V4-22-R03 | WHEN a performance benefit is claimed, the report SHALL identify the isolated mechanism and include its coordination and reconstruction costs. | **V4-22-T03:** Warm/fresh contexts, strong-first/sequential escalation and parallel branches include integration/reviewer overhead. |
+| V4-22-R04 | IF a mechanism lacks supported benefit under the frozen criteria, THEN promotion SHALL leave it unpromoted. | **V4-22-T04:** No-win, inconclusive, quality regression and incomplete-cost fixtures; no cherry-picked winning-task summary. |
+| V4-22-R05 | WHEN a trial reaches its authorized resource or safety boundary, the evaluator SHALL stop further trial dispatch. | **V4-22-T05:** Injected overspend/unknown exposure/authority violation and late usage; preserve partial data without self-authorized overage. |
 
-Prepare an explicit promotion decision based on G06's predefined criteria and G16/G17's results: promote for a named host/task/configuration scope, retain opt-in, or decline promotion. Include held-out evidence with uncertainty, unresolved limitations, support levels, and a maintenance plan for version-sensitive host interfaces. Do not claim cross-host savings, exact quota control, or all-project completion from one pilot. A research citation or a green fixture suite cannot authorize promotion.
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
 
-Test fresh install, no-Gauge existing project, upgraded opt-in project, legacy journal/receipt migration, independently versioned members/contracts, optional-server absence, dirty worktrees, interruption, and rollback with outstanding reservations. Preserve user settings and native credentials/sessions. Idempotent migration is non-destructive and reports unsupported legacy state honestly. Package/release producer changes before consuming their exact tags/hashes in the nexus; publication and merge require separate operator authorization.
+**Stop and rollback.** A null result can complete the investigation while keeping defaults off. Do not change oracles or margins after observing results.
 
-Document Conserve/Balanced/Accelerate behavior, actual enforceable units/granularity, unsupported capabilities, setup, diagnostics, interpretation of unknown quota, recovery, and escalation. Show one runnable example from an authorized observed result, plus a budget-limited partial example that does not claim success. Optional GUIs must not become installation prerequisites.
+---
 
-Roll out opt-in first, then only the approved scope/defaults. Add regression fixtures for observed failures and a reversible feature switch. Accounting uncertainty, invalid completion, authority violation, or material quality regression triggers a stop/review according to the frozen protocol. Provider/host upgrades invalidate affected capability assumptions until requalification. Preserve remaining budgets and uncertain reservations through disable/rollback; never turn an accounting error into permission to spend.
+<a id="v4-23"></a>
 
-| Acceptance | Required verification |
-|---|---|
-| G18-A1: Promotion scope and verdict follow the preregistered evidence criteria. | Independent review of protocol, holdout report, trade-offs, limitations, and decision; no-win/inconclusive has no default flip. |
-| G18-A2: Installation/migration/rollback preserve opt-out behavior and user data. | Supported platform matrix, repeated operations, dirty workspace, legacy state, and outstanding reservation scenarios. |
-| G18-A3: Published documentation matches tested capabilities and actual package versions. | CLI/README/host matrix comparison; concrete producer/consumer refs and denied unsupported controls. |
-| G18-A4: Release and default changes occur only with explicit approval. | Inspect PR/release sequence and approvals; no automated self-promotion from a benchmark result. |
-| G18-A5: Operational regressions have an effective stop, recovery, and requalification path. | Fault injection for lost telemetry, stale host capabilities, invalid completion, and rollback during a run. |
+## V4-23 — Evidence-scoped migration, release, and optional repository retirement
 
-**Campaign exit:** accepted implementation artifacts and an evidence-backed adoption decision for a declared scope. Remaining optional integrations, greenfield expansion, further models, and future research become separate work, not unbounded prerequisites for shipping the proven path.
+**Default source owner:** `Rynaro/eidolons`. **Prerequisites:** `V4-02`, `V4-03`, `V4-10`, `V4-22`. Stage gates also apply.
+
+**Starting points:** `cli/install.sh`, `cli/src/upgrade_self.sh`, `MIGRATION.md`, `.github/workflows/release-nexus.yml`, `roster/`. Resolve symbolic/new paths in the actual checkout; they are not claims those interfaces already exist.
+
+**Scope and decisions.** Prepare a v4.0.0-compatible migration only for actually implemented breaks; this planning PR changes no version. Use a staged verified binary path plus an optional developer go install path. Publish modular contracts and approved package versions before dependent adoption. Archive only explicitly authorized, migrated components after replacement and rollback evidence. Retain optional memory/UI deployment.
+
+**Implementation sequence.** Test fresh install, affected legacy recovery, v3 migration, rollback and offline/no-service modes. Review held-out promotion scope and compile the release evidence. Perform publication/archival only under separate explicit operator authorization.
+
+| ID | EARS requirement | Planned verification |
+|---|---|---|
+| V4-23-R01 | WHEN a supported migration is authorized, the migrator SHALL stage and verify the replacement before switching the active installation. | **V4-23-T01:** Affected pre-v1.41.1, v2.20, v3.3.1, fresh, dirty and interrupted upgrade fixtures; no force-integrity bypass. |
+| V4-23-R02 | IF migration or post-switch validation fails, THEN recovery SHALL preserve a usable previous installation and user state. | **V4-23-T02:** Failure at staging/switch/smoke plus repeat migration, native session and pending reservation controls. |
+| V4-23-R03 | WHEN a release candidate is evaluated, the release gate SHALL require the declared deterministic checks and applicable authorized live evidence. | **V4-23-T03:** RC matrix distinguishes code/behavior change from docs-only; missing required live evidence cannot be replaced by smoke success. |
+| V4-23-R04 | IF promotion evidence is insufficient or approval absent, THEN release automation SHALL leave behavioral defaults unchanged. | **V4-23-T04:** Inconclusive/no-win and missing operator approval; prepared report is not permission to tag, merge or publish. |
+| V4-23-R05 | IF a component still has an unmigrated supported consumer, THEN repository retirement SHALL remain blocked. | **V4-23-T05:** Inventory plus tested replacement, licenses/history, support window and rollback; explicit archive authorization required. |
+| V4-23-R06 | WHEN a supported host version changes, the capability catalogue SHALL invalidate affected qualification until rechecked. | **V4-23-T06:** Version-sensitive cancellation/usage/tool behavior; managed claims stop where required controls are no longer established. |
+
+**Exit.** Map every requirement above to observed evidence or a named blocker. Read HANDOFF.md for mechanical, independent, CI and live-evidence distinctions. Unavailable mandatory evidence prevents acceptance; a fixture-only candidate can be ready for review without claiming live qualification.
+
+**Stop and rollback.** Preserve user settings, native sessions, candidate work, evidence and outstanding reservations. A rollback cannot restore permissions to overspend or accept stale evidence.
+
+---

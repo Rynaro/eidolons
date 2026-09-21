@@ -1,67 +1,77 @@
-# Gauge: quota-efficient verified delivery
+# Eidolons v4 — capability contracts, Gauge, and verified delivery
 
-**Status: proposed implementation campaign; no augmentation is implemented by this plan.**
+**Proposed execution campaign, revision 2 · revised September 21, 2026.** This recomposes PR #598 in place. It replaces the earlier G01–G18 assignment plan; it does not implement any runtime augmentation, change a version, merge a PR, or authorize a release. Existing history remains accessible at `4ef8aa38f28b8e0e8e6869cb35607e7007cd4ca3`.
 
-Prepared 2026-09-18. Nexus source baseline: `752194ef5ceaa8cee1f5995fd0d374888696d8fc` (main inspected on the preparation date). The preceding architecture review is the motivation, not a benchmark. Source-inspection findings must be reproduced before being treated as confirmed runtime failures.
+## Product outcome
 
-## Outcome
+One bounded user assignment should reach an accepted runnable result, or preserved and explicitly incomplete progress, with less unnecessary orchestration. Optimize resources per accepted task, including failures and verification, not the price of a single response. Preserve named expertise without equating each method with another worker. The Gauge controls economic preferences, never permissions or acceptance.
 
-Optimize the total resources required to produce an accepted, runnable result, not the price of an isolated model turn. Preserve task acceptance and authority boundaries while adapting coordination, exploration, model effort, and concurrency to available resources. One user brief may produce many useful internal tool calls; unnecessary requests for the user to restart already-authorized work are the waste to remove.
+Source baseline: `Rynaro/eidolons@752194ef5ceaa8cee1f5995fd0d374888696d8fc` (v3.3.1). Re-pin actual code and relevant sibling revisions at assignment start; keep this original control for comparisons. The proposed breaking release target is v4.0.0, not a colliding new v3 tag. No target date or savings percentage is promised.
 
-Gauge is nexus-owned policy, not another agent, mandatory MCP, or replacement coding harness. Conserve, Balanced, and Accelerate are candidate preferences, not proven operating points. They never grant permissions, relax acceptance, or guarantee a provider's external bill.
+## Start with V4-01
 
-## Ordered campaign
+Read [HANDOFF.md](HANDOFF.md), [ARCHITECTURE.md](ARCHITECTURE.md), and only the assigned stage section. [plan.yaml](plan.yaml) owns dependency/assignment metadata; the stage tables own requirement text. Each of the 23 packages has EARS requirements, paired planned verification cases, scope, implementation steps, prerequisites, and a stop/rollback boundary. There are 128 requirement/test pairs in this revision; this count is descriptive, not a coverage score.
 
-| Order | Work packages | Plan | Exit evidence |
-|---|---|---|---|
-| 1 | G01–G03 | [Evidence and accounting foundations](01-foundations.md) | Journal recovery and current-candidate verification regressions pass; generated evidence is mechanically checked. |
-| 2 | G04–G06 | [Persistent policy and observation](02-policy-and-observation.md) | Policy resolves reproducibly; IDs and signals reconcile; unsupported controls remain explicit; baseline and trial protocol are frozen. |
-| 3 | G07–G10 | [One managed delivery path](03-managed-delivery.md) | One qualified host performs an authorized bounded task through a runnable slice and independent checks, without resetting its budget. |
-| 4 | G11–G15 | [Methodology and ecosystem adaptation](04-methodology-and-ecosystem.md) | Leaner methods, routing, context, and interface changes remain individually switchable and preserve their safety/acceptance contracts. |
-| 5 | G16–G18 | [Evaluation and controlled rollout](05-evaluation-and-rollout.md) | Held-out results support a declared scope of adoption; otherwise defaults remain unchanged and the result is reported honestly. |
+| Stage | Packages | Delivery gate |
+|---|---|---|
+| [0 — Stabilize](00-stabilization.md) | V4-01–V4-03 | Current integrity, affected legacy upgrade and publication validation regressions. |
+| [1 — Evidence and Go seam](01-foundations.md) | V4-04–V4-06 | Ordered journal, current-candidate evidence, narrow typed controller seam with compatibility. |
+| [2 — Policy and packaging](02-policy-and-observation.md) | V4-07–V4-10 | Persistent Gauge, honest usage/entitlement signals, frozen protocol, compiled coupled packages. |
+| [3 — Managed demonstrator](03-managed-delivery.md) | V4-11–V4-15 | One qualified host; atomic reservations; conditional worker boundaries; protected verification; runnable delivery and recovery. |
+| [4 — Specialist adoption](04-methodology-and-ecosystem.md) | V4-16–V4-20 | Explicit lean/continuity profile amendments, roster adoption, context economy and usable CLI. |
+| [5 — Evaluate and release](05-evaluation-and-rollout.md) | V4-21–V4-23 | Honest comparisons, calibrated presets, migration and scope-limited promotion; no evidence means no default flip. |
 
-[plan.yaml](plan.yaml) is the canonical assignment/dependency index. Phase documents own acceptance criteria. Do not copy their full text into tracking issues or alternative specifications. This folder is a campaign, not an ESL change folder: each implementation uses the target project's existing right-sizing/lifecycle process when applicable. Nothing here declares a change verified or archived.
+Stage gates and package dependencies both apply. V4-02/V4-03 may run in separate lanes after V4-01; V4-16/V4-17/V4-19 after the managed demonstrator can also proceed independently. Overlapping sources/state remain serialized. A ready-for-review fixture implementation is not an accepted live-managed capability. Missing live evidence is a scoped blocker, not an excuse to invent it or substitute a smoke result.
 
-The normal first assignment is **G01**. Advance only after predecessor acceptance is recorded. G11, G12, and G14 may proceed in separate repository/worktree lanes after G10; all other ordering follows the manifest. A phase gate requires every package in that phase. A requested assignment does not authorize the harness to implement its successors.
+## What changed from the previous plan
 
-## Delegation
+The design now includes a narrow Go controller, profile/worker/context identity separation, conditional method fusion, explicit role/authority transitions, durable dispatch intent and recovery, protected frozen-candidate verification, compiled source packaging, and billing-mode eligibility. Current security fixes come first. A typed stateful implementation is not built fully in Bash just to be ported later. Consolidation preserves protocol/deployment/trust boundaries; archive and purge operations are deferred until tested consumer migration and explicit authorization.
 
-Read [HANDOFF.md](HANDOFF.md) and only the assigned package's phase section. Give the harness a work-package ID, target checkout, and explicit execution/verification allowance. It should inspect the named paths, reproduce the relevant failure, implement the smallest coherent change, run mechanical checks, and return a reviewable PR plus evidence. It must not re-audit the entire ecosystem or write another campaign plan.
+Old IDs are retired rather than silently reassigned. Their original requirements remain historical at the previous plan commit; the following map describes where their intent went, not a claim that all old wording is still normative.
 
-For multi-repository integration, use one PR per repository and explicit tested producer/consumer versions. Publish a sibling contract or package before updating nexus pins. Publishing, merging, releases, deployments, external spend, and broad permission changes require separate authorization; this campaign is not that authorization.
-
-## Invariants for every package
-
-- Budget preference never overrides permissions, immutable acceptance, protected tests, user-requested deliverables, or a specialist's current charter. Charter changes require an explicit tested revision.
-- Provider allowance, tokens, context occupancy, and estimated money are distinct quantities. Unknown telemetry is not zero and not unlimited. Observed, estimated, self-attested, and unsupported values remain distinguishable.
-- All descendants, retries, checker calls, and resumptions inherit a root task's accounting. No fresh allowance through an agent/provider/context switch.
-- An existing opt-out project retains current behavior. New behavioral paths remain opt-in until G18. Collectors may fail open; managed dispatch must not silently proceed when its required budget/authority guarantees are unavailable.
-- Keep Bash 3.2 compatibility, stdout/stderr discipline, deterministic configuration, no config evaluation, idempotent installation, and host-owned settings preservation. Do not add a runtime dependency without a documented packaging/compatibility decision.
-- Do not weaken a test to manufacture a pass, regenerate integrity over unexplained changed evidence, or claim independence from two different labels. Mechanical checks precede LLM review. Cosmetic/out-of-scope improvements do not reopen acceptance.
-
-## Evidence, not paperwork
-
-Use one authoritative machine record per implementation and generate volatile views from it. A passing local check is not a passing CI run; a parsed file is not a validated schema; an authenticated invocation is not proof of semantic correctness. Record actual commands, versions, exit statuses, candidate/criteria identities, and evidence references. Store logs outside the model's working conversation and avoid duplicating counts and hashes in prose.
-
-An unavailable runtime, credential, CI runner, or independent checker is a named blocked check, never an implied pass. Tests described in this plan are planned tests, not execution results.
-
-## Baseline and ownership
-
-The source map below is a starting set, not an exhaustive read list. Re-pin current target SHAs when each assignment begins and reconcile only relevant drift.
-
-| Concern | Starting evidence / owner |
+| Previous package | Revised packages |
 |---|---|
-| Experimental journal and completion projection | [ledger.sh at baseline](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/cli/src/ledger.sh) |
-| Existing cost surfaces | [telemetry.sh](../../../cli/src/telemetry.sh), [trace.sh](../../../cli/src/trace.sh), [context.sh](../../../cli/src/context.sh), [context policy](../../../roster/context-policy.yaml) |
-| Routing, discovery, and host boundaries | [EIDOLONS.md](../../../EIDOLONS.md), [chain templates](../../../methodology/cortex/chain-templates.md), [harness_hook.sh](../../../cli/src/harness_hook.sh), [README](../../../README.md) |
-| Repeated evidence corrections | [archived verification record](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/.spectra/changes/archive/2026-08-09-chain-scout-debug-fix/verification.md) |
-| Actual development gates | [Makefile](../../../Makefile), [CI workflow](../../../.github/workflows/ci.yml), [CLAUDE.md](../../../CLAUDE.md) |
-| Methodology revisions | Rynaro/Ramza and Rynaro/Vivi first; other roster members only through the targeted adoption slices in G13. |
-| Contract ownership | Rynaro/eidolons-eiis: packaging; Rynaro/eidolons-ecl: envelopes; Rynaro/eidolons-esl and Rynaro/tonberry: lifecycle; Rynaro/eidolons-ecm and Rynaro/atomos: context vocabulary and compose/verify. |
-| Optional supporting integrations | Rynaro/Junction, Rynaro/atlas-aci, Rynaro/crystalium, Rynaro/GAMBIT, and Rynaro/magicite. No mandatory new server or frontend. |
+| G01 | V4-04, V4-06 |
+| G02 | V4-05, V4-14 |
+| G03 | V4-03, V4-05 |
+| G04 | V4-07 |
+| G05 | V4-08 |
+| G06 | V4-09 |
+| G07 | V4-11 |
+| G08 | V4-12 |
+| G09 | V4-13, V4-15 |
+| G10 | V4-15 |
+| G11 | V4-16 |
+| G12 | V4-17 |
+| G13 | V4-10, V4-13, V4-18 |
+| G14 | V4-19 |
+| G15 | V4-20 |
+| G16 | V4-21 |
+| G17 | V4-22 |
+| G18 | V4-23 |
 
-Sibling paths named in phase documents were entrypoints examined in the preceding review, not a frozen multi-repository release set. Capture their actual commit and declared contract versions before changing them. Do not copy private client implementation details into this public campaign.
+V4-01/V4-02 add urgent stabilization; V4-06/V4-10/V4-13/V4-14 deepen architecture and execution boundaries beyond the earlier plan. Do not run an old Gxx handoff against this revision.
 
-## Explicit non-goals
+## Planning versus execution evidence
 
-No model training, quota circumvention, credential scraping, subscription pooling, automatic paid overages, universal dollar/token/quota conversion, new cloud control plane, global renaming campaign, wholesale rewrite, or blanket removal of review. Greenfield remains a separately authorized charter/bootstrap decision; the first managed delivery pilot uses bounded brownfield work.
+All listed requirements are authored targets. All listed Txx cases are planned verification. Local structural checks of these documents do not prove the future system works, authenticate checker independence, validate every semantic interpretation, or demonstrate EARS-generated executable tests. EARS is requirements notation, not Gherkin and not a test runner.
+
+Keep one canonical requirement statement and reference its ID from tests, receipts and issues. Do not manufacture additional plan/critique/promotion documents for every small correction. Existing ESL applies where the target project requires it; this folder is a campaign, not a falsely verified ESL change.
+
+## Source anchors and limits
+
+| Evidence | Use in this plan |
+|---|---|
+| [Current integrity helper](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/cli/src/lib.sh), [#562](https://github.com/Rynaro/eidolons/issues/562) | Reproduce and repair policy fail-open behavior in V4-01. |
+| [#566](https://github.com/Rynaro/eidolons/issues/566) | Include affected v1.41.0-or-earlier installs, not only v2/v3. |
+| [#563](https://github.com/Rynaro/eidolons/issues/563), [#564](https://github.com/Rynaro/eidolons/issues/564) | Validate authored/published metadata; do not infer every existing record is corrupt. |
+| [Current MCP templates](https://github.com/Rynaro/eidolons/tree/752194ef5ceaa8cee1f5995fd0d374888696d8fc/cli/templates/mcp) | Recheck actual wiring; historical #205/#465 reports are not proof the current generator still lacks their fixes. |
+| [Cortex](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/EIDOLONS.md), [ledger](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/cli/src/ledger.sh) | Existing delegate-by-default and experimental evidence semantics must be changed explicitly. |
+| [Live eval workflow](https://github.com/Rynaro/eidolons/blob/752194ef5ceaa8cee1f5995fd0d374888696d8fc/.github/workflows/live-eval.yml) | Gold-patch smoke is plumbing evidence, not measured coding capability. |
+| [Mavin's EARS guide](https://alistairmavin.com/ears/) | Pattern reference for the authored requirements. |
+
+The source review did not execute the product tests. Existing research motivates candidate strategies, not a performance guarantee. Runtime dependency versions, authentication permissions, native capabilities and billing modes must be rechecked during the responsible package.
+
+## Non-goals
+
+No new mandatory cloud service, universal quota conversion, credential scraping, subscription circumvention, automatic paid overage, all-host parity promise, wholesale native coding-loop rewrite, instantaneous removal of context already seen, one-page normative-spec target, or arbitrary repository/doc-size quota. No automatic deletion of `.spectra/`, archival of sibling repositories, private-client disclosure, or blanket weakening of specialist refusals.
