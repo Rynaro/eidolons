@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, one fixture-qualified native adapter with durable dispatch and cancellation, assignment compilation without mandatory agent chains, protected candidate freeze / oracle qualification, and an observable runnable-slice delivery demonstrator with recovery; it does not provide full CLI parity, live harness reconstruction, live host qualification, or universal correctness claims. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md), [V4-12 receipt](campaigns/gauge/receipts/V4-12.md), [V4-13 receipt](campaigns/gauge/receipts/V4-13.md), [V4-14 receipt](campaigns/gauge/receipts/V4-14.md) and [V4-15 receipt](campaigns/gauge/receipts/V4-15.md) for tested scope and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, one fixture-qualified native adapter with durable dispatch and cancellation, assignment compilation without mandatory agent chains, protected candidate freeze / oracle qualification, an observable runnable-slice delivery demonstrator with recovery, and an auditable evaluation instrument expansion; it does not provide full CLI parity, live harness reconstruction, live host qualification, or universal correctness claims. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md), [V4-12 receipt](campaigns/gauge/receipts/V4-12.md), [V4-13 receipt](campaigns/gauge/receipts/V4-13.md), [V4-14 receipt](campaigns/gauge/receipts/V4-14.md), [V4-15 receipt](campaigns/gauge/receipts/V4-15.md) and [V4-21 receipt](campaigns/gauge/receipts/V4-21.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -178,6 +178,8 @@ V4-08 adds `bash gauge/tests/observation-anchors.sh` for T01–T08 lineage and u
 
 V4-09 adds `bash gauge/tests/instrument-anchors.sh` for T01–T11 host-qualification and early comparison instrument anchors. Independent arithmetic vectors K/Z/U/W live in `gauge/internal/contract/instrument_vectors_test.go`. Catalogue/preflight never grants live admission; fake adapters prove blocked paths never hit transport (including API). Structural before V4-10 and managed before V4-15 remain ineligible.
 
+V4-21 adds `bash gauge/tests/evaluation-anchors.sh` for T01–T09 auditable evaluation anchors. Extends V4-09; pending structural arms are not fabricated zeros; unknown exposure blocks complete-cost claims; live stays blocked.
+
 V4-11 adds `bash gauge/tests/reservation-anchors.sh` for T01–T08 atomic reservation anchors (plus concurrency stress). Admission is fixture-local only: known ceiling intersection, protected verification/recovery headroom, uncertain exposure retention, and accounting-fault rejection. No provider dispatch and no exact external billing claims.
 
 V4-12 adds `bash gauge/tests/dispatch-anchors.sh` for T01–T09 durable native-adapter anchors. Exactly one fixture-qualified host/version/mode is exercised via a fake adapter; live qualification stays blocked. Commit reservation+intent before send; reconcile before redispatch; cancellation stays nonterminal until confirmed stop.
@@ -308,7 +310,23 @@ eidolons gauge delivery-cancel --project "/absolute/ação project" --root demo 
 eidolons gauge delivery-compact --project "/absolute/ação project" --root demo --input /absolute/compact.json
 ```
 
-One maker progresses authorized phases without routine continuation prompts. Runnable milestones require an executed behavior check. Resource exhaustion and repeat-failure bounds yield nonaccepted partial or blocked results. Resume preserves root accounting, authority, candidates and outstanding verification; unresolved external effects must be exposed before dependent work. Inspect is observational (no model work). Context compact keeps canonical obligations independently of summaries. Demonstrator comparison records native/v4 arms through V4-09 without fabricating ineligible live arms. Minimal inspect/status/resume/cancel only — full V4-20 CLI and V4-16+/V4-21 are out of scope for this package.
+One maker progresses authorized phases without routine continuation prompts. Runnable milestones require an executed behavior check. Resource exhaustion and repeat-failure bounds yield nonaccepted partial or blocked results. Resume preserves root accounting, authority, candidates and outstanding verification; unresolved external effects must be exposed before dependent work. Inspect is observational (no model work). Context compact keeps canonical obligations independently of summaries. Demonstrator comparison records native/v4 arms through V4-09 without fabricating ineligible live arms. Minimal inspect/status/resume/cancel only — full V4-20 CLI is deferred; evaluation expansion is V4-21.
+
+## V4-21 auditable evaluation instrument
+
+New stores initialize typed evaluation namespaces under schema 2 (`evaluation_trials`, `evaluation_arm_identities`, `evaluation_holdouts`, `evaluation_plumbing`, `evaluation_admissions`, `evaluation_drifts`, `evaluation_outcomes`, `evaluation_reports`, `evaluation_promotions`, `evaluation_attempts`, `evaluation_events`) with an `evaluation_receipt`. Existing schema-2 controllers without those buckets remain openable; call `evaluation-enable` before first managed evaluation use. Extends the V4-09 instrument — does not replace it.
+
+```sh
+eidolons gauge init --project "/absolute/ação project" --root demo
+eidolons gauge evaluation-enable --project "/absolute/ação project"
+eidolons gauge evaluation-trial --project "/absolute/ação project" --input /absolute/trial.json
+eidolons gauge evaluation-arm --project "/absolute/ação project" --input /absolute/arm.json
+eidolons gauge evaluation-cost --project "/absolute/ação project" --protocol <protocol-id>
+eidolons gauge evaluation-holdout --project "/absolute/ação project" --input /absolute/holdout.json
+eidolons gauge evaluation-show --project "/absolute/ação project" --trial <trial-id>
+```
+
+Records actual model/harness/policy/environment/acceptance/billing identities with requested-vs-observed confounds. Compares native / original-v3 / v4 fixed-model / structural when each exists; structural without V4-10 stays pending (not zero). Cost-per-accepted includes all attempts; undefined ratio is never zero; unknown exposure blocks complete-cost claims. Holdout isolation, plumbing-vs-capability classification, report uncertainty, admission/oracle/exclusion audit, environment confound flags, outcome distinctions, and promotion-set hygiene are fixture-local. Live stays blocked; no paid trial without allowance. No V4-20 / V4-22 / V4-10 in this package.
 
 ## Provenance
 
@@ -328,4 +346,6 @@ V4-13 additions use the [compiler CLI](../gauge/cmd/eidolons-gauge/compiler.go),
 
 V4-14 additions use the [acceptance CLI](../gauge/cmd/eidolons-gauge/acceptance.go), [acceptance contract](../gauge/internal/contract/acceptance.go), [store](../gauge/internal/store/acceptance.go), [isolation](../gauge/internal/controller/isolation.go), [controller](../gauge/internal/controller/acceptance.go), and [spec/decision](../.spectra/changes/gauge-v4-14/spec.md). Local fixture anchors are recorded in the [V4-14 receipt](campaigns/gauge/receipts/V4-14.md). No universal correctness; hosted CI pending publication.
 
-V4-15 additions use the [delivery CLI](../gauge/cmd/eidolons-gauge/delivery.go), [delivery contract](../gauge/internal/contract/delivery.go), [store](../gauge/internal/store/delivery.go), [controller](../gauge/internal/controller/delivery.go), and [spec/decision](../.spectra/changes/gauge-v4-15/spec.md). Local fixture anchors are recorded in the [V4-15 receipt](campaigns/gauge/receipts/V4-15.md). Minimal operator controls only; no V4-16+ / V4-20 full / V4-21; hosted CI pending publication.
+V4-15 additions use the [delivery CLI](../gauge/cmd/eidolons-gauge/delivery.go), [delivery contract](../gauge/internal/contract/delivery.go), [store](../gauge/internal/store/delivery.go), [controller](../gauge/internal/controller/delivery.go), and [spec/decision](../.spectra/changes/gauge-v4-15/spec.md). Local fixture anchors are recorded in the [V4-15 receipt](campaigns/gauge/receipts/V4-15.md). Minimal operator controls only; no V4-16+ / V4-20 full; hosted CI pending publication.
+
+V4-21 additions use the [evaluation CLI](../gauge/cmd/eidolons-gauge/evaluation.go), [evaluation contract](../gauge/internal/contract/evaluation.go), [store](../gauge/internal/store/evaluation.go), [controller](../gauge/internal/controller/evaluation.go), and [spec/decision](../.spectra/changes/gauge-v4-21/spec.md). Local fixture anchors are recorded in the [V4-21 receipt](campaigns/gauge/receipts/V4-21.md). Extends V4-09; no V4-20 / V4-22 / V4-10; hosted CI pending publication.

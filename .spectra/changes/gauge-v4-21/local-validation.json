@@ -1,0 +1,14 @@
+{
+  "package": "V4-21",
+  "scope": "fixture-auditable-evaluation",
+  "go": "1.27.1",
+  "gotoolchain": "local",
+  "flags": "-mod=readonly -race -count=1",
+  "anchors": "bash gauge/tests/evaluation-anchors.sh",
+  "tests": "TestV421T01-T09",
+  "predecessors_green": "TestV421|TestV415|TestV414|TestV413|TestV412|TestV411|TestV409",
+  "network": "none",
+  "paid_trials": "blocked_without_allowance",
+  "live": "blocked",
+  "out_of_scope": ["V4-20", "V4-22", "V4-10"]
+}

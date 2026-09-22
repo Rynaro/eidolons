@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-15 is merged on main at 7528827; V4-21 extends the V4-09 instrument into auditable evaluation only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-20 / V4-22 / V4-10; no paid/live probes; live qualification stays blocked; structural arm stays pending."
+  ],
+  "refusal_rerouting": false
+}

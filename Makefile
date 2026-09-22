@@ -77,6 +77,7 @@ gauge-test:
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/compiler-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/acceptance-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/delivery-anchors.sh
+	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/evaluation-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bats --print-output-on-failure gauge/tests/conformance.bats
 
 gauge-package:
