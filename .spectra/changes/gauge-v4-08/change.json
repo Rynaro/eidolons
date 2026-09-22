@@ -1,0 +1,44 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-08",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_08",
+  "checker": "pending",
+  "acceptance_checks": [
+    {
+      "id": "V4-08-R01",
+      "verify_method": "V4-08-T01: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T01'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R02",
+      "verify_method": "V4-08-T02: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T02'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R03",
+      "verify_method": "V4-08-T03: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T03'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R04",
+      "verify_method": "V4-08-T04: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T04'; plus TestV408T04IndependentVectors; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R05",
+      "verify_method": "V4-08-T05: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T05'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R06",
+      "verify_method": "V4-08-T06: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T06'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R07",
+      "verify_method": "V4-08-T07: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T07'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    },
+    {
+      "id": "V4-08-R08",
+      "verify_method": "V4-08-T08: bash gauge/tests/observation-anchors.sh / go test -run '^TestV408T08'; evidence in docs/campaigns/gauge/receipts/V4-08.md"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

@@ -1,0 +1,16 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-07 is merged on main at 4b3e499; V4-08 implements observation/lineage only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only."
+  ],
+  "refusal_rerouting": false
+}

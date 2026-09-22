@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences and policy inspection; it does not provide full CLI parity, live harness reconstruction, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md) and [V4-07 receipt](campaigns/gauge/receipts/V4-07.md) for tested scope and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage and honest usage observations; it does not provide full CLI parity, live harness reconstruction, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md) and [V4-08 receipt](campaigns/gauge/receipts/V4-08.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -174,8 +174,37 @@ For development, `make gauge-test` runs the nine conformance anchors separately 
 
 V4-07 adds `bash gauge/tests/policy-anchors.sh`, which checks discovery of T01–T08 and runs the policy Go tests. Its separate external oracle, `gauge/tests/policy.py`, requires a qualified frozen V4-06 checkout mounted at `/predecessor`; it builds the actual older binary for migration/refusal checks. New policy rollback cuts are callback fault tests; they do not add process-kill or power-loss qualification for preference/amendment transactions.
 
+V4-08 adds `bash gauge/tests/observation-anchors.sh` for T01–T08 lineage and usage-observation anchors. Independent arithmetic oracles for reconciliation live in `gauge/internal/contract/reconcile_vectors_test.go` (ported from the review-probe vectors). Observation recording does not grant policy or spending authority. Hosted CI remains blocked pending publication approval; no live-host qualification is claimed.
+
+## V4-08 root lineage and observations
+
+New stores initialize typed observation namespaces under schema 2 (`usage_observations`, `usage_corrections`, `lineage_edges`, `coverage_reports`) with an `observation_receipt`. Existing schema-2 controllers without those buckets remain openable; call `observation-enable` before first managed observation use (also implied by `task-start`).
+
+```sh
+eidolons gauge init --project "/absolute/ação project"
+eidolons gauge observation-enable --project "/absolute/ação project"
+eidolons gauge task-start --project "/absolute/ação project" --route-digest "sha256:route"
+eidolons gauge task-resume --project "/absolute/ação project" --root <uuid-from-task-start>
+```
+
+`task-start` allocates a fresh UUID execution root distinct from the route digest. Identical routes create different roots. `task-resume` resolves an existing root only; an unknown ID fails without creating a root. Descendant/reviewer/retry/successor edges bind to the original root via `lineage-bind`. Worker/environment replacement never allocates a new budget root.
+
+Record allowlisted usage JSON (unit, source grade, observation/receipt times, freshness; no credentials, transcripts, reasoning, tool-arg dumps):
+
+```sh
+eidolons gauge usage-record --project "/absolute/ação project" --root <uuid> --input /absolute/obs.json
+eidolons gauge usage-correct --project "/absolute/ação project" --root <uuid> --input /absolute/corr.json
+eidolons gauge usage-summary --project "/absolute/ação project" --root <uuid> --input /absolute/stream.json
+eidolons gauge usage-export --project "/absolute/ação project" --root <uuid>
+eidolons gauge usage-retain --project "/absolute/ação project" --root <uuid>
+```
+
+Reconciliation accounts for each consumption identity once (deltas, prefixes, corrections, epochs, parent/child overlap). Missing pricing, model identity or coverage stays unknown/incomplete — never zero or unlimited. Summaries always report inference, transfer, environment, elapsed and human coverage categories. `usage-export` is allowlisted managed inspection; legacy raw bytes are not forwarded. `usage-retain` drops eligible detail while preserving totals, lineage and exposure markers.
+
 ## Provenance
 
 IDG 1.8.1, usage reference, 2026-09-22. Sources: [CLI](../gauge/cmd/eidolons-gauge/main.go), [shim](../cli/src/gauge.sh), [build script](../scripts/gauge-build.sh), [controller](../gauge/internal/controller/controller.go), [authority protocol](../gauge/internal/controller/authority.go), [typed contracts](../gauge/internal/contract/types.go), [spec](../.spectra/changes/gauge-v4-06/spec.md), and the verified Vivi repair report identified in the [receipt](campaigns/gauge/receipts/V4-06.md#provenance). That handoff is Vivi → IDG, `PROPOSE`, message `8f84391a-5292-43b3-8c53-0c00aa93c682`, thread `10c848f8-d48b-4e45-babe-ee9616617f09`, outcome `verify_pass`. CHT: C:5/5 H:5/5 T:5/5 for documented usage and limits; candidate acceptance is tracked separately. CRYSTALIUM unavailable.
 
 V4-07 additions use the [policy CLI](../gauge/cmd/eidolons-gauge/policy.go), [policy contract](../gauge/internal/contract/policy.go), [typed store](../gauge/internal/store/policy.go), [controller wrappers](../gauge/internal/controller/policy.go), and [spec/decisions](../.spectra/changes/gauge-v4-07/spec.md). Incoming Vivi → IDG `PROPOSE`, message `4a0633b1-4576-4f04-8069-54763f689daa`, thread `7fa26ce4-5020-4b35-be77-3b81ee9323ac`, passed the blocking SHA-256 gate; full lineage is in the [V4-07 receipt](campaigns/gauge/receipts/V4-07.md#provenance). CHT: C:5/5 H:5/5 T:5/5 for the usage reference; final independent local review and formatting reconciliation are recorded in the receipt; hosted CI remains blocked.
+
+V4-08 additions use the [observation CLI](../gauge/cmd/eidolons-gauge/observation.go), [observation contract](../gauge/internal/contract/observation.go), [reconcile](../gauge/internal/contract/reconcile.go), [store](../gauge/internal/store/observation.go), [controller](../gauge/internal/controller/observation.go), and [spec/decision](../.spectra/changes/gauge-v4-08/spec.md). Local fixture anchors are recorded in the [V4-08 receipt](campaigns/gauge/receipts/V4-08.md). Hosted CI and independent review remain pending; no live qualification.
