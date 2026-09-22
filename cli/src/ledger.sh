@@ -7,12 +7,18 @@ _EIDOLONS_LEDGER_READ_ONLY=1
 
 usage() {
   cat <<'EOF'
-Usage: eidolons ledger open|record|status|complete [options]
+Usage: eidolons ledger open|record|status|complete|candidate|capture|render [options]
 
 open     --run-id ID [--route PATH]                 create a planned event
 record   --run-id ID --type TYPE [--requested JSON] [--observed JSON] [--evidence PATH]
 complete --run-id ID --artifact PATH --checker ID --scope TEXT --verdict pass|fail
 status   --run-id ID [--json]
+candidate --run-id ID --criteria PATH --integration-base REF [--event-id ID]
+complete --run-id ID --candidate EVENT_ID --check-id ID --artifact PATH
+         --checker LABEL --scope TEXT --verdict pass|fail|cancelled [--event-id ID]
+capture  --run-id ID [--event-id ID]                  capture historical projection inputs
+render   --run-id ID --event-id CAPTURE [--format json|text|markdown] [--compare PATH]
+render   --reference PATH                            canonical capture reference
 
 Writers accept --event-id ID for idempotent retries of identical content.
 EIDOLONS_LEDGER_LOCK_TIMEOUT sets a 1..300 second acquisition budget (default 60).
@@ -20,14 +26,17 @@ An interrupted owner may leave a recovery-required .append-lock directory.
 Never remove it until all writers and their publishing children are quiescent.
 
 Events are committed as individual files by atomic rename.  Requested and
-observed state remain separate; completion requires an independent passing
-checker linked to an artifact digest. Raw prompts and tool payloads are absent.
+observed state remain separate. Manual labels are self-attested; production
+independent acceptance awaits a qualified provenance source. Candidate/status/
+completion/render require Python 3 (standard library). Views are historical,
+never current acceptance. Raw prompts and tool payloads are absent.
 EOF
 }
 
 sub="${1:-}"; [[ $# -gt 0 ]] && shift || true
-case "$sub" in open|record|status|complete) ;; -h|--help|"") usage; exit 0 ;; *) die "Unknown ledger command: $sub" ;; esac
+case "$sub" in open|record|status|complete|candidate|capture|render) ;; -h|--help|"") usage; exit 0 ;; *) die "Unknown ledger command: $sub" ;; esac
 run_id=""; event_id=""; route=""; event_type=""; requested='{}'; observed='{}'; evidence=""; artifact=""; checker=""; scope=""; verdict=""; json=false
+criteria=""; integration_base=""; candidate_id=""; check_id=""; format=""; compare=""; reference=""; typed=false
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --run-id) run_id="${2:-}"; shift 2 ;; --route) route="${2:-}"; shift 2 ;;
@@ -36,9 +45,23 @@ while [[ $# -gt 0 ]]; do
     --observed) observed="${2:-}"; shift 2 ;; --evidence) evidence="${2:-}"; shift 2 ;;
     --artifact) artifact="${2:-}"; shift 2 ;; --checker) checker="${2:-}"; shift 2 ;;
     --scope) scope="${2:-}"; shift 2 ;; --verdict) verdict="${2:-}"; shift 2 ;;
+    --criteria) criteria="${2:-}"; shift 2 ;; --integration-base) integration_base="${2:-}"; shift 2 ;;
+    --candidate) candidate_id="${2:-}"; shift 2 ;; --check-id) check_id="${2:-}"; shift 2 ;;
+    --format) format="${2:-}"; shift 2 ;; --compare) compare="${2:-}"; shift 2 ;;
+    --reference) reference="${2:-}"; shift 2 ;;
     --json) json=true; shift ;; *) die "Unknown option: $1" ;;
   esac
 done
+completion_helper() {
+  command -v python3 >/dev/null 2>&1 || die "Completion commands require Python 3; install python3 and retry. Ordinary ledger open/record remain available."
+  python3 "$SELF_DIR/ledger_completion.py" "$@"
+}
+if [[ -n "$reference" ]]; then
+  [[ "$sub" == render && -z "$run_id" && -z "$event_id" ]] || die "--reference is exclusive to render without explicit IDs"
+  resolved="$(completion_helper reference --file "$reference")" || die "canonical capture reference required"
+  run_id="$(printf '%s\n' "$resolved" | jq -er '.run_id')"
+  event_id="$(printf '%s\n' "$resolved" | jq -er '.event_id')"
+fi
 [[ "$run_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "--run-id must contain only letters, digits, dot, underscore, or dash"
 [[ "$run_id" != . && "$run_id" != .. ]] || die "--run-id cannot be dot or dot-dot"
 root=".eidolons/.ledger/$run_id"; events="$root/events"; lock="$root/.append-lock"
@@ -149,17 +172,31 @@ acquire_owner() {
 }
 
 commit_event() {
-  local type="$1" req="$2" obs="$3" refs="$4" seq id payload existing content timestamp digest
+  local type="$1" req="$2" obs="$3" refs="$4" seq id payload existing content timestamp digest prepared
   jq -es 'length == 1 and (.[0]|type == "object")' >/dev/null <<<"$req" || die "--requested must be one JSON object"
   jq -es 'length == 1 and (.[0]|type == "object")' >/dev/null <<<"$obs" || die "--observed must be one JSON object"
   jq -es 'length == 1 and (.[0]|type == "array")' >/dev/null <<<"$refs" || die "internal evidence JSON invalid"
   acquire_owner
   validate_prefix
   check_interrupted
+  if [[ "$typed" == true ]]; then
+    # Snapshot and retry comparison are under the same append ownership. Generate
+    # volatile capture metadata only after stable caller/identity comparison.
+    prepared="$(printf '%s\n' "$history" | completion_helper prepare --kind "$sub" --request "$req")" || die "typed completion capture failed"
+    req="$(printf '%s\n' "$prepared" | jq -ce '.requested')"
+    obs="$(printf '%s\n' "$prepared" | jq -ce '.observed')"
+    refs="$(printf '%s\n' "$prepared" | jq -ce '.evidence_refs')"
+  fi
   content="$(jq -cnS --arg type "$type" --argjson req "$req" --argjson obs "$obs" --argjson refs "$refs" '{event_type:$type,requested:$req,observed:$obs,evidence_refs:$refs}')" || die "journal content construction failed"
   if [[ -n "$event_id" ]]; then
-    existing="$(printf '%s\n' "$history" | jq -cS --arg id "$event_id" '.[] | select(.event_id == $id) | {event_type,requested,observed,evidence_refs}')" || die "journal identity lookup failed"
+    existing="$(printf '%s\n' "$history" | jq -cS --arg id "$event_id" --argjson typed "$typed" '.[] | select(.event_id == $id) | {event_type,requested,observed:(if $typed then (.observed | del(.capture)) else .observed end),evidence_refs}')" || die "journal identity lookup failed"
     if [[ -n "$existing" ]]; then
+      if [[ "$sub" == complete && "$typed" == false && "$type" == checked ]]; then
+        # Legacy trust labels were derived, not caller inputs. Compare the stable
+        # request and evidence while returning the original event bytes on retry.
+        existing="$(printf '%s\n' "$existing" | jq -cS '.observed |= del(.independent,.completion)')" || die "legacy retry comparison failed"
+        content="$(printf '%s\n' "$content" | jq -cS '.observed |= del(.independent,.completion)')" || die "legacy retry comparison failed"
+      fi
       [[ "$existing" == "$content" ]] || die "event identity conflict: $event_id"
       return 0
     fi
@@ -172,6 +209,9 @@ commit_event() {
     die "event identity conflict: $id; supply a distinct --event-id"
   fi
   timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)" || die "journal timestamp failed"
+  if [[ "$typed" == true ]]; then
+    obs="$(printf '%s\n' "$obs" | completion_helper decorate --timestamp "$timestamp")" || die "capture metadata failed"
+  fi
   payload="$(jq -n --arg id "$id" --arg run "$run_id" --arg type "$type" --arg ts "$timestamp" --arg prev "$previous" --argjson seq "$seq" --argjson req "$req" --argjson obs "$obs" --argjson refs "$refs" '{schema_version:"1.0",event_id:$id,run_id:$run,sequence:$seq,event_type:$type,timestamp:$ts,previous_event_digest:(if $prev=="" then null else $prev end),requested:$req,observed:$obs,evidence_refs:$refs}')" || die "journal event construction failed"
   # Command substitutions inside jq arguments hide their exit status. Check
   # hashing separately before constructing or publishing the signed event.
@@ -203,25 +243,53 @@ case "$sub" in
     commit_event "$event_type" "$requested" "$observed" "$refs"
     ;;
   complete)
-    [[ -f "$artifact" ]] || die "complete requires an existing --artifact"
+    command -v python3 >/dev/null 2>&1 || die "Completion commands require Python 3; install python3 and retry"
     [[ -n "$checker" && -n "$scope" ]] || die "complete requires --checker and --scope"
-    case "$verdict" in pass|fail) ;; *) die "--verdict must be pass or fail" ;; esac
+    case "$verdict" in pass|fail|cancelled) ;; *) die "--verdict must be pass, fail, or cancelled" ;; esac
+    if [[ -n "$candidate_id" || -n "$check_id" ]]; then
+      [[ -n "$candidate_id" && -n "$check_id" ]] || die "typed complete requires --candidate and --check-id"
+      typed=true
+      requested="$(jq -cn --arg candidate "$candidate_id" --arg check "$check_id" --arg artifact "$artifact" --arg checker "$checker" --arg scope "$scope" --arg verdict "$verdict" '{candidate_event_id:$candidate,check_id:$check,artifact:$artifact,checker:$checker,scope:$scope,verdict:$verdict}')"
+      commit_event "completion-check" "$requested" '{}' '[]'
+      exit 0
+    fi
+    [[ -f "$artifact" ]] || die "complete requires an existing --artifact"
     artifact_digest="$(sha256_file "$artifact")" || die "artifact digest failed"
     [[ "$artifact_digest" =~ ^[a-f0-9]{64}$ ]] || die "artifact digest invalid"
     # Same-maker checks cannot claim independent completion.
-    independent=true; [[ "$checker" == "${EIDOLONS_LEDGER_MAKER:-}" || -z "$checker" ]] && independent=false
+    independent=false
     complete=false; [[ "$verdict" == pass && "$independent" == true ]] && complete=true
     observed="$(jq -n --arg d "$artifact_digest" --arg c "$checker" --arg s "$scope" --arg v "$verdict" --argjson i "$independent" --argjson done "$complete" '{artifact_digest:$d,checker:$c,scope:$s,verdict:$v,independent:$i,completion:(if $done then "independently-verified" else "not-complete" end)}')" || die "checker observation construction failed"
     refs="$(jq -n --arg a "$artifact" '[{kind:"artifact",ref:$a}]')" || die "artifact evidence construction failed"
     commit_event "checked" '{"completion":"requested"}' "$observed" "$refs"
     ;;
-  status)
+  candidate)
+    [[ -n "$criteria" && -n "$integration_base" ]] || die "candidate requires --criteria PATH and --integration-base REF"
+    typed=true
+    requested="$(jq -cn --arg criteria "$criteria" --arg base "$integration_base" '{criteria:$criteria,integration_base:$base}')"
+    commit_event "candidate-captured" "$requested" '{}' '[]'
+    ;;
+  capture)
+    typed=true
+    commit_event "projection-captured" '{}' '{}' '[]'
+    ;;
+  status|render)
     [[ ! -e "$lock" && ! -L "$lock" ]] || die "recovery-required: append ownership is unresolved for $run_id"
     [[ -d "$events" ]] || die "unknown run: $run_id"
     validate_prefix
     [[ "$count" -gt 0 ]] || die "recovery-required: run has no published events: $run_id"
     [[ ! -e "$lock" && ! -L "$lock" ]] || die "recovery-required: append ownership changed during inspection"
-    result="$(printf '%s\n' "$history" | jq '. as $e | ($e | map(select(.event_type=="planned")) | .[0]) as $plan | ($e | map(select(.event_type=="checked" and .observed.completion=="independently-verified")) | last) as $done | {run_id:($e[0].run_id),events:($e|length),requested:($plan.requested // {}),dispatch:([ $e[].observed.dispatch? | select(. != null) ] | last // "unobserved"),completion:(if $done then "independently-verified" else "not-complete" end),reconciliation_required:([ $e[].observed.side_effect? | select(. == "unknown") ] | length > 0)}')"
-    if [[ "$json" == true ]]; then printf '%s\n' "$result"; else printf '%s\n' "$result" | jq -r '"run \(.run_id): dispatch=\(.dispatch), completion=\(.completion), events=\(.events), reconciliation_required=\(.reconciliation_required)"'; fi
+    helper_args=("$sub")
+    if [[ "$sub" == render ]]; then
+      [[ -n "$event_id" ]] || die "render requires a canonical capture --event-id"
+      helper_args+=(--event-id "$event_id")
+      format="${format:-json}"
+    else
+      format="${format:-text}"
+    fi
+    [[ "$json" == false ]] || format=json
+    helper_args+=(--format "$format")
+    [[ -z "$compare" ]] || helper_args+=(--compare "$compare")
+    printf '%s\n' "$history" | completion_helper "${helper_args[@]}"
     ;;
 esac

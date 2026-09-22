@@ -16,14 +16,15 @@ make_route() {
   [ "$(jq -r '.completion' <<< "$output")" = "not-complete" ]
 }
 
-@test "ledger: completion needs an independent passing checker and artifact digest" {
+@test "ledger: manual completion labels remain self-attested despite a matching artifact digest" {
   make_route
   run eidolons ledger open --run-id checked --route "$route"
   [ "$status" -eq 0 ]
   run eidolons ledger complete --run-id checked --artifact "$route" --checker checker-a --scope route --verdict pass
   [ "$status" -eq 0 ]
   run eidolons ledger status --run-id checked --json
-  [ "$(jq -r '.completion' <<< "$output")" = "independently-verified" ]
+  [ "$(jq -r '.completion' <<< "$output")" = "not-complete" ]
+  [ "$(jq -r '.execution_provenance.status' <<< "$output")" = "self-attested" ]
   [ "$(jq -r '.events' <<< "$output")" = "2" ]
 }
 

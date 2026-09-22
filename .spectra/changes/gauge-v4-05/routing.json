@@ -1,0 +1,55 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "chain": [
+    {
+      "eidolon": "ATLAS",
+      "role": "completed static-main evidence preparation",
+      "hand_off_artifact_path": "mission.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "FORGE",
+      "role": "completion representation and trust floor decision",
+      "hand_off_artifact_path": "decision.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "Vivi",
+      "role": "single source/test writer",
+      "hand_off_artifact_path": "spec.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "VIGIL",
+      "role": "distinct fresh artifact checker",
+      "hand_off_artifact_path": "checker-report.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "IDG",
+      "role": "documentation and receipt after maker yield",
+      "hand_off_artifact_path": "docs/campaigns/gauge/receipts/V4-05.md",
+      "edge_origin": "orchestrator"
+    }
+  ],
+  "model_tier_per_step": [
+    "standard",
+    "standard",
+    "standard",
+    "standard",
+    "standard"
+  ],
+  "assumptions": [
+    "User authorizes implementation through V4-09; no new merge/release/paid trial authorization.",
+    "Pinned plan supplies requirements; this artifact composes bounded implementation contract.",
+    "No production independently authenticated execution source ships in V4-05."
+  ],
+  "refusal_rerouting": false
+}

@@ -1,0 +1,51 @@
+{
+  "candidate": {
+    "identity": {
+      "candidate": "candidate-digest",
+      "criteria": "criteria-digest",
+      "environment": "env-digest",
+      "configuration": "config-digest",
+      "integration_base": "base-sha"
+    },
+    "required_checks": [
+      {
+        "id": "tests",
+        "oracle_id": "tests@1"
+      }
+    ]
+  },
+  "observations": [
+    {
+      "event_id": "receipt-1",
+      "sequence": 1,
+      "identity": {
+        "candidate": "candidate-digest",
+        "criteria": "criteria-digest",
+        "environment": "env-digest",
+        "configuration": "config-digest",
+        "integration_base": "base-sha"
+      },
+      "check_id": "tests",
+      "oracle_id": "tests@1",
+      "outcome": "pass",
+      "maker_invocation_id": "maker-1",
+      "checker_invocation_id": "checker-1",
+      "evidence_refs": [
+        {
+          "ref": "fixture-artifact",
+          "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      ]
+    }
+  ],
+  "current_identity": {
+    "candidate": "candidate-digest",
+    "criteria": "criteria-digest",
+    "environment": "env-digest",
+    "configuration": "config-digest",
+    "integration_base": "base-sha"
+  },
+  "evidence": {
+    "receipt-1": "verified"
+  }
+}

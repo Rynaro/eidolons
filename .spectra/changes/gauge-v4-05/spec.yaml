@@ -1,0 +1,36 @@
+{
+  "change_id": "gauge-v4-05",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "implementation_base": "d1b56bb06bc22a7aab1f6ec8a4a07cb8f68aa138",
+  "acceptance_checks": [
+    {
+      "id": "V4-05-R01",
+      "verify_method": "V4-05-T01: bats --filter 'V4-05 T01' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R02",
+      "verify_method": "V4-05-T02: bats --filter 'V4-05 T02' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R03",
+      "verify_method": "V4-05-T03: bats --filter 'V4-05 T03' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R04",
+      "verify_method": "V4-05-T04: bats --filter 'V4-05 T04' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R05",
+      "verify_method": "V4-05-T05: bats --filter 'V4-05 T05' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R06",
+      "verify_method": "V4-05-T06: bats --filter 'V4-05 T06' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    },
+    {
+      "id": "V4-05-R07",
+      "verify_method": "V4-05-T07: bats --filter 'V4-05 T07' cli/tests/completion_conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-05.md before verification"
+    }
+  ],
+  "scope": "V4-05 only"
+}

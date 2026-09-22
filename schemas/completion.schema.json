@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Completion observation and projection v1",
+  "description": "Embedded observations are claims. This schema never authenticates an invocation or grants acceptance authority.",
+  "oneOf": [
+    {"$ref": "#/$defs/candidateObservation"},
+    {"$ref": "#/$defs/checkObservation"},
+    {"$ref": "#/$defs/projectionObservation"},
+    {"$ref": "#/$defs/reference"}
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": ["candidate", "criteria", "environment", "configuration", "integration_base"],
+      "properties": {
+        "candidate": {"type": "string", "minLength": 1},
+        "criteria": {"type": "string", "minLength": 1},
+        "environment": {"type": "string", "minLength": 1},
+        "configuration": {"type": "string", "minLength": 1},
+        "integration_base": {"type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "capture": {
+      "type": "object", "required": ["invocation_id", "captured_at"],
+      "properties": {"invocation_id": {"type": "string", "minLength": 1}, "captured_at": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    },
+    "requiredCheck": {
+      "type": "object", "required": ["id", "oracle_id"],
+      "properties": {"id": {"type": "string", "minLength": 1}, "oracle_id": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": "object", "required": ["identity", "required_checks"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identity"},
+        "required_checks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/requiredCheck"}},
+        "inputs": {"type": "object", "required": ["criteria", "integration_base"], "properties": {"criteria": {"type": "string"}, "integration_base": {"type": "string"}}},
+        "files": {"type": "array", "items": {"type": "object", "required": ["path", "kind", "mode", "sha256"]}},
+        "environment": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+        "configuration": {"type": "array"}
+      }
+    },
+    "candidateObservation": {
+      "type": "object", "required": ["kind", "contract_version", "snapshot", "capture"],
+      "properties": {"kind": {"const": "candidate"}, "contract_version": {"const": "1.0"}, "snapshot": {"$ref": "#/$defs/candidate"}, "capture": {"$ref": "#/$defs/capture"}},
+      "additionalProperties": false
+    },
+    "checkObservation": {
+      "type": "object", "required": ["kind", "contract_version", "identity", "check_id", "oracle_id", "outcome", "evidence_refs", "maker_invocation_id", "checker_invocation_id", "capture"],
+      "properties": {
+        "kind": {"const": "check"}, "contract_version": {"const": "1.0"}, "identity": {"$ref": "#/$defs/identity"},
+        "check_id": {"type": "string", "minLength": 1}, "oracle_id": {"type": "string", "minLength": 1},
+        "outcome": {"enum": ["pass", "fail", "cancelled", "skipped", "unknown"]},
+        "evidence_refs": {"type": "array", "items": {"type": "object", "required": ["ref", "digest"], "properties": {"ref": {"type": "string"}, "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}},
+        "maker_invocation_id": {"type": ["string", "null"]}, "checker_invocation_id": {"type": ["string", "null"]},
+        "checker_label": {"type": "string"}, "scope": {"type": "string"}, "capture": {"$ref": "#/$defs/capture"}
+      }, "additionalProperties": false
+    },
+    "projectionObservation": {
+      "type": "object", "required": ["kind", "contract_version", "inputs", "capture"],
+      "properties": {
+        "kind": {"const": "projection"}, "contract_version": {"const": "1.0"},
+        "inputs": {"type": "object", "required": ["candidate", "observations", "current_identity", "evidence"], "properties": {"candidate": {"type": ["object", "null"]}, "observations": {"type": "array"}, "current_identity": {"type": ["object", "null"]}, "evidence": {"type": "object"}, "validation_errors": {"type": "array", "items": {"type": "string"}}}},
+        "capture": {"$ref": "#/$defs/capture"}
+      }, "additionalProperties": false
+    },
+    "reference": {
+      "type": "object", "required": ["schema_version", "kind", "run_id", "event_id"],
+      "properties": {"schema_version": {"const": "1.0"}, "kind": {"const": "completion-view-reference"}, "run_id": {"type": "string", "minLength": 1}, "event_id": {"type": "string", "minLength": 1}},
+      "additionalProperties": false
+    }
+  }
+}

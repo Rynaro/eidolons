@@ -1,0 +1,26 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "v4_05_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify current-candidate completion, provenance floor, canonical views and exact legacy retries",
+  "context_delta": {
+    "candidate": "f22a171e31172d34c3b2b9be0835e814998d7c02",
+    "ci": "https://github.com/Rynaro/eidolons/actions/runs/35682739261",
+    "receipt": "docs/campaigns/gauge/receipts/V4-05.md",
+    "review_context": "Distinct initial fresh artifact-only checker; later localized findings/repair coordination disclosed in checker-report.md. Both findings independently reproduced and repaired. No statistical independence, protected production provenance or live qualification claim. Original maker vivi_v4_core; fresh repair maker vivi_v4_05_repair.",
+    "reviewed_source_hashes": ".spectra/changes/gauge-v4-05/reviewed-source.sha256",
+    "roster_health": "https://github.com/Rynaro/eidolons/actions/runs/35682736801"
+  },
+  "ise": {
+    "verification": {
+      "fresh_context": true,
+      "checker": "v4_05_review",
+      "transcript_access": "artifact-only"
+    }
+  }
+}

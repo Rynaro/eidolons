@@ -1,0 +1,12 @@
+{
+  "artifact_integrity": {
+    "status": "verified"
+  },
+  "execution_provenance": {
+    "status": "authenticated-independent"
+  },
+  "acceptance_status": {
+    "status": "accepted",
+    "reasons": []
+  }
+}
