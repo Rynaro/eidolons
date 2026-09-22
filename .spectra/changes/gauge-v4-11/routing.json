@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-09 is merged on main at bf629db; V4-11 implements fixture-local atomic reservations only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-12 durable native dispatch; no paid/live probes; no exact external billing claims."
+  ],
+  "refusal_rerouting": false
+}

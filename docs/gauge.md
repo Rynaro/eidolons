@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, and a fixture-first host qualification / early comparison instrument; it does not provide full CLI parity, live harness reconstruction, live host qualification, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md) and [V4-09 receipt](campaigns/gauge/receipts/V4-09.md) for tested scope and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, and fixture-local atomic reservations with verification/recovery headroom; it does not provide full CLI parity, live harness reconstruction, live host qualification, durable native dispatch, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md) and [V4-11 receipt](campaigns/gauge/receipts/V4-11.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -178,6 +178,8 @@ V4-08 adds `bash gauge/tests/observation-anchors.sh` for T01–T08 lineage and u
 
 V4-09 adds `bash gauge/tests/instrument-anchors.sh` for T01–T11 host-qualification and early comparison instrument anchors. Independent arithmetic vectors K/Z/U/W live in `gauge/internal/contract/instrument_vectors_test.go`. Catalogue/preflight never grants live admission; fake adapters prove blocked paths never hit transport (including API). Structural before V4-10 and managed before V4-15 remain ineligible.
 
+V4-11 adds `bash gauge/tests/reservation-anchors.sh` for T01–T08 atomic reservation anchors (plus concurrency stress). Admission is fixture-local only: known ceiling intersection, protected verification/recovery headroom, uncertain exposure retention, and accounting-fault rejection. No provider dispatch and no exact external billing claims.
+
 ## V4-08 root lineage and observations
 
 New stores initialize typed observation namespaces under schema 2 (`usage_observations`, `usage_corrections`, `lineage_edges`, `coverage_reports`) with an `observation_receipt`. Existing schema-2 controllers without those buckets remain openable; call `observation-enable` before first managed observation use (also implied by `task-start`).
@@ -221,6 +223,21 @@ eidolons gauge eligibility --project "/absolute/ação project" --input /absolut
 
 Catalogue tuples bind host/version/integration/mode/method/permissions/boundary/granularity/maturity/evidence/billing — not a brand. Help/registration is discovery only. Preflight fails closed when required capabilities or authorized billing are missing; credentials are not allowance; exhausted subscription never switches to API. Protocol freeze must precede dispatch/outcome in controller ordering. Live criterion stays blocked without protected authorization and a real live probe. Native and original-v3 (`752194ef5ceaa8cee1f5995fd0d374888696d8fc`) share one recorder schema; structural/managed arms stay ineligible until V4-10/V4-15.
 
+## V4-11 atomic reservations
+
+New stores initialize typed reservation namespaces under schema 2 (`reservations`, `scope_balances`, `reservation_events`) with a `reservation_receipt`. Existing schema-2 controllers without those buckets remain openable; call `reservation-enable` before first managed reservation use.
+
+```sh
+eidolons gauge init --project "/absolute/ação project" --root demo
+eidolons gauge reservation-enable --project "/absolute/ação project"
+eidolons gauge reservation-admit --project "/absolute/ação project" --root demo --input /absolute/admit.json
+eidolons gauge reservation-status --project "/absolute/ação project" --root demo
+eidolons gauge reservation-amend --project "/absolute/ação project" --root demo --input /absolute/amend.json
+eidolons gauge reservation-reconcile --project "/absolute/ação project" --root demo --input /absolute/reconcile.json
+```
+
+Admission intersects known local ceilings (task/project/account/window/concurrency) under the active policy identity — it never invents grants. Verification/recovery headroom is excluded from optional implementation. Uncertain post-dispatch exposure is retained until explicit reconcile/release-with-proof. Provider window reset does not refill task budget. Authoritative accounting unavailability rejects managed admit. No provider/network call runs inside a store transaction; V4-12 owns durable native dispatch.
+
 ## Provenance
 
 IDG 1.8.1, usage reference, 2026-09-22. Sources: [CLI](../gauge/cmd/eidolons-gauge/main.go), [shim](../cli/src/gauge.sh), [build script](../scripts/gauge-build.sh), [controller](../gauge/internal/controller/controller.go), [authority protocol](../gauge/internal/controller/authority.go), [typed contracts](../gauge/internal/contract/types.go), [spec](../.spectra/changes/gauge-v4-06/spec.md), and the verified Vivi repair report identified in the [receipt](campaigns/gauge/receipts/V4-06.md#provenance). That handoff is Vivi → IDG, `PROPOSE`, message `8f84391a-5292-43b3-8c53-0c00aa93c682`, thread `10c848f8-d48b-4e45-babe-ee9616617f09`, outcome `verify_pass`. CHT: C:5/5 H:5/5 T:5/5 for documented usage and limits; candidate acceptance is tracked separately. CRYSTALIUM unavailable.
@@ -230,3 +247,5 @@ V4-07 additions use the [policy CLI](../gauge/cmd/eidolons-gauge/policy.go), [po
 V4-08 additions use the [observation CLI](../gauge/cmd/eidolons-gauge/observation.go), [observation contract](../gauge/internal/contract/observation.go), [reconcile](../gauge/internal/contract/reconcile.go), [store](../gauge/internal/store/observation.go), [controller](../gauge/internal/controller/observation.go), and [spec/decision](../.spectra/changes/gauge-v4-08/spec.md). Local fixture anchors are recorded in the [V4-08 receipt](campaigns/gauge/receipts/V4-08.md). Hosted CI and independent review remain pending; no live qualification.
 
 V4-09 additions use the [instrument CLI](../gauge/cmd/eidolons-gauge/instrument.go), [capability](../gauge/internal/contract/capability.go) / [protocol](../gauge/internal/contract/protocol.go) / [recorder](../gauge/internal/contract/recorder.go) contracts, [store](../gauge/internal/store/instrument.go), [controller](../gauge/internal/controller/instrument.go), and [spec/decision](../.spectra/changes/gauge-v4-09/spec.md). Local fixture anchors are recorded in the [V4-09 receipt](campaigns/gauge/receipts/V4-09.md). Live qualification intentionally blocked; hosted CI pending publication.
+
+V4-11 additions use the [reservation CLI](../gauge/cmd/eidolons-gauge/reservation.go), [reservation contract](../gauge/internal/contract/reservation.go), [store](../gauge/internal/store/reservation.go), [controller](../gauge/internal/controller/reservation.go), and [spec/decision](../.spectra/changes/gauge-v4-11/spec.md). Local fixture anchors are recorded in the [V4-11 receipt](campaigns/gauge/receipts/V4-11.md). No provider dispatch; hosted CI pending publication.

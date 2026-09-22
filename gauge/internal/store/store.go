@@ -20,9 +20,10 @@ var buckets = []string{"meta", "roots", "legacy", "history", "context", "knowled
 var families = []string{"history", "context", "knowledge", "policy"}
 
 type Store struct {
-	db         *bolt.DB
-	authorizer policyAuthorizer
-	policyCut  func(string) error
+	db               *bolt.DB
+	authorizer       policyAuthorizer
+	policyCut        func(string) error
+	reservationFault reservationFaultState
 }
 type Snapshot struct {
 	StoreID string                            `json:"store_id"`
@@ -89,7 +90,10 @@ func guard(tx *bolt.Tx) error {
 	if e := guardObservation(tx); e != nil {
 		return e
 	}
-	return guardInstrument(tx)
+	if e := guardInstrument(tx); e != nil {
+		return e
+	}
+	return guardReservation(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -134,7 +138,10 @@ func Create(path, id string) error {
 		if e := initializeObservation(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeInstrument(tx, id, "new-store")
+		if e := initializeInstrument(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeReservation(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {
