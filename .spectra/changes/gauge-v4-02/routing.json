@@ -1,0 +1,41 @@
+{
+  "selected": [
+    "ATLAS",
+    "Vivi",
+    "IDG"
+  ],
+  "tier": "standard",
+  "chain": [
+    {
+      "eidolon": "ATLAS",
+      "role": "read-only legacy fixture scout",
+      "hand_off_artifact_path": ".spectra/changes/gauge-v4-02/mission.md",
+      "edge_origin": "roster"
+    },
+    {
+      "eidolon": "Vivi",
+      "role": "single implementation writer",
+      "hand_off_artifact_path": ".spectra/changes/gauge-v4-02/spec.md",
+      "edge_origin": "roster"
+    },
+    {
+      "eidolon": "IDG",
+      "role": "completion receipt and CLI documentation",
+      "hand_off_artifact_path": "docs/campaigns/gauge/receipts/V4-02.md",
+      "edge_origin": "roster"
+    }
+  ],
+  "model_tier_per_step": [
+    "standard",
+    "standard",
+    "standard"
+  ],
+  "confidence": 0.96,
+  "assumptions": [
+    "V4-02 only; V4-03 remains intact",
+    "Prerequisite V4-01 merged with passing CI",
+    "Separate checker before verification"
+  ],
+  "clarification_request": null,
+  "refusal_rerouting": false
+}

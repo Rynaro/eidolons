@@ -85,14 +85,6 @@ NEXUS_PREV="$EIDOLONS_HOME/nexus.prev"
 NEXUS_NEW="$EIDOLONS_HOME/nexus.new"
 NEXUS_FAILED="$EIDOLONS_HOME/nexus.failed"
 
-# Defense-in-depth: backfill .roster_ref for pre-v1.11.0 installs so that
-# nexus_refresh tracks main even when upgrade self runs before any sync/init
-# call that would otherwise trigger the backfill via nexus_refresh.
-# nexus_ensure_roster_ref is a no-op when .roster_ref already exists.
-if [[ -d "$NEXUS/.git" ]]; then
-  nexus_ensure_roster_ref
-fi
-
 # ─── Helpers ──────────────────────────────────────────────────────────────
 
 # Write install metadata sidecars into a nexus directory.
@@ -107,17 +99,11 @@ _write_install_sidecars() {
   local commit
   commit="$(git -C "$dir" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
-  # Ensure .gitignore excludes sidecar files.
-  # B1: .roster_ref is also excluded here so it survives atomic swap + rollback.
-  if [[ ! -f "$dir/.gitignore" ]]; then
-    printf '.install_date\n.install_ref\n.install_commit\n.roster_ref\n' > "$dir/.gitignore"
-  else
-    local sc
-    for sc in .install_date .install_ref .install_commit .roster_ref; do
-      grep -qxF "$sc" "$dir/.gitignore" 2>/dev/null \
-        || printf '%s\n' "$sc" >> "$dir/.gitignore"
-    done
-  fi
+  # Sidecars belong to the installation, never to the tracked source tree.
+  local sc
+  for sc in .install_date .install_ref .install_commit .roster_ref; do
+    nexus_ensure_gitignore_sidecar "$sc" "$dir"
+  done
 
   # Only .install_date, .install_ref, and .install_commit are written here.
   # .roster_ref is intentionally left alone — see B1 note above.
@@ -135,12 +121,20 @@ _write_install_sidecars() {
 # drift is throwaway. Genuine edits to CLI code (cli/src/*.sh, etc.) still trip
 # the guard — that is the guard's only real job.
 _nexus_is_dirty() {
-  [[ -d "$NEXUS/.git" ]] || return 1  # no .git → not a git repo, not "dirty"
+  [[ -e "$NEXUS/.git" ]] || return 1
   local status
-  # Pathspec negation `:!<path>` excludes refresh-managed data paths.
-  # Verified to work on macOS git (2.39+) and GitHub Actions runner git.
-  status="$(git -C "$NEXUS" status --porcelain -- \
-    . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null | head -1)"
+  # Read tracked edits separately so even tracked sidecars are protected.
+  # Disable optional index refresh writes: --check must remain observational.
+  status="$(GIT_OPTIONAL_LOCKS=0 git -C "$NEXUS" status --porcelain --untracked-files=no -- \
+    . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null)" || return 0
+  [[ -n "$status" ]] && return 0
+  # Legacy installers may leave these four known root sidecars unignored.
+  # Ignore only untracked metadata, without healing the old tree or excluding
+  # .gitignore itself. A same-named file below another directory is user data.
+  status="$(git -C "$NEXUS" ls-files --others --exclude-standard \
+    --exclude='/.install_date' --exclude='/.install_ref' \
+    --exclude='/.install_commit' --exclude='/.roster_ref' -- \
+    . ':!roster' ':!EIDOLONS.md' ':!methodology/cortex' 2>/dev/null)" || return 0
   [[ -n "$status" ]]
 }
 
@@ -157,6 +151,16 @@ _is_semver_tag() {
 # Strip leading 'v' prefix.
 _strip_v() { echo "${1#v}"; }
 
+# Renaming a registered worktree/separate-git-dir checkout would leave its
+# Git metadata pointing at the old location. Inspection is safe; swap is not.
+_require_standalone_nexus() {
+  if [[ -f "$NEXUS/.git" ]]; then
+    echo "Cannot swap a linked worktree or separate Git directory at $NEXUS." >&2
+    echo "Use a standalone nexus clone; this checkout is untouched." >&2
+    return 1
+  fi
+}
+
 # ─── Rollback path ────────────────────────────────────────────────────────
 if [[ "$ROLLBACK" == true ]]; then
   if [[ ! -d "$NEXUS_PREV" ]]; then
@@ -165,6 +169,8 @@ if [[ "$ROLLBACK" == true ]]; then
     die_exit7() { echo "Rollback unavailable: no nexus.prev exists." >&2; exit 7; }
     die_exit7
   fi
+
+  _require_standalone_nexus
 
   # Read versions for the message.
   _cur_ver="$(read_nexus_version 2>/dev/null || echo unknown)"
@@ -258,6 +264,8 @@ if [[ "$CHECK" == true ]]; then
   echo ""
   exit 0
 fi
+
+_require_standalone_nexus
 
 # ─── Downgrade warning (OQ-7) ─────────────────────────────────────────────
 if [[ "$_is_downgrade" == true ]]; then
@@ -431,11 +439,11 @@ _write_install_sidecars "$NEXUS_NEW" "$TARGET_REF"
 # value forward so the user's configured channel survives the swap.
 # B1 invariant preserved: _write_install_sidecars intentionally does NOT write
 # .roster_ref (it only writes the CLI-pin sidecars). We carry it here explicitly.
-_old_roster_ref="${EIDOLONS_ROSTER_REF:-}"
 if [[ -f "$NEXUS/.roster_ref" ]]; then
-  _old_roster_ref="$(tr -d '[:space:]' < "$NEXUS/.roster_ref" || true)"
+  cp "$NEXUS/.roster_ref" "$NEXUS_NEW/.roster_ref"
+else
+  printf '%s\n' "${EIDOLONS_ROSTER_REF:-main}" > "$NEXUS_NEW/.roster_ref"
 fi
-printf '%s\n' "${_old_roster_ref:-main}" > "$NEXUS_NEW/.roster_ref"
 
 # ─── Atomic swap ─────────────────────────────────────────────────────────
 say "Swapping nexus.new into place"

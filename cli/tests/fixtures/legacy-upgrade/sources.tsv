@@ -1,0 +1,10 @@
+# Reduced install-state snapshots; exact paths from the named historical commit.
+# Other CLI commands/resources are omitted. --version is the retained old-binary probe.
+# Tests invoke the CURRENT source upgrade_self.sh directly against these old trees.
+# version	source_commit	archive_sha256
+1.10.0	e2e41878c42ecbc17b8041e62cbaf3124848085a	aa54674981dfc1ae33692493b39de06a02e2f2b3e162d26bb24e27d24d4da525
+1.40.0	b1a3db683857c041a30c185817bf45d0bc816712	c5eea5b73a0569aaa527356d8ce172ac21c0f8b59d9e14bb83274d5071290dd6
+1.41.0	2ab9e55293ce5981d455f10842b82cd5ac2f33b0	e229b781f411bfe6ad4236f5c2cc13956e9ed05e0101904f51a1fae003800633
+1.41.1	ba60d6df334d1a5ed14e80f5d2bf0757f1e78920	908b336483409c72aaabe8ee6836715ef2ec5ac67abbb0780e49661cd3637567
+2.20.0	2cd2d0984e3f06ebad33bab9f9bb354ca57f83ec	70ccdc506086b262919619adf2c748cca6fbd95dbf1d0e4aa7f20a273f3a214b
+3.3.1	50913c28f0297f03d0db895a0e99545b7f489143	f79d16c844b1ee081d960cadac7d72f778a6dca0de85e08e83255dccf25db380
