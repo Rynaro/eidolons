@@ -1,0 +1,13 @@
+{
+  "selected": ["ATLAS", "FORGE", "Vivi", "VIGIL", "IDG"],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-15 and V4-21 are merged on main; V4-20 core-cli is also on main at eddd021.",
+    "Rynaro/Ramza remains the canonical producer; Gauge hosts consumer/versioned lite contracts and fixtures only.",
+    "Ramza sibling checkout may be absent — producer artifacts are fixture-simulated.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-17 / V4-18 / V4-10 / V4-19 / V4-22; no paid/live probes; no default flip or fabricated certainty."
+  ],
+  "refusal_rerouting": false
+}
