@@ -128,8 +128,27 @@ EOF
   fi
 }
 
+_harness_probe_cursor_hooks_patched() {
+  local hooks_file=".cursor/hooks.json"
+  [[ -f "$hooks_file" ]] || { printf 'false'; return 0; }
+  local _hooks_dump
+  _hooks_dump="$(jq -c '.hooks // {}' "$hooks_file" 2>/dev/null)" || { printf 'false'; return 0; }
+  [[ -n "$_hooks_dump" && "$_hooks_dump" != "null" ]] || { printf 'false'; return 0; }
+
+  if printf '%s' "$_hooks_dump" | grep -qF "cursor-SessionStart.sh"; then
+    printf 'true'
+    return 0
+  fi
+  if printf '%s' "$_hooks_dump" | grep -q "eidolons"; then
+    printf 'true'
+  else
+    printf 'false'
+  fi
+}
+
 _settings_patched="$(_harness_probe_settings_patched 2>/dev/null || echo "false")"
 _codex_patched="$(_harness_probe_codex_hooks_patched 2>/dev/null || echo "false")"
+_cursor_patched="$(_harness_probe_cursor_hooks_patched 2>/dev/null || echo "false")"
 _strict_wired="$(printf '%s' "$_lock_json" | jq -r '(.harness.strict // []) | join(",")' 2>/dev/null || echo "")"
 _strict_modes="$(printf '%s' "$_lock_json" | jq -c '.harness.strict_modes // {}' 2>/dev/null || echo '{}')"
 _protect_globs_count="$(printf '%s' "$_lock_json" | jq -r '(.harness.protect // []) | length' 2>/dev/null || echo "0")"
@@ -152,7 +171,7 @@ _harness_tier_rationale() {
     claude-code) printf 'full route-inject (UserPromptSubmit + SessionStart)' ;;
     codex)       printf 'route-inject; [A1] hooks.json schema unverified' ;;
     copilot)     printf 'static-inject + best-effort sessionStart ([#2142] context may be dropped)' ;;
-    cursor)      printf 'static-only (.mdc + AGENTS.md); hooks runtime-broken through v2.4.7' ;;
+    cursor)      printf 'sessionStart route-inject (.cursor/hooks.json) + static .mdc; --strict refused' ;;
     opencode)    printf 'gate-only floor; not yet wired (P3)' ;;
     *)           printf 'unknown host' ;;
   esac
@@ -181,6 +200,7 @@ printf '  strict wired:          %s\n' "${_strict_wired:-(none)}"
 printf '  protected-globs count: %s\n' "$_protect_globs_count"
 printf '  settings.json patched: %s\n' "$_settings_patched"
 printf '  codex hooks.json patched: %s\n' "$_codex_patched"
+printf '  cursor hooks.json patched: %s\n' "$_cursor_patched"
 
 # Report refusals for any hosts in the wire set that got strict refused.
 _manifest_hosts_status=""
@@ -189,7 +209,7 @@ if [[ -f "$PROJECT_MANIFEST" ]]; then
     | jq -r '(.hosts.wire // []) | join(",")' 2>/dev/null || echo "")"
 fi
 if printf '%s' ",$_manifest_hosts_status," | grep -q ",cursor,"; then
-  printf '  strict refusal: cursor — out of P3 scope (beforeSubmitPrompt persist-in-context bug)\n'
+  printf '  strict refusal: cursor — beforeSubmitPrompt cannot inject additional_context; --strict remains refused\n'
 fi
 
 printf '  shim paths:\n'
@@ -205,20 +225,25 @@ done <<EOF
 $_shims_json
 EOF
 
-# ── Cursor static-surface presence report (R13 AC-R13-2) ─────────────────
-# Driven by manifest hosts.wire (cursor is not a harness-installable host —
-# its surfaces ride sync). Read-only existence/grep checks only; no host binary.
+# ── Cursor surfaces (static .mdc + hooks) ────────────────────────────────
+# Static cortex rides sync; sessionStart hooks ride harness install.
 _manifest_hosts=""
 if [[ -f "$PROJECT_MANIFEST" ]]; then
   _manifest_hosts="$(yaml_to_json "$PROJECT_MANIFEST" 2>/dev/null \
     | jq -r '(.hosts.wire // []) | join(",")' 2>/dev/null || echo "")"
 fi
 if printf '%s' ",$_manifest_hosts," | grep -q ",cursor,"; then
-  printf '  cursor static surfaces:\n'
+  printf '  cursor surfaces:\n'
   if [[ -f ".cursor/rules/eidolons-cortex.mdc" ]]; then
     printf '    .cursor/rules/eidolons-cortex.mdc  [present]\n'
   else
     printf '    .cursor/rules/eidolons-cortex.mdc  [absent] — run eidolons sync to create\n'
+  fi
+  if [[ -f ".cursor/hooks.json" ]] && jq -e --arg ss ".eidolons/harness/hooks/cursor-SessionStart.sh" \
+      '.hooks.sessionStart[]?.command == $ss' ".cursor/hooks.json" >/dev/null 2>&1; then
+    printf '    .cursor/hooks.json sessionStart     [present]\n'
+  else
+    printf '    .cursor/hooks.json sessionStart     [absent] — run eidolons harness install\n'
   fi
   if grep -qF "<!-- eidolon:dispatch-pointer start -->" AGENTS.md 2>/dev/null; then
     printf '    AGENTS.md dispatch-pointer block    [present]\n'

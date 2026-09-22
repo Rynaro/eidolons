@@ -148,23 +148,37 @@ WIRE_HOSTS="$_resolved_hosts"
 # drifted cwd — the kernel resolves the project purely cwd-relatively
 # (manifest_exists() in lib.sh does no upward walk), so eidolons.yaml is
 # unreachable and `run --hook` fail-opens to empty stdout / exit 0, silently.
-# claude-code shims only (no equivalent project-root variable is confirmed
-# for codex/copilot). Inserts the guard right after `set -euo pipefail` —
-# a no-op line-count-preserving insert for every other host, so
-# codex/copilot shim bodies stay byte-identical to pre-change output.
+# Hosts with a confirmed project-root env var: claude-code (CLAUDE_PROJECT_DIR)
+# and cursor (CURSOR_PROJECT_DIR, with CLAUDE_PROJECT_DIR as documented alias).
+# Inserts the guard right after `set -euo pipefail`. Other hosts stay
+# byte-identical to pre-change shim bodies.
 _cd_guard() {
   local shim_path="$1"
   local host="$2"
-  [[ "$host" == "claude-code" ]] || return 0
   local tmp_shim
-  tmp_shim="$(mktemp)"
-  while IFS= read -r _cdg_line || [[ -n "$_cdg_line" ]]; do
-    printf '%s\n' "$_cdg_line" >> "$tmp_shim"
-    if [[ "$_cdg_line" == "set -euo pipefail" ]]; then
-      printf '\ncd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0\n' >> "$tmp_shim"
-    fi
-  done < "$shim_path"
-  mv "$tmp_shim" "$shim_path"
+  case "$host" in
+    claude-code)
+      tmp_shim="$(mktemp)"
+      while IFS= read -r _cdg_line || [[ -n "$_cdg_line" ]]; do
+        printf '%s\n' "$_cdg_line" >> "$tmp_shim"
+        if [[ "$_cdg_line" == "set -euo pipefail" ]]; then
+          printf '\ncd "${CLAUDE_PROJECT_DIR:-$PWD}" 2>/dev/null || exit 0\n' >> "$tmp_shim"
+        fi
+      done < "$shim_path"
+      mv "$tmp_shim" "$shim_path"
+      ;;
+    cursor)
+      tmp_shim="$(mktemp)"
+      while IFS= read -r _cdg_line || [[ -n "$_cdg_line" ]]; do
+        printf '%s\n' "$_cdg_line" >> "$tmp_shim"
+        if [[ "$_cdg_line" == "set -euo pipefail" ]]; then
+          printf '\ncd "${CURSOR_PROJECT_DIR:-${CLAUDE_PROJECT_DIR:-$PWD}}" 2>/dev/null || exit 0\n' >> "$tmp_shim"
+        fi
+      done < "$shim_path"
+      mv "$tmp_shim" "$shim_path"
+      ;;
+    *) return 0 ;;
+  esac
 }
 
 # ── Shim template renderer ─────────────────────────────────────────────────
@@ -822,14 +836,20 @@ for _host in $(printf '%s' "$_hosts_sorted" | tr ',' ' '); do
   [[ -z "$_host" ]] && continue
 
   # Copilot: SessionStart only (userPromptSubmitted output is unprocessed — per-prompt
-  # injection impossible, copilot-cli#1139). All other supported-shim hosts get both.
-  # Cursor/opencode: no base UPS/SessionStart shims (they surface via sync/strict only).
-  if [[ "$_host" == "cursor" ]] || [[ "$_host" == "opencode" ]]; then
+  # injection impossible, copilot-cli#1139).
+  # Cursor: SessionStart only via `.cursor/hooks.json` (beforeSubmitPrompt cannot inject
+  # additional_context; static .mdc remains the always-on baseline). Strict still refused.
+  # OpenCode: no base UPS/SessionStart shims (surfaces via sync/plugin).
+  if [[ "$_host" == "opencode" ]]; then
     info "  $_host: no base-tier UPS/SessionStart shims (static surfaces via sync; strict via --strict)"
     # No shim file written; host is still recorded in hosts_wired for status/strict routing.
-  elif [[ "$_host" == "copilot" ]]; then
+  elif [[ "$_host" == "copilot" || "$_host" == "cursor" ]]; then
     _write_shim "$_host" "SessionStart"
-    info "  wrote SessionStart shim for $_host (SessionStart-only; see caveat below)"
+    if [[ "$_host" == "cursor" ]]; then
+      info "  wrote SessionStart shim for $_host (Cursor hooks.json sessionStart; UPS inject unsupported)"
+    else
+      info "  wrote SessionStart shim for $_host (SessionStart-only; see caveat below)"
+    fi
     _ss_path="$HARNESS_SHIM_DIR/${_host}-SessionStart.sh"
     if [[ -z "$_shim_paths" ]]; then
       _shim_paths="$_ss_path"
@@ -1243,7 +1263,50 @@ Cursor.
 
 Pins: ${_cr_pins_csv}"
   upsert_marker_block "$_cr_mdc_file" "ecm-context" "$_cr_body"
-  ok "Wrote ECM static floor into .cursor/rules/eidolons-context.mdc (cursor: static-only, no live injection)"
+  ok "Wrote ECM static floor into .cursor/rules/eidolons-context.mdc (cursor: documentary floor; sessionStart inject is separate via hooks.json)"
+fi
+
+# ── Wire cursor hooks.json (sessionStart route-inject) ─────────────────────
+# Cursor project hooks: https://cursor.com/docs/hooks — schema version 1,
+# lowercase event names, command hooks receive JSON on stdin and may emit
+# {additional_context} from sessionStart. Fail-open (no failClosed).
+# Merge upserts our sessionStart command; foreign hooks/events are preserved.
+if printf '%s' ",$_hosts_wired_sorted," | grep -q ",cursor,"; then
+  mkdir -p .cursor
+  CURSOR_HOOKS=".cursor/hooks.json"
+  _cursor_ss_cmd="$HARNESS_SHIM_DIR/cursor-SessionStart.sh"
+  if [[ ! -f "$CURSOR_HOOKS" ]]; then
+    jq -n --arg ss "$_cursor_ss_cmd" \
+      '{"version":1,"hooks":{"sessionStart":[{"command":$ss}]}}' > "$CURSOR_HOOKS"
+    ok "Wrote .cursor/hooks.json (sessionStart)"
+  else
+    if ! jq empty "$CURSOR_HOOKS" 2>/dev/null; then
+      warn ".cursor/hooks.json is not valid JSON — leaving unchanged; fix or remove it, then re-run harness install"
+    else
+      _existing_cursor="$(jq -cS . "$CURSOR_HOOKS" 2>/dev/null || echo "")"
+      _merged_cursor="$(jq \
+        --arg ss "$_cursor_ss_cmd" \
+        '
+        .version = (.version // 1) |
+        .hooks = (.hooks // {}) |
+        .hooks.sessionStart = (
+          ((.hooks.sessionStart // []) | map(select(.command != $ss)))
+          + [{"command": $ss}]
+        )
+        ' "$CURSOR_HOOKS" 2>/dev/null)" || _merged_cursor=""
+      if [[ -n "$_merged_cursor" ]]; then
+        _new_cursor="$(printf '%s' "$_merged_cursor" | jq -cS . 2>/dev/null || echo "")"
+        if [[ "$_existing_cursor" != "$_new_cursor" ]]; then
+          printf '%s\n' "$_merged_cursor" > "$CURSOR_HOOKS"
+          ok "Merged sessionStart into .cursor/hooks.json"
+        else
+          info ".cursor/hooks.json already has eidolons sessionStart (no-op)"
+        fi
+      else
+        warn "Failed to merge .cursor/hooks.json — leaving unchanged"
+      fi
+    fi
+  fi
 fi
 
 # ── Wire codex hooks.json ──────────────────────────────────────────────────
@@ -1396,7 +1459,7 @@ if [[ "$_ecm_enabled" == "true" ]] && [[ -f "$PROJECT_LOCK" ]]; then
       claude-code) _et="T3"; _ech="full";          _efeat='["session_start","user_prompt_submit","post_tool_use","compact_threshold"]' ;;
       codex)       _et="T3"; _ech="full";          _efeat='["session_start","user_prompt_submit","post_tool_use","auto_compact_config"]' ;;
       copilot)     _et="T2"; _ech="static";        _efeat='["session_start_static"]' ;;
-      cursor)      _et="T2"; _ech="static";        _efeat='["static_floor"]' ;;
+      cursor)      _et="T2"; _ech="session_start"; _efeat='["static_floor","session_start"]' ;;
       opencode)    _et="T1"; _ech="system_prompt"; _efeat='["chat_system_transform","session_compacting"]' ;;
       *)           _et="T0"; _ech="none";          _efeat='[]' ;;
     esac

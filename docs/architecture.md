@@ -331,10 +331,10 @@ template; the kernel is unchanged.
 | claude-code | T3 | block (`PreToolUse` deny) | `UserPromptSubmit` + `SessionStart` + optional `PreToolUse`; `additionalContext` inject | Full route-inject; `--strict` adds file-edit blocking shim |
 | codex | T3 | advisory (protected-glob deny) | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) | Route-inject; `--strict` adds codex `PreToolUse` shim for protected-glob paths only |
 | copilot | T2 | — (not available) | `.github/hooks/eidolons.json` + best-effort `sessionStart` shim | `additionalContext` may be silently dropped (upstream bug #2142); no `userPromptSubmitted` hook (copilot-cli#1139) |
-| cursor | T2 | refused by CLI | `.cursor/rules/eidolons-cortex.mdc` (always-applied) + `AGENTS.md` dispatch-pointer | Static-only; cursor `beforeSubmitPrompt` has a persist-in-context bug — strict surfaces are unsound |
+| cursor | T2 | refused by CLI | `.cursor/hooks.json` `sessionStart` + `.cursor/rules/eidolons-cortex.mdc` + `AGENTS.md` dispatch-pointer | SessionStart route-inject (fail-open); static `.mdc` remains the always-on baseline. `--strict cursor` refused — `beforeSubmitPrompt` cannot inject `additional_context`. Cloud agents may skip `sessionStart`. |
 | opencode | T1 | advisory (plugin gate) | `opencode.json` MCP registration + `agent.<member>.permission.task` gate + optional `.opencode/plugins/eidolons.js` | `--strict opencode` writes advisory plugin (caveat: `#5894` subagent bypass) |
 
-**Cursor note:** cursor hooks (`additional_context`) are runtime-broken through Cursor v2.4.7 (multiple forum reports). P2 ships only static surfaces (`.mdc` + AGENTS.md pointer). `--strict cursor` is refused by the CLI with an explanation (FORGE degradation-rule 4).
+**Cursor note:** `eidolons harness install` writes `.cursor/hooks.json` (`version: 1`) with a fail-open `sessionStart` command hook that injects cortex digest via `{additional_context}`. Always-apply `.mdc` from `eidolons sync` remains the baseline (especially for cloud agents where `sessionStart` may not fire). `--strict cursor` is refused — Cursor's `beforeSubmitPrompt` can gate but cannot inject routing context.
 
 **Copilot note:** `sessionStart` `additionalContext` is tracked as silently dropped by the Copilot CLI (issue #2142, closed without fix note). The harness adapter is best-effort; install prints the caveat. Per-prompt injection is impossible (`userPromptSubmitted` output is unprocessed, copilot-cli#1139).
 

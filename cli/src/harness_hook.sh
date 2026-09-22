@@ -438,11 +438,18 @@ ${ecm_block}"
       fi
     fi
 
-    # Emit JSON.
-    jq -n \
-      --arg en "SessionStart" \
-      --arg ctx "$cortex_digest" \
-      '{"hookSpecificOutput": {"hookEventName": $en, "additionalContext": $ctx}}'
+    # Emit JSON — host-shaped. Cursor sessionStart wants top-level
+    # additional_context; Claude/Codex/Copilot use hookSpecificOutput.
+    if [[ "$hook_host" == "cursor" ]]; then
+      jq -n \
+        --arg ctx "$cortex_digest" \
+        '{"additional_context": $ctx}'
+    else
+      jq -n \
+        --arg en "SessionStart" \
+        --arg ctx "$cortex_digest" \
+        '{"hookSpecificOutput": {"hookEventName": $en, "additionalContext": $ctx}}'
+    fi
     return 0
   fi
 

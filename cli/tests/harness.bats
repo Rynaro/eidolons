@@ -1076,6 +1076,130 @@ alwaysApply: true
   [ ! -f ".cursor/rules/eidolons-cortex.mdc" ]
 }
 
+# ─── Cursor harness sessionStart (hooks.json) ────────────────────────────────
+
+@test "harness: cursor install writes SessionStart shim only (no UserPromptSubmit)" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  [ -f ".eidolons/harness/hooks/cursor-SessionStart.sh" ]
+  [ -x ".eidolons/harness/hooks/cursor-SessionStart.sh" ]
+  [ ! -f ".eidolons/harness/hooks/cursor-UserPromptSubmit.sh" ]
+  grep -qF 'CURSOR_PROJECT_DIR' .eidolons/harness/hooks/cursor-SessionStart.sh
+}
+
+@test "harness: cursor install writes .cursor/hooks.json sessionStart (version 1)" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/hooks.json" ]
+  run jq -e '.version == 1' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  run jq -e --arg ss ".eidolons/harness/hooks/cursor-SessionStart.sh" \
+    '.hooks.sessionStart[]?.command == $ss' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  # No PascalCase Claude events leaked into Cursor hooks.json.
+  run jq -e '(.hooks | has("SessionStart") or has("UserPromptSubmit")) | not' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: cursor hooks.json merge preserves foreign hooks" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  mkdir -p .cursor
+  cat > .cursor/hooks.json <<'EOF'
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [{"command": ".cursor/hooks/user-shell.sh"}],
+    "sessionStart": [{"command": ".cursor/hooks/user-start.sh"}]
+  }
+}
+EOF
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.beforeShellExecution[0].command == ".cursor/hooks/user-shell.sh"' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  run jq -e '.hooks.sessionStart | map(.command) | index(".cursor/hooks/user-start.sh") != null' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  run jq -e --arg ss ".eidolons/harness/hooks/cursor-SessionStart.sh" \
+    '.hooks.sessionStart | map(.command) | index($ss) != null' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: cursor remove strips eidolons sessionStart and preserves foreign hooks" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  mkdir -p .cursor
+  cat > .cursor/hooks.json <<'EOF'
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [{"command": ".cursor/hooks/user-shell.sh"}]
+  }
+}
+EOF
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  run eidolons harness remove
+  [ "$status" -eq 0 ]
+  [ -f ".cursor/hooks.json" ]
+  run jq -e '.hooks.beforeShellExecution[0].command == ".cursor/hooks/user-shell.sh"' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  run jq -e --arg ss ".eidolons/harness/hooks/cursor-SessionStart.sh" \
+    '((.hooks.sessionStart // []) | map(.command) | index($ss)) == null' .cursor/hooks.json
+  [ "$status" -eq 0 ]
+  [ ! -f ".eidolons/harness/hooks/cursor-SessionStart.sh" ]
+}
+
+@test "harness: run --hook cursor --session-start emits additional_context (not Claude shape)" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  run eidolons run --hook cursor --session-start
+  [ "$status" -eq 0 ]
+  [[ -n "$output" ]]
+  _hook_out="$output"
+  run jq -e 'has("additional_context") and (.additional_context | length) > 0' <<<"$_hook_out"
+  [ "$status" -eq 0 ]
+  run jq -e 'has("hookSpecificOutput") | not' <<<"$_hook_out"
+  [ "$status" -eq 0 ]
+  run jq -e '.additional_context | test("Roster Index|Dispatch Protocol|Eidolons")' <<<"$_hook_out"
+  [ "$status" -eq 0 ]
+}
+
+@test "harness: status reports cursor hooks.json patched after install" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts cursor --non-interactive --force
+  [ "$status" -eq 0 ]
+  run eidolons harness status
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ "cursor hooks.json patched: true" ]]
+  [[ "$output" =~ "sessionStart route-inject" ]]
+}
+
+@test "harness: --strict cursor still refused" {
+  seed_cursor_manifest
+  seed_lock
+  seed_cortex
+  run eidolons harness install --hosts cursor --strict --non-interactive --force
+  # Install may succeed overall while refusing strict for cursor; assert no PreToolUse
+  # and warning/refusal text. Exit may be 0 (warn) depending on host set.
+  [ ! -f ".eidolons/harness/hooks/cursor-PreToolUse.sh" ]
+  run eidolons harness install --hosts cursor --strict --non-interactive --force
+  [[ "$output" =~ "refuse: cursor strict" ]] || [[ "$output" =~ "out of P3" ]] || [[ "$output" =~ "strict" ]]
+}
+
 # ─── Phase 2: R12 — Copilot harness adapter ───────────────────────────────────
 
 # Helper: seed manifest with copilot in hosts.wire.

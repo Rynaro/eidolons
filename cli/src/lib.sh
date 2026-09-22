@@ -2748,7 +2748,7 @@ deep_check_harness_consistency() {
         fi
         ;;
       cursor)
-        err "D12 cursor in strict[] — cursor strict is out of P3 scope; remove with 'eidolons harness remove && eidolons harness install'"
+        err "D12 cursor in strict[] — cursor --strict remains refused (beforeSubmitPrompt cannot inject); remove with 'eidolons harness remove && eidolons harness install'"
         rc=$((rc + 1))
         ;;
       *)
@@ -2767,6 +2767,29 @@ deep_check_harness_consistency() {
         ;;
     esac
   done
+
+  # Cursor harness: when cursor is wired, expect SessionStart shim + hooks.json entry.
+  if printf '%s' ",$_hosts_wired," | grep -q ",cursor,"; then
+    if [[ ! -f ".eidolons/harness/hooks/cursor-SessionStart.sh" ]]; then
+      err "D12 cursor-SessionStart.sh missing — cursor wired but SessionStart shim absent"
+      rc=$((rc + 1))
+    elif [[ ! -x ".eidolons/harness/hooks/cursor-SessionStart.sh" ]]; then
+      err "D12 cursor-SessionStart.sh not executable"
+      rc=$((rc + 1))
+    fi
+    if [[ ! -f ".cursor/hooks.json" ]]; then
+      err "D12 .cursor/hooks.json missing — cursor wired but hooks file absent"
+      rc=$((rc + 1))
+    elif ! jq empty ".cursor/hooks.json" 2>/dev/null; then
+      err "D12 .cursor/hooks.json is not valid JSON"
+      rc=$((rc + 1))
+    elif ! jq -e --arg ss ".eidolons/harness/hooks/cursor-SessionStart.sh" \
+        '(.hooks.sessionStart // []) | map(.command) | index($ss) != null' \
+        ".cursor/hooks.json" >/dev/null 2>&1; then
+      err "D12 .cursor/hooks.json missing eidolons sessionStart entry"
+      rc=$((rc + 1))
+    fi
+  fi
 
   # Orphan shim check: PreToolUse shim on disk but host NOT in strict[].
   for _h in claude-code codex; do

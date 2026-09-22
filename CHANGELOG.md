@@ -8,7 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+- Cursor harness `sessionStart` wiring: `eidolons harness install` writes `.cursor/hooks.json` (schema v1) and `.eidolons/harness/hooks/cursor-SessionStart.sh`, injecting cortex digest as `{additional_context}` (fail-open). Static `.mdc` from sync remains the always-on baseline; `--strict cursor` stays refused.
+
+### Changed
+- `harness status` / doctor D12 report Cursor hooks surfaces; ECM lock `per_host.cursor` channel is `session_start` with features `static_floor` + `session_start`.
 
 ## [4.0.0] — 2026-09-22 — verified-delivery Gauge era
 

@@ -258,7 +258,7 @@ Writes shim scripts under `.eidolons/harness/hooks/` and merges hooks blocks int
 | `--force` | Overwrite existing shims even when already up-to-date. (The `SessionStart` merge is an upsert: a stale `startup`-only matcher on the Eidolons-owned entry is healed in place.) |
 | `--no-heal` | Skip the seamless `SessionStart`-matcher self-heal during the internal `--refresh-shims-only` refresh (default: heal). |
 
-**Base tier (default):** writes `UserPromptSubmit.sh` + `SessionStart.sh` shims for claude-code and codex; `sessionStart` shim for copilot. Merges a hooks block into `.claude/settings.json` (claude-code) and `.codex/hooks.json` (codex). Cursor and opencode receive no base shims (their surfaces ride `eidolons sync` and `eidolons mcp install`).
+**Base tier (default):** writes `UserPromptSubmit.sh` + `SessionStart.sh` shims for claude-code and codex; `sessionStart` shim for copilot; `sessionStart` shim + `.cursor/hooks.json` for cursor. Merges a hooks block into `.claude/settings.json` (claude-code) and `.codex/hooks.json` (codex); merges Cursor `sessionStart` into `.cursor/hooks.json` (foreign hooks preserved). OpenCode receives no base shims (surfaces ride `eidolons sync` / plugin).
 
 **Strict tier (`--strict`):** adds a `PreToolUse` shim layer on top of the base tier.
 
@@ -267,7 +267,7 @@ Writes shim scripts under `.eidolons/harness/hooks/` and merges hooks blocks int
 | claude-code | `block` | `{"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}` (exit 0) | Subagent invocations (agent_id present in event JSON) are allowed through — delegate-or-deny. Protected globs deny in ALL contexts. |
 | codex | `advisory` | `{"decision":"block","reason":"..."}` (exit 0) | Protected-glob denials only; host may still proceed. |
 | opencode | `advisory` | Plugin `.opencode/plugins/eidolons.js` throws on edit tools | Caveat: opencode#5894 subagent bypass — plugin not invoked for subagent calls. |
-| cursor | refused | CLI prints reason and exits non-zero | `beforeSubmitPrompt` persist-in-context bug makes strict surfaces unsound (FORGE degradation-rule 4). |
+| cursor | refused | CLI prints reason and exits non-zero | `beforeSubmitPrompt` cannot inject `additional_context`; sessionStart inject is base-tier only. |
 | copilot | — | Not available | No `PreToolUse`-equivalent hook in copilot. |
 
 **`#16952` guard:** The UPS shim and `eidolons run` both exit 0 immediately when the prompt is a task-completion notification (`"Agent ... completed"` shape or `<task-notification>` suffix). This prevents double-routing on subagent hand-off completions (Claude Code issue #16952).
