@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-11 is merged on main at 9ff1c65; V4-12 implements one fixture-qualified native adapter with durable dispatch only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-13 compiler; no paid/live probes; no privileged sibling fallback; live qualification stays blocked."
+  ],
+  "refusal_rerouting": false
+}

@@ -57,6 +57,13 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   reservation-amend --root ID --input JSON
   reservation-reconcile --root ID --input JSON
 
+  dispatch-enable                  add typed dispatch namespaces (schema 2)
+  admit-dispatch --root ID --input JSON
+  dispatch-status --root ID
+  dispatch-cancel --root ID --input JSON
+  dispatch-reconcile --root ID --input JSON
+  dispatch-events --root ID --intent ID
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -64,6 +71,7 @@ Preset strategy bounds are illustrative registry rules, not calibrated budgets.
 Observation recording never grants policy or spending authority.
 Instrument catalogue/preflight never grants live host qualification.
 Reservation admit is fixture-local atomic bookkeeping; no provider dispatch.
+Dispatch admit uses one fixture-qualified fake native adapter; live stays blocked.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -90,6 +98,9 @@ func run(args []string) error {
 	}
 	if isReservationCommand(command) {
 		return reservationCommand(args)
+	}
+	if isDispatchCommand(command) {
+		return dispatchCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

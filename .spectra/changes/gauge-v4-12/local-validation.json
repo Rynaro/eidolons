@@ -1,0 +1,20 @@
+{
+  "scope": "local fixture acceptance only",
+  "implementation_base": "9ff1c65210a70890a5c701405e8e2d3db64485a0",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "branch": "codex/gauge-v4-12-adapter",
+  "macos": {
+    "go": "1.27.1",
+    "commands": [
+      "cd gauge && GAUGE_REPO=$PWD/.. go test -mod=readonly -race -count=1 ./... -run 'TestV412|TestV411|TestV409|TestV408|TestV407|TestV406'",
+      "bash gauge/tests/dispatch-anchors.sh"
+    ],
+    "exit": 0
+  },
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "live_qualification": "intentionally_blocked",
+  "provider_dispatch": "fixture_fake_adapter_only",
+  "model_calls": 0,
+  "schema": "2 additive dispatch namespaces",
+  "transport_probes": "none; FakeNativeAdapter counters only"
+}
