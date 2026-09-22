@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-14 is merged on main at de25cd9; V4-15 implements the observable delivery demonstrator only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-16+ / V4-20 full CLI / V4-21; no paid/live probes; live qualification stays blocked."
+  ],
+  "refusal_rerouting": false
+}

@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, one fixture-qualified native adapter with durable dispatch and cancellation, assignment compilation without mandatory agent chains, and protected candidate freeze / oracle qualification; it does not provide full CLI parity, live harness reconstruction, live host qualification, or universal correctness claims. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md), [V4-12 receipt](campaigns/gauge/receipts/V4-12.md), [V4-13 receipt](campaigns/gauge/receipts/V4-13.md) and [V4-14 receipt](campaigns/gauge/receipts/V4-14.md) for tested scope and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, one fixture-qualified native adapter with durable dispatch and cancellation, assignment compilation without mandatory agent chains, protected candidate freeze / oracle qualification, and an observable runnable-slice delivery demonstrator with recovery; it does not provide full CLI parity, live harness reconstruction, live host qualification, or universal correctness claims. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md), [V4-12 receipt](campaigns/gauge/receipts/V4-12.md), [V4-13 receipt](campaigns/gauge/receipts/V4-13.md), [V4-14 receipt](campaigns/gauge/receipts/V4-14.md) and [V4-15 receipt](campaigns/gauge/receipts/V4-15.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -291,7 +291,24 @@ eidolons gauge owner-review --project "/absolute/ação project" --root demo --i
 eidolons gauge definition-assess --project "/absolute/ação project" --root demo --input /absolute/package.json
 ```
 
-Mandatory checks bind to a frozen content digest plus acceptance/environment identities. Enforced fixture isolation denies writes to journal/receipt/oracle/keys and strips checker credentials from candidate env; label-only isolation withholds the trusted grade. Observed outcomes and provenance are recorded; authored prose cannot replace observation. Application requires revalidation when the target base moved, is dirty, or conflicts. Oracle qualification needs discrimination on valid and representative defective fixtures. Maker test/def changes need acceptance-owner review. Behavior gates require declared-environment observation. Ambiguous criteria yield definition blockers. No universal correctness, no auto push/merge/release, no V4-15+.
+Mandatory checks bind to a frozen content digest plus acceptance/environment identities. Enforced fixture isolation denies writes to journal/receipt/oracle/keys and strips checker credentials from candidate env; label-only isolation withholds the trusted grade. Observed outcomes and provenance are recorded; authored prose cannot replace observation. Application requires revalidation when the target base moved, is dirty, or conflicts. Oracle qualification needs discrimination on valid and representative defective fixtures. Maker test/def changes need acceptance-owner review. Behavior gates require declared-environment observation. Ambiguous criteria yield definition blockers. No universal correctness, no auto push/merge/release.
+
+## V4-15 managed delivery demonstrator
+
+New stores initialize typed delivery namespaces under schema 2 (`delivery_loops`, `delivery_checkpoints`, `delivery_obligations`, `delivery_interventions`, `delivery_events`) with a `delivery_receipt`. Existing schema-2 controllers without those buckets remain openable; call `delivery-enable` before first managed delivery use.
+
+```sh
+eidolons gauge init --project "/absolute/ação project" --root demo
+eidolons gauge delivery-enable --project "/absolute/ação project"
+eidolons gauge delivery-run --project "/absolute/ação project" --root demo --input /absolute/delivery.json
+eidolons gauge delivery-inspect --project "/absolute/ação project" --loop <loop-id>
+eidolons gauge delivery-status --project "/absolute/ação project" --root demo
+eidolons gauge delivery-resume --project "/absolute/ação project" --root demo --input /absolute/resume.json
+eidolons gauge delivery-cancel --project "/absolute/ação project" --root demo --input /absolute/cancel.json
+eidolons gauge delivery-compact --project "/absolute/ação project" --root demo --input /absolute/compact.json
+```
+
+One maker progresses authorized phases without routine continuation prompts. Runnable milestones require an executed behavior check. Resource exhaustion and repeat-failure bounds yield nonaccepted partial or blocked results. Resume preserves root accounting, authority, candidates and outstanding verification; unresolved external effects must be exposed before dependent work. Inspect is observational (no model work). Context compact keeps canonical obligations independently of summaries. Demonstrator comparison records native/v4 arms through V4-09 without fabricating ineligible live arms. Minimal inspect/status/resume/cancel only — full V4-20 CLI and V4-16+/V4-21 are out of scope for this package.
 
 ## Provenance
 
@@ -309,4 +326,6 @@ V4-12 additions use the [dispatch CLI](../gauge/cmd/eidolons-gauge/dispatch.go),
 
 V4-13 additions use the [compiler CLI](../gauge/cmd/eidolons-gauge/compiler.go), [compiler contract](../gauge/internal/contract/compiler.go), [store](../gauge/internal/store/compiler.go), [controller](../gauge/internal/controller/compiler.go), and [spec/decision](../.spectra/changes/gauge-v4-13/spec.md). Local fixture anchors are recorded in the [V4-13 receipt](campaigns/gauge/receipts/V4-13.md). No mandatory agent chains; hosted CI pending publication.
 
-V4-14 additions use the [acceptance CLI](../gauge/cmd/eidolons-gauge/acceptance.go), [acceptance contract](../gauge/internal/contract/acceptance.go), [store](../gauge/internal/store/acceptance.go), [isolation](../gauge/internal/controller/isolation.go), [controller](../gauge/internal/controller/acceptance.go), and [spec/decision](../.spectra/changes/gauge-v4-14/spec.md). Local fixture anchors are recorded in the [V4-14 receipt](campaigns/gauge/receipts/V4-14.md). No universal correctness; no V4-15+; hosted CI pending publication.
+V4-14 additions use the [acceptance CLI](../gauge/cmd/eidolons-gauge/acceptance.go), [acceptance contract](../gauge/internal/contract/acceptance.go), [store](../gauge/internal/store/acceptance.go), [isolation](../gauge/internal/controller/isolation.go), [controller](../gauge/internal/controller/acceptance.go), and [spec/decision](../.spectra/changes/gauge-v4-14/spec.md). Local fixture anchors are recorded in the [V4-14 receipt](campaigns/gauge/receipts/V4-14.md). No universal correctness; hosted CI pending publication.
+
+V4-15 additions use the [delivery CLI](../gauge/cmd/eidolons-gauge/delivery.go), [delivery contract](../gauge/internal/contract/delivery.go), [store](../gauge/internal/store/delivery.go), [controller](../gauge/internal/controller/delivery.go), and [spec/decision](../.spectra/changes/gauge-v4-15/spec.md). Local fixture anchors are recorded in the [V4-15 receipt](campaigns/gauge/receipts/V4-15.md). Minimal operator controls only; no V4-16+ / V4-20 full / V4-21; hosted CI pending publication.
