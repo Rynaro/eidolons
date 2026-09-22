@@ -1,0 +1,18 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-21 evaluation is present on main tip fcafd0d; V4-22 extends it with calibration namespaces only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-18 / V4-23; no paid/live probes; live qualification stays blocked; missing mechanism arms stay pending.",
+    "optional-offline-adaptation delivers R10 fixture isolation without production self-mod."
+  ],
+  "refusal_rerouting": false
+}

@@ -153,6 +153,22 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   roster-benefit --input JSON      label unproven performance benefits
   roster-show [--profile ID]       show profile or adoption registry
 
+  calibration-enable               add typed calibration namespaces (schema 2)
+  calibration-trial --input JSON   start strategy calibration trial (extends V4-21)
+  calibration-baseline --input JSON lock acceptance/authority digests across arms
+  calibration-arm --input JSON     record mechanism ablation arm / pending gate
+  calibration-batch --input JSON   development/calibration freeze chronology
+  calibration-cost --input JSON    mechanism benefit + coordination costs
+  calibration-promote --input JSON promotion/unpromotion under frozen criteria
+  calibration-stop --input JSON    stop trial at resource/safety boundary
+  calibration-decide --input JSON  bind adaptive strategy decision (R06)
+  calibration-adapt --input JSON   version experience-derived proposal (R07)
+  calibration-generalize --input JSON same-batch vs forward generalization (R08)
+  calibration-strategy --input JSON register promoted strategy scope (R09)
+  calibration-revalidate --strategy ID [--model] [--harness] [--task-scope]
+  calibration-offline --input JSON isolate offline adaptation proposals (R10)
+
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -175,6 +191,8 @@ publication authority.
 V4-18 adopts need-based specialist execution across the roster; no global rename;
 no V4-22/V4-23; unproven benefits stay experimental/maintenance without V4-21 evidence.
 V4-19 core-context manages bounded information access; optional adapter out of scope.
+V4-22 calibrates strategies and gates experience-driven adaptation; extends V4-21;
+null/inconclusive never flips a default; no V4-18/V4-23 in this package.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -231,6 +249,9 @@ func run(args []string) error {
 	}
 	if isRosterCommand(command) {
 		return rosterCommand(args)
+	}
+	if isCalibrationCommand(command) {
+		return calibrationCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

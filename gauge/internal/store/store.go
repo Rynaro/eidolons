@@ -117,7 +117,10 @@ func guard(tx *bolt.Tx) error {
 	if e := guardContext(tx); e != nil {
 		return e
 	}
-	return guardRoster(tx)
+	if e := guardRoster(tx); e != nil {
+		return e
+	}
+	return guardCalibration(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -195,7 +198,10 @@ func Create(path, id string) error {
 		if e := initializeContext(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeRoster(tx, id, "new-store")
+		if e := initializeRoster(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeCalibration(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {
