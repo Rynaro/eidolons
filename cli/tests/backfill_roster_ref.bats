@@ -7,7 +7,7 @@
 #   BRR-1: no .roster_ref + no env var → nexus_refresh writes "main"
 #   BRR-2: .roster_ref=staging already exists → nexus_refresh does NOT overwrite
 #   BRR-3: no .roster_ref + EIDOLONS_ROSTER_REF=feature/foo → writes "feature/foo"
-#   BRR-4: upgrade self on a cache without .roster_ref → also writes the default
+#   BRR-4: explicit helper on a cache without .roster_ref writes the default
 #   BRR-5: nexus_ensure_roster_ref directly — idempotent on repeated calls
 
 load helpers
@@ -78,13 +78,13 @@ load helpers
   echo "$output" | grep -qx "feature/foo"
 }
 
-# ─── BRR-4: upgrade self path — nexus_ensure_roster_ref called for .git nexus ──
+# ─── BRR-4: explicit backfill helper on a Git nexus ──
 
-@test "BRR-4: upgrade self backfills .roster_ref when absent from a .git nexus" {
+@test "BRR-4: explicit helper backfills .roster_ref when absent from a .git nexus" {
   local fake_nexus="$BATS_TEST_TMPDIR/nexus-brr4"
   mkdir -p "$fake_nexus/.git"
   # No .roster_ref; pre-v1.11.0 state.
-  # We test nexus_ensure_roster_ref (which upgrade_self.sh also calls) directly.
+  # Read-only upgrade checks do not call this mutating helper.
 
   run bash -c "
     export EIDOLONS_NEXUS=''

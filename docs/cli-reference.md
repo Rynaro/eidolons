@@ -28,7 +28,7 @@ eidolons <command> [options]
 |------|-------|---------|
 | `~/.eidolons/nexus/` | user | Cloned nexus |
 | `~/.eidolons/nexus/.install_ref` | user | CLI self-pin ref (written by `install.sh` and `upgrade self`). |
-| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref (written by `install.sh` only; `upgrade self` leaves this alone). Default: `main`. Installs predating v1.11.0 that lack this file are auto-healed by `nexus_refresh()` and `upgrade self`: the file is backfilled with `$EIDOLONS_ROSTER_REF` when set, otherwise `main`. As part of the backfill (v1.13.4), `nexus_ensure_roster_ref` also ensures `.roster_ref` and all other sidecar files (`.install_date`, `.install_ref`, `.install_commit`) are listed in `~/.eidolons/nexus/.gitignore` so they are not reported as untracked by `git status`. Without this heal, a freshly-backfilled `.roster_ref` caused `eidolons upgrade self`'s dirty-tree check to refuse the upgrade until `--force` was passed. |
+| `~/.eidolons/nexus/.roster_ref` | user | Roster-refresh target ref. Bootstrap writes it; refresh backfills a missing file with `$EIDOLONS_ROSTER_REF` or `main`. `upgrade self --check` never backfills or heals metadata. A successful upgrade preserves existing bytes exactly, or creates a missing file in the validated staged clone with `$EIDOLONS_ROSTER_REF` or `main`. Sidecar maintenance and self-upgrade exclusions use root-anchored entries in Git `info/exclude`, never tracked `.gitignore`. |
 | `~/.eidolons/cache/` | user | Cloned Eidolon repos (per name + version) |
 | `./eidolons.yaml` | project | Your team manifest |
 | `./eidolons.lock` | project | Resolved versions |
@@ -786,7 +786,7 @@ eidolons upgrade --all     [OPTIONS]                # nexus then members
 
 ## `eidolons upgrade self`
 
-Upgrade the nexus CLI itself. Atomic, integrity-verified, rollback-safe.
+Upgrade the nexus CLI itself using a staged, integrity-verified replacement.
 
 ```
 eidolons upgrade self                      # upgrade to latest stable
@@ -814,16 +814,34 @@ eidolons upgrade self --allow-unverified   # proceed when integrity has no evide
 3. Validates the shared integrity policy, then clones the target into `~/.eidolons/nexus.new/`. An invalid policy refuses with exit 5 before fetching the replacement, including for non-tag refs and `--allow-unverified`.
 4. Verifies integrity by consulting **two sources** and requiring every non-placeholder value they report to agree: the **upstream default branch** (`origin HEAD`, reached through the remote the fresh clone already has — the only source that can structurally hold a release's own commit/tree/archive SHA-256, since the metadata-recording PR merges *after* the tag) and the **currently installed** nexus's own `roster/index.yaml` (the more independent witness, since it predates this fetch and so is the only source that can notice a tag that moved since the last sync). Adding the upstream source only ever makes verification *stricter* — it joins the installed roster, it does not replace it. When sources disagree about which kind of evidence they hold, the most severe wins: `mismatch > corrupt > absent > network > placeholder`. A detected mismatch always refuses (exit 5) regardless of enforcement mode or `--allow-unverified`. With no evidence anywhere, `strict` refuses (exit 5) unless `--allow-unverified` is passed or `EIDOLONS_INTEGRITY_ENFORCEMENT=warn`; placeholder-only release metadata (the bootstrap-window sentinel) follows the same rule: strict refuses without explicit opt-in, while advisory or explicitly allowed upgrades warn and proceed unverified. The terminal summary always carries the outcome: `(integrity: verified)`, `(integrity: verified:local-only)`, or `(integrity: UNVERIFIED - <reason>)`.
 5. Runs a smoke test: `bash ~/.eidolons/nexus.new/cli/eidolons --version --quiet` exits 0. Exit 6 on failure.
-6. Atomically swaps:
+6. Writes installation metadata in the validated staged clone, preserving existing `.roster_ref` bytes, then renames:
    - `~/.eidolons/nexus` → `~/.eidolons/nexus.prev`
    - `~/.eidolons/nexus.new` → `~/.eidolons/nexus`
 7. The symlink at `~/.local/bin/eidolons` is unchanged — it already points at `~/.eidolons/nexus/cli/eidolons`.
 
-On any failure before step 6, `~/.eidolons/nexus.new` is removed and the current install is untouched.
+On handled failures and interruptions before the swap, the current install is retained. Clone and integrity failures remove staging; smoke failure leaves `nexus.new` for inspection, and interruption may leave it for cleanup on the next attempt. The two renames are not one atomic transaction; this does not guarantee recovery from `SIGKILL` or power loss.
 
 **Downgrade detection.** If `--ref` targets a version older than the current install, the command warns and requires explicit confirmation (or `--force` / `--non-interactive` with `--force`).
 
-**Dirty-tree guard.** If the current nexus directory has uncommitted changes (common when working directly from a checkout), the command refuses to proceed unless `--force` is passed.
+**Dirty-tree guard.** Tracked edits, including `.gitignore` and tracked installation sidecars, refuse replacement. Untracked root installation sidecars (`.roster_ref`, `.install_date`, `.install_ref`, `.install_commit`) are distinguished from user changes; similarly named files in nested directories are not exempt. Existing refresh-managed roster, `EIDOLONS.md`, and `methodology/cortex` exclusions remain. Failure to inspect Git state refuses replacement. Review and deliberately commit or stash user changes before retrying.
+
+Linked worktrees and separate-Git-directory installations support safe checks, but replacement and rollback refuse to relocate them.
+
+### Legacy installation recovery
+
+The repair must run from a trusted source checkout containing the patched updater. Running that checkout's `cli/eidolons` dispatcher against an old nexus still selects the old installed updater; the patch does not retroactively replace an installed executable.
+
+Set both paths to the old standalone installation's home and its `nexus` child, so staging and previous-installation paths use the same home:
+
+```bash
+env EIDOLONS_HOME=/path/to/eidolons-home \
+    EIDOLONS_NEXUS=/path/to/eidolons-home/nexus \
+    bash /trusted/checkout/cli/src/upgrade_self.sh --check
+```
+
+Inspect the reported target, then repeat the same invocation without `--check` to perform the upgrade. No copying of source files into the old installation is needed. Normal integrity verification still applies; this recovery does not require `--force` or an integrity bypass.
+
+[ACTION] Before retrying a refused upgrade, review tracked edits and deliberately commit or stash them. This includes an old installer's appended `.roster_ref` line in tracked `.gitignore`: its origin cannot be inferred from its bytes, so it remains protected. The regression matrix begins with clean historical tracked snapshots; it does not execute historical installers or establish that an installer-dirtied checkout upgrades without this review.
 
 **Exit codes.**
 
@@ -1067,3 +1085,5 @@ eidolons doctor || exit 1
 RUN curl -sSL https://raw.githubusercontent.com/Rynaro/eidolons/v1.0.0/cli/install.sh | bash
 RUN eidolons init --preset pipeline --non-interactive
 ```
+
+<!-- V4-02 documentation provenance: IDG 1.8.1, 2026-09-21; sources: .spectra/changes/gauge-v4-02/spec.md, cli/tests/fixtures/legacy-upgrade/README.md, root handoff to idg_v4_02_docs. Scope: sidecar table and self-upgrade/recovery corrections only. CHT C:5/5 H:5/5 T:5/5. No incoming ECL envelope; verification skipped. CRYSTALIUM unavailable. -->
