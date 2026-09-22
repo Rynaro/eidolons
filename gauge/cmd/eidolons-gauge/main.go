@@ -120,6 +120,19 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   ramza-assumption --input JSON [--plan ID]  keep unsupported assumptions unresolved
   ramza-show --plan ID             show persisted lite plan
 
+  vivi-enable                      add typed Vivi mode namespaces (schema 2)
+  vivi-session --input JSON        start fixture Vivi modes session
+  vivi-mode --input JSON           select named opt-in proposal/candidate mode
+  vivi-edit --session --mode --target  scoped candidate edit (never user-tree apply)
+  vivi-propose --session --mode --diff emit proposal without applying
+  vivi-apply --session --proposal  separate parent-authorized application
+  vivi-continuity --input JSON     continuity state (decisions/failures/accounting)
+  vivi-repair --continuity ID      record repair decision/failure under continuity
+  vivi-reset --continuity ID       record context reset without resetting accounting
+  vivi-verify --input JSON         controller-managed maker≠checker verification
+  vivi-boundary --session --task   return authority/greenfield boundary refusal
+  vivi-context --input JSON        record context strategy version + transition
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -137,7 +150,8 @@ V4-20 core-cli status projections extend inspect/status; optional-GAMBIT is
 out of scope (dropped; not used). Status/preview cannot refill budgets or create live-evidence claims.
 V4-16 publishes lean RAMZA method contracts without fabricated certainty; Rynaro/Ramza
 remains canonical until accepted V4-10; no default flip or probability from rubrics.
-
+V4-17 publishes explicit Vivi candidate/context modes; Gauge does not grant
+publication authority.
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
 cross-device authority is implied. Native harnesses own reasoning and editing.
@@ -184,6 +198,9 @@ func run(args []string) error {
 	}
 	if isRamzaCommand(command) {
 		return ramzaCommand(args)
+	}
+	if isViviCommand(command) {
+		return viviCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

@@ -177,7 +177,10 @@ func Create(path, id string) error {
 		if e := initializeStatus(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeRamza(tx, id, "new-store")
+		if e := initializeRamza(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeVivi(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {
