@@ -79,7 +79,7 @@ func statusCommand(args []string) error {
 			"typed_version":      contract.StatusSchemaVersion,
 			"contract_version":   contract.StatusContractID,
 			"slice":              "core-cli",
-			"optional_gambit":    "explicitly_deferred",
+			"optional_gambit":    "out_of_scope",
 			"model_calls":        0,
 			"scope":              "observational-status-projection",
 			"live_qualification": "blocked",

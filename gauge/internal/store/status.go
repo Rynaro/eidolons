@@ -148,7 +148,7 @@ func (s *Store) GetStatusProjection(key string) (contract.StatusProjection, erro
 	return out, e
 }
 
-// PersistClientConformance records fixture-consumer conformance (GAMBIT deferred).
+// PersistClientConformance records fixture-consumer conformance (GAMBIT out of scope).
 func (s *Store) PersistClientConformance(id string, r contract.ClientConformanceResult) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		if e := s.statusReady(tx); e != nil {

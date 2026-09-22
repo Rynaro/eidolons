@@ -4,7 +4,7 @@
   "confidence": 0.9,
   "assumptions": [
     "V4-15 is merged on main at 7528827; V4-20 implements core-cli status projections only.",
-    "optional-GAMBIT is explicitly deferred; fixture consumer proves shared contract conformance.",
+    "optional-GAMBIT is out of scope (dropped; not used); fixture consumer proves shared optional-client contract conformance.",
     "Hosted CI remains blocked pending publication approval; local fixture scope only.",
     "No V4-21 / V4-16+; no paid/live probes; live qualification stays blocked."
   ],

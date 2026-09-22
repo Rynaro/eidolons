@@ -60,7 +60,7 @@ func (s *Service) ProjectStatus(opts StatusProjectOptions) (contract.StatusProje
 		GreenBadgeMeans:   "not_acceptance",
 		ObservationalOnly: true,
 		Slice:             "core-cli",
-		OptionalGAMBIT:    "explicitly_deferred",
+		OptionalGAMBIT:    "out_of_scope",
 		Participation: contract.ParticipationView{
 			SchemaVersion: contract.StatusSchemaVersion,
 			ObservedOnly:  true,
@@ -255,7 +255,7 @@ func (s *Service) PreviewPolicyChange(rootID string, counters *ObservationalCoun
 }
 
 // ConsumeStatusContract is the fixture optional-client consumer (R05/R07).
-// GAMBIT itself is explicitly deferred; this proves contract conformance only.
+// GAMBIT is out of scope (dropped; not used); this proves contract conformance only.
 func (s *Service) ConsumeStatusContract(req contract.ClientConformanceRequest, projectionJSON []byte, counters *ObservationalCounters) (contract.ClientConformanceResult, error) {
 	if counters == nil {
 		counters = &ObservationalCounters{}
@@ -266,7 +266,7 @@ func (s *Service) ConsumeStatusContract(req contract.ClientConformanceRequest, p
 	result := contract.ClientConformanceResult{
 		SchemaVersion:   contract.StatusSchemaVersion,
 		ContractVersion: req.ContractVersion,
-		OptionalGAMBIT:  "explicitly_deferred",
+		OptionalGAMBIT:  "out_of_scope",
 		ModelCalls:      0,
 	}
 	for _, m := range req.Modes {

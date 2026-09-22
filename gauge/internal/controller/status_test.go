@@ -168,8 +168,8 @@ func TestV420T01(t *testing.T) {
 	if projS.VerificationState != contract.VerificationStateStaleEvidence {
 		t.Fatalf("stale evidence must override checks_passed: %s", projS.VerificationState)
 	}
-	if projS.OptionalGAMBIT != "explicitly_deferred" {
-		t.Fatal("optional-GAMBIT must be explicitly deferred")
+	if projS.OptionalGAMBIT != "out_of_scope" {
+		t.Fatal("optional-GAMBIT must be out_of_scope")
 	}
 }
 
@@ -387,8 +387,8 @@ func TestV420T05(t *testing.T) {
 	if !ok.Supported || !ok.NoGUI || !ok.NoColor || !ok.ConsumedProjection {
 		t.Fatalf("fixture consumer must accept shared contract: %+v", ok)
 	}
-	if ok.OptionalGAMBIT != "explicitly_deferred" {
-		t.Fatal("GAMBIT must remain explicitly deferred (not silent pass)")
+	if ok.OptionalGAMBIT != "out_of_scope" {
+		t.Fatal("GAMBIT must remain out_of_scope (dropped; not used)")
 	}
 	if ok.ModelCalls != 0 {
 		t.Fatalf("client conformance must not dispatch: %d", ok.ModelCalls)

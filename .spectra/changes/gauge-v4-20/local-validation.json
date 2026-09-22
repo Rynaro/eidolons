@@ -4,7 +4,7 @@
   "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
   "branch": "codex/gauge-v4-20-cli",
   "slice": "core-cli",
-  "optional_gambit": "explicitly_deferred",
+  "optional_gambit": "out_of_scope",
   "macos": {
     "go": "1.27.1",
     "commands": [

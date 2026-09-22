@@ -217,7 +217,7 @@ type StatusProjection struct {
 	DeniedEscalation        bool                    `json:"denied_escalation,omitempty"`
 	ObservationalOnly       bool                    `json:"observational_only"`
 	Slice                   string                  `json:"slice"`           // core-cli
-	OptionalGAMBIT          string                  `json:"optional_gambit"` // explicitly deferred
+	OptionalGAMBIT          string                  `json:"optional_gambit"` // out_of_scope (dropped; not used)
 }
 
 func (s StatusProjection) Validate() error {
@@ -233,8 +233,8 @@ func (s StatusProjection) Validate() error {
 	if !s.ObservationalOnly {
 		return errors.New("status projection must be observational_only")
 	}
-	if s.OptionalGAMBIT != "explicitly_deferred" {
-		return errors.New("optional-GAMBIT deferral must be explicit")
+	if s.OptionalGAMBIT != "out_of_scope" {
+		return errors.New("optional-GAMBIT must be out_of_scope (dropped; not used)")
 	}
 	if e := s.Participation.Validate(); e != nil {
 		return e
@@ -303,7 +303,7 @@ func (r ClientConformanceRequest) Validate() error {
 	return nil
 }
 
-// ClientConformanceResult is the fixture-consumer response (GAMBIT itself deferred).
+// ClientConformanceResult is the fixture-consumer response (GAMBIT out of scope).
 type ClientConformanceResult struct {
 	SchemaVersion      int                      `json:"schema_version"`
 	ContractVersion    string                   `json:"contract_version"`
