@@ -1,0 +1,5 @@
+{
+  "gauge/internal/controller/authority.go": "774f377b3c456f7e87c48ac19a2c86222ce2a94a3ccf3f86d7d078b797cdb436",
+  "gauge/internal/controller/publication_cuts_test.go": "bd313815535bf75944d722950ef6363b2b0e6dd95e796565a0c0598b32924286",
+  ".github/workflows/gauge.yml": "16148218f320e373537b28a88371145e9fd79f0edba8d303f320e5f6dbe11ccf"
+}

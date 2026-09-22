@@ -1,0 +1,20 @@
+{
+  "scope": "local fixture acceptance only",
+  "linux": "maker protected k2 full Go race, nine anchors, nonroot repeat packaging; independent focused publication kill twice/T04/package",
+  "macos": {
+    "full_race_exit": 0,
+    "log": "/private/tmp/gauge-v4-06-native-publication-final.log",
+    "package_exit": 0,
+    "package_log": "/private/tmp/gauge-v4-06-native-publication-package.log"
+  },
+  "cli": {
+    "passed": 1877,
+    "skipped": 15,
+    "failed": 0,
+    "total": 1892,
+    "source_unchanged_by_followup": true
+  },
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "publication": "not_pushed_no_pr",
+  "checker": "v4_06_review"
+}

@@ -1,0 +1,25 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "v4_06_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify optional controller and recoverable single-instance authority within local fixture scope",
+  "context_delta": {
+    "checker_report": "checker-report.md",
+    "hosted_ci": "blocked_pending_explicit_publication_approval",
+    "receipt": "docs/campaigns/gauge/receipts/V4-06.md",
+    "review_context": "Distinct initially artifact-only checker, later localized repair coordination disclosed. Initial maker vivi_v4_core; fresh repairs vivi_v4_06_repair and vivi_v4_06_faults. Local Linux and native macOS fixture evidence; no live qualification.",
+    "reviewed_source_hashes": "reviewed-source.sha256"
+  },
+  "ise": {
+    "verification": {
+      "fresh_context": true,
+      "checker": "v4_06_review",
+      "transcript_access": "artifact-only"
+    }
+  }
+}

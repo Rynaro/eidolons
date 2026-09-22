@@ -1,0 +1,17 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "forge_v4_06"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "CRITIQUE",
+  "objective": "Select a narrow typed Go seam and one local transactional authority store",
+  "context_delta": {
+    "decision_ref": "decision.md",
+    "outcome": "Conditional bbolt1.5.0, synchronous shared controller-instance DB, explicit recoverable authority handoff, no Junction source import",
+    "prerequisite": "V4-04 and V4-05 reviewed source, all hosted checks and blocking lifecycle verification passed",
+    "reuse_inspection": "junction-reuse.md"
+  }
+}

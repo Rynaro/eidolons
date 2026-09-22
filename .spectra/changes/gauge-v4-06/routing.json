@@ -1,0 +1,56 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "chain": [
+    {
+      "eidolon": "ATLAS",
+      "role": "attempted scout; capacity exception, root performed bounded Junction inspection",
+      "hand_off_artifact_path": "junction-reuse.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "FORGE",
+      "role": "actual two-pass conditional store decision",
+      "hand_off_artifact_path": "decision.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "Vivi",
+      "role": "single source/test writer after explicit handoff",
+      "hand_off_artifact_path": "spec.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "VIGIL",
+      "role": "distinct artifact-context checker",
+      "hand_off_artifact_path": "checker-report.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "IDG",
+      "role": "documentation after source writer yields",
+      "hand_off_artifact_path": "docs/campaigns/gauge/receipts/V4-06.md",
+      "edge_origin": "orchestrator"
+    }
+  ],
+  "model_tier_per_step": [
+    "standard",
+    "standard",
+    "standard",
+    "standard",
+    "standard"
+  ],
+  "confidence": 0.95,
+  "assumptions": [
+    "One shared controller-instance DB; no cross-instance authority claim.",
+    "No new package merge, release, deployment or paid/live model trial authorized.",
+    "No Junction source import; licenses checked for selected dependency packaging."
+  ],
+  "refusal_rerouting": false
+}
