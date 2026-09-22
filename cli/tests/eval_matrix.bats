@@ -260,22 +260,36 @@ EOF
   [[ "$output" =~ "EIDOLONS_EVAL_MODEL" ]]
 }
 
+# Restrict the hook to its preflight dependencies, independent of where Bash
+# is installed. Homebrew's Bash directory has no cat; a system bin directory
+# can contain an unrelated installed claude. Neither is a valid absence fixture.
+_hooks_path_without_claude() {
+  HOOK_PATH="$BATS_TEST_TMPDIR/hook-bin"
+  mkdir -p "$HOOK_PATH"
+  local tool
+  for tool in bash cat; do
+    ln -s "$(command -v "$tool")" "$HOOK_PATH/$tool"
+  done
+  run env -i PATH="$HOOK_PATH" bash -c 'command -v claude'
+  [ "$status" -eq 1 ]
+}
+
 @test "hooks: keep-bare.sh with EIDOLONS_EVAL_MODEL set but no 'claude' binary on PATH never attempts a call" {
-  local fakepath
-  fakepath="$(dirname "$(command -v bash)")"
-  run env -i PATH="$fakepath" EIDOLONS_EVAL_MODEL="haiku" bash "$EIDOLONS_ROOT/evals/hooks/keep-bare.sh"
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "claude" ]]
-  [[ "$output" =~ "not found on PATH" ]]
+  _hooks_path_without_claude
+  run env -i PATH="$HOOK_PATH" HOME="$BATS_TEST_TMPDIR/hook-home" \
+    EIDOLONS_HOME="$BATS_TEST_TMPDIR/hook-home/.eidolons" EIDOLONS_EVAL_MODEL="haiku" \
+    bash "$EIDOLONS_ROOT/evals/hooks/keep-bare.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = "keep-bare.sh: 'claude' binary not found on PATH" ]
 }
 
 @test "hooks: keep-system.sh with EIDOLONS_EVAL_MODEL set but no 'claude' binary on PATH never attempts a call" {
-  local fakepath
-  fakepath="$(dirname "$(command -v bash)")"
-  run env -i PATH="$fakepath" EIDOLONS_EVAL_MODEL="haiku" bash "$EIDOLONS_ROOT/evals/hooks/keep-system.sh"
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ "claude" ]]
-  [[ "$output" =~ "not found on PATH" ]]
+  _hooks_path_without_claude
+  run env -i PATH="$HOOK_PATH" HOME="$BATS_TEST_TMPDIR/hook-home" \
+    EIDOLONS_HOME="$BATS_TEST_TMPDIR/hook-home/.eidolons" EIDOLONS_EVAL_MODEL="haiku" \
+    bash "$EIDOLONS_ROOT/evals/hooks/keep-system.sh"
+  [ "$status" -eq 1 ]
+  [ "$output" = "keep-system.sh: 'claude' binary not found on PATH" ]
 }
 
 @test "hooks: evals/arms/h-win.json is valid JSON conforming to eval-arms shape" {

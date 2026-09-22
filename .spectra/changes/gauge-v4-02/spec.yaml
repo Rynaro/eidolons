@@ -1,0 +1,28 @@
+{
+  "change_id": "gauge-v4-02",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "implementation_base": "2e514f280f26a378811f0c9939928584546a35d0",
+  "acceptance_checks": [
+    {
+      "id": "V4-02-R01",
+      "verify_method": "V4-02-T01: bats --filter 'V4-02 T01' cli/tests/legacy_upgrade.bats; actual historical clone and preservation evidence in docs/campaigns/gauge/receipts/V4-02.md"
+    },
+    {
+      "id": "V4-02-R02",
+      "verify_method": "V4-02-T02: bats --filter 'V4-02 T02' cli/tests/legacy_upgrade.bats; actual historical clone and preservation evidence in docs/campaigns/gauge/receipts/V4-02.md"
+    },
+    {
+      "id": "V4-02-R03",
+      "verify_method": "V4-02-T03: bats --filter 'V4-02 T03' cli/tests/legacy_upgrade.bats; actual historical clone and preservation evidence in docs/campaigns/gauge/receipts/V4-02.md"
+    },
+    {
+      "id": "V4-02-R04",
+      "verify_method": "V4-02-T04: bats --filter 'V4-02 T04' cli/tests/legacy_upgrade.bats; actual historical clone and preservation evidence in docs/campaigns/gauge/receipts/V4-02.md"
+    },
+    {
+      "id": "V4-02-R05",
+      "verify_method": "V4-02-T05: bats --filter 'V4-02 T05' cli/tests/legacy_upgrade.bats; actual historical clone and preservation evidence in docs/campaigns/gauge/receipts/V4-02.md"
+    }
+  ],
+  "scope": "V4-02 only"
+}
