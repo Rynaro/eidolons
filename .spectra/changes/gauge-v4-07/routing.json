@@ -1,0 +1,15 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.95,
+  "assumptions": [
+    "Publication recovers stranded accepted local candidate; hosted CI is the remaining gate."
+  ],
+  "refusal_rerouting": false
+}

@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "changed": [
+    "gauge/cmd/eidolons-gauge/policy_test.go",
+    "gauge/internal/controller/policy_test.go",
+    "gauge/internal/store/policy_test.go",
+    "gauge/internal/store/reviewer_regressions_test.go"
+  ],
+  "ast_equal": true,
+  "unchanged_other_files": 284,
+  "qualification": "/private/tmp/gauge-go-ast-fingerprint/qualification.json",
+  "scope": "Mechanical gofmt only on four new tests after completed functional repair/review; original bytes retained; AST excludes positions/comments and normalizes import order; no directives present."
+}
