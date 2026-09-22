@@ -64,6 +64,14 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   dispatch-reconcile --root ID --input JSON
   dispatch-events --root ID --intent ID
 
+  compiler-enable                  add typed compiler namespaces (schema 2)
+  compile --root ID --input JSON   compile assignments without mandatory chains
+  compiler-status --root ID
+  consult-validate --root ID --input JSON
+  compiler-rebind --root ID --input JSON
+  compiler-evidence --root ID --input JSON
+  compiler-writers --root ID --input JSON
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -72,6 +80,7 @@ Observation recording never grants policy or spending authority.
 Instrument catalogue/preflight never grants live host qualification.
 Reservation admit is fixture-local atomic bookkeeping; no provider dispatch.
 Dispatch admit uses one fixture-qualified fake native adapter; live stays blocked.
+Compiler records inspectable selection reasons; semantic planning remains fallible.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -101,6 +110,9 @@ func run(args []string) error {
 	}
 	if isDispatchCommand(command) {
 		return dispatchCommand(args)
+	}
+	if isCompilerCommand(command) {
+		return compilerCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, and one fixture-qualified native adapter with durable dispatch and cancellation; it does not provide full CLI parity, live harness reconstruction, live host qualification, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md) and [V4-12 receipt](campaigns/gauge/receipts/V4-12.md) for tested scope and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences, policy inspection, root lineage, honest usage observations, a fixture-first host qualification / early comparison instrument, fixture-local atomic reservations with verification/recovery headroom, one fixture-qualified native adapter with durable dispatch and cancellation, and assignment compilation without mandatory agent chains; it does not provide full CLI parity, live harness reconstruction, live host qualification, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md), [V4-07 receipt](campaigns/gauge/receipts/V4-07.md), [V4-08 receipt](campaigns/gauge/receipts/V4-08.md), [V4-09 receipt](campaigns/gauge/receipts/V4-09.md), [V4-11 receipt](campaigns/gauge/receipts/V4-11.md), [V4-12 receipt](campaigns/gauge/receipts/V4-12.md) and [V4-13 receipt](campaigns/gauge/receipts/V4-13.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -256,6 +256,23 @@ eidolons gauge dispatch-events --project "/absolute/ação project" --root demo 
 
 Managed dispatch admits a V4-11 reservation, commits durable intent, then invokes the single fixture-qualified fake native adapter (`exec-sandbox-readonly`). Live qualification remains blocked. Transport-terminal events are not acceptance. Cancellation requested ≠ confirmed stopped ≠ final reconciliation. Uncertain sends stay pending reconcile; checkpoint replay is not an exactly-once guarantee.
 
+## V4-13 assignment compiler
+
+New stores initialize typed compiler namespaces under schema 2 (`compiled_plans`, `method_bindings`, `assignment_splits`, `consultant_receipts`) with a `compiler_receipt`. Existing schema-2 controllers without those buckets remain openable; call `compiler-enable` before first managed compile use.
+
+```sh
+eidolons gauge init --project "/absolute/ação project" --root demo
+eidolons gauge compiler-enable --project "/absolute/ação project"
+eidolons gauge compile --project "/absolute/ação project" --root demo --input /absolute/compile.json
+eidolons gauge compiler-status --project "/absolute/ação project" --root demo
+eidolons gauge consult-validate --project "/absolute/ação project" --root demo --input /absolute/consult.json
+eidolons gauge compiler-rebind --project "/absolute/ação project" --root demo --input /absolute/rebind.json
+eidolons gauge compiler-evidence --project "/absolute/ação project" --root demo --input /absolute/evidence.json
+eidolons gauge compiler-writers --project "/absolute/ação project" --root demo --input /absolute/writers.json
+```
+
+Compatible methods stay in the continuing maker; separate workers require a recorded boundary reason. Effective authority is the intersection of operator/task/assignment/specialist/host layers — role cards and model messages cannot widen a child grant. Skills bind versioned I/O contracts; consultant results must pass a bounded output check before maker use. Concurrent writers need isolated workspaces plus an integration owner. Selection reasons are inspectable and fallible; no V4-14 acceptance freeze is claimed.
+
 ## Provenance
 
 IDG 1.8.1, usage reference, 2026-09-22. Sources: [CLI](../gauge/cmd/eidolons-gauge/main.go), [shim](../cli/src/gauge.sh), [build script](../scripts/gauge-build.sh), [controller](../gauge/internal/controller/controller.go), [authority protocol](../gauge/internal/controller/authority.go), [typed contracts](../gauge/internal/contract/types.go), [spec](../.spectra/changes/gauge-v4-06/spec.md), and the verified Vivi repair report identified in the [receipt](campaigns/gauge/receipts/V4-06.md#provenance). That handoff is Vivi → IDG, `PROPOSE`, message `8f84391a-5292-43b3-8c53-0c00aa93c682`, thread `10c848f8-d48b-4e45-babe-ee9616617f09`, outcome `verify_pass`. CHT: C:5/5 H:5/5 T:5/5 for documented usage and limits; candidate acceptance is tracked separately. CRYSTALIUM unavailable.
@@ -269,3 +286,5 @@ V4-09 additions use the [instrument CLI](../gauge/cmd/eidolons-gauge/instrument.
 V4-11 additions use the [reservation CLI](../gauge/cmd/eidolons-gauge/reservation.go), [reservation contract](../gauge/internal/contract/reservation.go), [store](../gauge/internal/store/reservation.go), [controller](../gauge/internal/controller/reservation.go), and [spec/decision](../.spectra/changes/gauge-v4-11/spec.md). Local fixture anchors are recorded in the [V4-11 receipt](campaigns/gauge/receipts/V4-11.md). No provider dispatch; hosted CI pending publication.
 
 V4-12 additions use the [dispatch CLI](../gauge/cmd/eidolons-gauge/dispatch.go), [dispatch contract](../gauge/internal/contract/dispatch.go), [store](../gauge/internal/store/dispatch.go), [NativeAdapter](../gauge/internal/controller/native_adapter.go), [controller](../gauge/internal/controller/dispatch.go), and [spec/decision](../.spectra/changes/gauge-v4-12/spec.md). Local fixture anchors are recorded in the [V4-12 receipt](campaigns/gauge/receipts/V4-12.md). Live qualification blocked; hosted CI pending publication.
+
+V4-13 additions use the [compiler CLI](../gauge/cmd/eidolons-gauge/compiler.go), [compiler contract](../gauge/internal/contract/compiler.go), [store](../gauge/internal/store/compiler.go), [controller](../gauge/internal/controller/compiler.go), and [spec/decision](../.spectra/changes/gauge-v4-13/spec.md). Local fixture anchors are recorded in the [V4-13 receipt](campaigns/gauge/receipts/V4-13.md). No mandatory agent chains; no V4-14+; hosted CI pending publication.
