@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-21 and V4-20 are on main at eddd021; this assignment delivers only the V4-10 inventory slice.",
+    "one-component-import and registry-and-discovery-compiler remain not yet assigned.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No import/archive/protocol rewrite; null/blocked V4-21 results are not performance gains."
+  ],
+  "refusal_rerouting": false
+}
