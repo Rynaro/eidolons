@@ -2,7 +2,14 @@
 # Product Leap opt-in surfaces for capsules, bounded local recall, evidence,
 # policy shadowing, and a deliberately disabled ACP negotiation pilot.
 set -euo pipefail
-SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; . "$SELF_DIR/lib.sh"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Evidence is now a read-only canonical historical view. Dispatch before eager
+# cache/product-leap initialization; raw observation arrays cannot confer grades.
+if [[ "${1:-}" == evidence ]]; then
+  [[ $# -eq 2 ]] || { printf '%s\n' 'augment evidence requires a canonical capture reference file; use ledger capture first' >&2; exit 1; }
+  exec bash "$SELF_DIR/ledger.sh" render --reference "$2"
+fi
+. "$SELF_DIR/lib.sh"
 usage(){ echo "Usage: eidolons augment capsule|recall|evidence|policy|acp ..."; }
 sub="${1:-}"; [[ $# -gt 0 ]] && shift || true
 case "$sub" in capsule|recall|evidence|policy|acp) ;; *) usage; exit 2;; esac
@@ -24,9 +31,6 @@ recall)
   if [[ "$op" == add ]]; then origin=""; text=""; while [[ $# -gt 0 ]]; do case "$1" in --origin) origin="${2:-}"; shift 2;; --text) text="${2:-}"; shift 2;; *) die "unknown option";; esac; done; [[ -n "$text" ]] || die "--text required"; jq -n --arg id "recall-$(date +%s)-$$" --arg o "$origin" --arg t "$text" '{schema_version:"1.0",record_id:$id,origin:$o,text:$t,trust:"untrusted",validity:"active",token_estimate:($t|length/4|floor),authority:"none"}' >> "$store"
   elif [[ "$op" == invalidate ]]; then id="${1:-}"; [[ -n "$id" ]] || die "record id required"; jq -s --arg id "$id" 'map(if .record_id==$id then .validity="stale" else . end)[]' "$store" > "$store.$$.tmp"; mv "$store.$$.tmp" "$store"
   else [[ -f "$store" ]] || { echo '[]'; exit 0; }; jq -s '[.[]|select(.validity=="active")]|sort_by(.token_estimate)|.[0:5] | reduce .[] as $r ({records:[],tokens:0}; if (.tokens+$r.token_estimate)<=1200 then .records += [$r + {selection_reason:"bounded-local-recall"}] | .tokens += $r.token_estimate else . end)' "$store"; fi;;
-evidence)
-  # Replay reports are evidence-only; unknown/infrastructure never passes.
-  file="${1:-}"; [[ -f "$file" ]] || die "evidence requires JSON observations file"; jq -e 'type=="array" and all(.[]; (.status|IN("pass","fail","unknown","infrastructure","timeout","authority_violation")))' "$file" >/dev/null || die "invalid evidence status"; jq -s '{schema_version:"1.0",run_id:("eval-"+(now|floor|tostring)),outcomes:.,comparative_conclusion:(if all(.[];.status=="pass") then "eligible-for-review" else "blocked-incomplete-or-failed" end)}' "$file";;
 policy)
   candidate="${1:-}"; [[ -f "$candidate" ]] || die "policy requires candidate JSON"; jq -e '(.allowed_parameter_diff|type)=="array" and ([.allowed_parameter_diff[] | select(IN("thresholds","topology")|not)]|length==0) and (.recall_policy // "pinned")=="pinned"' "$candidate" >/dev/null || die "candidate changes a protected policy field"; jq '{mode:"shadow-only",candidate_id,base_policy_digest,allowed_parameter_diff,recall_policy}' "$candidate";;
 acp)

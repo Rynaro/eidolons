@@ -1,0 +1,47 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "IDG"
+  ],
+  "tier": "standard",
+  "chain": [
+    {
+      "eidolon": "ATLAS",
+      "role": "read-only baseline scout",
+      "hand_off_artifact_path": "mission.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "FORGE",
+      "role": "lock ownership tradeoff",
+      "hand_off_artifact_path": "decision.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "Vivi",
+      "role": "maker",
+      "hand_off_artifact_path": "spec.md",
+      "edge_origin": "orchestrator"
+    },
+    {
+      "eidolon": "IDG",
+      "role": "documentation",
+      "hand_off_artifact_path": "docs/campaigns/gauge/receipts/V4-04.md",
+      "edge_origin": "orchestrator"
+    }
+  ],
+  "model_tier_per_step": [
+    "standard",
+    "standard",
+    "standard",
+    "standard"
+  ],
+  "confidence": 0.96,
+  "assumptions": [
+    "User V4-0X scope interpreted as04-09 while optional clarification pending.",
+    "Same-model checker fresh context is not statistical independence."
+  ],
+  "refusal_rerouting": false
+}

@@ -1,0 +1,26 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "v4_04_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify V4-04 ordered journal publication, ownership, read-only inspection and corruption rejection",
+  "context_delta": {
+    "candidate": "85a8541a6537e83f30ea1f32c9e5d2287360cd79",
+    "ci": "https://github.com/Rynaro/eidolons/actions/runs/35679172221",
+    "receipt": "docs/campaigns/gauge/receipts/V4-04.md",
+    "review_context": "Initially fresh frozen artifacts, followed by disclosed maker/root coordination. Same-model distinct review is not statistical independence. Hash-failure P1 independently reproduced and fixed; no unresolved findings. Local process-interruption scope only.",
+    "reviewed_source_hashes": ".spectra/changes/gauge-v4-04/reviewed-source.sha256",
+    "roster_health": "https://github.com/Rynaro/eidolons/actions/runs/35679147636"
+  },
+  "ise": {
+    "verification": {
+      "fresh_context": true,
+      "checker": "v4_04_review",
+      "transcript_access": "artifact-only"
+    }
+  }
+}

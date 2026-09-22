@@ -1,0 +1,142 @@
+{
+  "eidolon": "vivi",
+  "version": "1.1.0",
+  "kind": "vivi-completion-report",
+  "status": "ready-for-independent-checker",
+  "created_at": "2026-09-22T03:14:07.537060Z",
+  "files_changed_count": 4,
+  "tests_run": 68,
+  "tests_passed": 68,
+  "deltas_count": 0,
+  "escalations_count": 0,
+  "scope": [
+    "cli/src/ledger_completion.py",
+    "cli/src/ledger.sh",
+    "cli/tests/completion_conformance.py",
+    "cli/tests/completion_conformance.bats"
+  ],
+  "fixes": [
+    "Bind directory permissions and symlink traversal metadata for tracked, discovered, explicit ignored, and symlink-target inputs.",
+    "Compare stable legacy completion request/evidence on exact retry while preserving original bytes and withholding independent provenance."
+  ],
+  "validation": [
+    {
+      "suite": "ledger/product_leap/completion",
+      "tests": 15,
+      "passes": 15,
+      "repeated_by_loop": 2
+    },
+    {
+      "suite": "journal/run Docker compatibility",
+      "tests": 39,
+      "passes": 39
+    },
+    {
+      "suite": "real macOS /bin/bash 3.2 completion/journal Python-driven probes",
+      "tests": 14,
+      "passes": 14
+    }
+  ],
+  "loop": {
+    "final": "passed",
+    "attempts_run": 2,
+    "max_attempts": 2,
+    "k": 2,
+    "protect": "cli/tests/completion_conformance* cli/tests/fixtures/completion/* cli/tests/ledger.bats",
+    "tier": "container",
+    "base": "d1b56bb06bc22a7aab1f6ec8a4a07cb8f68aa138",
+    "candidate_diff": "/private/tmp/v4-05-repair-loop-final/substrate/candidate.diff",
+    "feedback": "/private/tmp/v4-05-repair-loop-final/substrate/feedback.json",
+    "vigil_handoff": "",
+    "out_dir": "/private/tmp/v4-05-repair-loop-final/substrate",
+    "merged": false,
+    "attempts": [
+      {
+        "attempt": 1,
+        "passed": false,
+        "exit_code": 1,
+        "duration_s": 7,
+        "phase": "regression",
+        "flaky": false,
+        "passk_runs": [
+          {
+            "run": 1,
+            "passed": false,
+            "exit_code": 1
+          }
+        ]
+      },
+      {
+        "attempt": 2,
+        "passed": true,
+        "exit_code": 0,
+        "duration_s": 2,
+        "phase": "reproduction",
+        "flaky": false,
+        "passk_runs": [
+          {
+            "run": 1,
+            "passed": true,
+            "exit_code": 0
+          },
+          {
+            "run": 2,
+            "passed": true,
+            "exit_code": 0
+          }
+        ]
+      }
+    ],
+    "passk": {
+      "k": 2,
+      "runs": [
+        {
+          "attempt": 1,
+          "passk_runs": [
+            {
+              "run": 1,
+              "passed": false,
+              "exit_code": 1
+            }
+          ]
+        },
+        {
+          "attempt": 2,
+          "passk_runs": [
+            {
+              "run": 1,
+              "passed": true,
+              "exit_code": 0
+            },
+            {
+              "run": 2,
+              "passed": true,
+              "exit_code": 0
+            }
+          ]
+        }
+      ]
+    },
+    "fanout": 1,
+    "selected_candidate": 0,
+    "red_gate": "verified-red",
+    "judge": "",
+    "tamper_rejections": 0,
+    "cascade_tier_used": ""
+  },
+  "source_repairs": 1,
+  "preparatory_loop": {
+    "path": "/private/tmp/v4-05-repair-loop",
+    "accepted_evidence": false,
+    "reason": "Stopped before any source edit to refine ignored directory fixture so symlink replacement remained ignored."
+  },
+  "frozen_tests": "frozen-tests.sha256",
+  "full_candidate_manifest": "candidate-files.sha256",
+  "docker_image": "sha256:d8aba23301c07272b428495c1ea7eb2e7f115a82f165f83e0c2fef88e2410732",
+  "notes": [
+    "Existing tests preserved; two additive T02 anchors.",
+    "No paid/model calls, commits, pushes, lifecycle or documentation edits.",
+    "CRYSTALIUM unavailable; no memory write attempted.",
+    "Source/test writer authority yielded; acceptance remains subject to independent checker."
+  ]
+}

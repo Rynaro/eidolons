@@ -1,0 +1,43 @@
+[
+  {
+    "name": "malformed",
+    "raw": "{"
+  },
+  {
+    "name": "chain",
+    "replace": {
+      "previous_event_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  {
+    "name": "duplicate-sequence",
+    "replace": {
+      "sequence": 1
+    }
+  },
+  {
+    "name": "unsupported",
+    "replace": {
+      "schema_version": "999"
+    }
+  },
+  {
+    "name": "digest",
+    "replace": {
+      "event_digest": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "reseal": false
+  },
+  {
+    "name": "duplicate-identity",
+    "replace": {
+      "event_id": "legacy-1"
+    }
+  },
+  {
+    "name": "foreign-run",
+    "replace": {
+      "run_id": "other"
+    }
+  }
+]

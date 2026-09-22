@@ -1,0 +1,16 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "forge_v4_05"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "CRITIQUE",
+  "objective": "Choose a canonical completion evidence contract with honest provenance and deterministic views",
+  "context_delta": {
+    "decision_ref": "decision.md",
+    "outcome": "hybrid canonical journal plus digest-bound bulky evidence; self-attested production provenance until authenticated runner",
+    "prerequisite": "V4-04 source reviewed, 25 checks and blocking verification passed"
+  }
+}

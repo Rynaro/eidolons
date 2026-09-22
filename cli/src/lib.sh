@@ -12,7 +12,11 @@ NEXUS="${EIDOLONS_NEXUS:-$EIDOLONS_HOME/nexus}"
 CACHE_DIR="$EIDOLONS_HOME/cache"
 ROSTER_FILE="$NEXUS/roster/index.yaml"
 
-mkdir -p "$CACHE_DIR"
+# A ledger inspection must not initialize durable state merely by loading
+# helpers. Other callers retain their existing eager cache initialization.
+if [[ "${_EIDOLONS_LEDGER_READ_ONLY:-0}" != 1 ]]; then
+  mkdir -p "$CACHE_DIR"
+fi
 
 # ─── UI layer (theme + panels) ─────────────────────────────────────────────
 # theme.sh detects fancy vs plain mode and exports color vars (BOLD, DIM,

@@ -1,0 +1,51 @@
+[
+  {
+    "command_file": "phase.IfyPof.command",
+    "command": "rc=0; python3 cli/tests/completion_conformance.py ancestors || rc=1; python3 cli/tests/completion_conformance.py legacy_retry || rc=1; exit \"$rc\"",
+    "log": "phase.IfyPof",
+    "exit": 1,
+    "sha256": "98924417e49e891c0ae2b04980de83165e82ff1446596c766e57a88d1f85045c"
+  },
+  {
+    "command_file": "phase.gbjSRD.command",
+    "command": "bats cli/tests/ledger.bats cli/tests/product_leap.bats cli/tests/completion_conformance.bats",
+    "log": "phase.gbjSRD",
+    "exit": 1,
+    "sha256": "e1b82f39363866799ae7214e5bbb0fd813cf5d79c0711d7166ddff045976dac7"
+  },
+  {
+    "command_file": "phase.jcmXsd.command",
+    "command": "bats cli/tests/ledger.bats cli/tests/product_leap.bats cli/tests/completion_conformance.bats",
+    "log": "phase.jcmXsd",
+    "exit": 0,
+    "sha256": "7a1e1373dd0da1b1ffa8c14a57dd068efddb1c3cddf0009058477031a20f5ab0"
+  },
+  {
+    "command_file": "phase.IlFdqt.command",
+    "command": "rc=0; python3 cli/tests/completion_conformance.py ancestors || rc=1; python3 cli/tests/completion_conformance.py legacy_retry || rc=1; exit \"$rc\"",
+    "log": "phase.IlFdqt",
+    "exit": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "command_file": "phase.uBCp93.command",
+    "command": "bats cli/tests/ledger.bats cli/tests/product_leap.bats cli/tests/completion_conformance.bats",
+    "log": "phase.uBCp93",
+    "exit": 0,
+    "sha256": "7a1e1373dd0da1b1ffa8c14a57dd068efddb1c3cddf0009058477031a20f5ab0"
+  },
+  {
+    "command_file": "phase.m8rhYr.command",
+    "command": "rc=0; python3 cli/tests/completion_conformance.py ancestors || rc=1; python3 cli/tests/completion_conformance.py legacy_retry || rc=1; exit \"$rc\"",
+    "log": "phase.m8rhYr",
+    "exit": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "command_file": "phase.VLAfCE.command",
+    "command": "bash --version | head -n 1; bats --version; python3 --version; bats cli/tests/journal_conformance.bats cli/tests/run.bats",
+    "log": "phase.VLAfCE",
+    "exit": 0,
+    "sha256": "876577a0442fa1976cd0b9ca5da7ac51c20f5d60ac25a5918180d79d03c8fa53"
+  }
+]
