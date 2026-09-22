@@ -1,0 +1,85 @@
+name: Gauge controller
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  controller:
+    name: Gauge native — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      GOTOOLCHAIN: local
+      GAUGE_REPO: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: gauge/go.sum
+      - name: Install test tools
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y bats jq shellcheck
+            sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+          else
+            brew install bash bats-core jq yq shellcheck
+            echo "$(brew --prefix bash)/bin" >> "$GITHUB_PATH"
+            echo "$(brew --prefix bats-core)/bin" >> "$GITHUB_PATH"
+          fi
+          python3 -m venv "$RUNNER_TEMP/gauge-venv"
+          "$RUNNER_TEMP/gauge-venv/bin/python3" -m pip install 'PyYAML==6.0.2'
+          echo "$RUNNER_TEMP/gauge-venv/bin" >> "$GITHUB_PATH"
+      - name: Qualify the Bats assertion runner
+        run: |
+          cat > "$RUNNER_TEMP/gauge-runner-control.bats" <<'EOF'
+          @test "deliberate intermediate failure" {
+            [[ 1 -eq 2 ]]
+            echo final-command-succeeds
+          }
+          EOF
+          set +e
+          bats "$RUNNER_TEMP/gauge-runner-control.bats"
+          result=$?
+          set -e
+          test "$result" -eq 1
+      - name: Download locked build dependencies
+        working-directory: gauge
+        run: |
+          go mod download
+          go mod verify
+      - name: Native race tests and protected anchors
+        env:
+          GOPROXY: 'off'
+        run: |
+          cd gauge
+          go test -mod=readonly -race -count=1 ./...
+          cd ..
+          make gauge-test
+          bats --print-output-on-failure cli/tests/ledger.bats cli/tests/journal_conformance.bats cli/tests/completion_conformance.bats cli/tests/product_leap.bats
+      - name: Reproducible binary and license-complete package
+        env:
+          GOPROXY: 'off'
+        run: |
+          make gauge-build GAUGE_OUT="$RUNNER_TEMP/gauge-build-a"
+          make gauge-build GAUGE_OUT="$RUNNER_TEMP/gauge-build-b"
+          cmp "$RUNNER_TEMP/gauge-build-a/eidolons-gauge" "$RUNNER_TEMP/gauge-build-b/eidolons-gauge"
+          make gauge-package GAUGE_OUT="$RUNNER_TEMP/gauge-package"
+          test -s "$RUNNER_TEMP/gauge-package/LICENSE"
+          test -s "$RUNNER_TEMP/gauge-package/licenses/Go-LICENSE"
+          test -s "$RUNNER_TEMP/gauge-package/licenses/go.etcd.io_bbolt-LICENSE"
+          test -s "$RUNNER_TEMP/gauge-package/licenses/golang.org_x_sys-LICENSE"
+          "$RUNNER_TEMP/gauge-package/eidolons-gauge" --help
+          shellcheck -S error cli/src/gauge.sh scripts/gauge-build.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gauge-${{ matrix.os }}
+          path: ${{ runner.temp }}/gauge-package/

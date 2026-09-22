@@ -65,6 +65,25 @@ fi
 [[ "$run_id" =~ ^[A-Za-z0-9._-]+$ ]] || die "--run-id must contain only letters, digits, dot, underscore, or dash"
 [[ "$run_id" != . && "$run_id" != .. ]] || die "--run-id cannot be dot or dot-dot"
 root=".eidolons/.ledger/$run_id"; events="$root/events"; lock="$root/.append-lock"
+authority="$root/.writer-authority.json"
+
+refuse_controller_writer() {
+  # Presence alone denies legacy writes, including unknown versions, malformed
+  # metadata, interrupted promotion and a missing optional Go binary.
+  [[ ! -e "$authority" && ! -L "$authority" ]] || die "Gauge writer authority is registered or pending; legacy writes refused. Use gauge status/recover; no automatic fallback."
+  if [[ "$run_id" == .gauge-controller-v1 && ( -e "$root/layout.json" || -e "$root/state.db" ) ]]; then
+    die "Controller-instance storage occupies this path; legacy writes refused."
+  fi
+}
+
+historical_controller=false
+inspect_controller_authority() {
+  if [[ -e "$authority" || -L "$authority" ]]; then
+    [[ -f "$authority" && ! -L "$authority" ]] || die "recovery-required: invalid controller authority metadata"
+    jq -e --arg run "$run_id" '.schema_version == 1 and .backend == "gauge" and .phase == "active" and .root_id == $run and (.store_id|type == "string" and length > 0) and (.store_path|type == "string" and length > 0) and (.generation|type == "string" and length > 0) and (.inventory|type == "string" and length > 0)' "$authority" >/dev/null || die "recovery-required: unsupported or pending controller authority; use gauge recover"
+    historical_controller=true
+  fi
+}
 
 # Full v1 prefixes remain the authority; neither counts nor cached digests are
 # trusted. Capture one immutable published prefix and verify every member.
@@ -150,6 +169,7 @@ check_interrupted() {
 acquire_owner() {
   local timeout="${EIDOLONS_LEDGER_LOCK_TIMEOUT:-60}" started
   [[ "$timeout" =~ ^[1-9][0-9]{0,2}$ ]] && [[ "$timeout" -le 300 ]] || die "EIDOLONS_LEDGER_LOCK_TIMEOUT must be an integer from 1 to 300"
+  refuse_controller_writer
   mkdir -p "$events"
   trap cleanup_owner EXIT
   # Signal handlers only mark interruption. In particular, the foreground mv
@@ -169,6 +189,7 @@ acquire_owner() {
   printf '%s\n' "$owner" > "$lock/owner"
   owned=true
   check_interrupted
+  refuse_controller_writer
 }
 
 commit_event() {
@@ -274,11 +295,21 @@ case "$sub" in
     commit_event "projection-captured" '{}' '{}' '[]'
     ;;
   status|render)
+    inspect_controller_authority
     [[ ! -e "$lock" && ! -L "$lock" ]] || die "recovery-required: append ownership is unresolved for $run_id"
     [[ -d "$events" ]] || die "unknown run: $run_id"
     validate_prefix
     [[ "$count" -gt 0 ]] || die "recovery-required: run has no published events: $run_id"
     [[ ! -e "$lock" && ! -L "$lock" ]] || die "recovery-required: append ownership changed during inspection"
+    inspect_controller_authority
+    if [[ "$historical_controller" == true && "$sub" == status ]]; then
+      if [[ "$json" == true || "$format" == json ]]; then
+        printf '%s\n' "$history" | jq --arg run "$run_id" '{historical:true,source:"legacy-import",run_id:$run,current_authority:"gauge",current_acceptance:"unavailable",events:.}'
+      else
+        printf 'Historical legacy evidence for %s (%s events). Current authority: Gauge; current acceptance unavailable here. Use eidolons gauge status --root %s.\n' "$run_id" "$count" "$run_id"
+      fi
+      exit 0
+    fi
     helper_args=("$sub")
     if [[ "$sub" == render ]]; then
       [[ -n "$event_id" ]] || die "render requires a canonical capture --event-id"

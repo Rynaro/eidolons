@@ -1,0 +1,44 @@
+{
+  "change_id": "gauge-v4-06",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "implementation_base": "50e8553423dd19620e75a5a0d98a7ba4a9418528",
+  "acceptance_checks": [
+    {
+      "id": "V4-06-R01",
+      "verify_method": "V4-06-T01: bats --print-output-on-failure --filter 'V4-06 T01 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R02",
+      "verify_method": "V4-06-T02: bats --print-output-on-failure --filter 'V4-06 T02 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R03",
+      "verify_method": "V4-06-T03: bats --print-output-on-failure --filter 'V4-06 T03 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R04",
+      "verify_method": "V4-06-T04: bats --print-output-on-failure --filter 'V4-06 T04 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R05",
+      "verify_method": "V4-06-T05: bats --print-output-on-failure --filter 'V4-06 T05 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R06",
+      "verify_method": "V4-06-T06: bats --print-output-on-failure --filter 'V4-06 T06 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R07",
+      "verify_method": "V4-06-T07: bats --print-output-on-failure --filter 'V4-06 T07 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R08",
+      "verify_method": "V4-06-T08: bats --print-output-on-failure --filter 'V4-06 T08 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    },
+    {
+      "id": "V4-06-R09",
+      "verify_method": "V4-06-T09: bats --print-output-on-failure --filter 'V4-06 T09 ' gauge/tests/conformance.bats; actual evidence required in docs/campaigns/gauge/receipts/V4-06.md"
+    }
+  ],
+  "scope": "V4-06 only"
+}

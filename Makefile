@@ -8,7 +8,7 @@ PYTHON ?= python3
 PUBLISH ?=
 RELEASE_RECORD ?=
 
-.PHONY: help test test-fast test-file lint schema token-budget check
+.PHONY: help test test-fast test-file lint schema token-budget check gauge-build gauge-test gauge-package
 
 help:
 	@echo "Targets:"
@@ -20,6 +20,9 @@ help:
 	@echo "  schema       Validate authored keys and publication integrity records."
 	@echo "  token-budget Check always-loaded dispatch token budgets."
 	@echo "  check        lint + schema + test."
+	@echo "  gauge-build  Explicitly build the optional Gauge binary (Go 1.27.1)."
+	@echo "  gauge-test   Run separate Gauge conformance anchors (Go, Bats, jq, Python)."
+	@echo "  gauge-package Package the optional binary with required license notices."
 	@echo ""
 	@echo "Override JOBS to tune parallelism, e.g. \`make test JOBS=4\`."
 
@@ -59,3 +62,14 @@ token-budget:
 	@bash scripts/token-budget-check.sh EIDOLONS.md --ceiling 850
 
 check: lint schema token-budget test
+
+# Optional compiled path. These are deliberately absent from ordinary check
+# and install: consumers who opt out do not require Go or a Gauge binary.
+gauge-build:
+	@bash scripts/gauge-build.sh build $(if $(GAUGE_OUT),"$(GAUGE_OUT)")
+
+gauge-test:
+	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bats --print-output-on-failure gauge/tests/conformance.bats
+
+gauge-package:
+	@bash scripts/gauge-build.sh package $(if $(GAUGE_OUT),"$(GAUGE_OUT)")

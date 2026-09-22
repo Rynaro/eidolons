@@ -217,6 +217,7 @@ case "$cmd" in
   doctor)        exec bash "$CLI_SRC/doctor.sh"         "$@" ;;
   readiness)     exec bash "$CLI_SRC/readiness.sh"      "$@" ;;
   ledger)        exec bash "$CLI_SRC/ledger.sh"         "$@" ;;
+  gauge)         exec bash "$CLI_SRC/gauge.sh"          "$@" ;;
   augment)       exec bash "$CLI_SRC/augment.sh"        "$@" ;;
   migrate-stamp) exec bash "$CLI_SRC/migrate-stamp.sh"  "$@" ;;
   harness)
