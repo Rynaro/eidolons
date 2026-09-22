@@ -28,7 +28,7 @@ jobs:
       - name: Install shellcheck + yq + jq
         run: |
           sudo apt-get update
-          sudo apt-get install -y shellcheck jq
+          sudo apt-get install -y shellcheck jq python3-yaml
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -43,34 +43,8 @@ jobs:
           shellcheck -x -S error cli/eidolons
           find scripts -name '*.sh' -type f -print0 | xargs -0 shellcheck -x -S error
 
-      - name: Validate JSON schemas parse
-        run: |
-          for schema in schemas/*.json; do
-            jq empty "$schema"
-          done
-
-      - name: Validate roster/index.yaml required fields
-        run: |
-          set -euo pipefail
-          yq -o=json eval '.' roster/index.yaml > /tmp/roster.json
-          for name in $(jq -r '.eidolons[].name' /tmp/roster.json); do
-            jq -e --arg n "$name" '.eidolons[] | select(.name == $n) |
-              .methodology.name and .methodology.version and .methodology.cycle and
-              .source.repo and
-              .versions.latest and
-              .handoffs.upstream and .handoffs.downstream' \
-              /tmp/roster.json > /dev/null || { echo "::error::$name missing required fields"; exit 1; }
-          done
-
-      - name: Check roster/mcps.yaml and roster/index.yaml crystalium version parity
-        run: bash cli/src/check_roster_mcp_skew.sh
-
-      # Live ESL change records must be parseable YAML. This job re-implements
-      # `make schema` inline rather than invoking it, so a gate added to the
-      # Makefile alone does NOT run at the merge gate — three unparseable specs
-      # shipped through green PRs exactly that way. Keep both in step.
-      - name: Check live ESL change specs parse
-        run: bash cli/src/check_change_specs.sh
+      - name: Validate authored registries and publication records
+        run: make schema PYTHON=/usr/bin/python3
 
   cortex-token-budget:
     name: Cortex always-loaded token budget
@@ -183,7 +157,7 @@ jobs:
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             sudo apt-get update
-            sudo apt-get install -y jq bats parallel
+            sudo apt-get install -y jq bats parallel python3-yaml
             sudo wget -qO /usr/local/bin/yq \
               https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
             sudo chmod +x /usr/local/bin/yq
@@ -194,6 +168,12 @@ jobs:
             echo "$(brew --prefix bash)/bin" >> "$GITHUB_PATH"
             echo "$(brew --prefix bats-core)/bin" >> "$GITHUB_PATH"
           fi
+
+      - name: Install registry validation parser
+        run: |
+          python3 -m venv "$RUNNER_TEMP/registry-venv"
+          "$RUNNER_TEMP/registry-venv/bin/python3" -m pip install 'PyYAML==6.0.2'
+          echo "$RUNNER_TEMP/registry-venv/bin" >> "$GITHUB_PATH"
 
       - name: Qualify Bats intermediate assertion failures
         run: |

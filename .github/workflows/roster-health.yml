@@ -31,65 +31,14 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           # mikefarah/yq
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
 
-      - name: Validate roster/index.yaml structure
-        run: |
-          set -euo pipefail
-          yq eval '.' roster/index.yaml > /tmp/roster.json
-
-          # Every entry must have required fields
-          for name in $(jq -r '.eidolons[].name' /tmp/roster.json); do
-            echo "Validating $name..."
-            jq -e --arg n "$name" '.eidolons[] | select(.name == $n) |
-              .methodology.name and .methodology.version and .methodology.cycle and
-              .source.repo and
-              .versions.latest and
-              .handoffs.upstream and .handoffs.downstream' \
-              /tmp/roster.json > /dev/null || { echo "::error::$name missing required fields"; exit 1; }
-          done
-
-      - name: Validate JSON schemas themselves
-        run: |
-          for schema in schemas/*.json; do
-            echo "Checking $schema is valid JSON..."
-            jq empty "$schema"
-          done
-
-      - name: Validate shipped-status integrity metadata posture
-        # Story 5.H: a roster entry with status=shipped must declare release
-        # integrity metadata under versions.releases.<latest>. Compatibility
-        # mode (integrity.enforcement: warn) makes this a warning; strict
-        # mode promotes it to a hard failure. in_construction Eidolons skip
-        # — consistent with the EIIS-conformance matrix job.
-        run: |
-          set -euo pipefail
-          enforcement="$(yq -r '.integrity.enforcement // "warn"' roster/index.yaml)"
-          missing_count=0
-          while IFS= read -r name; do
-            [[ -n "$name" ]] || continue
-            status="$(yq -r ".eidolons[] | select(.name == \"$name\") | .status" roster/index.yaml)"
-            if [[ "$status" != "shipped" ]]; then
-              continue
-            fi
-            latest="$(yq -r ".eidolons[] | select(.name == \"$name\") | .versions.latest" roster/index.yaml)"
-            meta="$(yq -o=json ".eidolons[] | select(.name == \"$name\") | .versions.releases.\"$latest\" // {}" roster/index.yaml)"
-            if [[ "$meta" == "{}" ]]; then
-              if [[ "$enforcement" == "strict" ]]; then
-                echo "::error::$name is shipped at v$latest but versions.releases.\"$latest\" is missing"
-                missing_count=$((missing_count + 1))
-              else
-                echo "::warning::$name is shipped at v$latest without release integrity metadata (compatibility mode)"
-              fi
-            fi
-          done < <(yq -r '.eidolons[].name' roster/index.yaml)
-          if [[ "$missing_count" -gt 0 ]]; then
-            exit 1
-          fi
+      - name: Validate authored registries and publication records
+        run: make schema PYTHON=/usr/bin/python3
 
   parse-mcp-catalogue:
     name: Validate MCP catalogue
@@ -101,7 +50,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -144,7 +93,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq curl
+          sudo apt-get install -y jq python3-yaml curl
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -214,7 +163,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq
@@ -377,7 +326,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y jq
+          sudo apt-get install -y jq python3-yaml
           sudo wget -qO /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
           sudo chmod +x /usr/local/bin/yq

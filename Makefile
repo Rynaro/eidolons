@@ -3,6 +3,10 @@ SHELL := /usr/bin/env bash
 # Parallelism for `make test` / `make test-fast`. Override on the command
 # line: `make test JOBS=4`.
 JOBS ?= 8
+PYTHON ?= python3
+# Optional explicit release candidate, e.g. make schema PUBLISH=nexus@3.4.0
+PUBLISH ?=
+RELEASE_RECORD ?=
 
 .PHONY: help test test-fast test-file lint schema token-budget check
 
@@ -13,7 +17,7 @@ help:
 	@echo "  test-file F=cli/tests/init.bats   Run a single file."
 	@echo "  test-file F=cli/tests/init.bats P='preset pipeline'  Run a single test by name pattern."
 	@echo "  lint         shellcheck the CLI sources."
-	@echo "  schema       Validate roster + schema JSON structurally."
+	@echo "  schema       Validate authored keys and publication integrity records."
 	@echo "  token-budget Check always-loaded dispatch token budgets."
 	@echo "  check        lint + schema + test."
 	@echo ""
@@ -47,8 +51,7 @@ lint:
 	@shellcheck -x -S error cli/eidolons
 
 schema:
-	@jq empty schemas/*.json
-	@yq eval '.' roster/index.yaml >/dev/null
+	@$(PYTHON) scripts/validate-registry.py $(if $(PUBLISH),--publish "$(PUBLISH)") $(if $(RELEASE_RECORD),--release-record "$(RELEASE_RECORD)")
 	@bash cli/src/check_roster_mcp_skew.sh
 	@bash cli/src/check_change_specs.sh
 

@@ -349,6 +349,27 @@ If your host has no suitable hook or tool-control surface, expect documentary gu
 
 CLI, roster, and composition issues belong here. Member-specific bugs belong in the member's repository; installation-contract changes belong in [EIIS](https://github.com/Rynaro/eidolons-eiis). Include the host, CLI version, reproduction steps, and relevant command output when reporting a problem.
 
+For registry changes, run `make schema`. Its shared validator requires Python 3
+and PyYAML; use a virtual environment if PyYAML is not already available:
+
+```bash
+python3 -m venv /tmp/eidolons-schema-venv
+. /tmp/eidolons-schema-venv/bin/activate
+python -m pip install 'PyYAML==6.0.2'
+make schema
+```
+
+The gate rejects duplicate authored YAML/JSON keys and incomplete integrity
+metadata for advertised `latest`/`stable` releases. Historical records remain
+readable; explicitly selected publication records must pass the same gate.
+PR, roster-health, nexus-release, and intake workflows use
+[`scripts/validate-registry.py`](scripts/validate-registry.py). Intake validates
+the raw release manifest before normalization. The reusable member-release
+producer remains unchanged. See the [V4-03 receipt](docs/campaigns/gauge/receipts/V4-03.md)
+for the executed checks and their limits.
+
+<!-- IDG provenance: V4-03 handoff; scripts/validate-registry.py; receipt above. -->
+
 ## License
 
 Apache-2.0. See [LICENSE](LICENSE).

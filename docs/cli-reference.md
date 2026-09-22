@@ -951,6 +951,9 @@ eidolons mcp refresh <name>          # re-fetch artefact (image pull / binary)
 eidolons mcp uninstall <name>        # remove from this project
 eidolons mcp upgrade [<name>|--all]  # upgrade to catalogue stable
 eidolons mcp sync                    # reconcile eidolons.yaml mcps: block
+eidolons mcp sync --dry-run          # read-only installed wiring drift preview
+eidolons mcp sync --repair-wiring    # explicitly repair installed managed wiring
+eidolons mcp verify [<name>] [--json] # diagnose installed MCP wiring drift
 eidolons mcp health [<name>|--all]   # run health probes; exit code always 0
 eidolons mcp run <name> [<args>]     # pass-through to binary MCP (junction only in v1.3)
 ```
@@ -959,9 +962,17 @@ OCI MCP installs also honor `mcp_runtime.resource_profile` in
 `eidolons.yaml` (`minimal`, `standard`, `full`, or `unlimited`) and a
 per-entry `mcps[].resource_profile` override. The setting applies Docker
 CPU/memory/PID ceilings per MCP container. An absent setting remains
-`unlimited`; run `eidolons mcp sync` to reconcile profile changes. See
-[`docs/mcp.md`](mcp.md#oci-resource-profiles) for values and Codex lifecycle
-behavior.
+`unlimited`. After a profile change, preview with `eidolons mcp sync --dry-run`
+and apply with `eidolons mcp sync --repair-wiring`. Ordinary sync reports drift.
+The two flags are mutually exclusive, require the project manifest, and operate
+on installed, locked MCPs without installing artifacts. Repair preserves
+user-owned settings and the locked OCI digest (including local unpublished
+images), and updates the runtime receipt. `mcp verify` diagnoses drift without
+repairing it. Codex drift comparison in verify/sync and repair require Python
+3.11+ (`tomllib`). See [`docs/mcp.md`](mcp.md#sync-opt-in-reconciler) for ownership
+boundaries and [resource profiles](mcp.md#oci-resource-profiles) for limits.
+
+<!-- IDG provenance: V4-03 maker/reviewer handoffs; campaigns/gauge/receipts/V4-03.md. -->
 
 ### Environment
 
