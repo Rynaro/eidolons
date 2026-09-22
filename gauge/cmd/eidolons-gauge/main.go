@@ -110,6 +110,16 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   status-policy-preview --root ID  preview preserves reservations; no model work
   status-client-conformance --input JSON  fixture client contract (GAMBIT out of scope)
 
+  ramza-enable                     add typed RAMZA method-contract namespaces (schema 2)
+  ramza-plan-lite --input JSON     lean lite plan without invented alternatives
+  ramza-mark-ready --plan ID       refuse ready while behavior/authority unresolved
+  ramza-consume --input JSON       producer/consumer decision carry (no duplicate search)
+  ramza-rubric --input JSON [--plan ID]  label uncalibrated scores as heuristics
+  ramza-profile --input JSON       preserve full/legacy controls; version lite amendments
+  ramza-heuristic --input JSON     publish activation/scope/retirement conditions
+  ramza-assumption --input JSON [--plan ID]  keep unsupported assumptions unresolved
+  ramza-show --plan ID             show persisted lite plan
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -125,6 +135,8 @@ Delivery loop is the V4-15 observable runnable-slice demonstrator.
 V4-21 expands the V4-09 instrument into auditable evaluation; no V4-22/V4-10.
 V4-20 core-cli status projections extend inspect/status; optional-GAMBIT is
 out of scope (dropped; not used). Status/preview cannot refill budgets or create live-evidence claims.
+V4-16 publishes lean RAMZA method contracts without fabricated certainty; Rynaro/Ramza
+remains canonical until accepted V4-10; no default flip or probability from rubrics.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -169,6 +181,9 @@ func run(args []string) error {
 	}
 	if isStatusCommand(command) {
 		return statusCommand(args)
+	}
+	if isRamzaCommand(command) {
+		return ramzaCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

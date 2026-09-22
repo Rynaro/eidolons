@@ -1,0 +1,40 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-16",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_16",
+  "checker": "pending",
+  "acceptance_checks": [
+    {
+      "id": "V4-16-R01",
+      "verify_method": "V4-16-T01: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T01'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R02",
+      "verify_method": "V4-16-T02: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T02'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R03",
+      "verify_method": "V4-16-T03: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T03'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R04",
+      "verify_method": "V4-16-T04: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T04'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R05",
+      "verify_method": "V4-16-T05: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T05'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R06",
+      "verify_method": "V4-16-T06: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T06'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    },
+    {
+      "id": "V4-16-R07",
+      "verify_method": "V4-16-T07: bash gauge/tests/ramza-anchors.sh / go test -run '^TestV416T07'; evidence in docs/campaigns/gauge/receipts/V4-16.md"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

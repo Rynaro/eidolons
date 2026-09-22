@@ -1,0 +1,28 @@
+{
+  "scope": "local fixture acceptance only",
+  "implementation_base": "eddd02118ad85810776ea155da4a82a1993d4b09",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "branch": "codex/gauge-v4-16-ramza",
+  "macos": {
+    "go": "1.27.1",
+    "commands": [
+      "cd gauge && GAUGE_REPO=$PWD/.. go test -mod=readonly -race -count=1 ./... -run 'TestV416|TestV415|TestV421|TestV420'",
+      "bash gauge/tests/ramza-anchors.sh"
+    ],
+    "exit": 0
+  },
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "live_qualification": "intentionally_blocked",
+  "provider_dispatch": "excluded",
+  "model_calls": 0,
+  "schema": "2 additive ramza namespaces",
+  "v4_17": "out_of_scope",
+  "v4_18": "out_of_scope",
+  "v4_10": "out_of_scope",
+  "v4_19": "out_of_scope",
+  "v4_22": "out_of_scope",
+  "canonical_owner": "Rynaro/Ramza",
+  "sibling_relocated": false,
+  "fabricated_certainty": false,
+  "default_flip": false
+}
