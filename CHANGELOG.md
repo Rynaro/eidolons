@@ -10,6 +10,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.0.0] — 2026-09-22 — verified-delivery Gauge era
+
+Major: ships the opt-in Gauge controller and the completed V4 verified-delivery campaign (23 packages). Ordinary CLI install, roster sync, and host wiring stay compatible; Gauge is not required for day-to-day use. Behavioral routing defaults are unchanged until separately authorized live promotion. Live host qualification and paid probes remain fail-closed / operator-gated.
+
+### Added
+- Opt-in Go Gauge controller (`eidolons gauge`, `make gauge-build` / `gauge-package`) with schema-2 local store, typed namespaces, and fixture-first execution — native harnesses still own reasoning and editing ([docs/gauge.md](docs/gauge.md)).
+- Full V4 campaign surface (receipts under `docs/campaigns/gauge/receipts/`): integrity/upgrade/validation floor (V4-01–03); ordered journal and typed controller seam (V4-04–06); preferences, root lineage, host-qualification instrument (V4-07–09); reservations, native dispatch, assignment compiler, protected acceptance, runnable delivery + recovery (V4-11–15); evaluation expansion and truthful status projections (V4-21, V4-20); consolidation inventory (V4-10 inventory); lean RAMZA / Vivi modes / core context / roster adoption (V4-16–19); calibration and release/migration gates (V4-22–23).
+- Gauge CI workflow and packaging path for Linux/macOS native tests.
+- Shared registry validator (`scripts/validate-registry.py`) wired into PR, roster-health, nexus-release, and intake workflows (V4-03).
+
+### Changed
+- Fail-closed integrity on invalid policy; clean legacy upgrade preservation; publication records gated and MCP wiring repaired (V4-01–03).
+- Upgrade/self and migration paths gain staged verify-before-switch fixtures and recovery that preserve prior installation state (V4-02, V4-23 gates) — production install defaults are not flipped by incomplete promotion evidence.
+- README reframed for the v4 operating model: one continuing maker with embedded specialist methods by default; separate workers when a real boundary or explicit request requires them; status separates delivery, verification, managed-live qualification, and performance promotion.
+
+### Notes / non-goals in this cut
+- Live provider dispatch and live-host managed qualification remain blocked without operator-supplied allowance and recheck after host version drift.
+- Optional V4-10 import/compiler consolidation beyond inventory, optional memory adapters, and GAMBIT remain deferred or out of scope as recorded in campaign receipts.
+- Null/inconclusive calibration does not authorize default flips, tags beyond this release cut, or repository archival.
+
 ## [3.3.1] — 2026-09-15 — Crystalium recall contract
 
 ### Added
