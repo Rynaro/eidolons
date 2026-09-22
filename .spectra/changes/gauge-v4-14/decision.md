@@ -1,0 +1,11 @@
+# V4-14 acceptance decision — freeze candidates and qualify protected acceptance
+
+Actor vivi_v4_14, implementing from canonical EARS in `03-managed-delivery.md` §V4-14 and ARCHITECTURE.md §Acceptance integrity and acceptance adequacy. Plan commit c581308f055a0e252013bf09f2a7b2e1426ff811. Implementation base dc3bb0d (V4-13 merged via #610). No live/provider dispatch authorization. Architectural confidence high for fixture-local protected acceptance only.
+
+Select enforceable fixture isolation (chmod deny + write allowlist + credential filtering) over (a) label/directory theater or (b) rewriting the Bash sandbox wholesale. Challenge invented acceptance from digest equality, authored prose, or unqualified oracles — none are introduced.
+
+Schema 2 preserved. Additive typed namespaces: `frozen_candidates`, `acceptance_packages`, `check_receipts`, `oracle_qualifications`, `owner_reviews`, `definition_blockers`, `protected_paths`, with `meta.acceptance_receipt` and typed version guards. Pre-V4-14 schema-2 stores remain openable; acceptance APIs call `EnsureAcceptanceNamespaces`. New stores initialize acceptance namespaces alongside compiler.
+
+Freeze sequence: materialize content entries (tracked/untracked/config/mode) → content digest → bind acceptance/environment IDs → persist immutable freeze. Check finish records observed outcome + provenance against the freeze; GradeFromIsolation withholds trusted integrity when enforcement or context provenance is absent. Application gate compares frozen base digest to current target (moved/dirty/conflicts → revalidation). Human reports reuse V4-05 projection fields without conflating integrity, provenance, and acceptance. Oracle qualification requires representative expected-pass and expected-fail discrimination. Owner review is mandatory for maker test/def changes. Behavior gate requires declared-environment observation. Definition blockers fire on ambiguous criteria without inventing requirements.
+
+Mutators retain V4-06 append lock + active claim/inventory checks. V4-09 live admission remains fail-closed. Zero real network/transport. Bash 3.2 legacy CLI unchanged; acceptance CLI is opt-in Go only (`candidate-freeze` / `acceptance-check` avoid colliding with instrument `freeze`). No V4-15+, no merge/release, no paid probes, no universal correctness, no auto push/merge/release.
