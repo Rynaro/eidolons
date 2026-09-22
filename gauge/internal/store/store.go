@@ -93,7 +93,10 @@ func guard(tx *bolt.Tx) error {
 	if e := guardInstrument(tx); e != nil {
 		return e
 	}
-	return guardReservation(tx)
+	if e := guardReservation(tx); e != nil {
+		return e
+	}
+	return guardDispatch(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -141,7 +144,10 @@ func Create(path, id string) error {
 		if e := initializeInstrument(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeReservation(tx, id, "new-store")
+		if e := initializeReservation(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeDispatch(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {
