@@ -83,6 +83,14 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   owner-review --root ID --input JSON
   definition-assess --root ID --input JSON
 
+  delivery-enable                  add typed delivery namespaces (schema 2)
+  delivery-run --root ID --input JSON
+  delivery-inspect --loop ID       observational status (no model work)
+  delivery-status [--root ID]
+  delivery-resume --root ID --input JSON
+  delivery-cancel --root ID --input JSON
+  delivery-compact --root ID --input JSON
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -94,6 +102,8 @@ Dispatch admit uses one fixture-qualified fake native adapter; live stays blocke
 Compiler records inspectable selection reasons; semantic planning remains fallible.
 Acceptance freezes candidates and qualifies protected oracles; no universal correctness;
 no auto push/merge/release; candidate scripts cannot inherit checker credentials.
+Delivery loop is the V4-15 observable runnable-slice demonstrator; minimal
+inspect/status/resume/cancel only — full V4-20 CLI is deferred. No V4-16+.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -129,6 +139,9 @@ func run(args []string) error {
 	}
 	if isAcceptanceCommand(command) {
 		return acceptanceCommand(args)
+	}
+	if isDeliveryCommand(command) {
+		return deliveryCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

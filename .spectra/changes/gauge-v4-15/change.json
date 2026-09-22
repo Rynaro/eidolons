@@ -1,0 +1,52 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-15",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_15",
+  "checker": "pending",
+  "acceptance_checks": [
+    {
+      "id": "V4-15-R01",
+      "verify_method": "V4-15-T01: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T01'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R02",
+      "verify_method": "V4-15-T02: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T02'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R03",
+      "verify_method": "V4-15-T03: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T03'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R04",
+      "verify_method": "V4-15-T04: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T04'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R05",
+      "verify_method": "V4-15-T05: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T05'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R06",
+      "verify_method": "V4-15-T06: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T06'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R07",
+      "verify_method": "V4-15-T07: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T07'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R08",
+      "verify_method": "V4-15-T08: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T08'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R09",
+      "verify_method": "V4-15-T09: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T09'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    },
+    {
+      "id": "V4-15-R10",
+      "verify_method": "V4-15-T10: bash gauge/tests/delivery-anchors.sh / go test -run '^TestV415T10'; evidence in docs/campaigns/gauge/receipts/V4-15.md"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}
