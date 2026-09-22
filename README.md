@@ -2,7 +2,7 @@
 
 <h1 align="center">Eidolons</h1>
 
-<p align="center"><em>A personal team for understanding, planning, building, and checking software.</em></p>
+<p align="center"><em>A personal team for understanding, planning, building, and checking software — with evidence when you need it.</em></p>
 
 <!-- Release badges stay dynamic: the nexus and its members version independently. -->
 <p align="center">
@@ -17,7 +17,7 @@
 <a href="#start-here">Start here</a> ·
 <a href="#meet-the-team">The team</a> ·
 <a href="#work-through-a-real-task">Workflow</a> ·
-<a href="#new-in-v33-observe-and-preserve">What's new</a> ·
+<a href="#new-in-v4-verified-delivery">What's new</a> ·
 <a href="#go-deeper">For experts</a> ·
 <a href="#evidence-you-can-inspect">Evidence</a>
 </p>
@@ -25,6 +25,8 @@
 Eidolons installs named AI specialists into your projects and connects them to your coding host. ATLAS explores the code, RAMZA writes the plan, Vivi implements it, and IDG documents the result. Other members handle difficult diagnoses, trade-offs, and small repairs.
 
 The **nexus** is this repository and its `eidolons` CLI: it installs the team, maintains versions, computes routes, and wires host integrations. Your coding host supplies the model and execution environment. Adapters are available for Claude Code, Codex, GitHub Copilot, Cursor, and OpenCode; their hook and enforcement capabilities differ. Use an installed, authenticated host to run the agents; the CLI does not include a model subscription.
+
+**v4 default shape:** one continuing maker, with specialist expertise loaded as methods when no separate boundary is needed. Spin a separate worker for isolation, independent review, distinct authority, or when you ask for a named specialist by name. More agents is not a performance claim.
 
 You can start with one scout and add members as the work grows. The names are inspired by Final Fantasy summons; each comes with its own methodology, role boundaries, and independently versioned repository.
 
@@ -146,55 +148,47 @@ Use the phases the task needs:
 | **Check — a separate reviewer; VIGIL for failures** | Findings tied to the diff and acceptance criteria. |
 | **Document — IDG** | Updated usage, decisions, and operational notes. |
 
-Keep diagnosis and implementation separate when you want review first: “Diagnose this failure and propose a fix; stop before implementation.” For implementation requests, state the allowed changes and the stopping condition.
+Prefer **one maker** through build unless you need a real boundary. Ask for a separate specialist when you want independent review (“ATLAS, inspect this diff only”) or isolation (“FORGE as consultant, then return a bounded recommendation”). Keep diagnosis and implementation separate when you want review first: “Diagnose this failure and propose a fix; stop before implementation.”
 
 The router uses deterministic rules from [`roster/routing.yaml`](roster/routing.yaml), without model calls. A selected chain can still be wrong or unavailable in your project. Inspect `selected`, `clarification_request`, and assumptions; confirm the host actually used the intended members.
 
-## New in v3.3: observe and preserve
+## New in v4: verified delivery
 
-The v3.3 commands add local receipts and checkpoint primitives. They make more of the workflow inspectable, with the current implementation boundaries below.
+v4 ships an **opt-in Gauge controller** and a completed verified-delivery campaign. Ordinary install, sync, and host wiring keep working without Gauge. Routing defaults are not flipped by incomplete performance evidence.
 
-### Inspect configuration and route intent
+### Operating model
+
+| Practice | Meaning |
+|---|---|
+| One continuing maker | Compatible methods bind into the maker without mandatory fan-out. |
+| Separate workers on purpose | Context isolation, independent review, distinct authority, or an explicit user request. |
+| Honest status | Delivery, verification, managed-live qualification, and performance promotion are separate decisions — not one composite green badge. |
+| Fail closed | Missing grants, unknown host methods, and unauthorized release actions refuse rather than silently downgrade. |
+
+### Optional Gauge controller
+
+Build Gauge explicitly (Go **1.27.1**), then exercise fixture roots:
+
+```bash
+make gauge-build
+eidolons gauge --help
+eidolons gauge init --project /absolute/project --root demo
+eidolons gauge status --project /absolute/project --root demo
+```
+
+Gauge owns typed local state: preferences and ceilings, root lineage and observations, reservations and dispatch intents, assignment compilation, protected candidate freeze/check, runnable-slice delivery with recovery, evaluation and calibration gates, and migration/release readiness reporting. Native harnesses still own the edit/test loop. Live provider dispatch and live-host managed qualification stay fail-closed until separately authorized.
+
+[Gauge guide](docs/gauge.md) · [Campaign receipts](docs/campaigns/gauge/receipts/) · [Architecture frame](docs/campaigns/gauge/ARCHITECTURE.md)
+
+### Still from v3.3: observe and preserve
 
 ```bash
 eidolons readiness --json
-eidolons readiness --live --json
 eidolons run "audit the loader; do not implement changes" --json
-```
-
-Readiness writes `.eidolons/.readiness/receipt.json`, recording manifest/lock digests, discovery locations, and check outcomes. In this version, `--live` runs harness registration and syntax checks for supported hosts; it does **not** launch a real model session. Enforcement fields reflect lock declarations, and host versions remain unknown.
-
-Routing JSON now includes `route_contract` and `semantic_decision_digest`. The contract exposes operation sets inferred from prompt text and labels enforcement as advisory. Treat it as routing metadata: the host must apply the actual task permissions.
-
-### Save state before a long-session handoff
-
-Create a `task-state.json` file with the fields the checkpoint command requires:
-
-```json
-{
-  "constraints": ["Keep the public API unchanged"],
-  "anchors": ["src/queue.ts:42"],
-  "decisions": ["Use an idempotency key for each job"],
-  "failed_approaches": ["A process-local lock does not cover multiple workers"],
-  "open_variables": ["Which store owns key expiration?"],
-  "pending_checks": ["Repeat the duplicate-delivery regression test"],
-  "lineage": ["queue-repair"]
-}
-```
-
-Replace the example paths and decisions with your task's actual state, then:
-
-```bash
 eidolons context checkpoint create --payload task-state.json --run-id queue-repair --json
 ```
 
-The receipt returns a `checkpoint_id`. Copy that value into the recovery command:
-
-```bash
-eidolons context checkpoint recover --id <checkpoint_id> --json
-```
-
-Recovery checks the payload digest and required-field presence, then returns the saved JSON. Review it against the current source before continuing. Payload and receipt files live under `.eidolons/.context/checkpoints/`; local atomic renames do not constitute remote backup. Use a fresh ID for each checkpoint.
+Readiness and checkpoints remain the lightweight continuity path for host sessions. Treat routing contracts as metadata: the host must apply actual task permissions. Payload and receipt files live under `.eidolons/`; local atomic renames are not remote backup.
 
 <details>
 <summary><strong>Experimental interfaces: ledger, capsules, recall, policy, and ACP</strong></summary>
@@ -333,6 +327,7 @@ Host adapters expose these canonical instructions in the format each host unders
 | Explore | Start with |
 |---|---|
 | CLI usage and examples | [CLI reference](docs/cli-reference.md), [examples](examples/) |
+| Optional Gauge controller | [Gauge guide](docs/gauge.md), [campaign](docs/campaigns/gauge/) |
 | Routing and composition | [Cortex](methodology/cortex/), [composition](methodology/composition.md) |
 | Available members and tools | [Roster](roster/index.yaml), [MCP catalogue](roster/mcps.yaml) |
 | Implementation and contracts | [CLI source](cli/src/), [JSON schemas](schemas/) |
@@ -341,9 +336,9 @@ Host adapters expose these canonical instructions in the format each host unders
 
 ## When to keep it simple
 
-A single assistant may be enough for a short, disposable task. Eidolons is most useful when work benefits from distinct phases, reusable methods, and continuity across sessions. Start with the smallest useful team.
+A single assistant may be enough for a short, disposable task. Eidolons is most useful when work benefits from distinct phases, reusable methods, and continuity across sessions. Start with the smallest useful team — often one maker plus an embedded method, not a full specialist swarm.
 
-If your host has no suitable hook or tool-control surface, expect documentary guidance rather than enforced delegation. The experimental continuity commands are not yet a substitute for a tested cross-host resume workflow.
+If your host has no suitable hook or tool-control surface, expect documentary guidance rather than enforced delegation. The experimental continuity commands and optional Gauge fixtures are not yet a substitute for authorized live-host managed delivery.
 
 ## Contributing
 
@@ -367,8 +362,6 @@ PR, roster-health, nexus-release, and intake workflows use
 the raw release manifest before normalization. The reusable member-release
 producer remains unchanged. See the [V4-03 receipt](docs/campaigns/gauge/receipts/V4-03.md)
 for the executed checks and their limits.
-
-<!-- IDG provenance: V4-03 handoff; scripts/validate-registry.py; receipt above. -->
 
 ## License
 
