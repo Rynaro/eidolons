@@ -1,0 +1,26 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "v4_02_review"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "INFORM",
+  "objective": "Verify V4-02 legacy upgrade preservation and qualified hosted regressions",
+  "context_delta": {
+    "candidate": "483e362e136328f60117eb92d0fb9ede3661f391",
+    "ci": "https://github.com/Rynaro/eidolons/actions/runs/35674027863",
+    "receipt": "docs/campaigns/gauge/receipts/V4-02.md",
+    "review_context": "Initially fresh artifact-only context, followed by maker/parent coordination. Same-model review is not statistical independence. No live managed-host qualification.",
+    "reviewed_source_hashes": ".spectra/changes/gauge-v4-02/reviewed-source.sha256",
+    "roster_health": "https://github.com/Rynaro/eidolons/actions/runs/35674025451"
+  },
+  "ise": {
+    "verification": {
+      "fresh_context": true,
+      "checker": "v4_02_review",
+      "transcript_access": "artifact-only"
+    }
+  }
+}
