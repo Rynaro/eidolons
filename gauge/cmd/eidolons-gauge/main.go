@@ -168,6 +168,17 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   calibration-revalidate --strategy ID [--model] [--harness] [--task-scope]
   calibration-offline --input JSON isolate offline adaptation proposals (R10)
 
+  release-enable                   add typed release/migration namespaces (schema 2)
+  migration-attempt --input JSON   stage+verify before switch (R01); no force-integrity bypass
+  migration-recover --migration ID restore previous install + user state (R02)
+  release-candidate --input JSON   deterministic + live evidence gate (R03)
+  release-authorize --input JSON   refuse tag/merge/publication without approval (R04)
+  release-retire --input JSON      block retirement while unmigrated consumers remain (R05)
+  release-hostcap --input JSON     register host capability catalogue qualification (R06)
+  release-hostcap-invalidate --id ID --version VER invalidate on host version drift
+  release-readiness --input JSON   separate correctness/managed-op/performance decisions (R07)
+  release-rollback --input JSON    strategy/method rollback retaining lineage (R08)
+
 
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
@@ -193,6 +204,9 @@ no V4-22/V4-23; unproven benefits stay experimental/maintenance without V4-21 ev
 V4-19 core-context manages bounded information access; optional adapter out of scope.
 V4-22 calibrates strategies and gates experience-driven adaptation; extends V4-21;
 null/inconclusive never flips a default; no V4-18/V4-23 in this package.
+V4-23 evidence-scoped migration/release/retirement gates refuse unauthorized
+tag/merge/publication/archival; fixture readiness is not a release authorization.
+
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -252,6 +266,12 @@ func run(args []string) error {
 	}
 	if isCalibrationCommand(command) {
 		return calibrationCommand(args)
+	}
+	if isReleaseCommand(command) {
+		return releaseCommand(args)
+	}
+	if isMigrationCommand(command) {
+		return migrationCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

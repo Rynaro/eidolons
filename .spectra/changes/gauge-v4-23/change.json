@@ -1,0 +1,44 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-23",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_23",
+  "checker": "pending",
+  "acceptance_checks": [
+    {
+      "id": "V4-23-R01",
+      "verify_method": "V4-23-T01: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T01'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R02",
+      "verify_method": "V4-23-T02: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T02'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R03",
+      "verify_method": "V4-23-T03: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T03'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R04",
+      "verify_method": "V4-23-T04: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T04'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R05",
+      "verify_method": "V4-23-T05: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T05'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R06",
+      "verify_method": "V4-23-T06: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T06'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R07",
+      "verify_method": "V4-23-T07: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T07'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    },
+    {
+      "id": "V4-23-R08",
+      "verify_method": "V4-23-T08: bash gauge/tests/release-anchors.sh / go test -run '^TestV423T08'; evidence in docs/campaigns/gauge/receipts/V4-23.md"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

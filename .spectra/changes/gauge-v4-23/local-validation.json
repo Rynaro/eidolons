@@ -1,0 +1,11 @@
+{
+  "go": "1.27.1",
+  "flags": "-mod=readonly -race",
+  "anchors": "bash gauge/tests/release-anchors.sh",
+  "network": "none",
+  "live_probes": "blocked",
+  "publication": "blocked",
+  "tag_merge_release": "not_authorized",
+  "base": "5136c21612f8c99cef3baf06d9c15ec4f443560a",
+  "plan": "c581308f055a0e252013bf09f2a7b2e1426ff811"
+}
