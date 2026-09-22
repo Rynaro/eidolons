@@ -32,10 +32,21 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   amendment-show --root ID --authorization-id ID
   strategy-select --root ID --policy-id ID --input JSON
 
+  observation-enable               add typed observation/lineage namespaces (schema 2)
+  task-start --route-digest DIGEST allocate fresh UUID root distinct from route
+  task-resume --root ID            resume existing root; unknown fails without create
+  lineage-bind --root ID --input JSON
+  usage-record --root ID --input JSON
+  usage-correct --root ID --input JSON
+  usage-summary --root ID --input STREAM-JSON
+  usage-export --root ID           allowlisted observation export
+  usage-retain --root ID           drop eligible detail; preserve totals/lineage
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
 Preset strategy bounds are illustrative registry rules, not calibrated budgets.
+Observation recording never grants policy or spending authority.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -53,6 +64,9 @@ func run(args []string) error {
 	command := args[0]
 	if isPolicyCommand(command) {
 		return policyCommand(args)
+	}
+	if isObservationCommand(command) {
+		return observationCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
