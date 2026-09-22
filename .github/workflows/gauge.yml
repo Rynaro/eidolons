@@ -75,7 +75,9 @@ jobs:
         run: |
           sudo mkdir -p /predecessor
           sudo chown "$(id -u):$(id -g)" /predecessor
-          git archive aa155c8738209f1672cc3fc663b0019740ba54a6 | tar -x -C /predecessor
+          # Published V4-06 tip on main (schema 1). The pre-publication local tip
+          # aa155c8 is not a remote object and cannot be archived in hosted CI.
+          git archive 1ee649c67ba1a0a25a82fe6195e6a358913f0431 | tar -x -C /predecessor
           python3 gauge/tests/policy.py
       - name: Reproducible binary and license-complete package
         env:
