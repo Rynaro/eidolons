@@ -1,0 +1,12 @@
+{
+  "selected": ["ATLAS", "FORGE", "Vivi", "VIGIL", "IDG"],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-15 and V4-21 are merged on main at eddd021; V4-17 implements fixture Vivi candidate/context modes only.",
+    "Sibling Rynaro/Vivi remains canonical until accepted V4-10 relocation; Gauge owns versioned mode contracts.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-16/18/10/19/22; no paid/live probes; Gauge does not grant publication authority."
+  ],
+  "refusal_rerouting": false
+}
