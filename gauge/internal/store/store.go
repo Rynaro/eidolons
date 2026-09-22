@@ -108,7 +108,13 @@ func guard(tx *bolt.Tx) error {
 	if e := guardStatus(tx); e != nil {
 		return e
 	}
-	return guardRamza(tx)
+	if e := guardRamza(tx); e != nil {
+		return e
+	}
+	if e := guardVivi(tx); e != nil {
+		return e
+	}
+	return guardContext(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -180,7 +186,10 @@ func Create(path, id string) error {
 		if e := initializeRamza(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeVivi(tx, id, "new-store")
+		if e := initializeVivi(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeContext(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {

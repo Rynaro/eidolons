@@ -1,0 +1,24 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-19",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_19",
+  "checker": "pending",
+  "acceptance_checks": [
+    {"id": "V4-19-R01", "verify_method": "V4-19-T01: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T01'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R02", "verify_method": "V4-19-T02: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T02'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R03", "verify_method": "V4-19-T03: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T03'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R04", "verify_method": "V4-19-T04: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T04'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R05", "verify_method": "V4-19-T05: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T05'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R06", "verify_method": "V4-19-T06: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T06'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R07", "verify_method": "V4-19-T07: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T07'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R08", "verify_method": "V4-19-T08: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T08'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R09", "verify_method": "V4-19-T09: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T09'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R10", "verify_method": "V4-19-T10: bash gauge/tests/context-anchors.sh / go test -run '^TestV419T10'; evidence in docs/campaigns/gauge/receipts/V4-19.md"},
+    {"id": "V4-19-R11", "verify_method": "V4-19-T11 N/A: feature_condition_absent (indexed access); one-justified-optional-adapter out of scope (dropped; not used); recorded via context-feature-na / TestV419T11"},
+    {"id": "V4-19-R12", "verify_method": "V4-19-T12 N/A: feature_condition_absent (recursive access); one-justified-optional-adapter out of scope (dropped; not used); recorded via context-feature-na / TestV419T12"}
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

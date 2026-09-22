@@ -1,0 +1,13 @@
+{
+  "selected": ["ATLAS", "FORGE", "Vivi", "VIGIL", "IDG"],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-15 and V4-21 are on main (eddd021 after V4-20 #614); V4-19 implements core-context only.",
+    "one-justified-optional-adapter is out of scope (dropped; not used); R11/R12 N/A with feature_condition_absent.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-10/16/17/18/22; no paid/live probes; live qualification stays blocked.",
+    "CRYSTALIUM optional never operational truth; Atomos compose/verify-only; no mandatory vector store."
+  ],
+  "refusal_rerouting": false
+}
