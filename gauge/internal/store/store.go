@@ -86,7 +86,10 @@ func guard(tx *bolt.Tx) error {
 	if e := guardPolicy(tx); e != nil {
 		return e
 	}
-	return guardObservation(tx)
+	if e := guardObservation(tx); e != nil {
+		return e
+	}
+	return guardInstrument(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -128,7 +131,10 @@ func Create(path, id string) error {
 		if e := initializePolicy(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeObservation(tx, id, "new-store")
+		if e := initializeObservation(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeInstrument(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {

@@ -42,11 +42,21 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   usage-export --root ID           allowlisted observation export
   usage-retain --root ID           drop eligible detail; preserve totals/lineage
 
+  instrument-enable                add typed instrument namespaces (schema 2)
+  catalogue --input JSON           record host capability tuple (fixture scope)
+  preflight --tuple ID [--input JSON]
+  freeze --input JSON              freeze comparison protocol before outcomes
+  record --input JSON              record native/v3 attempt under frozen protocol
+  shadow --input JSON              shadow-observe without mutating execution
+  report --protocol ID             instrument report (live remains blocked)
+  eligibility --input JSON         record arm eligibility (no fabricated attempts)
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
 Preset strategy bounds are illustrative registry rules, not calibrated budgets.
 Observation recording never grants policy or spending authority.
+Instrument catalogue/preflight never grants live host qualification.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -67,6 +77,9 @@ func run(args []string) error {
 	}
 	if isObservationCommand(command) {
 		return observationCommand(args)
+	}
+	if isInstrumentCommand(command) {
+		return instrumentCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
