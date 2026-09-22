@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-08 is merged on main at 7d93197; V4-09 implements fixture-first instrument + fail-closed live admission only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "Live host qualification intentionally blocked without protected authorization + usable host interface + trustworthy ordering."
+  ],
+  "refusal_rerouting": false
+}

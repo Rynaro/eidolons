@@ -1,0 +1,19 @@
+{
+  "scope": "local fixture acceptance only",
+  "implementation_base": "7d931979c73439f2bb73b8d049ac666b719ed8c4",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "branch": "codex/gauge-v4-09-instrument",
+  "macos": {
+    "go": "1.27.1",
+    "commands": [
+      "cd gauge && go test -mod=readonly -race -count=1 ./... -run 'TestV409|TestV408|TestV407|TestV406'",
+      "bash gauge/tests/instrument-anchors.sh"
+    ],
+    "exit": 0
+  },
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "live_qualification": "intentionally_blocked",
+  "model_calls": 0,
+  "schema": "2 additive instrument namespaces",
+  "transport_probes": "fake adapters only; zero real network"
+}
