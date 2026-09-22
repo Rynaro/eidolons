@@ -66,10 +66,12 @@ fi
 [[ "$run_id" != . && "$run_id" != .. ]] || die "--run-id cannot be dot or dot-dot"
 root=".eidolons/.ledger/$run_id"; events="$root/events"; lock="$root/.append-lock"
 authority="$root/.writer-authority.json"
+claim=".eidolons/.ledger/.gauge-controller-v1/authority-$run_id.json"
 
 refuse_controller_writer() {
   # Presence alone denies legacy writes, including unknown versions, malformed
   # metadata, interrupted promotion and a missing optional Go binary.
+  [[ ! -e "$claim" && ! -L "$claim" ]] || die "Gauge authority claim is registered; legacy writes refused. Missing metadata requires explicit recovery; no automatic fallback."
   [[ ! -e "$authority" && ! -L "$authority" ]] || die "Gauge writer authority is registered or pending; legacy writes refused. Use gauge status/recover; no automatic fallback."
   if [[ "$run_id" == .gauge-controller-v1 && ( -e "$root/layout.json" || -e "$root/state.db" ) ]]; then
     die "Controller-instance storage occupies this path; legacy writes refused."
@@ -78,6 +80,10 @@ refuse_controller_writer() {
 
 historical_controller=false
 inspect_controller_authority() {
+  if [[ -e "$claim" || -L "$claim" ]]; then
+    [[ -f "$claim" && ! -L "$claim" && -f "$authority" && ! -L "$authority" ]] || die "recovery-required: incomplete controller authority"
+    jq -e --arg run "$run_id" --slurpfile marker "$authority" '.schema_version == 1 and .backend == "gauge" and .phase == "pending" and .root_id == $run and ([.store_id,.store_path,.generation,.inventory] == [$marker[0].store_id,$marker[0].store_path,$marker[0].generation,$marker[0].inventory])' "$claim" >/dev/null || die "recovery-required: conflicting controller authority claim"
+  fi
   if [[ -e "$authority" || -L "$authority" ]]; then
     [[ -f "$authority" && ! -L "$authority" ]] || die "recovery-required: invalid controller authority metadata"
     jq -e --arg run "$run_id" '.schema_version == 1 and .backend == "gauge" and .phase == "active" and .root_id == $run and (.store_id|type == "string" and length > 0) and (.store_path|type == "string" and length > 0) and (.generation|type == "string" and length > 0) and (.inventory|type == "string" and length > 0)' "$authority" >/dev/null || die "recovery-required: unsupported or pending controller authority; use gauge recover"

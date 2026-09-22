@@ -78,6 +78,7 @@ jobs:
           test -s "$RUNNER_TEMP/gauge-package/licenses/go.etcd.io_bbolt-LICENSE"
           test -s "$RUNNER_TEMP/gauge-package/licenses/golang.org_x_sys-LICENSE"
           "$RUNNER_TEMP/gauge-package/eidolons-gauge" --help
+          bash gauge/tests/package-repeat.sh
           shellcheck -S error cli/src/gauge.sh scripts/gauge-build.sh
       - uses: actions/upload-artifact@v4
         with:

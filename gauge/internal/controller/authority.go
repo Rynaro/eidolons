@@ -38,6 +38,14 @@ func (s *Service) storeDir() string        { return filepath.Join(s.ledgerDir(),
 func (s *Service) storePath() string       { return filepath.Join(s.storeDir(), "state.db") }
 func (s *Service) runDir(id string) string { return filepath.Join(s.ledgerDir(), id) }
 
+// A persistent, per-root denial record survives loss of the run marker. It is
+// published before transfer and never removed to reopen legacy authority.
+// This coordinates local cooperating writers; it is not a hostile-filesystem
+// security boundary or a transaction spanning the filesystem and database.
+func (s *Service) claimPath(id string) string {
+	return filepath.Join(s.storeDir(), "authority-"+id+".json")
+}
+
 func directory(path string, create bool) error {
 	info, e := os.Lstat(path)
 	if os.IsNotExist(e) && create {
@@ -231,8 +239,18 @@ func (s *Service) lock(id string, create bool) (func(), error) {
 }
 
 func (s *Service) readMarker(id string) (marker, error) {
+	return s.readAuthority(id, filepath.Join(s.runDir(id), markerName))
+}
+func (s *Service) readClaim(id string) (marker, error) {
+	m, e := s.readAuthority(id, s.claimPath(id))
+	if e == nil && m.Phase != "pending" {
+		e = errors.New("unsupported authority claim; explicit recovery required")
+	}
+	return m, e
+}
+func (s *Service) readAuthority(id, path string) (marker, error) {
 	var m marker
-	e := decodeFile(filepath.Join(s.runDir(id), markerName), &m)
+	e := decodeFile(path, &m)
 	if e != nil {
 		return m, e
 	}
@@ -257,6 +275,13 @@ func (s *Service) active(id string) (store.Snapshot, contract.Root, error) {
 	if !ok {
 		return snap, r, errors.New("unknown execution root")
 	}
+	claim, e := s.readClaim(id)
+	if e != nil {
+		return snap, r, fmt.Errorf("authority claim unavailable; explicit recovery required: %w", e)
+	}
+	if e = s.bound(claim, snap, r); e != nil {
+		return snap, r, e
+	}
 	m, e := s.readMarker(id)
 	if e != nil {
 		return snap, r, e
@@ -266,6 +291,9 @@ func (s *Service) active(id string) (store.Snapshot, contract.Root, error) {
 	}
 	if m.Phase != "active" || r.Phase != "active" {
 		return snap, r, errors.New("incomplete transfer; explicit gauge recover required")
+	}
+	if e = s.verifyInventory(r); e != nil {
+		return snap, r, e
 	}
 	return snap, r, nil
 }
@@ -279,26 +307,51 @@ func (s *Service) promoteLocked(id string, recovery bool) error {
 	if !ok {
 		return errors.New("root has no frozen import")
 	}
-	existing, e := s.readMarker(id)
-	if e == nil {
+	claim, claimErr := s.readClaim(id)
+	if claimErr == nil {
+		if e = s.bound(claim, snap, r); e != nil {
+			return e
+		}
+	} else if !os.IsNotExist(claimErr) {
+		return claimErr
+	}
+	existing, markerErr := s.readMarker(id)
+	if markerErr == nil {
+		if claimErr != nil {
+			return errors.New("missing persistent authority claim; explicit inspection required")
+		}
 		if e = s.bound(existing, snap, r); e != nil {
 			return e
 		}
 		if existing.Phase == "active" && r.Phase == "active" {
-			return nil
+			return s.verifyInventory(r)
 		}
 		if !recovery {
 			return errors.New("pending transfer requires explicit gauge recover")
 		}
-	} else if !os.IsNotExist(e) {
-		return e
+	} else if !os.IsNotExist(markerErr) {
+		return markerErr
+	} else if claimErr == nil {
+		if !recovery {
+			return errors.New("missing authority marker; explicit gauge recover required")
+		}
 	} else if recovery || r.Phase != "staged" {
-		return errors.New("missing authority marker; explicit inspection required")
+		return errors.New("missing authority proof; explicit inspection required")
 	}
 	if e = s.verifyInventory(r); e != nil {
 		return e
 	}
 	m := marker{Version: 1, Backend: "gauge", Phase: "pending", StoreID: snap.StoreID, StorePath: s.storePath(), RootID: id, Generation: r.Generation, Inventory: r.Inventory}
+	if claimErr != nil {
+		if e = atomicJSON(s.claimPath(id), m); e != nil {
+			return e
+		}
+		if s.opts.Cut != nil {
+			if e = s.opts.Cut("claim-published"); e != nil {
+				return e
+			}
+		}
+	}
 	if e = atomicJSON(filepath.Join(s.runDir(id), markerName), m); e != nil {
 		return e
 	}
@@ -325,7 +378,13 @@ func (s *Service) promoteLocked(id string, recovery bool) error {
 		}
 	}
 	m.Phase = "active"
-	return atomicJSON(filepath.Join(s.runDir(id), markerName), m)
+	if e = atomicJSON(filepath.Join(s.runDir(id), markerName), m); e != nil {
+		return e
+	}
+	if s.opts.Cut != nil {
+		return s.opts.Cut("marker-published")
+	}
+	return nil
 }
 
 func (s *Service) Promote(id string) error {

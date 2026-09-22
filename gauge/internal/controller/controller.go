@@ -81,6 +81,7 @@ func (s *Service) newRoot(id, inventory string, imported bool) contract.Root {
 		// A frozen journal does not establish its historical harness settings.
 		b.Profile, b.Method = "unknown", "unknown"
 		m.RequestedModel, m.Methods = "unknown", []string{"unknown"}
+		m.Adapter = "unknown"
 	}
 	return contract.Root{ID: id, Phase: "staged", Generation: generation, Inventory: inventory, Legacy: imported, Binding: b, Manifest: m, PolicyRefs: []string{}, Intents: []string{}, Evidence: []string{}}
 }
@@ -102,8 +103,10 @@ func (s *Service) InitRoot(id string) error {
 		_, _, e = s.active(id)
 		return e
 	}
-	if _, e = os.Lstat(filepath.Join(s.runDir(id), markerName)); !os.IsNotExist(e) {
-		return errors.New("occupied execution authority path")
+	for _, path := range []string{filepath.Join(s.runDir(id), markerName), s.claimPath(id)} {
+		if _, e = os.Lstat(path); !os.IsNotExist(e) {
+			return errors.New("occupied execution authority path")
+		}
 	}
 	events := filepath.Join(s.runDir(id), "events")
 	if info, e := os.Lstat(events); e == nil {
@@ -155,13 +158,17 @@ func (s *Service) Import(id string) error {
 			_, _, e = s.active(id)
 			return e
 		}
-		if _, e = os.Lstat(filepath.Join(s.runDir(id), markerName)); !os.IsNotExist(e) {
-			return errors.New("pending authority requires explicit recovery")
+		for _, path := range []string{filepath.Join(s.runDir(id), markerName), s.claimPath(id)} {
+			if _, e = os.Lstat(path); !os.IsNotExist(e) {
+				return errors.New("pending authority requires explicit recovery")
+			}
 		}
 		return nil
 	}
-	if _, e = os.Lstat(filepath.Join(s.runDir(id), markerName)); !os.IsNotExist(e) {
-		return errors.New("unregistered authority marker; import refused")
+	for _, path := range []string{filepath.Join(s.runDir(id), markerName), s.claimPath(id)} {
+		if _, e = os.Lstat(path); !os.IsNotExist(e) {
+			return errors.New("unregistered authority proof; import refused")
+		}
 	}
 	root := s.newRoot(id, inventory.Digest, true)
 	db, e := store.Open(s.storePath(), s.opts.Timeout)
@@ -331,7 +338,9 @@ func (s *Service) Replace(id, worker, environment string, reconstruct bool) erro
 	if e != nil {
 		return e
 	}
-	if r.Manifest.Adapter != "fixture@1" {
+	// Imported labels do not establish reconstruction capability, including
+	// historical roots created by earlier versions that defaulted to fixture.
+	if r.Legacy || r.Manifest.Adapter != "fixture@1" {
 		return errors.New("unsupported adapter reconstruction")
 	}
 	if worker != "" {

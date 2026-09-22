@@ -1,7 +1,7 @@
 {
   "esl_version": "1.1",
   "change_id": "gauge-v4-06",
-  "status": "in_progress",
+  "status": "verified",
   "tier": "full",
   "maker": "vivi_v4_core",
   "checker": "v4_06_review",

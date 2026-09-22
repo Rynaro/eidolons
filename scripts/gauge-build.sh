@@ -20,14 +20,14 @@ output="$(cd "$output" && pwd)"
 CGO_ENABLED=0 go build -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid= -o "$output/eidolons-gauge" ./cmd/eidolons-gauge
 if [[ "$mode" == package ]]; then
   mkdir -p "$output/licenses"
-  cp "$root/LICENSE" "$output/LICENSE"
-  cp "$(go env GOROOT)/LICENSE" "$output/licenses/Go-LICENSE"
+  install -m 0644 "$root/LICENSE" "$output/LICENSE"
+  install -m 0644 "$(go env GOROOT)/LICENSE" "$output/licenses/Go-LICENSE"
   modules="$(CGO_ENABLED=0 go list -mod=readonly -deps -f '{{if .Module}}{{.Module.Path}}|{{.Module.Dir}}{{end}}' ./cmd/eidolons-gauge | sort -u)"
   while IFS='|' read -r module source; do
     [[ -n "$module" && "$module" != github.com/Rynaro/eidolons/gauge ]] || continue
     [[ -f "$source/LICENSE" ]] || { printf 'Missing required license for %s\n' "$module" >&2; exit 1; }
     label="${module//\//_}"
-    cp "$source/LICENSE" "$output/licenses/$label-LICENSE"
+    install -m 0644 "$source/LICENSE" "$output/licenses/$label-LICENSE"
   done <<< "$modules"
   printf 'Go: %s\nTarget: %s/%s\nBuild: CGO_ENABLED=0 -mod=readonly -trimpath -buildvcs=false -ldflags=-buildid=\nScope: one controller instance; local Linux/macOS only; no power-loss qualification\n' "$(go env GOVERSION)" "$target_os" "$target_arch" > "$output/BUILD.txt"
 fi
