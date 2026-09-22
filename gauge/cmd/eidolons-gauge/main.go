@@ -132,6 +132,17 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   vivi-verify --input JSON         controller-managed maker≠checker verification
   vivi-boundary --session --task   return authority/greenfield boundary refusal
   vivi-context --input JSON        record context strategy version + transition
+  context-enable                   add typed context-manager namespaces (schema 2)
+  context-session --session ID --root ID  open core-context session
+  context-reuse --input JSON       validate evidence reuse dependencies (R01)
+  context-present --input JSON     bounded excerpt + full reference (R02)
+  context-succeed --input JSON     retain pins/obligations on succession (R03)
+  context-memory --input JSON      optional memory recall (never authoritative)
+  context-batch --input JSON       batched tool permission enforcement (R05)
+  context-debounce --input JSON    lifecycle debounce/hysteresis (R06)
+  context-overhead --input JSON    distinguish host-visible vs estimates (R07)
+  context-navigate --input JSON    discovery/retrieval/cited-use (R10)
+  context-feature-na --requirement --test --feature  record R11/R12 N/A
 
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
@@ -152,6 +163,8 @@ V4-16 publishes lean RAMZA method contracts without fabricated certainty; Rynaro
 remains canonical until accepted V4-10; no default flip or probability from rubrics.
 V4-17 publishes explicit Vivi candidate/context modes; Gauge does not grant
 publication authority.
+V4-19 core-context manages bounded information access; optional adapter out of scope.
+
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
 cross-device authority is implied. Native harnesses own reasoning and editing.
@@ -201,6 +214,9 @@ func run(args []string) error {
 	}
 	if isViviCommand(command) {
 		return viviCommand(args)
+	}
+	if isContextCommand(command) {
+		return contextCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

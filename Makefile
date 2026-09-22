@@ -82,6 +82,7 @@ gauge-test:
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/inventory-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/ramza-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/vivi-anchors.sh
+	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/context-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bats --print-output-on-failure gauge/tests/conformance.bats
 
 gauge-package:
