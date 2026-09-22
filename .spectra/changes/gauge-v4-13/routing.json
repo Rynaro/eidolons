@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-12 is merged on main at 47fc0a4; V4-13 implements assignment compilation without mandatory agent chains only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-14 acceptance freeze; no paid/live probes; semantic planning remains fallible; live qualification stays blocked."
+  ],
+  "refusal_rerouting": false
+}
