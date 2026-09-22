@@ -162,7 +162,10 @@ func Create(path, id string) error {
 		if e := initializeAcceptance(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeDelivery(tx, id, "new-store")
+		if e := initializeDelivery(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeEvaluation(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {

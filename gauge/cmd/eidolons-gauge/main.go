@@ -91,6 +91,19 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   delivery-cancel --root ID --input JSON
   delivery-compact --root ID --input JSON
 
+  evaluation-enable                add typed evaluation namespaces (schema 2)
+  evaluation-trial --input JSON    start auditable trial under frozen protocol
+  evaluation-arm --input JSON      record actual arm identities / confounds
+  evaluation-cost --protocol ID    cost-per-accepted with complete-cost gate
+  evaluation-holdout --input JSON  holdout isolation / leakage canaries
+  evaluation-plumbing --input JSON classify gold-patch/smoke vs live
+  evaluation-report --input JSON   publish metrics with uncertainty
+  evaluation-admit --input JSON    task admission / oracle / exclusion
+  evaluation-drift --input JSON    flag material environment confounds
+  evaluation-outcome --input JSON  distinguish candidate/selection outcomes
+  evaluation-promotion --input JSON untouched promotion set controls
+  evaluation-show --trial ID       aggregate evaluation report
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -103,7 +116,8 @@ Compiler records inspectable selection reasons; semantic planning remains fallib
 Acceptance freezes candidates and qualifies protected oracles; no universal correctness;
 no auto push/merge/release; candidate scripts cannot inherit checker credentials.
 Delivery loop is the V4-15 observable runnable-slice demonstrator; minimal
-inspect/status/resume/cancel only — full V4-20 CLI is deferred. No V4-16+.
+inspect/status/resume/cancel only — full V4-20 CLI is deferred.
+V4-21 expands the V4-09 instrument into auditable evaluation; no V4-22/V4-10.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -142,6 +156,9 @@ func run(args []string) error {
 	}
 	if isDeliveryCommand(command) {
 		return deliveryCommand(args)
+	}
+	if isEvaluationCommand(command) {
+		return evaluationCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
