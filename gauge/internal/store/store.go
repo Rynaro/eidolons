@@ -99,7 +99,10 @@ func guard(tx *bolt.Tx) error {
 	if e := guardDispatch(tx); e != nil {
 		return e
 	}
-	return guardCompiler(tx)
+	if e := guardCompiler(tx); e != nil {
+		return e
+	}
+	return guardAcceptance(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -153,7 +156,10 @@ func Create(path, id string) error {
 		if e := initializeDispatch(tx, id, "new-store"); e != nil {
 			return e
 		}
-		return initializeCompiler(tx, id, "new-store")
+		if e := initializeCompiler(tx, id, "new-store"); e != nil {
+			return e
+		}
+		return initializeAcceptance(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {

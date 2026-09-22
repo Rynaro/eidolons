@@ -1,0 +1,17 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "VIGIL",
+    "IDG"
+  ],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-13 is merged on main at dc3bb0d; V4-14 implements protected acceptance freeze/qualify only.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-15 delivery loop; no paid/live probes; no universal correctness; live qualification stays blocked."
+  ],
+  "refusal_rerouting": false
+}

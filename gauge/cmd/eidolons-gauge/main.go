@@ -72,6 +72,17 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   compiler-evidence --root ID --input JSON
   compiler-writers --root ID --input JSON
 
+  acceptance-enable                add typed acceptance namespaces (schema 2)
+  acceptance-register --root ID --input JSON
+  candidate-freeze --root ID --input JSON
+  acceptance-check --root ID --input JSON
+  qualify --root ID --input JSON   qualify oracle on valid and defective fixtures
+  apply --root ID --input JSON     gate application against target base
+  acceptance-report --root ID --candidate ID
+  acceptance-status --root ID
+  owner-review --root ID --input JSON
+  definition-assess --root ID --input JSON
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -81,6 +92,8 @@ Instrument catalogue/preflight never grants live host qualification.
 Reservation admit is fixture-local atomic bookkeeping; no provider dispatch.
 Dispatch admit uses one fixture-qualified fake native adapter; live stays blocked.
 Compiler records inspectable selection reasons; semantic planning remains fallible.
+Acceptance freezes candidates and qualifies protected oracles; no universal correctness;
+no auto push/merge/release; candidate scripts cannot inherit checker credentials.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -113,6 +126,9 @@ func run(args []string) error {
 	}
 	if isCompilerCommand(command) {
 		return compilerCommand(args)
+	}
+	if isAcceptanceCommand(command) {
+		return acceptanceCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
