@@ -144,6 +144,15 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   context-navigate --input JSON    discovery/retrieval/cited-use (R10)
   context-feature-na --requirement --test --feature  record R11/R12 N/A
 
+  roster-enable                    add typed roster-adoption namespaces (schema 2)
+  roster-seed                      register required specialist profile slices
+  roster-route --input JSON        need-based embedded vs separated routing
+  roster-control --input JSON      revise methodology control classification
+  roster-compat --input JSON       exact producer/consumer version checks
+  roster-isolation --input JSON    bounded I/O for advertised isolation
+  roster-benefit --input JSON      label unproven performance benefits
+  roster-show [--profile ID]       show profile or adoption registry
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -163,6 +172,8 @@ V4-16 publishes lean RAMZA method contracts without fabricated certainty; Rynaro
 remains canonical until accepted V4-10; no default flip or probability from rubrics.
 V4-17 publishes explicit Vivi candidate/context modes; Gauge does not grant
 publication authority.
+V4-18 adopts need-based specialist execution across the roster; no global rename;
+no V4-22/V4-23; unproven benefits stay experimental/maintenance without V4-21 evidence.
 V4-19 core-context manages bounded information access; optional adapter out of scope.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
@@ -217,6 +228,9 @@ func run(args []string) error {
 	}
 	if isContextCommand(command) {
 		return contextCommand(args)
+	}
+	if isRosterCommand(command) {
+		return rosterCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

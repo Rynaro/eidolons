@@ -178,6 +178,7 @@ V4-09 adds `bash gauge/tests/instrument-anchors.sh` for T01–T11 host-qualifica
 
 V4-21 adds `bash gauge/tests/evaluation-anchors.sh` for T01–T09 auditable evaluation anchors. Extends V4-09; pending structural arms are not fabricated zeros; unknown exposure blocks complete-cost claims; live stays blocked.
 V4-16 adds `bash gauge/tests/ramza-anchors.sh` for T01–T07 lean RAMZA method-contract anchors. No fabricated certainty, default flip, or V4-17+.
+V4-18 adds `bash gauge/tests/roster-anchors.sh` for T01–T07 need-based roster adoption anchors. No global rename, refusal weakening, or V4-22/V4-23.
 
 V4-11 adds `bash gauge/tests/reservation-anchors.sh` for T01–T08 atomic reservation anchors (plus concurrency stress). Admission is fixture-local only: known ceiling intersection, protected verification/recovery headroom, uncertain exposure retention, and accounting-fault rejection. No provider dispatch and no exact external billing claims.
 
@@ -406,6 +407,25 @@ eidolons gauge vivi-context --project "/absolute/ação project" --input /absolu
 Named opt-in modes only: `proposal_only` (emit candidate without user-tree apply; parent-authorized application is a separate operation) and `candidate_workspace` (edits only inside the scoped authorized workspace; user-tree escape, protected criteria, and unrelated dirty work reject). Continuity retains decisions/failure history across repairs; context resets are recorded without resetting root accounting. Independent verification is controller-managed — maker rename/fork fails; a separated checker satisfies only the observed evidence grade. Tasks exceeding greenfield/publication/push-deploy/external-spend/expanded-scope return the applicable boundary; method composition cannot evade it. Context strategies (`continue`, `native_compaction`, `fresh_worker`) record strategy version and observed transition; unsupported host compaction is unknown, not claimed completed. Gauge does not grant publication authority.
 
 V4-17 additions use the [vivi CLI](../gauge/cmd/eidolons-gauge/vivi.go), [vivi contract](../gauge/internal/contract/vivi.go), [store](../gauge/internal/store/vivi.go), [controller](../gauge/internal/controller/vivi.go), and [spec/decision](../.spectra/changes/gauge-v4-17/spec.md). Local fixture anchors are recorded in the [V4-17 receipt](campaigns/gauge/receipts/V4-17.md). Hosted CI pending publication.
+
+## V4-18 need-based specialist adoption across the roster
+
+New stores initialize typed roster-adoption namespaces under schema 2 (`roster_profiles`, `roster_assignments`, `roster_controls`, `roster_compat`, `roster_isolation`, `roster_benefits`, `roster_registries`, `roster_events`) with a `roster_receipt`. Existing schema-2 controllers without those buckets remain openable; call `roster-enable` before first managed use. Required fixture profiles: ATLAS, FORGE, VIGIL, IDG, Kupo, Gilgamesh, SPECTRA, APIVR-Delta, nexus-adoption — each with activation, V4-13 skill I/O/execution-form contract, and exact producer/consumer versions. Named expertise/aliases/charters/ceilings preserved (not a global rename).
+
+```sh
+eidolons gauge roster-enable --project "/absolute/ação project"
+eidolons gauge roster-seed --project "/absolute/ação project"
+eidolons gauge roster-route --project "/absolute/ação project" --input /absolute/route.json
+eidolons gauge roster-control --project "/absolute/ação project" --input /absolute/control.json
+eidolons gauge roster-compat --project "/absolute/ação project" --input /absolute/compat.json
+eidolons gauge roster-isolation --project "/absolute/ação project" --input /absolute/isolation.json
+eidolons gauge roster-benefit --project "/absolute/ação project" --input /absolute/benefit.json
+eidolons gauge roster-show --project "/absolute/ação project" --profile ATLAS
+```
+
+Need-based routing permits embedded methods when expertise is required without a separate boundary; explicit specialist/independent requests preserve separation; distinct context/permission/independent tracks record boundary reasons. Methodology controls retain rule/heuristic/rationale classification. Compatibility checks exact producer/consumer versions. Advertised isolation requires bounded I/O. Unproven benefits stay experimental/maintenance/unproven without V4-21 evidence. Reuses V4-13 compiler, V4-16 RAMZA, and V4-17 Vivi contracts where applicable. Opt-out/legacy retained. No refusal weakening. No V4-22/V4-23.
+
+V4-18 additions use the [roster CLI](../gauge/cmd/eidolons-gauge/roster.go), [roster contract](../gauge/internal/contract/roster.go), [store](../gauge/internal/store/roster.go), [controller](../gauge/internal/controller/roster.go), and [spec/decision](../.spectra/changes/gauge-v4-18/spec.md). Local fixture anchors are recorded in the [V4-18 receipt](campaigns/gauge/receipts/V4-18.md). Hosted CI pending publication.
 
 ## V4-19 core context and bounded information access (core-context)
 

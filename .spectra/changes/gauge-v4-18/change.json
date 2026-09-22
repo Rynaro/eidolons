@@ -1,0 +1,19 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-18",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "forge_v4_18",
+  "checker": "pending",
+  "acceptance_checks": [
+    {"id": "V4-18-R01", "verify_method": "V4-18-T01: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T01'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R02", "verify_method": "V4-18-T02: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T02'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R03", "verify_method": "V4-18-T03: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T03'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R04", "verify_method": "V4-18-T04: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T04'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R05", "verify_method": "V4-18-T05: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T05'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R06", "verify_method": "V4-18-T06: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T06'; evidence in docs/campaigns/gauge/receipts/V4-18.md"},
+    {"id": "V4-18-R07", "verify_method": "V4-18-T07: bash gauge/tests/roster-anchors.sh / go test -run '^TestV418T07'; evidence in docs/campaigns/gauge/receipts/V4-18.md"}
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

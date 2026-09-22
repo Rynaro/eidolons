@@ -1,0 +1,12 @@
+{
+  "selected": ["ATLAS", "FORGE", "VIGIL", "IDG", "SPECTRA", "APIVR-Delta"],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-13/16/17/19 are merged on main at fcafd0d; V4-18 implements fixture need-based roster adoption only.",
+    "Named specialist identities/aliases/charters/ceilings are preserved; not a global rename.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-22/V4-23; no paid/live probes; unproven benefits stay experimental/maintenance without V4-21 evidence."
+  ],
+  "refusal_rerouting": false
+}
