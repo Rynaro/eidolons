@@ -1,0 +1,12 @@
+{
+  "package": "V4-18",
+  "scope": "fixture-local",
+  "commands": [
+    "cd gauge && GOTOOLCHAIN=local go test -mod=readonly -race -count=1 ./... -run '^TestV418'",
+    "GAUGE_REPO=$PWD GOTOOLCHAIN=local bash gauge/tests/roster-anchors.sh"
+  ],
+  "live_blocked": true,
+  "network": false,
+  "paid_probes": false,
+  "out_of_scope": ["V4-22", "V4-23"]
+}
