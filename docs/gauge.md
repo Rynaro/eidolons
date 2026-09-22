@@ -346,6 +346,20 @@ V4-13 additions use the [compiler CLI](../gauge/cmd/eidolons-gauge/compiler.go),
 
 V4-14 additions use the [acceptance CLI](../gauge/cmd/eidolons-gauge/acceptance.go), [acceptance contract](../gauge/internal/contract/acceptance.go), [store](../gauge/internal/store/acceptance.go), [isolation](../gauge/internal/controller/isolation.go), [controller](../gauge/internal/controller/acceptance.go), and [spec/decision](../.spectra/changes/gauge-v4-14/spec.md). Local fixture anchors are recorded in the [V4-14 receipt](campaigns/gauge/receipts/V4-14.md). No universal correctness; hosted CI pending publication.
 
-V4-15 additions use the [delivery CLI](../gauge/cmd/eidolons-gauge/delivery.go), [delivery contract](../gauge/internal/contract/delivery.go), [store](../gauge/internal/store/delivery.go), [controller](../gauge/internal/controller/delivery.go), and [spec/decision](../.spectra/changes/gauge-v4-15/spec.md). Local fixture anchors are recorded in the [V4-15 receipt](campaigns/gauge/receipts/V4-15.md). Minimal operator controls only; no V4-16+ / V4-20 full; hosted CI pending publication.
+V4-15 additions use the [delivery CLI](../gauge/cmd/eidolons-gauge/delivery.go), [delivery contract](../gauge/internal/contract/delivery.go), [store](../gauge/internal/store/delivery.go), [controller](../gauge/internal/controller/delivery.go), and [spec/decision](../.spectra/changes/gauge-v4-15/spec.md). Local fixture anchors are recorded in the [V4-15 receipt](campaigns/gauge/receipts/V4-15.md). Minimal operator controls only; hosted CI pending publication.
 
-V4-21 additions use the [evaluation CLI](../gauge/cmd/eidolons-gauge/evaluation.go), [evaluation contract](../gauge/internal/contract/evaluation.go), [store](../gauge/internal/store/evaluation.go), [controller](../gauge/internal/controller/evaluation.go), and [spec/decision](../.spectra/changes/gauge-v4-21/spec.md). Local fixture anchors are recorded in the [V4-21 receipt](campaigns/gauge/receipts/V4-21.md). Extends V4-09; no V4-20 / V4-22 / V4-10; hosted CI pending publication.
+V4-21 additions use the [evaluation CLI](../gauge/cmd/eidolons-gauge/evaluation.go), [evaluation contract](../gauge/internal/contract/evaluation.go), [store](../gauge/internal/store/evaluation.go), [controller](../gauge/internal/controller/evaluation.go), and [spec/decision](../.spectra/changes/gauge-v4-21/spec.md). Local fixture anchors are recorded in the [V4-21 receipt](campaigns/gauge/receipts/V4-21.md). Extends V4-09; no V4-22 / V4-10; hosted CI pending publication.
+
+## V4-20 truthful CLI status projections (core-cli)
+
+```sh
+eidolons gauge status-enable --project "/absolute/ação project"
+eidolons gauge status-project --project "/absolute/ação project" --loop <loop-id>
+eidolons gauge status-policy-inspect --project "/absolute/ação project" --root demo
+eidolons gauge status-policy-preview --project "/absolute/ação project" --root demo
+eidolons gauge status-client-conformance --project "/absolute/ação project" --input /absolute/client.json
+```
+
+Observational status projections report delivery and verification states separately, distinguish methods/workers/context-separation, disclose unsupported/stale quota in plain text (no invented percentages), keep policy inspect/preview free of model work while preserving outstanding reservations, and project cancellation as request-ack / confirmed-stop / accounting-reconciliation. Shared `gauge-status@1` contract is consumed by the CLI and a fixture client (no-GUI/no-color); unsupported contracts reject authority mutations with an explicit compatibility diagnostic. Terminal/green badge ≠ acceptance. Status/preview cannot refill budgets or create live-evidence claims. Slice `core-cli` required; **`optional-GAMBIT` out of scope (dropped; not used)**.
+
+V4-20 additions use the [status CLI](../gauge/cmd/eidolons-gauge/status.go), [status contract](../gauge/internal/contract/status.go), [store](../gauge/internal/store/status.go), [controller](../gauge/internal/controller/status.go), and [spec/decision](../.spectra/changes/gauge-v4-20/spec.md). Local fixture anchors are recorded in the [V4-20 receipt](campaigns/gauge/receipts/V4-20.md). No V4-16+; hosted CI pending publication.

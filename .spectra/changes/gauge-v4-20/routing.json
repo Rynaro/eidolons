@@ -1,0 +1,12 @@
+{
+  "selected": ["ATLAS", "FORGE", "Vivi", "VIGIL", "IDG"],
+  "tier": "standard",
+  "confidence": 0.9,
+  "assumptions": [
+    "V4-15 is merged on main at 7528827; V4-20 implements core-cli status projections only.",
+    "optional-GAMBIT is explicitly deferred; fixture consumer proves shared contract conformance.",
+    "Hosted CI remains blocked pending publication approval; local fixture scope only.",
+    "No V4-21 / V4-16+; no paid/live probes; live qualification stays blocked."
+  ],
+  "refusal_rerouting": false
+}
