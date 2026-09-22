@@ -22,6 +22,21 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   fixture --root ID --event-id ID --outcome pass|fail|cancelled
   replace --root ID [--worker ID] [--environment ID] --reconstruction fixture
 
+  migrate                          explicitly migrate supported schema 1 to 2
+  preferences                      inspect controller-local user/project layers
+  preferences-set --layer user|project --expected-revision N --input JSON
+  policy-compile [--input JSON]     inspect unqualified effective policy
+  policy-bind|policy-amend --root ID --authorization-id ID [--predecessor ID]
+  policy-show --root ID --policy-id ID
+  policy-binding --root ID
+  amendment-show --root ID --authorization-id ID
+  strategy-select --root ID --policy-id ID --input JSON
+
+User preferences are a logical layer local to this controller/project, not an
+OS identity, home setting, cross-project default or authority grant. Production
+activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
+Preset strategy bounds are illustrative registry rules, not calibrated budgets.
+
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
 cross-device authority is implied. Native harnesses own reasoning and editing.
@@ -36,6 +51,9 @@ func run(args []string) error {
 		return nil
 	}
 	command := args[0]
+	if isPolicyCommand(command) {
+		return policyCommand(args)
+	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
 	default:

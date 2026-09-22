@@ -69,6 +69,7 @@ gauge-build:
 	@bash scripts/gauge-build.sh build $(if $(GAUGE_OUT),"$(GAUGE_OUT)")
 
 gauge-test:
+	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/policy-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bats --print-output-on-failure gauge/tests/conformance.bats
 
 gauge-package:

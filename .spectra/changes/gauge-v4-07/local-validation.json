@@ -1,0 +1,19 @@
+{
+  "scope": "local fixture acceptance only",
+  "checker": "v4_07_review",
+  "linux": "protected second repair k2 full Go race/vet, 29 Bats, all policy anchors and real predecessor migration; final independent review including two-pass probes and migration process kills",
+  "macos": {
+    "full_race_exit": 0,
+    "log": "/private/tmp/gauge-v4-07-native-empty-set-final.log",
+    "package_exit": 0,
+    "package_log": "/private/tmp/gauge-v4-07-native-empty-set-package.log",
+    "migration_result": "/private/tmp/gauge-v4-07-native-upgrade-final/result.json",
+    "post_format_targeted_race_exit": 0,
+    "format_log": "/private/tmp/gauge-v4-07-format/native-tests.log"
+  },
+  "format": "four new tests exactly gofmt of independently accepted originals; remaining 284 hashes unchanged",
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "publication": "PR pending for stranded V4-07 publication",
+  "live_authorization": "unqualified",
+  "model_calls": 0
+}

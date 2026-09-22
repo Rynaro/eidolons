@@ -19,7 +19,11 @@ import (
 var buckets = []string{"meta", "roots", "legacy", "history", "context", "knowledge", "policy", "operations"}
 var families = []string{"history", "context", "knowledge", "policy"}
 
-type Store struct{ db *bolt.DB }
+type Store struct {
+	db         *bolt.DB
+	authorizer policyAuthorizer
+	policyCut  func(string) error
+}
 type Snapshot struct {
 	StoreID string                            `json:"store_id"`
 	Roots   map[string]contract.Root          `json:"roots"`
@@ -44,14 +48,14 @@ func options(timeout time.Duration, readOnly bool) (*bolt.Options, error) {
 	return &bolt.Options{Timeout: timeout, ReadOnly: readOnly}, nil
 }
 
-func guard(tx *bolt.Tx) error {
+func guardBase(tx *bolt.Tx, version string) error {
 	for _, name := range buckets {
 		if tx.Bucket([]byte(name)) == nil {
 			return fmt.Errorf("incomplete controller state: missing %s; explicit recovery required", name)
 		}
 	}
 	meta := tx.Bucket([]byte("meta"))
-	if !bytes.Equal(meta.Get([]byte("schema")), []byte("1")) {
+	if !bytes.Equal(meta.Get([]byte("schema")), []byte(version)) {
 		return errors.New("unsupported store schema or missing migration; state left unchanged")
 	}
 	if len(meta.Get([]byte("store_id"))) == 0 {
@@ -70,6 +74,16 @@ func guard(tx *bolt.Tx) error {
 		}
 		return r.Validate()
 	})
+}
+
+func guard(tx *bolt.Tx) error {
+	if m := tx.Bucket([]byte("meta")); m != nil && bytes.Equal(m.Get([]byte("schema")), []byte("1")) {
+		return errors.New("migration_required: explicitly migrate schema 1 to 2")
+	}
+	if e := guardBase(tx, "2"); e != nil {
+		return e
+	}
+	return guardPolicy(tx)
 }
 
 // Create only creates a previously absent file. Failed initialization never
@@ -102,10 +116,13 @@ func Create(path, id string) error {
 			}
 		}
 		meta := tx.Bucket([]byte("meta"))
-		if e := meta.Put([]byte("schema"), []byte("1")); e != nil {
+		if e := meta.Put([]byte("schema"), []byte("2")); e != nil {
 			return e
 		}
-		return meta.Put([]byte("store_id"), []byte(id))
+		if e := meta.Put([]byte("store_id"), []byte(id)); e != nil {
+			return e
+		}
+		return initializePolicy(tx, id, "new-store")
 	})
 	closeErr := db.Close()
 	if e != nil {
@@ -176,9 +193,15 @@ func (s *Store) Snapshot() (Snapshot, error) {
 	return result, e
 }
 
-func snapshot(tx *bolt.Tx) (Snapshot, error) {
+func snapshot(tx *bolt.Tx) (Snapshot, error) { return snapshotAt(tx, "2") }
+func snapshotAt(tx *bolt.Tx, version string) (Snapshot, error) {
 	result := Snapshot{Roots: map[string]contract.Root{}, Legacy: map[string][]contract.LegacyEvent{}, Records: map[string][]contract.Record{}}
-	if e := guard(tx); e != nil {
+	if e := func() error {
+		if version == "1" {
+			return guardBase(tx, "1")
+		}
+		return guard(tx)
+	}(); e != nil {
 		return result, e
 	}
 	result.StoreID = string(tx.Bucket([]byte("meta")).Get([]byte("store_id")))

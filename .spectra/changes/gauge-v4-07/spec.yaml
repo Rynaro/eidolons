@@ -1,0 +1,40 @@
+{
+  "change_id": "gauge-v4-07",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "implementation_base": "16733276d9bc677f67936223d891504f68f53765",
+  "scope": "V4-07 only",
+  "acceptance_checks": [
+    {
+      "id": "V4-07-R01",
+      "verify_method": "V4-07-T01: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T01'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R02",
+      "verify_method": "V4-07-T02: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T02'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R03",
+      "verify_method": "V4-07-T03: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T03'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R04",
+      "verify_method": "V4-07-T04: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T04'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R05",
+      "verify_method": "V4-07-T05: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T05'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R06",
+      "verify_method": "V4-07-T06: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T06'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R07",
+      "verify_method": "V4-07-T07: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T07'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    },
+    {
+      "id": "V4-07-R08",
+      "verify_method": "V4-07-T08: bash gauge/tests/policy-anchors.sh / go test -run '^TestV407T08'; evidence in docs/campaigns/gauge/receipts/V4-07.md"
+    }
+  ]
+}

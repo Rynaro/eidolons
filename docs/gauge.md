@@ -1,6 +1,6 @@
 # Optional Gauge controller
 
-Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import and writer transfer; it does not provide full CLI parity, live harness reconstruction, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md) for the tested candidate and outstanding gates.
+Gauge is an opt-in compiled controller for typed local state and fixture execution. Native harnesses still own reasoning and editing. The current seam supports explicit legacy import, writer transfer, persistent local preferences and policy inspection; it does not provide full CLI parity, live harness reconstruction, or current-candidate acceptance. See the [V4-06 receipt](campaigns/gauge/receipts/V4-06.md) and [V4-07 receipt](campaigns/gauge/receipts/V4-07.md) for tested scope and outstanding gates.
 
 ## Build and select the binary
 
@@ -43,7 +43,94 @@ Fixture outcomes are `pass`, `fail` or `cancelled`. Receipts record `model_calls
 
 Worker and environment replacement are independent. Worker replacement also allocates new invocation and context identities; durable root, policy, candidate, intent and evidence references remain linked. Reconstruction is restricted to controller-created fixture roots. Imported roots have unknown adapter provenance and cannot become reconstructable by supplying `--reconstruction fixture`, including older imports labeled as fixtures.
 
-Every command accepts `--project` (default `.`) and `--lock-timeout` (default `5s`, positive and at most `300s`). `--root` is required except for `init`. Event options belong only to `fixture`; replacement options belong only to `replace`.
+Every command accepts `--project` (default `.`) and `--lock-timeout` (default `5s`, positive and at most `300s`). The fixture/import/authority commands above require `--root` except for `init`; the rootless V4-07 commands below do not. Event options belong only to `fixture`; replacement options belong only to `replace`.
+
+## V4-07 preferences and migration
+
+V4-07 has independent local fixture acceptance, including preserved empty restrictions, distinct request identities and rejection of negative underflow. The [receipt](campaigns/gauge/receipts/V4-07.md#independent-findings-and-final-local-verification) records repairs and validation. Hosted CI remains blocked pending publication approval; production authorization remains unqualified.
+
+V4-07 stores two logical preference layers, `user` and `project`, inside this project's controller DB. “User” is a provenance label local to that controller; it is not an OS identity, home setting, account-wide default or multi-user isolation boundary. Another controller DB has independent settings. Preferences require an initialized store but no execution root:
+
+```sh
+eidolons gauge init --project "/absolute/ação project"
+eidolons gauge preferences --project "/absolute/ação project"
+```
+
+New stores use database schema 2. An existing V4-06 schema-1 store requires an explicit migration before ordinary V4-07 commands can open it:
+
+```sh
+eidolons gauge migrate --project "/absolute/ação project"
+eidolons gauge preferences --project "/absolute/ação project"
+```
+
+[ACTION] Before migration, preserve the controller DB and legacy files and resolve interrupted writer transfers using the predecessor's recovery procedure. Migration validates existing roots, inventories and authority proofs under their locks. It creates typed namespaces, a migration receipt and schema 2 in one database transaction, preserving controller identity, history, replay state and filesystem proofs. The `.gauge-controller-v1` directory and version-1 layout/claim formats retain their names and versions; they are distinct from the DB schema.
+
+The new binary refuses unmigrated schema 1 with `migration_required`; the real V4-06 binary refuses schema 2. There is no downgrade or schema-number reset. `migrate` accepts only the supported predecessor, so repeating it on schema 2 fails. Missing migration metadata, missing namespaces and unknown versions fail closed. Migration does not convert old generic policy JSON into grants or create V4-07 root bindings.
+
+To replace a preference layer, save a JSON file such as `/absolute/preferences.json`:
+
+```json
+{"schema_version":1,"preset":"Conserve","restrictions":[{"denied":["write"]}]}
+```
+
+Read the current layer's `revision`, then submit it as a compare-and-swap check:
+
+```sh
+eidolons gauge preferences-set --project "/absolute/ação project" \
+  --layer user --expected-revision 0 --input /absolute/preferences.json
+```
+
+Revision `0` is the initial value. Successful replacement increments that layer's revision; a stale revision fails, preserving the current document. Re-read and reconcile before retrying. This replaces the whole named layer, not a partial merge. Duplicate JSON keys at any depth, unknown fields/versions/presets, negative or nonfinite limits, and unsafe persistence failures leave the previous preferences intact. The returned document includes controller, layer, revision, digest and normalized values. The other layer and unrelated state remain unchanged.
+
+Preset precedence is built-in `Balanced` < `user` < `project` < explicit run input. Valid presets are `Conserve`, `Balanced` and `Accelerate`. Preference precedence does not confer authority: restrictions accumulate/intersect, and a preference cannot supply a missing permission, billing grant or hard bound.
+
+## Compile and inspect policy
+
+```sh
+eidolons gauge policy-compile --project "/absolute/ação project"
+```
+
+Compilation reads both persistent layers together and returns an unbound inspection result with an identity and field provenance: source classes/references/digests, resolution rules and contributing values. It does not persist a policy, bind a root or activate execution. Without `--input`, mandatory inspection placeholders are checks `acceptance`/`regression`, criteria `unavailable` and grade `unqualified`.
+
+For an explicit run preference, save `/absolute/policy-patch.json`:
+
+```json
+{
+  "run": {"schema_version":1,"preset":"Balanced"},
+  "restrictions": [{"ceilings":[{
+    "resource":"tokens","unit":"token","pool":"example",
+    "interval":"run","scope":"task","limit":1000
+  }]}],
+  "required": {
+    "checks":["acceptance","regression"],
+    "criteria":"unavailable","grade":"unqualified"
+  }
+}
+```
+
+```sh
+eidolons gauge policy-compile --project "/absolute/ação project" \
+  --input /absolute/policy-patch.json
+```
+
+The example limit is an inspection input, not a calibrated budget or grant. Ceiling minima combine only matching resource/unit/pool/interval/scope dimensions; task, project, account, window and concurrency scopes remain separately applicable. These scope labels do not implement account-wide enforcement. Unknown hard bounds remain explicit and block authorized admission. Allowed sets can only narrow designated grants; denies accumulate. Presets change optional strategy choices while preserving the supplied mandatory acceptance contract and authority requirements.
+
+Production activation remains **`authorizer_boundary_unqualified`**. No file, environment variable, CLI source label, authorization-looking ID, writer generation or DB ownership grants policy authority. The only trusted-authorizer positive controls are in-memory test fixtures. There is no production provisioning or activation flag in this seam.
+
+The typed commands below require `--root` and currently expose storage/inspection contracts, not a way around that boundary:
+
+| Command | Inputs and behavior |
+|---|---|
+| `policy-bind` | `--authorization-id ID [--input JSON]`; initial predecessor must be empty. A fresh production binding fails with `authorizer_boundary_unqualified`. |
+| `policy-amend` | `--authorization-id ID --predecessor POLICY_ID [--input JSON]`; fresh production amendment has the same refusal. An ID is not a credential. |
+| `policy-show` | `--policy-id ID`; reads an existing immutable typed policy for the root. A compiled-only ID has no stored record. |
+| `policy-binding` | Reads the root's typed binding; newly initialized/migrated roots have no V4-07 binding. |
+| `amendment-show` | `--authorization-id ID`; retrieves an existing original amendment result. |
+| `strategy-select` | `--policy-id ID --input JSON`; validates a data-only selection against an existing stored policy. It does not execute a strategy. |
+
+In the fixture-tested amendment contract, policy snapshots and results are immutable. Preference updates affect future compilation, never an old snapshot. Authorization consumption is keyed across the controller DB by authorizer and authorization ID, bound to the root and canonical request. Exact historical retry returns its original result after later amendments without reactivating it; conflicting reuse or stale predecessors fail. A pending restriction does not revoke an active worker. Criteria changes require separate lifecycle handling and evidence invalidation.
+
+Strategy input has the closed shape `{"schema_version":1,"strategy":"focused@1","parameters":{"breadth":1},"reason":"limited optional exploration"}`. The pinned registry offers `focused@1` (breadth 1), `balanced@1` (1–2) and `exploratory@1` (1–3), restricted further by the immutable policy's preset subset. These are illustrative rules, not calibrated cost/quality promises. Selection reports the chosen entry, alternatives, rule, parameters and observable reason. Unknown entries, out-of-range parameters, executable code, protected-policy edits and acceptance changes are rejected.
 
 ## Import and transfer writer authority
 
@@ -85,6 +172,10 @@ The exercised boundary is cooperating processes on local Linux/macOS storage. Pr
 
 For development, `make gauge-test` runs the nine conformance anchors separately from ordinary CLI tests. The complete Go suite also includes repair regressions: from `gauge/`, run `GOTOOLCHAIN=local go test -mod=readonly -race -count=1 ./...`. Run `bash gauge/tests/package-repeat.sh` from the repository as a non-root user for the repeat-package regression. Go, Bats, jq and Python are test/build tools, not additions to the ordinary no-Gauge runtime.
 
+V4-07 adds `bash gauge/tests/policy-anchors.sh`, which checks discovery of T01–T08 and runs the policy Go tests. Its separate external oracle, `gauge/tests/policy.py`, requires a qualified frozen V4-06 checkout mounted at `/predecessor`; it builds the actual older binary for migration/refusal checks. New policy rollback cuts are callback fault tests; they do not add process-kill or power-loss qualification for preference/amendment transactions.
+
 ## Provenance
 
 IDG 1.8.1, usage reference, 2026-09-22. Sources: [CLI](../gauge/cmd/eidolons-gauge/main.go), [shim](../cli/src/gauge.sh), [build script](../scripts/gauge-build.sh), [controller](../gauge/internal/controller/controller.go), [authority protocol](../gauge/internal/controller/authority.go), [typed contracts](../gauge/internal/contract/types.go), [spec](../.spectra/changes/gauge-v4-06/spec.md), and the verified Vivi repair report identified in the [receipt](campaigns/gauge/receipts/V4-06.md#provenance). That handoff is Vivi → IDG, `PROPOSE`, message `8f84391a-5292-43b3-8c53-0c00aa93c682`, thread `10c848f8-d48b-4e45-babe-ee9616617f09`, outcome `verify_pass`. CHT: C:5/5 H:5/5 T:5/5 for documented usage and limits; candidate acceptance is tracked separately. CRYSTALIUM unavailable.
+
+V4-07 additions use the [policy CLI](../gauge/cmd/eidolons-gauge/policy.go), [policy contract](../gauge/internal/contract/policy.go), [typed store](../gauge/internal/store/policy.go), [controller wrappers](../gauge/internal/controller/policy.go), and [spec/decisions](../.spectra/changes/gauge-v4-07/spec.md). Incoming Vivi → IDG `PROPOSE`, message `4a0633b1-4576-4f04-8069-54763f689daa`, thread `7fa26ce4-5020-4b35-be77-3b81ee9323ac`, passed the blocking SHA-256 gate; full lineage is in the [V4-07 receipt](campaigns/gauge/receipts/V4-07.md#provenance). CHT: C:5/5 H:5/5 T:5/5 for the usage reference; final independent local review and formatting reconciliation are recorded in the receipt; hosted CI remains blocked.

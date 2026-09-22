@@ -1,0 +1,63 @@
+{
+  "passed": true,
+  "method": "Exact gofmt output comparison from retained bytes checked against independent accepted hash manifest; no AST assumption required",
+  "gofmt_executable": "/private/tmp/gauge-go-darwin-1.27.1/go/bin/gofmt",
+  "gofmt_executable_sha256": "1e950d1efa1539f5b9239ca95bbfd367d9338348513242b5a959093034c51e8c",
+  "targets": [
+    {
+      "path": "gauge/cmd/eidolons-gauge/policy_test.go",
+      "command": [
+        "/private/tmp/gauge-go-darwin-1.27.1/go/bin/gofmt",
+        "/private/tmp/gauge-v4-07-format/original/gauge/cmd/eidolons-gauge/policy_test.go"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "accepted_original_sha256": "8d4752988a69099a0dc89874d90b96dc8a41a43277faefcd34444cd448dc5c6a",
+      "gofmt_stdout_sha256": "ef79eb817fee8a36f936eab863454da725db907523fcf6dff7ceac0bba72b65d",
+      "actual_sha256": "ef79eb817fee8a36f936eab863454da725db907523fcf6dff7ceac0bba72b65d",
+      "exact_gofmt_match": true
+    },
+    {
+      "path": "gauge/internal/controller/policy_test.go",
+      "command": [
+        "/private/tmp/gauge-go-darwin-1.27.1/go/bin/gofmt",
+        "/private/tmp/gauge-v4-07-format/original/gauge/internal/controller/policy_test.go"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "accepted_original_sha256": "f625cb74062a6bd55a9c4bf5479241b641bbcf936a109f8a723d9ffe492a9986",
+      "gofmt_stdout_sha256": "5b17eaf09d801202daf4810daf018b0315b04c3c636374b96a04a364c7eb7508",
+      "actual_sha256": "5b17eaf09d801202daf4810daf018b0315b04c3c636374b96a04a364c7eb7508",
+      "exact_gofmt_match": true
+    },
+    {
+      "path": "gauge/internal/store/policy_test.go",
+      "command": [
+        "/private/tmp/gauge-go-darwin-1.27.1/go/bin/gofmt",
+        "/private/tmp/gauge-v4-07-format/original/gauge/internal/store/policy_test.go"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "accepted_original_sha256": "a84fc6fdc76cbf99d2efc8f501109891855a92ecca22acf7f08cce129a9acd54",
+      "gofmt_stdout_sha256": "1bfdbdb053bc87cb8f2e925d498fda813cc1835e22d9fb8461b731c3e5dc0898",
+      "actual_sha256": "1bfdbdb053bc87cb8f2e925d498fda813cc1835e22d9fb8461b731c3e5dc0898",
+      "exact_gofmt_match": true
+    },
+    {
+      "path": "gauge/internal/store/reviewer_regressions_test.go",
+      "command": [
+        "/private/tmp/gauge-go-darwin-1.27.1/go/bin/gofmt",
+        "/private/tmp/gauge-v4-07-format/original/gauge/internal/store/reviewer_regressions_test.go"
+      ],
+      "exit": 0,
+      "stderr": "",
+      "accepted_original_sha256": "4f7da1a9e3ba47befd36d28c6069ea2522f6d3b328018d812a7292f05b880b15",
+      "gofmt_stdout_sha256": "282ae707ca8b940ade170c6fe87779797160998e32835e6b73bf3f49ab31bdbf",
+      "actual_sha256": "282ae707ca8b940ade170c6fe87779797160998e32835e6b73bf3f49ab31bdbf",
+      "exact_gofmt_match": true
+    }
+  ],
+  "unchanged_other_files": 284,
+  "mismatches": [],
+  "original_acceptance_preserved_sha256": "143e4a13f01ea849e152de5c26b7dacf39ee9110a81aad34ba5ee131e5d93e60"
+}

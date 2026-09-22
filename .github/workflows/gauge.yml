@@ -19,6 +19,8 @@ jobs:
       GAUGE_REPO: ${{ github.workspace }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
           go-version: '1.27.1'
@@ -65,6 +67,18 @@ jobs:
           cd ..
           make gauge-test
           bats --print-output-on-failure cli/tests/ledger.bats cli/tests/journal_conformance.bats cli/tests/completion_conformance.bats cli/tests/product_leap.bats
+      - name: Real predecessor CLI and explicit policy migration (Linux)
+        if: runner.os == 'Linux'
+        env:
+          GOPROXY: 'off'
+          GOFLAGS: '-buildvcs=false'
+        run: |
+          sudo mkdir -p /predecessor
+          sudo chown "$(id -u):$(id -g)" /predecessor
+          # Published V4-06 tip on main (schema 1). The pre-publication local tip
+          # aa155c8 is not a remote object and cannot be archived in hosted CI.
+          git archive 1ee649c67ba1a0a25a82fe6195e6a358913f0431 | tar -x -C /predecessor
+          python3 gauge/tests/policy.py
       - name: Reproducible binary and license-complete package
         env:
           GOPROXY: 'off'
