@@ -72,6 +72,7 @@ gauge-test:
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/policy-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/observation-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/instrument-anchors.sh
+	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bash gauge/tests/reservation-anchors.sh
 	@GAUGE_REPO="$(CURDIR)" GOTOOLCHAIN=local bats --print-output-on-failure gauge/tests/conformance.bats
 
 gauge-package:

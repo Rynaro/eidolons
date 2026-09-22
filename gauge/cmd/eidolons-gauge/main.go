@@ -51,12 +51,19 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   report --protocol ID             instrument report (live remains blocked)
   eligibility --input JSON         record arm eligibility (no fabricated attempts)
 
+  reservation-enable               add typed reservation namespaces (schema 2)
+  reservation-admit --root ID --input JSON
+  reservation-status --root ID
+  reservation-amend --root ID --input JSON
+  reservation-reconcile --root ID --input JSON
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
 Preset strategy bounds are illustrative registry rules, not calibrated budgets.
 Observation recording never grants policy or spending authority.
 Instrument catalogue/preflight never grants live host qualification.
+Reservation admit is fixture-local atomic bookkeeping; no provider dispatch.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -80,6 +87,9 @@ func run(args []string) error {
 	}
 	if isInstrumentCommand(command) {
 		return instrumentCommand(args)
+	}
+	if isReservationCommand(command) {
+		return reservationCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":
