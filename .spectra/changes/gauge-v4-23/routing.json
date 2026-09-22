@@ -1,0 +1,13 @@
+{
+  "selected": [
+    "ATLAS",
+    "FORGE",
+    "Vivi",
+    "APIVR-Delta"
+  ],
+  "deferred": [
+    "SPECTRA",
+    "IDG"
+  ],
+  "notes": "V4-23 fixture gates only; no real release/merge/tag/archival. Maker≠checker pending independent review."
+}
