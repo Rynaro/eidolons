@@ -1,0 +1,16 @@
+{
+  "envelope_version": "1.0",
+  "from": {
+    "eidolon": "forge_v4_04"
+  },
+  "to": {
+    "eidolon": "orchestrator"
+  },
+  "performative": "CRITIQUE",
+  "objective": "Select bounded legacy journal append ownership without adding future store design",
+  "context_delta": {
+    "decision": "decision.md",
+    "evidence": "ATLAS pinned baseline and FORGE alternatives; no implementation success claimed",
+    "selected": "Bash mkdir ownership; bounded waits; conservative recovery-required for ambiguous owners"
+  }
+}

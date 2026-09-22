@@ -1,0 +1,59 @@
+[
+  {
+    "schema_version": "1.0",
+    "event_id": "legacy-complex-1",
+    "run_id": "legacy-complex",
+    "sequence": 1,
+    "event_type": "probe",
+    "timestamp": "2026-09-22T02:04:39Z",
+    "previous_event_digest": null,
+    "requested": {
+      "unicode": {
+        "z": "雪 😀 é",
+        "a": "é"
+      },
+      "escapes": {
+        "z": "\n\t\r\b\f\\\"/",
+        "a": "\u0000"
+      },
+      "numbers": {
+        "integer": 9007199254740991,
+        "negative": -27,
+        "fraction": 1.25,
+        "small": 1e-07,
+        "large": 1e+20
+      },
+      "nested": {
+        "z": [
+          true,
+          false,
+          null,
+          {},
+          []
+        ],
+        "a": {
+          "z": 2,
+          "a": 1
+        }
+      }
+    },
+    "observed": {},
+    "evidence_refs": [],
+    "event_digest": "87855d24e3972c0585a3623072ea655a2a4b6a2d16f9ee2b5fdee2d84240f08b"
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "legacy-complex-2",
+    "run_id": "legacy-complex",
+    "sequence": 2,
+    "event_type": "probe",
+    "timestamp": "2026-09-22T02:04:39Z",
+    "previous_event_digest": "87855d24e3972c0585a3623072ea655a2a4b6a2d16f9ee2b5fdee2d84240f08b",
+    "requested": {
+      "control": "tail"
+    },
+    "observed": {},
+    "evidence_refs": [],
+    "event_digest": "848950b96a7e2cbe2a644813c02071d2d399c07fbc817a5561cde4afdd8900b4"
+  }
+]

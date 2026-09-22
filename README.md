@@ -210,7 +210,7 @@ These commands are available for local experimentation. They are not a completed
 | `eidolons augment policy` | Checks declared parameter categories and emits candidate metadata labeled shadow-only. | Does not run a shadow router, validate a full policy diff, or promote a policy. |
 | `eidolons augment acp` | Emits a local version/capability receipt. | No negotiated editor session, prompt execution, cancellation, or session loading. It is not an ACP bridge. |
 
-Inspect the [implementation](cli/src/augment.sh), [ledger](cli/src/ledger.sh), and [schemas](schemas/) before integrating these primitives into automation.
+Read the [ledger guide](docs/ledger.md) for retry identities, journal integrity and interrupted-writer recovery. Inspect the [implementation](cli/src/augment.sh), [ledger source](cli/src/ledger.sh), and [schemas](schemas/) before integrating these primitives into automation.
 
 </details>
 

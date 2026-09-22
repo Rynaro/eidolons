@@ -1,0 +1,32 @@
+[
+  {
+    "schema_version": "1.0",
+    "event_id": "legacy-1",
+    "run_id": "legacy",
+    "sequence": 1,
+    "event_type": "probe",
+    "timestamp": "2026-09-22T01:58:06Z",
+    "previous_event_digest": null,
+    "requested": {
+      "control": "one"
+    },
+    "observed": {},
+    "evidence_refs": [],
+    "event_digest": "3b7f6f63ffda55effa2543b0944b7e42a8a6376c4abfb0808120709d005b92ce"
+  },
+  {
+    "schema_version": "1.0",
+    "event_id": "legacy-2",
+    "run_id": "legacy",
+    "sequence": 2,
+    "event_type": "probe",
+    "timestamp": "2026-09-22T01:58:06Z",
+    "previous_event_digest": "3b7f6f63ffda55effa2543b0944b7e42a8a6376c4abfb0808120709d005b92ce",
+    "requested": {
+      "control": "two"
+    },
+    "observed": {},
+    "evidence_refs": [],
+    "event_digest": "85978f592d119f296e97834c976f69fa70d65541df9e418db21d57fd1cbbb082"
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-04",
+  "status": "in_progress",
+  "tier": "full",
+  "maker": "vivi_v4_core",
+  "checker": "v4_04_review",
+  "acceptance_checks": [
+    {
+      "id": "V4-04-R01",
+      "verify_method": "V4-04-T01: bats --filter 'V4-04 T01' cli/tests/journal_conformance.bats; bind observed evidence in docs/campaigns/gauge/receipts/V4-04.md before final verification"
+    },
+    {
+      "id": "V4-04-R02",
+      "verify_method": "V4-04-T02: bats --filter 'V4-04 T02' cli/tests/journal_conformance.bats; bind observed evidence in docs/campaigns/gauge/receipts/V4-04.md before final verification"
+    },
+    {
+      "id": "V4-04-R03",
+      "verify_method": "V4-04-T03: bats --filter 'V4-04 T03' cli/tests/journal_conformance.bats; bind observed evidence in docs/campaigns/gauge/receipts/V4-04.md before final verification"
+    },
+    {
+      "id": "V4-04-R04",
+      "verify_method": "V4-04-T04: bats --filter 'V4-04 T04' cli/tests/journal_conformance.bats; bind observed evidence in docs/campaigns/gauge/receipts/V4-04.md before final verification"
+    },
+    {
+      "id": "V4-04-R05",
+      "verify_method": "V4-04-T05: bats --filter 'V4-04 T05' cli/tests/journal_conformance.bats; bind observed evidence in docs/campaigns/gauge/receipts/V4-04.md before final verification"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

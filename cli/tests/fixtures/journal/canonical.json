@@ -1,0 +1,50 @@
+[
+  {
+    "name": "unicode",
+    "payload": {
+      "z": "雪 😀 é",
+      "a": "é"
+    },
+    "canonical": "{\"a\":\"é\",\"z\":\"雪 😀 é\"}\n",
+    "sha256": "871804a284ad76d34e1be0d368b1588543f60b4e1abd4272b5fca0e9cd6bb6ec"
+  },
+  {
+    "name": "escapes",
+    "payload": {
+      "z": "\n\t\r\b\f\\\"/",
+      "a": "\u0000"
+    },
+    "canonical": "{\"a\":\"\\u0000\",\"z\":\"\\n\\t\\r\\b\\f\\\\\\\"/\"}\n",
+    "sha256": "1f1ddd7b9b140b8ce13e235be1e4fc5c6f13453827116d1b74b89de6e5ae74a5"
+  },
+  {
+    "name": "numbers",
+    "payload": {
+      "integer": 9007199254740991,
+      "negative": -27,
+      "fraction": 1.25,
+      "small": 1e-07,
+      "large": 1e+20
+    },
+    "canonical": "{\"fraction\":1.25,\"integer\":9007199254740991,\"large\":1E+20,\"negative\":-27,\"small\":1E-7}\n",
+    "sha256": "e74f2778f78b4929fc50949a70dd393f33e9391fc39b988d9c40b26c10aeab10"
+  },
+  {
+    "name": "nested",
+    "payload": {
+      "z": [
+        true,
+        false,
+        null,
+        {},
+        []
+      ],
+      "a": {
+        "z": 2,
+        "a": 1
+      }
+    },
+    "canonical": "{\"a\":{\"a\":1,\"z\":2},\"z\":[true,false,null,{},[]]}\n",
+    "sha256": "6297fd1ac74ff968ce75ad3596f4653ed260d4f20d6fefabfafa496fde39fb63"
+  }
+]
