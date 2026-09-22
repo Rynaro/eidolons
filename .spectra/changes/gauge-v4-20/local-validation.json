@@ -1,0 +1,23 @@
+{
+  "scope": "local fixture acceptance only",
+  "implementation_base": "7528827ab6482146375f9062925efbe97495d751",
+  "plan_commit": "c581308f055a0e252013bf09f2a7b2e1426ff811",
+  "branch": "codex/gauge-v4-20-cli",
+  "slice": "core-cli",
+  "optional_gambit": "out_of_scope",
+  "macos": {
+    "go": "1.27.1",
+    "commands": [
+      "cd gauge && GAUGE_REPO=$PWD/.. go test -mod=readonly -race -count=1 ./... -run 'TestV420|TestV415|TestV414|TestV413|TestV412|TestV411|TestV409|TestV408|TestV407|TestV406'",
+      "bash gauge/tests/status-anchors.sh"
+    ],
+    "exit": 0
+  },
+  "hosted_ci": "blocked_pending_explicit_publication_approval",
+  "live_qualification": "intentionally_blocked",
+  "provider_dispatch": "excluded",
+  "model_calls": 0,
+  "schema": "2 additive status namespaces",
+  "v4_16_plus": "out_of_scope",
+  "v4_21": "out_of_scope"
+}

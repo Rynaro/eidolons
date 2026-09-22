@@ -104,6 +104,12 @@ const usage = `Usage: eidolons gauge COMMAND [options]
   evaluation-promotion --input JSON untouched promotion set controls
   evaluation-show --trial ID       aggregate evaluation report
 
+  status-enable                    add typed status-projection namespaces (schema 2)
+  status-project --loop|--root ID  truthful delivery/verification status (core-cli)
+  status-policy-inspect [--root ID] [--policy-id ID] [--escalation TEXT]
+  status-policy-preview --root ID  preview preserves reservations; no model work
+  status-client-conformance --input JSON  fixture client contract (GAMBIT out of scope)
+
 User preferences are a logical layer local to this controller/project, not an
 OS identity, home setting, cross-project default or authority grant. Production
 activation is authorizer_boundary_unqualified; authorization IDs are not credentials.
@@ -115,9 +121,10 @@ Dispatch admit uses one fixture-qualified fake native adapter; live stays blocke
 Compiler records inspectable selection reasons; semantic planning remains fallible.
 Acceptance freezes candidates and qualifies protected oracles; no universal correctness;
 no auto push/merge/release; candidate scripts cannot inherit checker credentials.
-Delivery loop is the V4-15 observable runnable-slice demonstrator; minimal
-inspect/status/resume/cancel only — full V4-20 CLI is deferred.
+Delivery loop is the V4-15 observable runnable-slice demonstrator.
 V4-21 expands the V4-09 instrument into auditable evaluation; no V4-22/V4-10.
+V4-20 core-cli status projections extend inspect/status; optional-GAMBIT is
+out of scope (dropped; not used). Status/preview cannot refill budgets or create live-evidence claims.
 
 Common options: --project PATH (default .), --lock-timeout DURATION (default 5s).
 One shared local bbolt DB serves this controller instance. No account-wide or
@@ -159,6 +166,9 @@ func run(args []string) error {
 	}
 	if isEvaluationCommand(command) {
 		return evaluationCommand(args)
+	}
+	if isStatusCommand(command) {
+		return statusCommand(args)
 	}
 	switch command {
 	case "init", "import", "promote", "recover", "status", "fixture", "replace":

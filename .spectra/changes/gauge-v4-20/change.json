@@ -1,0 +1,19 @@
+{
+  "esl_version": "1.1",
+  "change_id": "gauge-v4-20",
+  "status": "proposed",
+  "tier": "full",
+  "maker": "vivi_v4_20",
+  "checker": "pending",
+  "acceptance_checks": [
+    {"id": "V4-20-R01", "verify_method": "V4-20-T01: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T01'; evidence in docs/campaigns/gauge/receipts/V4-20.md"},
+    {"id": "V4-20-R02", "verify_method": "V4-20-T02: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T02'; evidence in docs/campaigns/gauge/receipts/V4-20.md"},
+    {"id": "V4-20-R03", "verify_method": "V4-20-T03: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T03'; evidence in docs/campaigns/gauge/receipts/V4-20.md"},
+    {"id": "V4-20-R04", "verify_method": "V4-20-T04: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T04'; evidence in docs/campaigns/gauge/receipts/V4-20.md"},
+    {"id": "V4-20-R05", "verify_method": "V4-20-T05: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T05'; evidence in docs/campaigns/gauge/receipts/V4-20.md; optional-GAMBIT out of scope (dropped; not used)"},
+    {"id": "V4-20-R06", "verify_method": "V4-20-T06: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T06'; evidence in docs/campaigns/gauge/receipts/V4-20.md"},
+    {"id": "V4-20-R07", "verify_method": "V4-20-T07: bash gauge/tests/status-anchors.sh / go test -run '^TestV420T07'; evidence in docs/campaigns/gauge/receipts/V4-20.md"}
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}
