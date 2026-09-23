@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+No changes yet.
+
+## [4.1.0] — 2026-09-22 — Cursor sessionStart harness
+
+Minor: Cursor host gains fail-open `sessionStart` route injection via project hooks. Ordinary install and static `.mdc` remain; `--strict cursor` stays refused.
+
 ### Added
 - Cursor harness `sessionStart` wiring: `eidolons harness install` writes `.cursor/hooks.json` (schema v1) and `.eidolons/harness/hooks/cursor-SessionStart.sh`, injecting cortex digest as `{additional_context}` (fail-open). Static `.mdc` from sync remains the always-on baseline; `--strict cursor` stays refused.
 
