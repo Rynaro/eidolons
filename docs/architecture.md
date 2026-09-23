@@ -104,7 +104,7 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
       - Appends to root AGENTS.md (bounded by markers; co-owned by copilot/codex)
       - Appends to CLAUDE.md (pointer line)
       - Creates .cursor/rules/<n>.mdc, .cursor/agents/<n>.md, and
-        .cursor/skills/<n>-<skill>/SKILL.md if cursor is wired (EIIS §4.2.9)
+        .cursor/skills/<n>-<skill>/SKILL.md if cursor is wired (EIIS 3.1 §4.1)
       - Creates .codex/agents/<n>.md if codex is wired
         (YAML frontmatter: name, description; subagent dispatch file)
       - Emits ./.eidolons/<n>/install.manifest.json
