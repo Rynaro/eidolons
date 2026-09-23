@@ -313,7 +313,7 @@ if [[ "$HOSTS_EXPLICIT" != "true" ]]; then
         echo ""
         echo "  - claude-code  → creates .claude/agents/  and .claude/skills/"
         echo "  - copilot      → creates .github/instructions/"
-        echo "  - cursor       → creates .cursor/rules/"
+        echo "  - cursor       → creates .cursor/rules/, .cursor/agents/, .cursor/skills/"
         echo "  - opencode     → creates .opencode/agents/"
         echo "  - codex        → creates AGENTS.md (root) and .codex/agents/"
         echo "  - all          (every host above)"
@@ -329,8 +329,9 @@ fi
 
 # ─── Resolve shared-dispatch preference ───────────────────────────────────
 # Opt-in by design. Per-vendor files (.claude/agents/<n>.md, .cursor/rules/<n>.mdc,
-# .opencode/agents/<n>.md, .github/instructions/) are self-sufficient for their
-# hosts to discover the Eidolon. Root AGENTS.md / CLAUDE.md / copilot-
+# .cursor/agents/<n>.md, .cursor/skills/<n>-<skill>/SKILL.md, .opencode/agents/<n>.md,
+# .github/instructions/) are self-sufficient for their hosts to discover the Eidolon.
+# Root AGENTS.md / CLAUDE.md / copilot-
 # instructions.md are a separate composition concern — default off so they don't
 # clutter brownfield projects without permission.
 if [[ -z "$SHARED_DISPATCH" ]]; then
@@ -342,7 +343,7 @@ if [[ -z "$SHARED_DISPATCH" ]]; then
       echo "${BOLD}Compose root dispatch files?${RESET}"
       echo "If yes, each Eidolon will own a marker-bounded section in root"
       echo "  AGENTS.md, CLAUDE.md, and .github/copilot-instructions.md."
-      echo "If no, only per-vendor files (.claude/agents/, .cursor/rules/, etc.)"
+      echo "If no, only per-vendor files (.claude/agents/, .cursor/{rules,agents,skills}/, etc.)"
       echo "  are created — agents remain self-sufficient via host discovery."
       echo ""
     } >&2

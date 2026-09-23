@@ -218,6 +218,44 @@ if [[ -f "$CODEX_HOOKS" ]]; then
   ok "Removed .codex/hooks.json"
 fi
 
+# ── Remove eidolons sessionStart from .cursor/hooks.json ──────────────────
+# Preserve foreign hooks/events. Delete sessionStart when empty; delete hooks
+# when empty; remove the file only when it becomes an empty {version} object
+# with no other keys of substance (or empty hooks + only version).
+CURSOR_HOOKS=".cursor/hooks.json"
+_cursor_ss="$HARNESS_SHIM_DIR/cursor-SessionStart.sh"
+if [[ -f "$CURSOR_HOOKS" ]]; then
+  if jq empty "$CURSOR_HOOKS" 2>/dev/null; then
+    _cursor_before="$(jq -cS . "$CURSOR_HOOKS" 2>/dev/null || echo "")"
+    _cursor_tmp="$(mktemp)"
+    if jq --arg ss "$_cursor_ss" '
+        .hooks = (.hooks // {}) |
+        .hooks.sessionStart = ((.hooks.sessionStart // []) | map(select(.command != $ss))) |
+        if ((.hooks.sessionStart // []) | length) == 0 then .hooks |= del(.sessionStart) else . end |
+        if (.hooks | length) == 0 then del(.hooks) else . end
+      ' "$CURSOR_HOOKS" > "$_cursor_tmp" 2>/dev/null; then
+      _cursor_after="$(jq -cS . "$_cursor_tmp" 2>/dev/null || echo "")"
+      # Drop file if only version remains (or empty object).
+      _cursor_only_version="$(jq -e 'keys == ["version"] or keys == []' "$_cursor_tmp" >/dev/null 2>&1 && echo yes || echo no)"
+      if [[ "$_cursor_only_version" == "yes" ]]; then
+        rm -f "$CURSOR_HOOKS" "$_cursor_tmp"
+        ok "Removed .cursor/hooks.json (no remaining hooks)"
+      elif [[ "$_cursor_before" != "$_cursor_after" ]]; then
+        mv "$_cursor_tmp" "$CURSOR_HOOKS"
+        ok "Removed eidolons sessionStart from .cursor/hooks.json (foreign hooks preserved)"
+      else
+        rm -f "$_cursor_tmp"
+        info ".cursor/hooks.json had no eidolons sessionStart entry to remove"
+      fi
+    else
+      rm -f "$_cursor_tmp"
+      warn ".cursor/hooks.json merge-remove failed — leaving unchanged (fail-open)"
+    fi
+  else
+    warn ".cursor/hooks.json is not valid JSON — skipping hooks removal"
+  fi
+fi
+
 # ── ECM P2 Track E: strip model_auto_compact_token_limit from codex config ──
 # (AC-RM-3). Don't-clobber-aware: only strip when lock-recorded managed=true.
 CODEX_CONFIG_TOML=".codex/config.toml"

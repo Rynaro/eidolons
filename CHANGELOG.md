@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.1.0] — 2026-09-22 — Cursor sessionStart harness + first-class Agents/Skills
+
+Minor: Cursor host gains fail-open `sessionStart` route injection via project hooks, plus first-class `.cursor/agents/` and `.cursor/skills/` adapter surfaces (EIIS 3.1 §4.1). Ordinary install and static `.mdc` remain; `--strict cursor` stays refused.
+
+### Added
+- Cursor harness `sessionStart` wiring: `eidolons harness install` writes `.cursor/hooks.json` (schema v1) and `.eidolons/harness/hooks/cursor-SessionStart.sh`, injecting cortex digest as `{additional_context}` (fail-open). Static `.mdc` from sync remains the always-on baseline; `--strict cursor` stays refused.
+- Cursor EIIS-v3 multi-surface adapters: when `cursor` is wired, `eiis_v3_render_adapters` emits `.cursor/rules/<name>.mdc` (rules), `.cursor/agents/<name>.md` (Task/subagent discovery; `readonly: true` for scout capability class), and `.cursor/skills/<name>-<skill>/SKILL.md` (Skills; frontmatter `name` matches folder; symlink preferred, constrained pointer fallback). Aligns with EIIS 3.1 §4.1.
+
+### Changed
+- `harness status` / doctor D12 report Cursor hooks surfaces; ECM lock `per_host.cursor` channel is `session_start` with features `static_floor` + `session_start`.
+- Doctor D5/D6-v3 also inspect `.cursor/agents/` and `.cursor/skills/` vendor adapters.
 ## [4.0.0] — 2026-09-22 — verified-delivery Gauge era
 
 Major: ships the opt-in Gauge controller and the completed V4 verified-delivery campaign (23 packages). Ordinary CLI install, roster sync, and host wiring stay compatible; Gauge is not required for day-to-day use. Behavioral routing defaults are unchanged until separately authorized live promotion. Live host qualification and paid probes remain fail-closed / operator-gated.

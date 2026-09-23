@@ -60,6 +60,66 @@ _eiis_v3_skill_adapter() {
   printf 'pointer\t%s\t.eidolons/%s/%s\n' "$path" "$name" "$entry"
 }
 
+# _eiis_v3_cursor_agent_write NAME DESCRIPTION ROOT
+# Cursor project subagent under .cursor/agents/<name>.md (Task-tool discovery).
+# Disposable discovery adapter — canonical prose stays under .eidolons/<name>/.
+_eiis_v3_cursor_agent_write() {
+  local name="$1" description="$2" root="$3"
+  local path=".cursor/agents/${name}.md" klass readonly_line=""
+  mkdir -p "$(dirname "$path")"
+  klass="$(_eiis_v3_capability_class "$name" 2>/dev/null || true)"
+  if [[ "$klass" == "scout" ]]; then
+    readonly_line=$'readonly: true\n'
+  fi
+  {
+    printf '%s\n' '---'
+    printf 'name: %s\n' "$name"
+    printf 'description: %s\n' "$description"
+    printf '%s' "$readonly_line"
+    printf '%s\n' 'generated_by: eidolons' '---' ''
+    printf 'You are the %s Eidolon. Load `%s/PERSONA.md` and `%s/SPEC.md`.\n' \
+      "$name" "$root" "$root"
+    printf 'This file is a disposable discovery adapter; do not treat it as the source of truth.\n'
+  } > "$path"
+}
+
+# _eiis_v3_cursor_skill_adapter NAME SKILL ENTRY
+# Cursor project skill at .cursor/skills/<name>-<skill>/SKILL.md.
+# Frontmatter name MUST match the folder name (Cursor skills contract).
+# Prefer symlink to the canonical skill; fall back to a constrained pointer.
+_eiis_v3_cursor_skill_adapter() {
+  local name="$1" skill="$2" entry="$3"
+  local folder="${name}-${skill}"
+  local dir=".cursor/skills/${folder}" path link_target
+  path="$dir/SKILL.md"
+  mkdir -p "$dir"
+  link_target="../../../.eidolons/${name}/${entry}"
+  if [[ "${EIDOLONS_NO_SYMLINKS:-0}" != "1" ]]; then
+    rm -f "$path"
+    if ln -s "$link_target" "$path" 2>/dev/null && [[ -e "$path" ]]; then
+      # Ensure Cursor-required name/description survive even when the
+      # canonical skill uses a different frontmatter convention: if the
+      # linked target lacks a matching name:, rewrite as pointer instead.
+      if grep -qE "^name:[[:space:]]*${folder}\$" "$path" 2>/dev/null \
+        && grep -qE '^description:[[:space:]]*.+' "$path" 2>/dev/null; then
+        printf 'symlink\t%s\t.eidolons/%s/%s\n' "$path" "$name" "$entry"
+        return 0
+      fi
+      rm -f "$path"
+    fi
+    rm -f "$path"
+  fi
+  {
+    printf '%s\n' '---'
+    printf 'name: %s\n' "$folder"
+    printf 'description: Load the canonical %s/%s skill from the installed Eidolon package.\n' "$name" "$skill"
+    printf '%s\n' 'generated_by: eidolons' '---' ''
+    printf 'Load `%s` (canonical). Companion spec: `%s`.\n' \
+      ".eidolons/${name}/${entry}" ".eidolons/${name}/SPEC.md"
+  } > "$path"
+  printf 'pointer\t%s\t.eidolons/%s/%s\n' "$path" "$name" "$entry"
+}
+
 eiis_v3_render_adapters() {
   local name="$1" hosts_csv="$2" root=".eidolons/$1"
   local manifest="$root/manifest.json" receipt="$root/install.receipt.json"
@@ -82,6 +142,19 @@ eiis_v3_render_adapters() {
       if [[ "$declared" != "true" ]]; then
         rm -f "$old_adapter"
         rmdir "$(dirname "$old_adapter")" 2>/dev/null || true
+      fi
+    done
+  fi
+  if [[ -d .cursor/skills ]]; then
+    local old_cskill old_cskill_name declared_c
+    for old_cskill in .cursor/skills/${name}-*/SKILL.md; do
+      [[ -e "$old_cskill" || -L "$old_cskill" ]] || continue
+      old_cskill_name="$(basename "$(dirname "$old_cskill")")"
+      old_cskill_name="${old_cskill_name#${name}-}"
+      declared_c="$(jq -r --arg s "$old_cskill_name" '.skills | has($s)' "$manifest")"
+      if [[ "$declared_c" != "true" ]]; then
+        rm -f "$old_cskill"
+        rmdir "$(dirname "$old_cskill")" 2>/dev/null || true
       fi
     done
   fi
@@ -121,9 +194,17 @@ eiis_v3_render_adapters() {
         adapter_lines="${adapter_lines}pointer\t.opencode/agents/$name.md\t$root/PERSONA.md\n"
         ;;
       cursor)
+        # Rules (always-available Agent context) + Agents (Task subagents) + Skills.
         _eiis_v3_pointer_write ".cursor/rules/${name}.mdc" "$name" "$description" \
           "$root/PERSONA.md" "$root/SPEC.md"
         adapter_lines="${adapter_lines}pointer\t.cursor/rules/${name}.mdc\t$root/PERSONA.md\n"
+        _eiis_v3_cursor_agent_write "$name" "$description" "$root"
+        adapter_lines="${adapter_lines}pointer\t.cursor/agents/${name}.md\t$root/PERSONA.md\n"
+        while IFS=$'\t' read -r skill entry; do
+          [[ -n "$skill" ]] || continue
+          line="$(_eiis_v3_cursor_skill_adapter "$name" "$skill" "$entry")"
+          adapter_lines="${adapter_lines}${line}\n"
+        done < <(jq -r '.skills | to_entries[]? | [.key,.value.entrypoint] | @tsv' "$manifest")
         ;;
     esac
   done
