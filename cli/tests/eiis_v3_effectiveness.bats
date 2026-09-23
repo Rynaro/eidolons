@@ -23,10 +23,49 @@ JSON
   setup_effective_package
   run bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas claude-code,codex,copilot,cursor,opencode' _ "$EIDOLONS_ROOT"
   [ "$status" -eq 0 ]
-  for file in .claude/agents/atlas.md .codex/agents/atlas.toml .github/agents/atlas.agent.md .cursor/rules/atlas.mdc .opencode/agents/atlas.md; do
+  for file in .claude/agents/atlas.md .codex/agents/atlas.toml .github/agents/atlas.agent.md .cursor/rules/atlas.mdc .cursor/agents/atlas.md .opencode/agents/atlas.md; do
     grep -q '.eidolons/atlas/PERSONA.md' "$file"
     grep -q '.eidolons/atlas/SPEC.md' "$file"
   done
+}
+
+@test "v3 effectiveness: Cursor agents + skills surfaces are emitted with EIIS 1.5 paths" {
+  setup_effective_package
+  run bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas cursor' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  [ -f .cursor/rules/atlas.mdc ]
+  [ -f .cursor/agents/atlas.md ]
+  [ -e .cursor/skills/atlas-locate/SKILL.md ]
+  grep -qE '^name:[[:space:]]*atlas-locate$' .cursor/skills/atlas-locate/SKILL.md
+  grep -q '.eidolons/atlas/PERSONA.md' .cursor/agents/atlas.md
+  # Receipt lists all three Cursor surfaces.
+  run jq -e '[.adapters[] | select(.host=="cursor") | .path] | index(".cursor/rules/atlas.mdc") and index(".cursor/agents/atlas.md") and (map(test(".cursor/skills/atlas-locate")) | any)' .eidolons/atlas/install.receipt.json
+  [ "$status" -eq 0 ]
+}
+
+@test "v3 effectiveness: Cursor skill pointer fallback when symlinks disabled" {
+  setup_effective_package
+  EIDOLONS_NO_SYMLINKS=1 bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas cursor' _ "$EIDOLONS_ROOT"
+  [ -f .cursor/skills/atlas-locate/SKILL.md ]
+  [ ! -L .cursor/skills/atlas-locate/SKILL.md ]
+  grep -qF 'generated_by: eidolons' .cursor/skills/atlas-locate/SKILL.md
+  grep -qF '.eidolons/atlas/skills/locate/SKILL.md' .cursor/skills/atlas-locate/SKILL.md
+}
+
+@test "v3 effectiveness: Cursor scout class projects readonly on agents file" {
+  setup_effective_package
+  # atlas is scout in the roster — readonly: true on Cursor agent frontmatter.
+  bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas cursor' _ "$EIDOLONS_ROOT"
+  grep -qE '^readonly:[[:space:]]*true$' .cursor/agents/atlas.md
+}
+
+@test "v3 effectiveness: stale Cursor skills are pruned when undeclared" {
+  setup_effective_package
+  mkdir -p .cursor/skills/atlas-stale
+  printf '%s\n' '---' 'name: atlas-stale' 'description: stale' '---' > .cursor/skills/atlas-stale/SKILL.md
+  bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters atlas cursor' _ "$EIDOLONS_ROOT"
+  [ ! -e .cursor/skills/atlas-stale/SKILL.md ]
+  [ -e .cursor/skills/atlas-locate/SKILL.md ]
 }
 
 @test "v3 effectiveness: Claude adapter projects ATLAS's read-only capability class" {

@@ -103,7 +103,8 @@ What `eidolons init --preset pipeline` actually does in a brownfield project:
       - Copies methodology files into ./.eidolons/<n>/
       - Appends to root AGENTS.md (bounded by markers; co-owned by copilot/codex)
       - Appends to CLAUDE.md (pointer line)
-      - Creates .cursor/rules/<n>.mdc if cursor is wired
+      - Creates .cursor/rules/<n>.mdc, .cursor/agents/<n>.md, and
+        .cursor/skills/<n>-<skill>/SKILL.md if cursor is wired (EIIS §4.2.9)
       - Creates .codex/agents/<n>.md if codex is wired
         (YAML frontmatter: name, description; subagent dispatch file)
       - Emits ./.eidolons/<n>/install.manifest.json
@@ -331,7 +332,7 @@ template; the kernel is unchanged.
 | claude-code | T3 | block (`PreToolUse` deny) | `UserPromptSubmit` + `SessionStart` + optional `PreToolUse`; `additionalContext` inject | Full route-inject; `--strict` adds file-edit blocking shim |
 | codex | T3 | advisory (protected-glob deny) | `hooks.json` sidecar (ASSUMPTION A1 — verify with `eidolons doctor`) | Route-inject; `--strict` adds codex `PreToolUse` shim for protected-glob paths only |
 | copilot | T2 | — (not available) | `.github/hooks/eidolons.json` + best-effort `sessionStart` shim | `additionalContext` may be silently dropped (upstream bug #2142); no `userPromptSubmitted` hook (copilot-cli#1139) |
-| cursor | T2 | refused by CLI | `.cursor/hooks.json` `sessionStart` + `.cursor/rules/eidolons-cortex.mdc` + `AGENTS.md` dispatch-pointer | SessionStart route-inject (fail-open); static `.mdc` remains the always-on baseline. `--strict cursor` refused — `beforeSubmitPrompt` cannot inject `additional_context`. Cloud agents may skip `sessionStart`. |
+| cursor | T2 | refused by CLI | `.cursor/hooks.json` `sessionStart` + `.cursor/rules/eidolons-cortex.mdc` + `.cursor/rules|agents|skills/<n>…` + `AGENTS.md` dispatch-pointer | SessionStart route-inject (fail-open); static `.mdc` + first-class Agents/Skills remain the always-on baseline. `--strict cursor` refused — `beforeSubmitPrompt` cannot inject `additional_context`. Cloud agents may skip `sessionStart`. |
 | opencode | T1 | advisory (plugin gate) | `opencode.json` MCP registration + `agent.<member>.permission.task` gate + optional `.opencode/plugins/eidolons.js` | `--strict opencode` writes advisory plugin (caveat: `#5894` subagent bypass) |
 
 **Cursor note:** `eidolons harness install` writes `.cursor/hooks.json` (`version: 1`) with a fail-open `sessionStart` command hook that injects cortex digest via `{additional_context}`. Always-apply `.mdc` from `eidolons sync` remains the baseline (especially for cloud agents where `sessionStart` may not fire). `--strict cursor` is refused — Cursor's `beforeSubmitPrompt` can gate but cannot inject routing context.

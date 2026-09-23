@@ -55,7 +55,9 @@ my-new-thing/
 ├── CLAUDE.md                # Claude Code entry
 ├── .github/
 │   └── copilot-instructions.md
-├── .cursor/rules/           # one MDC per Eidolon
+├── .cursor/rules/           # one MDC per Eidolon (always-on Agent context)
+├── .cursor/agents/          # one agent md per Eidolon (Task/subagent discovery)
+├── .cursor/skills/          # <name>-<skill>/SKILL.md project Skills
 ├── .opencode/agents/        # one agent file per Eidolon
 └── .codex/agents/           # one subagent file per Eidolon (OpenAI Codex)
 ```
@@ -100,6 +102,8 @@ Fails fast on any prompt. Use `--preset` or `--members` to provide all required 
 | `AGENTS.md` | Each Eidolon appends its section | ✅ yes |
 | `CLAUDE.md` | Each Eidolon appends a pointer line | ✅ yes |
 | `.cursor/rules/<n>.mdc` | Per-Eidolon | ✅ yes |
+| `.cursor/agents/<n>.md` | Per-Eidolon | ✅ yes |
+| `.cursor/skills/<n>-<skill>/SKILL.md` | Per-Eidolon / Per-skill | ✅ yes |
 | `.opencode/agents/<n>.md` | Per-Eidolon | ✅ yes |
 | `.codex/agents/<n>.toml` | Per-Eidolon (Codex subagent) | ✅ yes |
 
