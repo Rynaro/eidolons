@@ -312,25 +312,26 @@ write_row() {
 
 # ─── P2.4 USD budget: priced model, breach ────────────────────────────────────
 #
-# GIVEN a row with model=claude-opus-4-8 (priced at $15/1M input),
-#       input=2_000_000 tokens → $30.00,
-# WHEN budget --limit 20 --usd --by eidolon,
-# THEN exit 3 (breach) because $30 > $20.
+# GIVEN a row with model=claude-opus-4-8 (priced at $5/1M input),
+#       input=2_000_000 tokens → $10.00,
+# WHEN budget --limit 5 --usd --by eidolon,
+# THEN exit 3 (breach) because $10 > $5.
+# NOTE: Prices updated 2026-09-25 to Anthropic official rates: $5/MTok in.
 
 @test "telemetry budget --usd: exit 3 when USD spend exceeds dollar limit" {
-  # input=2M @ $15/1M = $30.00 > limit $20.00.
+  # input=2M @ $5/1M = $10.00 > limit $5.00.
   write_row "evt-usd-breach1" "audited" "claude-opus-4-8" 2000000 0 0 0 "repo" "main"
 
   local out status=0
   out="$("$EIDOLONS_BIN" telemetry budget \
-    --limit 20 \
+    --limit 5 \
     --usd \
     --by eidolon \
     --project "$TEST_SLUG" \
     2>/dev/null)" || status=$?
 
   [ "$status" -eq 3 ] || {
-    echo "FAIL: expected exit 3 (USD breach: $30 > $20), got $status" >&2
+    echo "FAIL: expected exit 3 (USD breach: $10 > $5), got $status" >&2
     echo "Output: $out" >&2
     return 1
   }
@@ -350,7 +351,8 @@ write_row() {
 # ─── P2.4 USD budget: within limit ───────────────────────────────────────────
 
 @test "telemetry budget --usd: exit 0 when USD spend within dollar limit" {
-  # input=100k @ $15/1M = $1.50 < limit $10.00.
+  # input=100k @ $5/1M = $0.50 < limit $10.00.
+  # NOTE: Prices updated 2026-09-25 to Anthropic official rates: $5/MTok in.
   write_row "evt-usd-ok1" "audited" "claude-opus-4-8" 100000 0 0 0 "repo" "main"
 
   local status=0
