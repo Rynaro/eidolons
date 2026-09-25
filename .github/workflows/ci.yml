@@ -3,7 +3,7 @@ name: CI
 # Validates the eidolons CLI on every push and PR:
 #   - lint: shellcheck + schema validation
 #   - cortex-token-budget: EIDOLONS.md always-loaded region stays <= 850
-#                  chars/4 proxy tokens (ESL generalist-eidolon Track D,
+#                  chars/3 proxy tokens (ESL generalist-eidolon Track D,
 #                  R-023/AC-D01/AC-D02) — a BLOCKING precondition that must
 #                  land green at/before any roster-row growth (AC-D05)
 #   - install-e2e: curl-pipe install against the checkout on Ubuntu + macOS,
@@ -52,7 +52,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: EIDOLONS.md always-loaded region <= 850 chars/4 proxy tokens
+      - name: EIDOLONS.md always-loaded region <= 850 chars/3 proxy tokens
         run: bash scripts/token-budget-check.sh EIDOLONS.md --ceiling 850
 
       - name: Over-budget fixture is correctly rejected (script self-check)

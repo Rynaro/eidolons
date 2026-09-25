@@ -39,16 +39,16 @@ set -euo pipefail
 
 usage() {
   printf 'Usage: %s <file> [--ceiling N] [--ratio R] [--start-marker S] [--end-marker E]\n' "$(basename "$0")" >&2
-  printf 'Default ceiling: 850. Default ratio: 4. Default markers: <!-- always-loaded:start/end -->\n' >&2
+  printf 'Default ceiling: 850. Default ratio: 3. Default markers: <!-- always-loaded:start/end -->\n' >&2
   printf '\nRatio guidance:\n' >&2
+  printf '  --ratio 3  ~3 chars/token (newer tokenizer, Claude Opus 4.7 and later) [default]\n' >&2
   printf '  --ratio 4  ~4 chars/token (older tokenizer, Claude Sonnet 4.6 and earlier)\n' >&2
-  printf '  --ratio 3  ~3 chars/token (newer tokenizer, Claude Opus 4.7 and later)\n' >&2
   exit 2
 }
 
 FILE=""
 CEILING=850
-RATIO=4
+RATIO=3
 START_MARKER="<!-- always-loaded:start -->"
 END_MARKER="<!-- always-loaded:end -->"
 

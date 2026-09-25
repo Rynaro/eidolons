@@ -11,8 +11,8 @@ live BPE call").
 
 NOTE (2026-09-25): Anthropic's newer tokenizer (Claude 4.7+) produces ~30%
 more tokens for the same text. The script now supports `--ratio N` to adjust
-the chars-per-token divisor: use `--ratio 4` for older models (default),
-`--ratio 3` for newer models. The cl100k_base reference below is still valid
+the chars-per-token divisor: use `--ratio 3` for newer models (default),
+`--ratio 4` for older models. The cl100k_base reference below is still valid
 for comparison purposes as a baseline.
 
 Recorded reference (regenerate with:
