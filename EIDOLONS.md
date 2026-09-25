@@ -25,26 +25,26 @@
 
 | Name | Class | Triggers | Refuses | Handoff |
 |------|-------|----------|---------|---------|
-| ATLAS | scout | map, trace, where/how does, investigate, analyze, audit | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
-| RAMZA | planner | spec, plan, decompose, clarify requirements | implement code, modify files | Vivi, IDG |
+| ATLAS | scout | map, trace, where does, how does, investigate, analyze, audit (read-only) | implement, fix, edit, write, commit | RAMZA, Vivi, IDG |
+| RAMZA | planner (default) | spec, plan, decompose, clarify requirements, decision-ready | implement code, modify files | Vivi, IDG |
 | SPECTRA | planner (opt-in) | named dispatch only | implement code, modify files | Vivi, IDG |
-| Vivi | coder | implement, build, fix, refactor, optimize, migrate, tests pass | design from scratch, novel architecture | IDG |
+| Vivi | coder (default) | implement, build, fix, refactor, optimize, migrate, make tests pass | design from scratch, novel architecture | IDG |
 | APIVR-Δ | coder (opt-in) | named dispatch only | design from scratch, novel architecture | IDG |
-| IDG | scriber | document, ADR, runbook, summarize | explore repo, find calls | — |
-| FORGE | reasoner | trade-off, compare, evaluate, which approach | implement, retrieve | — |
-| VIGIL | debugger | diagnose, debug, root cause, flaky, why fail | new feature, plan from scratch | — |
-| Kupo | executor | rename, path fix, lockfile, lint fix, one-line edit | design, plan, cross-cutting | — |
-| Gilgamesh | generalist | (none—fallback only) | design, plan, deploy, route, underspecified | — |
+| IDG | scriber | document, ADR, runbook, write up, summarize | explore repo, find calls, retrieve | (terminal) |
+| FORGE | reasoner | trade-off, compare, evaluate, which approach | implement, retrieve, synthesize prose | (lateral) |
+| VIGIL | debugger | diagnose, debug, root cause, flaky, why does X fail | build new feature, plan from scratch | (lateral) |
+| Kupo | executor | rename, import/path fix, lockfile bump, lint autofix, one-line edit, search-replace | design, plan, cross-cutting refactor | (orchestrator-dispatched) |
+| Gilgamesh | generalist (fallback-only; zero triggers—Step-2(a) only) | | design, plan, deploy, migrate, route, spawn, underspecified | (orchestrator-dispatched; PROPOSEs upward) |
 
 ## Dispatch
 
-**Default:** delegate via pipeline; answer directly only for trivial prompts.
+**Default:** delegate via pipeline; orchestrator does not implement, spec, or scout directly. Direct answer only for trivial/conversational/single-fact. Tier default `standard`; TRANCE gated, never automatic.
 
 1. **Classify** — extract verbs, match triggers, score 0–1.
-2. **Gate** — ≥0.8 one Eidolon → dispatch standard; ≥0.6 for ≥2 → chain (`chain-templates.md`); <0.6 all → (a) actionable: Gilgamesh, (b) underspecified: `clarification_request`. Gilgamesh never enters Step 1.
+2. **Gate** — ≥0.8 one Eidolon, ≤1 verb class: dispatch standard. ≥0.6 for ≥2 OR spans ≥2 classes: chain (`chain-templates.md`). <0.6 all (`dispatch-predicate.md`): (a) actionable → Gilgamesh; (b) underspecified → `clarification_request` (1–3 questions), do NOT dispatch. Gilgamesh never enters Step 1, never outranks specialist ≥τ.
 3. **Refusal** — top Eidolon refuses → reroute + emit `[DECISION]`.
 4. **Tier** — default `standard`; `trance` only with complexity AND stakes flags (`trance-matrix.md`).
-5. **Artifact** — emit `{selected, tier, chain, confidence, assumptions, clarification_request?, refusal_rerouting}` (schema: `routing-artifact.md`).
+5. **Artifact** — emit (`routing-artifact.md`): `{selected, tier, chain:[{eidolon, role, hand_off_artifact_path, edge_origin}], model_tier_per_step, confidence, assumptions, clarification_request?, refusal_rerouting}`.
 <!-- always-loaded:end -->
 
 ---
