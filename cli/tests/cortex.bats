@@ -138,9 +138,9 @@ restore_cortex_source() {
   fi
 }
 
-@test "cortex: EIDOLONS.md contains dispatch protocol section" {
+@test "cortex: EIDOLONS.md contains dispatch section" {
   REAL_CORTEX="$EIDOLONS_ROOT/EIDOLONS.md"
-  grep -q 'Dispatch Protocol' "$REAL_CORTEX"
+  grep -q '## Dispatch' "$REAL_CORTEX"
 }
 
 @test "cortex: EIDOLONS.md contains chain templates section" {
