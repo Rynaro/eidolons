@@ -10,6 +10,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.2.0] — 2026-09-25 — correct cost and token accounting
+
+Minor: token-budget script gains `--ratio` flag and changes default from 4 to 3 chars/token (reflecting Anthropic's newer tokenizer producing ~30% more tokens); eval scorecard schema gains optional token/cost fields; pricing table corrected and expanded.
+
+### Added
+- `scripts/token-budget-check.sh`: new `--ratio` flag for configurable chars-per-token divisor. Default changed from 4 to 3 to reflect Anthropic's newer tokenizer (Claude 4.7+) which produces ~30% more tokens for the same text.
+- `schemas/eval-scorecard.schema.json`: optional `token_usage` (input, output, cache_creation, cache_read), `estimated_cost_usd`, and `pricing_source` fields at top-level and per-task.
+- `methodology/cortex/routing-artifact.md`: new deep table documenting the routing artifact schema (Step 5 output format, field details, examples).
+- `roster/pricing.yaml`: 10 new models added (claude-fable-5-1, claude-opus-5-5, claude-sonnet-5, claude-haiku-4-5, claude-opus-5/4-7/4-6/4-5, claude-sonnet-4-5, claude-fable-5) with verified prices.
+- `cli/tests/token_budget.bats`: AC-D07 tests for `--ratio` flag.
+
+### Changed
+- `scripts/token-budget-check.sh`: default `--ratio` changed from 4 to 3 (newer tokenizer baseline).
+- `.github/workflows/ci.yml`: cortex-token-budget step comments updated to reference `chars/3`.
+- `EIDOLONS.md`: always-loaded region compacted from 3342 to 2491 chars (1114 to 831 tokens at ratio 3) — format-only compaction, all routing semantics preserved. Step 5 artifact now references `routing-artifact.md` deep table.
+- `methodology/cortex/README.md`: added `routing-artifact.md` to deep table index.
+- `cli/tests/cortex.bats`: test updated to match shortened "Dispatch" section heading.
+- `cli/tests/fixtures/token-budget/bpe-reference.md`: updated note to reflect new default ratio.
+- `cli/tests/telemetry_report.bats`, `cli/tests/telemetry_budget.bats`, `cli/tests/telemetry_export.bats`: test fixtures updated for corrected pricing.
+
+### Fixed
+- `roster/pricing.yaml`: corrected `claude-opus-4-8` prices from retired $15/$75 to official $5/$25 (input/output per 1M tokens). Cache prices corrected proportionally.
+
 ## [4.1.0] — 2026-09-22 — Cursor sessionStart harness + first-class Agents/Skills
 
 Minor: Cursor host gains fail-open `sessionStart` route injection via project hooks, plus first-class `.cursor/agents/` and `.cursor/skills/` adapter surfaces (EIIS 3.1 §4.1). Ordinary install and static `.mdc` remain; `--strict cursor` stays refused.
