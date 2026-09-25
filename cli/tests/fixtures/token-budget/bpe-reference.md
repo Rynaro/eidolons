@@ -9,6 +9,12 @@ call a live tokenizer — it diffs the recorded fixture numbers, which is
 what AC-D06 explicitly requires ("recorded fixture comparison, not a
 live BPE call").
 
+NOTE (2026-09-25): Anthropic's newer tokenizer (Claude 4.7+) produces ~30%
+more tokens for the same text. The script now supports `--ratio N` to adjust
+the chars-per-token divisor: use `--ratio 4` for older models (default),
+`--ratio 3` for newer models. The cl100k_base reference below is still valid
+for comparison purposes as a baseline.
+
 Recorded reference (regenerate with:
 `python3 -c "import tiktoken; print(len(tiktoken.get_encoding('cl100k_base').encode(open('/dev/stdin').read())))" < region.txt`
 against the exact bytes between the markers below):
@@ -17,7 +23,8 @@ against the exact bytes between the markers below):
 - cl100k_base_reference_tokens (measured on the decoded unicode text — one
   "—" em dash accounts for the 2-byte gap vs a 793-codepoint count): 184
 - chars/4 proxy (ceil(795/4)): 199
-- proxy/reference ratio: 199/184 = 1.0815 (within the +/-15% band: 0.85-1.15)
+- chars/3 proxy (ceil(795/3)): 265 (for newer tokenizers)
+- proxy/reference ratio (chars/4): 199/184 = 1.0815 (within the +/-15% band: 0.85-1.15)
 
 <!-- always-loaded:start -->
 Add a `--json` flag to `cli/src/status.sh` and update

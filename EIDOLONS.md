@@ -11,11 +11,12 @@
 > tables loaded on demand.
 >
 > The `<!-- always-loaded:start/end -->` pair below marks the byte range a
-> mechanical CI check counts against the I-C4 ≤900-token budget (proxy
-> `ceil(chars/4)`, CI fails > 850 to leave headroom — see
-> `.github/workflows/ci.yml` "cortex-token-budget" and
-> `scripts/token-budget-check.sh`). Everything outside the markers is
-> on-demand and does not count.
+> mechanical CI check counts against the I-C4 ≤900-token budget. The check
+> uses a configurable chars-per-token proxy (default `--ratio 4` for older
+> tokenizers; use `--ratio 3` for Claude 4.7+ which produces ~30% more tokens).
+> CI fails > 850 to leave headroom — see `.github/workflows/ci.yml`
+> "cortex-token-budget" and `scripts/token-budget-check.sh`. Everything
+> outside the markers is on-demand and does not count.
 
 ---
 
@@ -141,7 +142,7 @@ When `crystalium` is installed (`grants_to_eidolons: all`), every dispatched Eid
 - **I-C1** — Marker-bounded sections when embedding into shared host files (`<!-- eidolon:cortex start/end -->`).
 - **I-C2** — No `eval` of routing rules; descriptor table is data, dispatch is interpretive.
 - **I-C3** — Capability classes + vendor-neutral tiers only (`light < standard < deep`). Never vendor model names.
-- **I-C4** — Always-loaded section (`<!-- always-loaded:start/end -->`) ≤ 900 tokens; deep tables in `methodology/cortex/`. CI enforces a conservative `chars/4 ≤ 850` proxy ceiling on the marker-bounded bytes.
+- **I-C4** — Always-loaded section (`<!-- always-loaded:start/end -->`) ≤ 900 tokens; deep tables in `methodology/cortex/`. CI enforces a conservative proxy ceiling (default `chars/4 ≤ 850`; use `--ratio 3` for Claude 4.7+ tokenizer).
 - **I-C5** — Refusals are immutable; cortex must never request a refused capability of a target Eidolon.
 - **I-C6** — Same prompt + same context + same roster ⇒ same routing decision.
 - **I-C7** — `roster/index.yaml` is the source of truth; new Eidolons auto-appear, removed Eidolons disappear. `roster/mcps.yaml` is the closed MCP catalogue; `eidolons mcp list|show|install|refresh|uninstall|upgrade|sync|health|run` is the unified verb set (v1.3+).
