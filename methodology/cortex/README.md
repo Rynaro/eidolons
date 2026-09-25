@@ -9,6 +9,7 @@ here.
 
 | File | Contents | Load when |
 |------|----------|-----------|
+| `routing-artifact.md` | Schema and examples for the routing artifact emitted at Dispatch Protocol Step 5 | Emitting or parsing routing artifacts |
 | `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
 | `chain-templates.md` | Full Chain Template table (steps + trigger condition per template) relocated from EIDOLONS.md's always-loaded region | Composing a multi-Eidolon chain (Dispatch Protocol Step 2 chain branch) |
 | `trance-matrix.md` | TRANCE Activation Gates (G1–G6, relocated from EIDOLONS.md), per-Eidolon TRANCE capability matrix, cost ceiling rules, refusal gates | Evaluating or authorizing an TRANCE escalation |
