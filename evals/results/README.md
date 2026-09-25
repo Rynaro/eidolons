@@ -28,6 +28,18 @@ It compares every non-control arm against the first `control: true` arm:
 resolved-rate delta, pass^k delta, and a per-task flip table (newly-resolved /
 regressed). Scorecards conform to `../../schemas/eval-scorecard.schema.json`.
 
+## Token usage and cost tracking (optional)
+
+Scorecards may include optional token usage and estimated cost fields:
+
+- `token_usage` — Aggregate token counts (input, output, cache_creation, cache_read)
+- `estimated_cost_usd` — Estimated cost calculated from `roster/pricing.yaml`
+- `pricing_source` — Identifies which pricing file/version was used
+
+These fields are also available per-task in the `tasks[]` array. When present,
+`pricing_source` should include the pricing file path, schema version, and the
+`as_of` date the prices were last verified. See the schema for details.
+
 Re-running the same `(date, suite, label)` on the same UTC day overwrites the
 prior file for that day — this store is a daily log, not a run-by-run
 archive. Pass `--no-store` to `eidolons eval swe --matrix` to skip writing
