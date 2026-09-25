@@ -8,6 +8,7 @@
 #   AC-D04  relocated deep tables (chain templates, TRANCE activation gates)
 #           sit outside the always-loaded markers, under methodology/cortex/
 #   AC-D06  chars/4 proxy is within +/-15% of a recorded BPE reference count
+#   AC-D07  --ratio flag allows configurable chars-per-token divisor
 
 load helpers
 
@@ -89,7 +90,9 @@ FIXTURES="$EIDOLONS_ROOT/cli/tests/fixtures/token-budget"
 # ─── AC-D06 — chars/4 proxy within +/-15% of a recorded BPE reference ──────
 
 @test "token-budget: AC-D06 — chars/4 proxy is within +/-15% of the recorded cl100k_base reference" {
-  run bash "$SCRIPT" "$FIXTURES/bpe-reference.md" --ceiling 850
+  # Use --ratio 4 explicitly to test the chars/4 approximation quality
+  # (the default is now ratio 3, but this test validates the proxy vs real BPE)
+  run bash "$SCRIPT" "$FIXTURES/bpe-reference.md" --ceiling 850 --ratio 4
   [ "$status" -eq 0 ]
   proxy="$(echo "$output" | grep -oE 'ceil\) = [0-9]+ tokens' | grep -oE '[0-9]+')"
   [ -n "$proxy" ]
@@ -104,5 +107,29 @@ FIXTURES="$EIDOLONS_ROOT/cli/tests/fixtures/token-budget"
 
 @test "token-budget: AC-D06 — recorded proxy count in the fixture matches what the script measures" {
   run bash "$SCRIPT" "$FIXTURES/bpe-reference.md" --ceiling 850
-  [[ "$output" =~ "proxy(chars/4, ceil) = 199" ]]
+  [[ "$output" =~ "proxy(chars/3, ceil) = 265" ]]
+}
+
+# ─── AC-D07 — --ratio flag tests ──────────────────────────────────────────
+
+@test "token-budget: AC-D07 — default ratio is 3" {
+  run bash "$SCRIPT" "$EIDOLONS_ROOT/EIDOLONS.md"
+  [[ "$output" =~ "chars/3" ]]
+}
+
+@test "token-budget: AC-D07 — --ratio 3 produces higher token count (newer tokenizer simulation)" {
+  run bash "$SCRIPT" "$FIXTURES/bpe-reference.md" --ceiling 850 --ratio 4
+  proxy_4="$(echo "$output" | grep -oE 'ceil\) = [0-9]+ tokens' | grep -oE '[0-9]+')"
+  
+  run bash "$SCRIPT" "$FIXTURES/bpe-reference.md" --ceiling 850 --ratio 3
+  proxy_3="$(echo "$output" | grep -oE 'ceil\) = [0-9]+ tokens' | grep -oE '[0-9]+')"
+  
+  # chars/3 should produce more tokens than chars/4
+  [ "$proxy_3" -gt "$proxy_4" ]
+}
+
+@test "token-budget: AC-D07 — --ratio flag rejects non-integer values" {
+  run bash "$SCRIPT" "$EIDOLONS_ROOT/EIDOLONS.md" --ratio abc
+  [ "$status" -eq 2 ]
+  [[ "$output" =~ "must be a positive integer" ]]
 }

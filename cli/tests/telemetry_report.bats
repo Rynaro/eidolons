@@ -685,10 +685,11 @@ write_row() {
 # GIVEN a row with model=claude-opus-4-8 (in pricing.yaml) and
 #       usage: input=1000000, output=200000, cc=0, cr=0,
 # WHEN  report --json,
-# THEN  by_source.audited.usd > 0 (specifically 1000000*15/1e6 + 200000*75/1e6 = 15+15 = 30.00).
+# THEN  by_source.audited.usd > 0 (specifically 1000000*5/1e6 + 200000*25/1e6 = 5+5 = 10.00).
+# NOTE: Prices updated 2026-09-25 to Anthropic official rates: $5/MTok in, $25/MTok out.
 
 @test "telemetry report P2.1: priced model exposes usd in report --json" {
-  # input=1M @ $15/1M = $15.00; output=200k @ $75/1M = $15.00; total = $30.00.
+  # input=1M @ $5/1M = $5.00; output=200k @ $25/1M = $5.00; total = $10.00.
   write_row "evt-price-r1" "audited" "claude-opus-4-8" 1000000 200000 0 0
 
   local out status=0
@@ -723,11 +724,11 @@ write_row() {
     return 1
   }
 
-  # Specific value check: $30.00 (allow floating-point rounding to ±0.01).
+  # Specific value check: $10.00 (allow floating-point rounding to ±0.01).
   local usd_approx
-  usd_approx="$(printf '%s' "$usd_val" | awk '{d = $1 - 30.0; if (d < 0) d = -d; print (d < 0.01) ? "ok" : "fail"}')"
+  usd_approx="$(printf '%s' "$usd_val" | awk '{d = $1 - 10.0; if (d < 0) d = -d; print (d < 0.01) ? "ok" : "fail"}')"
   [ "$usd_approx" = "ok" ] || {
-    echo "FAIL: expected usd ≈ 30.00 (15+15), got $usd_val" >&2
+    echo "FAIL: expected usd ≈ 10.00 (5+5), got $usd_val" >&2
     return 1
   }
 }

@@ -421,7 +421,8 @@ write_row() {
 }
 
 @test "telemetry export csv: priced model (claude-opus-4-8) has non-empty usd column" {
-  # input=1M @ $15/1M = $15.00; output=0; total = $15.00.
+  # input=1M @ $5/1M = $5.00; output=0; total = $5.00.
+  # NOTE: Prices updated 2026-09-25 to Anthropic official rates: $5/MTok in.
   write_row "evt-csv-priced1" "audited" "claude-opus-4-8" 1000000 0 0 0
 
   local out status=0
@@ -438,20 +439,20 @@ write_row() {
   data_line="$(printf '%s' "$out" | sed -n '2p')"
 
   # usd column (last) must not be empty for a priced model.
-  # It should end with ",15" or ",15.0" (approximately $15.00).
+  # It should end with ",5" or ",5.0" (approximately $5.00).
   case "$data_line" in
     *",")
-      echo "FAIL: CSV usd column is empty for priced model claude-opus-4-8 (expected ~15)" >&2
+      echo "FAIL: CSV usd column is empty for priced model claude-opus-4-8 (expected ~5)" >&2
       echo "Got: $data_line" >&2
       return 1
       ;;
     *)
-      # Non-empty usd — good. Optionally verify it contains "15".
+      # Non-empty usd — good. Optionally verify it contains "5".
       case "$data_line" in
-        *",15"*)
+        *",5"*)
           ;;
         *)
-          echo "WARN: CSV usd for 1M input @ \$15/1M expected ~15, got: $data_line" >&2
+          echo "WARN: CSV usd for 1M input @ \$5/1M expected ~5, got: $data_line" >&2
           ;;
       esac
       ;;
@@ -673,7 +674,8 @@ write_row() {
 }
 
 @test "telemetry export otel: priced model carries eidolons.usd attribute" {
-  # input=1M @ $15/1M = $15.00.
+  # input=1M @ $5/1M = $5.00.
+  # NOTE: Prices updated 2026-09-25 to Anthropic official rates: $5/MTok in.
   write_row "evt-otel-usd1" "audited" "claude-opus-4-8" 1000000 0 0 0 "repo" "main"
 
   local out status=0
@@ -696,7 +698,7 @@ write_row() {
   local is_positive
   is_positive="$(printf '%s' "$usd_val" | awk '{print ($1 > 0) ? "true" : "false"}')"
   [ "$is_positive" = "true" ] || {
-    echo "FAIL: eidolons.usd expected > 0 for 1M input @ \$15/1M, got $usd_val" >&2
+    echo "FAIL: eidolons.usd expected > 0 for 1M input @ \$5/1M, got $usd_val" >&2
     return 1
   }
 }

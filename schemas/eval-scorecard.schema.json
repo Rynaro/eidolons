@@ -32,7 +32,23 @@
           "id": { "type": "string", "minLength": 1 },
           "resolved": { "type": "boolean", "description": "true iff at least one of the k runs reached final=passed." },
           "passes": { "type": "integer", "minimum": 0, "description": "Number of the k runs that reached final=passed." },
-          "attempts": { "type": "integer", "minimum": 1, "description": "k — the number of independent runs attempted for this task." }
+          "attempts": { "type": "integer", "minimum": 1, "description": "k — the number of independent runs attempted for this task." },
+          "token_usage": {
+            "type": "object",
+            "description": "Optional token usage for this task across all k attempts. Omit if not captured.",
+            "properties": {
+              "input_tokens": { "type": "integer", "minimum": 0, "description": "Total input tokens across all attempts." },
+              "output_tokens": { "type": "integer", "minimum": 0, "description": "Total output tokens across all attempts." },
+              "cache_creation_tokens": { "type": "integer", "minimum": 0, "description": "Total cache creation tokens (prompt caching writes)." },
+              "cache_read_tokens": { "type": "integer", "minimum": 0, "description": "Total cache read tokens (prompt caching hits)." }
+            },
+            "additionalProperties": false
+          },
+          "estimated_cost_usd": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Optional estimated cost in USD for this task. Calculated using pricing_source."
+          }
         }
       }
     },
@@ -46,6 +62,32 @@
         "nexus_version": { "type": "string" },
         "smoke": { "type": "boolean", "description": "true iff this arm ran under --smoke (gold_fix reference, no model) — a plumbing-validation run, never a capability claim." }
       }
+    },
+    "token_usage": {
+      "type": "object",
+      "description": "Optional aggregate token usage for the entire arm run. Omit if not captured.",
+      "properties": {
+        "input_tokens": { "type": "integer", "minimum": 0, "description": "Total input tokens across all tasks and attempts." },
+        "output_tokens": { "type": "integer", "minimum": 0, "description": "Total output tokens across all tasks and attempts." },
+        "cache_creation_tokens": { "type": "integer", "minimum": 0, "description": "Total cache creation tokens (prompt caching writes)." },
+        "cache_read_tokens": { "type": "integer", "minimum": 0, "description": "Total cache read tokens (prompt caching hits)." }
+      },
+      "additionalProperties": false
+    },
+    "estimated_cost_usd": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Optional estimated total cost in USD for the arm run. Calculated using pricing_source."
+    },
+    "pricing_source": {
+      "type": "object",
+      "description": "Identifies the pricing data used to calculate estimated_cost_usd. Required when estimated_cost_usd is present.",
+      "properties": {
+        "file": { "type": "string", "description": "Path to the pricing file used, e.g. 'roster/pricing.yaml'." },
+        "schema_version": { "type": "integer", "minimum": 1, "description": "Schema version of the pricing file." },
+        "as_of": { "type": "string", "description": "Date the pricing was verified (ISO 8601 date, e.g. '2026-09-25')." }
+      },
+      "additionalProperties": false
     }
   }
 }

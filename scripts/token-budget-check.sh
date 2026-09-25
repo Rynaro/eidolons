@@ -3,18 +3,29 @@
 #
 # ESL change generalist-eidolon, Track D (R-022/R-023/R-024; AC-D01/D02/D03).
 #
-# Counts a conservative `ceil(char_count / 4)` chars-per-token proxy over the
-# bytes STRICTLY BETWEEN a start/end marker pair (default:
+# Counts a conservative `ceil(char_count / ratio)` chars-per-token proxy over
+# the bytes STRICTLY BETWEEN a start/end marker pair (default:
 # `<!-- always-loaded:start -->` / `<!-- always-loaded:end -->`) and fails
 # (exit 1) when the proxy count exceeds the ceiling (default 850 — a
-# conservative margin under the I-C4 900-token invariant, to absorb
-# chars/4-vs-real-BPE heuristic error).
+# conservative margin under the I-C4 900-token invariant).
+#
+# TOKENIZER NOTE (2026-09-25):
+#   Anthropic's newer tokenizer (Claude 4.7 and later) produces approximately
+#   30% more tokens for the same text compared to the older tokenizer.
+#   Source: https://docs.anthropic.com/en/docs/about-claude/pricing
+#
+#   The --ratio flag (default 4) controls the chars-per-token divisor:
+#     - ratio=4: ~4 chars/token (older tokenizer, e.g. Claude Sonnet 4.6)
+#     - ratio=3: ~3 chars/token (newer tokenizer, e.g. Claude Opus 4.7+)
+#
+#   For a 30% increase in tokens, the exact ratio is 4/1.3 ≈ 3.08.
+#   Use --ratio 3 for a conservative estimate with newer models.
 #
 # Deterministic: two runs on the same bytes give the same count by
 # construction (no external tokenizer call, no network, no randomness).
 #
 # Usage:
-#   token-budget-check.sh <file> [--ceiling N] [--start-marker S] [--end-marker E]
+#   token-budget-check.sh <file> [--ceiling N] [--ratio R] [--start-marker S] [--end-marker E]
 #
 # Exit codes:
 #   0 — proxy count <= ceiling
@@ -27,13 +38,17 @@
 set -euo pipefail
 
 usage() {
-  printf 'Usage: %s <file> [--ceiling N] [--start-marker S] [--end-marker E]\n' "$(basename "$0")" >&2
-  printf 'Default ceiling: 850. Default markers: <!-- always-loaded:start/end -->\n' >&2
+  printf 'Usage: %s <file> [--ceiling N] [--ratio R] [--start-marker S] [--end-marker E]\n' "$(basename "$0")" >&2
+  printf 'Default ceiling: 850. Default ratio: 3. Default markers: <!-- always-loaded:start/end -->\n' >&2
+  printf '\nRatio guidance:\n' >&2
+  printf '  --ratio 3  ~3 chars/token (newer tokenizer, Claude Opus 4.7 and later) [default]\n' >&2
+  printf '  --ratio 4  ~4 chars/token (older tokenizer, Claude Sonnet 4.6 and earlier)\n' >&2
   exit 2
 }
 
 FILE=""
 CEILING=850
+RATIO=3
 START_MARKER="<!-- always-loaded:start -->"
 END_MARKER="<!-- always-loaded:end -->"
 
@@ -41,6 +56,10 @@ while [ "$#" -gt 0 ]; do
   case "$1" in
     --ceiling)
       CEILING="${2:-}"
+      shift 2
+      ;;
+    --ratio)
+      RATIO="${2:-}"
       shift 2
       ;;
     --start-marker)
@@ -84,6 +103,18 @@ case "$CEILING" in
     ;;
 esac
 
+case "$RATIO" in
+  ''|*[!0-9]*)
+    printf '[ERROR] --ratio must be a positive integer, got: %s\n' "$RATIO" >&2
+    exit 2
+    ;;
+esac
+
+if [ "$RATIO" -lt 1 ]; then
+  printf '[ERROR] --ratio must be >= 1, got: %s\n' "$RATIO" >&2
+  exit 2
+fi
+
 if ! grep -qF "$START_MARKER" "$FILE"; then
   printf '[ERROR] start marker not found in %s: %s\n' "$FILE" "$START_MARKER" >&2
   exit 2
@@ -109,10 +140,11 @@ awk -v s="$START_MARKER" -v e="$END_MARKER" '
 CHAR_COUNT="$(wc -c < "$REGION_FILE" | tr -d '[:space:]')"
 
 # ceil(a/b) without bc/python — pure integer arithmetic (bash 3.2 safe).
-PROXY_COUNT=$(( (CHAR_COUNT + 3) / 4 ))
+# Formula: ceil(CHAR_COUNT / RATIO) = (CHAR_COUNT + RATIO - 1) / RATIO
+PROXY_COUNT=$(( (CHAR_COUNT + RATIO - 1) / RATIO ))
 
-printf '[token-budget] %s: always-loaded region = %s chars, proxy(chars/4, ceil) = %s tokens (ceiling %s)\n' \
-  "$FILE" "$CHAR_COUNT" "$PROXY_COUNT" "$CEILING" >&2
+printf '[token-budget] %s: always-loaded region = %s chars, proxy(chars/%s, ceil) = %s tokens (ceiling %s)\n' \
+  "$FILE" "$CHAR_COUNT" "$RATIO" "$PROXY_COUNT" "$CEILING" >&2
 
 if [ "$PROXY_COUNT" -gt "$CEILING" ]; then
   printf '[FAIL] always-loaded region proxy token count %s exceeds ceiling %s\n' "$PROXY_COUNT" "$CEILING" >&2

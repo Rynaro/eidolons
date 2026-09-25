@@ -2,7 +2,8 @@
 #
 # Unit: USD per 1 million tokens.
 # Keys: vendor model strings (same strings roster/model-profiles.yaml owns).
-# Date-stamped: 2026-06-13 (Anthropic public pricing).
+# Date-stamped: 2026-09-25 (Anthropic public pricing).
+# Source: https://docs.anthropic.com/en/docs/about-claude/pricing
 #
 # Model-key normalization: strip any trailing [...] suffix before lookup
 # (e.g. "claude-opus-4-8[1m]" → "claude-opus-4-8"). This is handled in
@@ -21,28 +22,80 @@ schema_version: 1
 currency: USD
 
 prices:
+  # ─── Current models ──────────────────────────────────────────────────────
+  # Prices verified 2026-09-25 from https://docs.anthropic.com/en/docs/about-claude/pricing
+
+  claude-fable-5-1:
+    input: 10.00
+    output: 50.00
+    cache_creation: 12.50
+    cache_read: 0.25
+
+  claude-opus-5-5:
+    input: 4.00
+    output: 20.00
+    cache_creation: 5.00
+    cache_read: 0.20
+
+  claude-sonnet-5:
+    input: 2.00
+    output: 10.00
+    cache_creation: 2.50
+    cache_read: 0.20
+
+  claude-haiku-4-5:
+    input: 1.00
+    output: 5.00
+    cache_creation: 1.25
+    cache_read: 0.10
+
+  # ─── Legacy models (still available) ─────────────────────────────────────
+  # Prices verified 2026-09-25 from https://docs.anthropic.com/en/docs/about-claude/pricing
+
+  claude-opus-5:
+    input: 5.00
+    output: 25.00
+    cache_creation: 6.25
+    cache_read: 0.50
+
   claude-opus-4-8:
-    input: 15.00
-    output: 75.00
-    cache_creation: 18.75
-    cache_read: 1.50
+    input: 5.00
+    output: 25.00
+    cache_creation: 6.25
+    cache_read: 0.50
+
+  claude-opus-4-7:
+    input: 5.00
+    output: 25.00
+    cache_creation: 6.25
+    cache_read: 0.50
+
+  claude-opus-4-6:
+    input: 5.00
+    output: 25.00
+    cache_creation: 6.25
+    cache_read: 0.50
+
+  claude-opus-4-5:
+    input: 5.00
+    output: 25.00
+    cache_creation: 6.25
+    cache_read: 0.50
+
   claude-sonnet-4-6:
     input: 3.00
     output: 15.00
     cache_creation: 3.75
     cache_read: 0.30
-  # Other models below — prices NOT populated because they have not been
-  # independently verified from the vendor's current public pricing page.
-  # Until verified + added, telemetry report falls back to tokens for these.
-  #
-  # claude-haiku-4-5:
-  #   input: ?       # maintainer-verify before enabling
-  #   output: ?
-  #   cache_creation: ?
-  #   cache_read: ?
-  #
-  # claude-fable-5:
-  #   input: ?       # maintainer-verify before enabling
-  #   output: ?
-  #   cache_creation: ?
-  #   cache_read: ?
+
+  claude-sonnet-4-5:
+    input: 3.00
+    output: 15.00
+    cache_creation: 3.75
+    cache_read: 0.30
+
+  claude-fable-5:
+    input: 10.00
+    output: 50.00
+    cache_creation: 12.50
+    cache_read: 1.00
