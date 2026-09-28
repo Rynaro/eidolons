@@ -53,7 +53,7 @@ A new/unknown capability class defaults to **standard**.
 
 Vendor model strings live **only** in `roster/model-profiles.yaml` — the sole source of truth for concrete model identifiers (keeping the cortex and every Eidolon vendor-free). Each profile maps the three tiers to a vendor's lineup and declares which hosts its strings are valid for.
 
-Two profiles ship by default (`default_profile: anthropic`):
+Three profiles ship by default (`default_profile: anthropic`):
 
 ```yaml
 profiles:
@@ -71,6 +71,13 @@ profiles:
       light:    gpt-5.6-luna
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
+  cursor:
+    description: "Cursor model tier mapping (Anthropic Claude family IDs)"
+    applies_to_hosts: [cursor]
+    tiers:
+      light:    claude-sonnet-5-thinking-low
+      standard: claude-opus-5-5-medium
+      deep:     claude-opus-5-5-xhigh
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -241,8 +248,10 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 ### Host behavior
 
 - **`claude-code`** → writes `.claude/agents/<id>.md`.
+- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent model configuration](https://docs.cursor.com/agents/subagent) — the `model:` field accepts `inherit` (default, uses parent model) or a specific model ID from the Cursor model picker. Invalid IDs are rejected. The `cursor` profile maps tiers to Cursor-accepted Anthropic model IDs.
 - **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
-- **`copilot`, `cursor`** → no per-agent model concept; model management is a clean **no-op** for these hosts.
+- **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
+- **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.
 
 Legacy `.codex/agents/<id>.md` files are migration artifacts only and are ignored by Codex and by active model wiring. Run `eidolons sync` to create the canonical TOML descriptor; explicit model commands fail with exit `4` while it is missing.
 
@@ -274,5 +283,6 @@ D9 never auto-fixes; it reports and lets you re-run `eidolons model` or `eidolon
 ## Out of scope
 
 - **EIIS install-contract extension** — having each Eidolon's own `install.sh` accept a `--model` flag is a cleaner long-term boundary, deferred to a future EIIS revision; today model wiring is a nexus-only, post-install concern.
-- **opencode model wiring** — pending confirmation of opencode's per-agent frontmatter convention; treated as a no-op for now.
+- **copilot model wiring** — copilot supports a `model` property in `.agent.md` files (VS Code) but the slug syntax (string vs array, model IDs vs display names) varies between VS Code and CLI; treated as a no-op until a validated mapping is established.
+- **opencode model wiring** — opencode uses `provider/model-id#variant` format which requires a distinct mapping structure; treated as a no-op for now.
 - **Additional vendor profiles** — Google Gemini and others are supported by the data model (and validate with zero code change) but are not shipped until a maintainer commits to keeping them current.

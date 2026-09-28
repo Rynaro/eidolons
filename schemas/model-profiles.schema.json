@@ -20,7 +20,7 @@
             "description": { "type": "string" },
             "applies_to_hosts": {
               "type": "array",
-              "items": { "type": "string", "enum": ["claude-code", "codex"] },
+              "items": { "type": "string", "enum": ["claude-code", "codex", "cursor"] },
               "uniqueItems": true
             },
             "tiers": {

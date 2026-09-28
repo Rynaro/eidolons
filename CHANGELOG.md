@@ -10,6 +10,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.3.0] — 2026-09-28 — Cursor model-tier wiring
+
+Minor: model-tier wiring now applies to Cursor. When the CLI writes/updates `.cursor/agents/<member>.md` files, it emits the `model:` field resolved from the member's tier and the active profile, the same way it already does for Claude Code and Codex.
+
+### Added
+- `roster/model-profiles.yaml`: new `cursor` profile mapping tiers to Cursor-accepted Anthropic model IDs (`claude-sonnet-5-thinking-low` → light, `claude-opus-5-5-medium` → standard, `claude-opus-5-5-xhigh` → deep). These IDs match Cursor's model picker; see [Cursor subagent model configuration](https://docs.cursor.com/agents/subagent).
+- `cli/tests/model_wiring.bats`: comprehensive test coverage for Cursor model wiring (tier→model, fallback profile selection, idempotency, profile change, drift handling).
+
+### Changed
+- `cli/src/lib_model_wiring.sh`: Cursor host now wires `.cursor/agents/<id>.md` with sentinel-guarded `model:` field using the same YAML frontmatter patching as Claude Code. Copilot and OpenCode remain explicit no-ops with updated comments explaining the skip (slug format/syntax differences are untested).
+- `schemas/model-profiles.schema.json`: `applies_to_hosts` enum now includes `cursor`.
+- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with a link to Cursor's official subagent model documentation.
+
+### Notes
+- **Copilot**: supports a `model` property in `.agent.md` files but the slug format varies between VS Code and CLI surfaces (string vs array, model IDs vs display names). Left as no-op; explicit comment added to wiring code.
+- **OpenCode**: uses `provider/model-id#variant` format that differs from other hosts. Left as no-op; requires a distinct mapping structure.
+
 ## [4.2.0] — 2026-09-25 — correct cost and token accounting
 
 Minor: token-budget script gains `--ratio` flag and changes default from 4 to 3 chars/token (reflecting Anthropic's newer tokenizer producing ~30% more tokens); eval scorecard schema gains optional token/cost fields; pricing table corrected and expanded.
