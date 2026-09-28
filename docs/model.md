@@ -72,12 +72,12 @@ profiles:
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
   cursor:
-    description: "Cursor model tier mapping (Anthropic Claude family IDs)"
+    description: "Cursor subagent model tier mapping"
     applies_to_hosts: [cursor]
     tiers:
-      light:    claude-sonnet-5-thinking-low
-      standard: claude-opus-5-5-medium
-      deep:     claude-opus-5-5-xhigh
+      light:    composer-2.5
+      standard: inherit
+      deep:     claude-opus-5.5
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -248,7 +248,12 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 ### Host behavior
 
 - **`claude-code`** → writes `.claude/agents/<id>.md`.
-- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent model configuration](https://docs.cursor.com/agents/subagent) — the `model:` field accepts `inherit` (default, uses parent model) or a specific model ID from the Cursor model picker. Invalid IDs are rejected. The `cursor` profile maps tiers to Cursor-accepted Anthropic model IDs.
+- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent documentation](https://cursor.com/docs/subagents). The `model:` field accepts:
+  - `inherit` (default) — uses the same model as the parent agent
+  - A specific model ID — e.g. `composer-2.5`, `claude-opus-5.5`, `gpt-5.6-sol`
+  - Model parameters in square brackets — e.g. `claude-opus-5[effort=high]`, `composer-2.5[fast=false]`
+  
+  The `cursor` profile maps tiers to documented Cursor model IDs. Note that Cursor may override the configured model when team admin restrictions apply, the model isn't available on your plan, or legacy Max Mode is required but not enabled (see [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used)). When multiple agent directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence.
 - **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
 - **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
 - **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.

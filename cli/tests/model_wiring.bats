@@ -214,8 +214,8 @@ EOF
   eidolons model use spectra@deep >/dev/null 2>&1 || true
   local file_model
   file_model="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  # cursor profile deep tier should resolve to claude-opus-5-5-xhigh
-  [ "$file_model" = "claude-opus-5-5-xhigh" ]
+  # cursor profile deep tier should resolve to claude-opus-5.5 (verified at https://cursor.com/docs/subagents)
+  [ "$file_model" = "claude-opus-5.5" ]
 }
 
 @test "model wiring: cursor selects its compatible profile when models is absent" {
@@ -224,8 +224,8 @@ EOF
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
   # Without explicit profile, cursor host should auto-select cursor profile
-  # and resolve to deep tier (spectra default) = claude-opus-5-5-xhigh
-  grep -q '^model: claude-opus-5-5-xhigh$' .cursor/agents/spectra.md
+  # and resolve to deep tier (spectra default) = claude-opus-5.5 (verified at https://cursor.com/docs/subagents)
+  grep -q '^model: claude-opus-5.5$' .cursor/agents/spectra.md
 }
 
 @test "model wiring: cursor write is byte-idempotent" {
@@ -253,12 +253,14 @@ EOF
   eidolons model use spectra@standard >/dev/null 2>&1 || true
   local model_before
   model_before="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  [ "$model_before" = "claude-opus-5-5-medium" ]
+  # cursor standard tier = inherit (verified at https://cursor.com/docs/subagents)
+  [ "$model_before" = "inherit" ]
   # Change tier
   eidolons model use spectra@light >/dev/null 2>&1 || true
   local model_after
   model_after="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  [ "$model_after" = "claude-sonnet-5-thinking-low" ]
+  # cursor light tier = composer-2.5 (verified at https://cursor.com/docs/subagents)
+  [ "$model_after" = "composer-2.5" ]
 }
 
 @test "model wiring: cursor sync preserves hand-authored model: (no sentinel)" {
@@ -292,7 +294,7 @@ EOF
   ! grep -q "user-authored-cursor-model" .cursor/agents/spectra.md
 }
 
-@test "model wiring: removing tier config cleanly removes model block" {
+@test "model wiring: cursor reset + re-sync rewrites model with default tier" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   setup_cursor_project
   cat >> eidolons.yaml <<'EOF'
@@ -302,10 +304,10 @@ EOF
   # Set model first
   eidolons model use spectra@standard >/dev/null 2>&1 || true
   grep -q "# eidolons:managed model" .cursor/agents/spectra.md
-  # Reset
+  # Reset clears per-member tier override
   run eidolons model reset spectra
   [ "$status" -eq 0 ]
-  # Re-sync with default tier should still write a model
+  # Re-sync with default tier (from roster) should still write a model
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
   grep -q "# eidolons:managed model" .cursor/agents/spectra.md

@@ -15,15 +15,17 @@ No changes yet.
 Minor: model-tier wiring now applies to Cursor. When the CLI writes/updates `.cursor/agents/<member>.md` files, it emits the `model:` field resolved from the member's tier and the active profile, the same way it already does for Claude Code and Codex.
 
 ### Added
-- `roster/model-profiles.yaml`: new `cursor` profile mapping tiers to Cursor-accepted Anthropic model IDs (`claude-sonnet-5-thinking-low` → light, `claude-opus-5-5-medium` → standard, `claude-opus-5-5-xhigh` → deep). These IDs match Cursor's model picker; see [Cursor subagent model configuration](https://docs.cursor.com/agents/subagent).
+- `roster/model-profiles.yaml`: new `cursor` profile mapping tiers to documented Cursor model IDs (`composer-2.5` → light, `inherit` → standard, `claude-opus-5.5` → deep). These IDs are verified at [Cursor subagent documentation](https://cursor.com/docs/subagents).
 - `cli/tests/model_wiring.bats`: comprehensive test coverage for Cursor model wiring (tier→model, fallback profile selection, idempotency, profile change, drift handling).
 
 ### Changed
 - `cli/src/lib_model_wiring.sh`: Cursor host now wires `.cursor/agents/<id>.md` with sentinel-guarded `model:` field using the same YAML frontmatter patching as Claude Code. Copilot and OpenCode remain explicit no-ops with updated comments explaining the skip (slug format/syntax differences are untested).
 - `schemas/model-profiles.schema.json`: `applies_to_hosts` enum now includes `cursor`.
-- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with a link to Cursor's official subagent model documentation.
+- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with verified documentation links.
 
 ### Notes
+- **Cursor model field**: accepts `inherit` (default, uses parent model), specific model IDs (e.g. `composer-2.5`, `claude-opus-5.5`), or model IDs with parameters in square brackets (e.g. `claude-opus-5[effort=high]`). Cursor may override the configured model under certain conditions (team admin restrictions, plan limitations, legacy Max Mode requirements). See [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used).
+- **Agent file precedence**: when multiple directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence for name conflicts.
 - **Copilot**: supports a `model` property in `.agent.md` files but the slug format varies between VS Code and CLI surfaces (string vs array, model IDs vs display names). Left as no-op; explicit comment added to wiring code.
 - **OpenCode**: uses `provider/model-id#variant` format that differs from other hosts. Left as no-op; requires a distinct mapping structure.
 

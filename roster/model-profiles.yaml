@@ -27,9 +27,9 @@ profiles:
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
   cursor:
-    description: "Cursor model tier mapping (Anthropic Claude family IDs)"
+    description: "Cursor subagent model tier mapping (see https://cursor.com/docs/subagents)"
     applies_to_hosts: [cursor]
     tiers:
-      light:    claude-sonnet-5-thinking-low
-      standard: claude-opus-5-5-medium
-      deep:     claude-opus-5-5-xhigh
+      light:    composer-2.5
+      standard: inherit
+      deep:     claude-opus-5.5
