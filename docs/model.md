@@ -53,7 +53,7 @@ A new/unknown capability class defaults to **standard**.
 
 Vendor model strings live **only** in `roster/model-profiles.yaml` — the sole source of truth for concrete model identifiers (keeping the cortex and every Eidolon vendor-free). Each profile maps the three tiers to a vendor's lineup and declares which hosts its strings are valid for.
 
-Two profiles ship by default (`default_profile: anthropic`):
+Three profiles ship by default (`default_profile: anthropic`):
 
 ```yaml
 profiles:
@@ -71,6 +71,13 @@ profiles:
       light:    gpt-5.6-luna
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
+  cursor:
+    description: "Cursor subagent model tier mapping (cross-vendor)"
+    applies_to_hosts: [cursor]
+    tiers:
+      light:    gemini-3.8-flash
+      standard: composer-2.5
+      deep:     claude-fable-5-1
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -241,8 +248,23 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 ### Host behavior
 
 - **`claude-code`** → writes `.claude/agents/<id>.md`.
+- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent documentation](https://cursor.com/docs/subagents) for model field syntax. The `model:` field accepts:
+  - `inherit` (default) — uses the same model as the parent agent
+  - A specific model ID — e.g. `gemini-3.8-flash`, `composer-2.5`, `claude-fable-5-1`
+  - Model parameters in square brackets — e.g. `claude-fable-5-1[effort=high]` to pin reasoning effort
+  
+  The `cursor` profile selects the best model for each tier across all vendors Cursor offers (Cursor's Composer, Google Gemini, Anthropic Claude, OpenAI GPT, etc.). IDs checked against Cursor's model catalog on 2026-09-28 (the pricing page lists display names only). Note that Cursor may override the configured model when team admin restrictions apply, the model isn't available on your plan, or legacy Max Mode is required but not enabled (see [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used)). When multiple agent directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence.
+
+  **Cursor tier model selection** (IDs checked against Cursor model catalog 2026-09-28):
+
+  | Tier | Model | Why chosen | Runner-up |
+  |------|-------|------------|-----------|
+  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities | `gpt-5.6-luna` |
+  | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` |
+  | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work | `claude-opus-5-5` |
 - **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
-- **`copilot`, `cursor`** → no per-agent model concept; model management is a clean **no-op** for these hosts.
+- **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
+- **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.
 
 Legacy `.codex/agents/<id>.md` files are migration artifacts only and are ignored by Codex and by active model wiring. Run `eidolons sync` to create the canonical TOML descriptor; explicit model commands fail with exit `4` while it is missing.
 
@@ -274,5 +296,6 @@ D9 never auto-fixes; it reports and lets you re-run `eidolons model` or `eidolon
 ## Out of scope
 
 - **EIIS install-contract extension** — having each Eidolon's own `install.sh` accept a `--model` flag is a cleaner long-term boundary, deferred to a future EIIS revision; today model wiring is a nexus-only, post-install concern.
-- **opencode model wiring** — pending confirmation of opencode's per-agent frontmatter convention; treated as a no-op for now.
+- **copilot model wiring** — copilot supports a `model` property in `.agent.md` files (VS Code) but the slug syntax (string vs array, model IDs vs display names) varies between VS Code and CLI; treated as a no-op until a validated mapping is established.
+- **opencode model wiring** — opencode uses `provider/model-id#variant` format which requires a distinct mapping structure; treated as a no-op for now.
 - **Additional vendor profiles** — Google Gemini and others are supported by the data model (and validate with zero code change) but are not shipped until a maintainer commits to keeping them current.

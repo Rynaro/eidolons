@@ -8,7 +8,7 @@
 #   IDEMPOTENT     repeat use with same value is byte-identical (no write)
 #   PROFILE-REWRITE profile openai re-resolves all members
 #   COPILOT-NOOP   copilot-only project exits 0, no model: written
-#   CURSOR-NOOP    cursor: no model: written
+#   CURSOR-WIRES   cursor host gets .cursor/agents/<id>.md managed model:
 #   CODEX-WIRES    codex host gets .codex/agents/<id>.toml managed assignment
 #   DRIFT-PRESERVE sync-time preserves hand-authored model: (warn)
 #   DRIFT-CLOBBER  explicit use clobbers hand-authored model:
@@ -163,10 +163,9 @@ EOF
   [ ! -f ".claude/agents/spectra.md" ] || ! grep -q "eidolons:managed" .claude/agents/spectra.md 2>/dev/null
 }
 
-# ─── CURSOR-NOOP ──────────────────────────────────────────────────────────────
+# ─── CURSOR-WIRES ─────────────────────────────────────────────────────────────
 
-@test "model wiring: cursor host is a no-op (exit 0)" {
-  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+setup_cursor_project() {
   cat > eidolons.yaml <<'EOF'
 version: 1
 hosts:
@@ -175,8 +174,143 @@ members:
   - name: spectra
     version: "^4.0.0"
 EOF
+  mkdir -p .cursor/agents
+  _write_agent_file .cursor/agents/spectra.md
+}
+
+@test "model wiring: cursor host writes model: to .cursor/agents/spectra.md" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
+  [ -f ".cursor/agents/spectra.md" ]
+  grep -q "# eidolons:managed model" .cursor/agents/spectra.md
+}
+
+@test "model wiring: cursor sentinel is followed by model: line" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  eidolons model use spectra@standard >/dev/null 2>&1 || true
+  local model_line
+  model_line="$(awk '/^# eidolons:managed model/{getline; print}' .cursor/agents/spectra.md)"
+  [[ "$model_line" =~ "model:" ]]
+}
+
+@test "model wiring: cursor profile resolves to cursor-profile tier models" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  eidolons model use spectra@deep >/dev/null 2>&1 || true
+  local file_model
+  file_model="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  # cursor profile deep tier should resolve to claude-fable-5-1 (checked against Cursor model catalog 2026-09-28)
+  [ "$file_model" = "claude-fable-5-1" ]
+}
+
+@test "model wiring: cursor selects its compatible profile when models is absent" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  # Without explicit profile, cursor host should auto-select cursor profile
+  # and resolve to deep tier (spectra default) = claude-fable-5-1 (checked against Cursor model catalog 2026-09-28)
+  grep -q '^model: claude-fable-5-1$' .cursor/agents/spectra.md
+}
+
+@test "model wiring: cursor write is byte-idempotent" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  eidolons model use spectra@deep >/dev/null 2>&1
+  local before after
+  before="$(cat .cursor/agents/spectra.md)"
+  eidolons model use spectra@deep >/dev/null 2>&1
+  after="$(cat .cursor/agents/spectra.md)"
+  [ "$before" = "$after" ]
+}
+
+@test "model wiring: cursor profile change re-resolves model" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  eidolons model use spectra@standard >/dev/null 2>&1 || true
+  local model_before
+  model_before="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  # cursor standard tier = composer-2.5 (checked against Cursor model catalog 2026-09-28)
+  [ "$model_before" = "composer-2.5" ]
+  # Change tier
+  eidolons model use spectra@light >/dev/null 2>&1 || true
+  local model_after
+  model_after="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  # cursor light tier = gemini-3.8-flash (checked against Cursor model catalog 2026-09-28)
+  [ "$model_after" = "gemini-3.8-flash" ]
+}
+
+@test "model wiring: cursor sync preserves hand-authored model: (no sentinel)" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  _write_agent_file .cursor/agents/spectra.md "model: user-authored-cursor-model"
+  local before
+  before="$(cat .cursor/agents/spectra.md)"
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  local after
+  after="$(cat .cursor/agents/spectra.md)"
+  [ "$before" = "$after" ]
+}
+
+@test "model wiring: cursor explicit use clobbers hand-authored model:" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  _write_agent_file .cursor/agents/spectra.md "model: user-authored-cursor-model"
+  run eidolons model use spectra@standard
+  [ "$status" -eq 0 ]
+  grep -q "# eidolons:managed model" .cursor/agents/spectra.md
+  ! grep -q "user-authored-cursor-model" .cursor/agents/spectra.md
+}
+
+@test "model wiring: cursor reset + re-sync rewrites model with default tier" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor
+EOF
+  # Set model first
+  eidolons model use spectra@standard >/dev/null 2>&1 || true
+  grep -q "# eidolons:managed model" .cursor/agents/spectra.md
+  # Reset clears per-member tier override
+  run eidolons model reset spectra
+  [ "$status" -eq 0 ]
+  # Re-sync with default tier (from roster) should still write a model
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
+  [ "$status" -eq 0 ]
+  grep -q "# eidolons:managed model" .cursor/agents/spectra.md
 }
 
 # ─── CODEX-WIRES ──────────────────────────────────────────────────────────────

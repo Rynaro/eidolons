@@ -23,8 +23,12 @@
 #   explicit command: clobber mode → replace any existing model: with managed block.
 #   doctor:           reports drift; does not auto-fix.
 #
-# Host support: Claude YAML frontmatter (.md) + Codex top-level TOML (.toml).
-# Explicit NO-OP for copilot, cursor, opencode.
+# Host support:
+#   claude-code  YAML frontmatter (.claude/agents/<id>.md)
+#   cursor       YAML frontmatter (.cursor/agents/<id>.md) — see §model configuration
+#                in Cursor docs: https://docs.cursor.com/agents/subagent
+#   codex        top-level TOML (.codex/agents/<id>.toml)
+# Explicit NO-OP for copilot and opencode (model slug syntax untested).
 #
 # Bash 3.2 compatible — no declare -A, no ${var,,}/^^, no readarray/mapfile, no &>>.
 # ═══════════════════════════════════════════════════════════════════════════
@@ -346,6 +350,14 @@ model_wiring_patch_agent_file() {
       }
       info "model wiring: $(basename "$agent_file") → $effective_model (host=$host)"
       ;;
+    cursor)
+      _model_wiring_patch_frontmatter "$agent_file" "$effective_model" "$clobber" || {
+        warn "model wiring: patch failed for ${agent_file}"
+        [ "$clobber" = "1" ] && return 1
+        return 0
+      }
+      info "model wiring: $(basename "$agent_file") → $effective_model (host=$host)"
+      ;;
     codex)
       _model_wiring_patch_toml "$agent_file" "$effective_model" "$clobber" || {
         warn "model wiring: patch failed for ${agent_file}"
@@ -354,9 +366,12 @@ model_wiring_patch_agent_file() {
       }
       info "model wiring: $(basename "$agent_file") → $effective_model (host=$host)"
       ;;
-    copilot|cursor|opencode)
-      # Explicit no-op — these hosts have no standardized model: frontmatter field.
-      info "model wiring: $host has no model frontmatter support — no-op"
+    copilot|opencode)
+      # Explicit no-op — copilot supports model: in VS Code but model slug syntax
+      # varies between CLI/IDE surfaces (string vs array); opencode uses
+      # provider/model-id#variant format. Both are skipped until the nexus has a
+      # validated mapping — see docs/model.md.
+      info "model wiring: $host model support is untested — skipping (no model: written)"
       ;;
     *)
       info "model wiring: unknown host '$host' — skipping"
@@ -397,12 +412,15 @@ model_wiring_apply_for_member() {
   for host in $(printf '%s' "$hosts_csv" | tr ',' ' '); do
     [ -z "$host" ] && continue
     case "$host" in
-      copilot|cursor|opencode)
+      copilot|opencode)
         model_wiring_noop_host "$host" "n/a"
         continue
         ;;
       claude-code)
         local agent_file=".claude/agents/${id}.md"
+        ;;
+      cursor)
+        local agent_file=".cursor/agents/${id}.md"
         ;;
       codex)
         local agent_file=".codex/agents/${id}.toml"

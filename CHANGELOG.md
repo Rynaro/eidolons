@@ -10,6 +10,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.3.0] — 2026-09-28 — Cursor model-tier wiring
+
+Minor: model-tier wiring now applies to Cursor. When the CLI writes/updates `.cursor/agents/<member>.md` files, it emits the `model:` field resolved from the member's tier and the active profile, the same way it already does for Claude Code and Codex.
+
+### Added
+- `roster/model-profiles.yaml`: new `cursor` profile selecting the best model for each tier across all vendors Cursor offers. IDs checked against Cursor's model catalog on 2026-09-28:
+
+  | Tier | Model | Why chosen | Runner-up |
+  |------|-------|------------|-----------|
+  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities | `gpt-5.6-luna` |
+  | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` |
+  | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work | `claude-opus-5-5` |
+
+- `cli/tests/model_wiring.bats`: comprehensive test coverage for Cursor model wiring (tier→model, fallback profile selection, idempotency, profile change, drift handling).
+
+### Changed
+- `cli/src/lib_model_wiring.sh`: Cursor host now wires `.cursor/agents/<id>.md` with sentinel-guarded `model:` field using the same YAML frontmatter patching as Claude Code. Copilot and OpenCode remain explicit no-ops with updated comments explaining the skip (slug format/syntax differences are untested).
+- `schemas/model-profiles.schema.json`: `applies_to_hosts` enum now includes `cursor`.
+- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with tier selection rationale.
+
+### Notes
+- **Cursor model field**: accepts `inherit` (default), specific model IDs, or IDs with parameters (e.g. `claude-fable-5-1[effort=high]`). See [Cursor subagent docs](https://cursor.com/docs/subagents) for syntax.
+- **Agent file precedence**: when multiple directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence for name conflicts.
+- **Copilot**: supports a `model` property in `.agent.md` files but the slug format varies between VS Code and CLI surfaces. Left as no-op.
+- **OpenCode**: uses `provider/model-id#variant` format that differs from other hosts. Left as no-op.
+
 ## [4.2.0] — 2026-09-25 — correct cost and token accounting
 
 Minor: token-budget script gains `--ratio` flag and changes default from 4 to 3 chars/token (reflecting Anthropic's newer tokenizer producing ~30% more tokens); eval scorecard schema gains optional token/cost fields; pricing table corrected and expanded.
