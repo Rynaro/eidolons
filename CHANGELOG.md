@@ -15,26 +15,26 @@ No changes yet.
 Minor: model-tier wiring now applies to Cursor. When the CLI writes/updates `.cursor/agents/<member>.md` files, it emits the `model:` field resolved from the member's tier and the active profile, the same way it already does for Claude Code and Codex.
 
 ### Added
-- `roster/model-profiles.yaml`: new `cursor` profile selecting the best model for each tier across all vendors Cursor offers. Model IDs verified at [Models & Pricing](https://docs.cursor.com/pricing):
+- `roster/model-profiles.yaml`: new `cursor` profile selecting the best model for each tier across all vendors Cursor offers. IDs checked against Cursor's model catalog on 2026-09-28:
 
   | Tier | Model | Why chosen | Runner-up |
   |------|-------|------------|-----------|
-  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities; not hidden | `gpt-5.6-luna` |
+  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities | `gpt-5.6-luna` |
   | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` |
-  | deep | `claude-fable-5.1` | Premium reasoning model (~2.5x Opus cost per docs); strongest for high-stakes work | `claude-opus-5.5` |
+  | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work | `claude-opus-5-5` |
 
 - `cli/tests/model_wiring.bats`: comprehensive test coverage for Cursor model wiring (tier→model, fallback profile selection, idempotency, profile change, drift handling).
 
 ### Changed
 - `cli/src/lib_model_wiring.sh`: Cursor host now wires `.cursor/agents/<id>.md` with sentinel-guarded `model:` field using the same YAML frontmatter patching as Claude Code. Copilot and OpenCode remain explicit no-ops with updated comments explaining the skip (slug format/syntax differences are untested).
 - `schemas/model-profiles.schema.json`: `applies_to_hosts` enum now includes `cursor`.
-- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with verified documentation links and tier selection rationale.
+- `docs/model.md`: updated host behavior documentation; Cursor is now a first-class wired host with tier selection rationale.
 
 ### Notes
-- **Cursor model field**: accepts `inherit` (default, uses parent model), specific model IDs (e.g. `gemini-3.8-flash`, `composer-2.5`, `claude-fable-5.1`), or model IDs with parameters in square brackets (e.g. `claude-opus-5[effort=high]`). Cursor may override the configured model under certain conditions (team admin restrictions, plan limitations, legacy Max Mode requirements). See [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used).
+- **Cursor model field**: accepts `inherit` (default), specific model IDs, or IDs with parameters (e.g. `claude-fable-5-1[effort=high]`). See [Cursor subagent docs](https://cursor.com/docs/subagents) for syntax.
 - **Agent file precedence**: when multiple directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence for name conflicts.
-- **Copilot**: supports a `model` property in `.agent.md` files but the slug format varies between VS Code and CLI surfaces (string vs array, model IDs vs display names). Left as no-op; explicit comment added to wiring code.
-- **OpenCode**: uses `provider/model-id#variant` format that differs from other hosts. Left as no-op; requires a distinct mapping structure.
+- **Copilot**: supports a `model` property in `.agent.md` files but the slug format varies between VS Code and CLI surfaces. Left as no-op.
+- **OpenCode**: uses `provider/model-id#variant` format that differs from other hosts. Left as no-op.
 
 ## [4.2.0] — 2026-09-25 — correct cost and token accounting
 

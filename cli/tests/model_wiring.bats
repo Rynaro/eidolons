@@ -214,8 +214,8 @@ EOF
   eidolons model use spectra@deep >/dev/null 2>&1 || true
   local file_model
   file_model="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  # cursor profile deep tier should resolve to claude-fable-5.1 (verified at https://docs.cursor.com/pricing)
-  [ "$file_model" = "claude-fable-5.1" ]
+  # cursor profile deep tier should resolve to claude-fable-5-1 (checked against Cursor model catalog 2026-09-28)
+  [ "$file_model" = "claude-fable-5-1" ]
 }
 
 @test "model wiring: cursor selects its compatible profile when models is absent" {
@@ -224,8 +224,8 @@ EOF
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
   # Without explicit profile, cursor host should auto-select cursor profile
-  # and resolve to deep tier (spectra default) = claude-fable-5.1 (verified at https://docs.cursor.com/pricing)
-  grep -q '^model: claude-fable-5.1$' .cursor/agents/spectra.md
+  # and resolve to deep tier (spectra default) = claude-fable-5-1 (checked against Cursor model catalog 2026-09-28)
+  grep -q '^model: claude-fable-5-1$' .cursor/agents/spectra.md
 }
 
 @test "model wiring: cursor write is byte-idempotent" {
@@ -253,13 +253,13 @@ EOF
   eidolons model use spectra@standard >/dev/null 2>&1 || true
   local model_before
   model_before="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  # cursor standard tier = composer-2.5 (verified at https://docs.cursor.com/pricing)
+  # cursor standard tier = composer-2.5 (checked against Cursor model catalog 2026-09-28)
   [ "$model_before" = "composer-2.5" ]
   # Change tier
   eidolons model use spectra@light >/dev/null 2>&1 || true
   local model_after
   model_after="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
-  # cursor light tier = gemini-3.8-flash (verified at https://docs.cursor.com/pricing)
+  # cursor light tier = gemini-3.8-flash (checked against Cursor model catalog 2026-09-28)
   [ "$model_after" = "gemini-3.8-flash" ]
 }
 
