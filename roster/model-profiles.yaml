@@ -27,9 +27,9 @@ profiles:
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
   cursor:
-    description: "Cursor subagent model tier mapping (see https://cursor.com/docs/subagents)"
+    description: "Cursor subagent model tier mapping (cross-vendor, see https://docs.cursor.com/pricing)"
     applies_to_hosts: [cursor]
     tiers:
-      light:    composer-2.5
-      standard: inherit
-      deep:     claude-opus-5.5
+      light:    gemini-3.8-flash
+      standard: composer-2.5
+      deep:     claude-fable-5.1

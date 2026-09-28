@@ -72,12 +72,12 @@ profiles:
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
   cursor:
-    description: "Cursor subagent model tier mapping"
+    description: "Cursor subagent model tier mapping (cross-vendor)"
     applies_to_hosts: [cursor]
     tiers:
-      light:    composer-2.5
-      standard: inherit
-      deep:     claude-opus-5.5
+      light:    gemini-3.8-flash
+      standard: composer-2.5
+      deep:     claude-fable-5.1
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -248,12 +248,20 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 ### Host behavior
 
 - **`claude-code`** → writes `.claude/agents/<id>.md`.
-- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent documentation](https://cursor.com/docs/subagents). The `model:` field accepts:
+- **`cursor`** → writes `.cursor/agents/<id>.md`. See [Cursor subagent documentation](https://cursor.com/docs/subagents) and [Models & Pricing](https://docs.cursor.com/pricing). The `model:` field accepts:
   - `inherit` (default) — uses the same model as the parent agent
-  - A specific model ID — e.g. `composer-2.5`, `claude-opus-5.5`, `gpt-5.6-sol`
+  - A specific model ID — e.g. `composer-2.5`, `gemini-3.8-flash`, `claude-fable-5.1`, `gpt-5.6-sol`
   - Model parameters in square brackets — e.g. `claude-opus-5[effort=high]`, `composer-2.5[fast=false]`
   
-  The `cursor` profile maps tiers to documented Cursor model IDs. Note that Cursor may override the configured model when team admin restrictions apply, the model isn't available on your plan, or legacy Max Mode is required but not enabled (see [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used)). When multiple agent directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence.
+  The `cursor` profile selects the best model for each tier across all vendors Cursor offers (Cursor's Composer, Google Gemini, Anthropic Claude, OpenAI GPT, etc.). See the tier selection table below. Note that Cursor may override the configured model when team admin restrictions apply, the model isn't available on your plan, or legacy Max Mode is required but not enabled (see [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used)). When multiple agent directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence.
+
+  **Cursor tier model selection** (verified from [Models & Pricing](https://docs.cursor.com/pricing)):
+
+  | Tier | Model | Why chosen | Runner-up |
+  |------|-------|------------|-----------|
+  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities; not hidden | `gpt-5.6-luna` (cost/speed optimized) |
+  | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` (mid-tier GPT) |
+  | deep | `claude-fable-5.1` | Premium reasoning model (~2.5x Opus cost per docs); strongest for high-stakes work | `claude-opus-5.5` (flagship Opus) |
 - **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
 - **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
 - **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.
