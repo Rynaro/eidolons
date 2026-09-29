@@ -33,3 +33,12 @@ profiles:
       light:    gemini-3.8-flash
       standard: composer-2.5
       deep:     claude-fable-5-1
+  # Opt-in. Keep this after `cursor`: when `models` is absent, Cursor auto-selects
+  # the first profile whose applies_to_hosts includes `cursor`.
+  cursor-native:
+    description: "Cursor first-party models only (Composer + Grok); stays on the Cursor Models usage pool"
+    applies_to_hosts: [cursor]
+    tiers:
+      light:    composer-2.5[]
+      standard: grok-4.5
+      deep:     grok-4.6

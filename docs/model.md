@@ -53,7 +53,7 @@ A new/unknown capability class defaults to **standard**.
 
 Vendor model strings live **only** in `roster/model-profiles.yaml` — the sole source of truth for concrete model identifiers (keeping the cortex and every Eidolon vendor-free). Each profile maps the three tiers to a vendor's lineup and declares which hosts its strings are valid for.
 
-Three profiles ship by default (`default_profile: anthropic`):
+Four profiles ship by default (`default_profile: anthropic`):
 
 ```yaml
 profiles:
@@ -78,6 +78,13 @@ profiles:
       light:    gemini-3.8-flash
       standard: composer-2.5
       deep:     claude-fable-5-1
+  cursor-native:
+    description: "Cursor first-party models only (Composer + Grok); stays on the Cursor Models usage pool"
+    applies_to_hosts: [cursor]
+    tiers:
+      light:    composer-2.5[]
+      standard: grok-4.5
+      deep:     grok-4.6
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
@@ -255,13 +262,34 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
   
   The `cursor` profile selects the best model for each tier across all vendors Cursor offers (Cursor's Composer, Google Gemini, Anthropic Claude, OpenAI GPT, etc.). IDs checked against Cursor's model catalog on 2026-09-28 (the pricing page lists display names only). Note that Cursor may override the configured model when team admin restrictions apply, the model isn't available on your plan, or legacy Max Mode is required but not enabled (see [model configuration caveats](https://cursor.com/docs/subagents#when-the-configured-model-wont-be-used)). When multiple agent directories exist (`.cursor/`, `.claude/`, `.codex/`), `.cursor/` takes precedence.
 
-  **Cursor tier model selection** (IDs checked against Cursor model catalog 2026-09-28):
+  **Cursor tier model selection** for the mixed `cursor` profile (IDs checked against Cursor model catalog 2026-09-28):
 
   | Tier | Model | Why chosen | Runner-up |
   |------|-------|------------|-----------|
   | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities | `gpt-5.6-luna` |
   | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` |
   | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work | `claude-opus-5-5` |
+
+  **Two Cursor usage pools.** Cursor meters [Cursor Models](https://cursor.com/docs/models) separately from everything else:
+
+  - **Cursor Models** — generous included usage for Composer 2.5 and Grok 4.5 / 4.6 / 4.7.
+  - **Other Models** — tighter limits for Gemini, Claude, GPT, and the rest.
+
+  The mixed `cursor` profile spends Other Models on `gemini-3.8-flash` (light) and `claude-fable-5-1` (deep). Its standard tier, `composer-2.5`, stays on Cursor Models. A Cursor host with no `models` block auto-selects this profile. `default_profile` stays `anthropic`.
+
+  **`cursor-native` (opt-in).** Use this when every subagent should stay on the Cursor Models pool. It is first-party only (Composer + Grok). Select it with `eidolons model profile cursor-native`.
+
+  Prefer `cursor-native` when included Composer/Grok usage is the constraint. Prefer `cursor` when each tier should take the strongest cross-vendor model Cursor offers.
+
+  **`cursor-native` tier model selection:**
+
+  | Tier | Pick | Why | Runner-up |
+  |------|------|-----|-----------|
+  | light | `composer-2.5[]` | Empty brackets force standard Composer 2.5. A bare `composer-2.5` often becomes Fast (~6× cost). Included in the Cursor Models pool. | `grok-4.5` |
+  | standard | `grok-4.5` | First-party Grok on the included pool, above Composer for ordinary reasoning. | `composer-2.5[]` |
+  | deep | `grok-4.6` | Stronger first-party Grok, still on the Cursor Models pool. | `grok-4.5` |
+
+  `grok-4.7` is omitted. Subagent frontmatter with that ID falls back to Auto on local spawn. Prefer `grok-4.5` and `grok-4.6`.
 - **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
 - **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
 - **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.

@@ -8,7 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Added
+- `cursor-native` model profile (`eidolons model profile cursor-native`): Cursor first-party models only, so subagents stay on the Cursor Models usage pool (Composer + Grok). Tiers: `light` → `composer-2.5[]` (empty brackets keep standard Composer 2.5; a bare `composer-2.5` resolves to Fast), `standard` → `grok-4.5`, `deep` → `grok-4.6`. The mixed `cursor` profile is unchanged and remains the auto-select when `models` is absent. `grok-4.7` is omitted because that ID falls back to Auto in subagent frontmatter.
 
 ## [4.3.0] — 2026-09-28 — Cursor model-tier wiring
 

@@ -9,6 +9,7 @@
 #   PROFILE-REWRITE profile openai re-resolves all members
 #   COPILOT-NOOP   copilot-only project exits 0, no model: written
 #   CURSOR-WIRES   cursor host gets .cursor/agents/<id>.md managed model:
+#   CURSOR-NATIVE  cursor-native wires composer-2.5[] / grok-4.5 / grok-4.6
 #   CODEX-WIRES    codex host gets .codex/agents/<id>.toml managed assignment
 #   DRIFT-PRESERVE sync-time preserves hand-authored model: (warn)
 #   DRIFT-CLOBBER  explicit use clobbers hand-authored model:
@@ -311,6 +312,30 @@ EOF
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
   grep -q "# eidolons:managed model" .cursor/agents/spectra.md
+}
+
+@test "model wiring: cursor-native wires Composer and Grok IDs including bracketed light" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_cursor_project
+  cat >> eidolons.yaml <<'EOF'
+models:
+  profile: cursor-native
+EOF
+  eidolons model use spectra@light >/dev/null 2>&1
+  local light
+  light="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  [ "$light" = "composer-2.5[]" ]
+  grep -qF 'model: composer-2.5[]' .cursor/agents/spectra.md
+
+  eidolons model use spectra@standard >/dev/null 2>&1
+  local standard
+  standard="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  [ "$standard" = "grok-4.5" ]
+
+  eidolons model use spectra@deep >/dev/null 2>&1
+  local deep
+  deep="$(awk '/^# eidolons:managed model/{getline; sub(/^model: /,""); print}' .cursor/agents/spectra.md)"
+  [ "$deep" = "grok-4.6" ]
 }
 
 # ─── CODEX-WIRES ──────────────────────────────────────────────────────────────
