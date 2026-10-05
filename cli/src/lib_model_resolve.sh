@@ -60,6 +60,9 @@ model_resolve_init() {
       # Derive path from ROSTER_FILE (set by lib.sh).
       profiles_file="$(dirname "${ROSTER_FILE:-roster/index.yaml}")/model-profiles.yaml"
     fi
+    if [ ! -f "$profiles_file" ]; then
+      profiles_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/roster/model-profiles.yaml"
+    fi
     if [ -f "$profiles_file" ]; then
       PROFILES_JSON="$(yaml_to_json "$profiles_file")"
     else
@@ -72,6 +75,9 @@ model_resolve_init() {
   if [ -z "${ROUTING_JSON:-}" ]; then
     if [ -z "$routing_file" ]; then
       routing_file="$(dirname "${ROSTER_FILE:-roster/index.yaml}")/routing.yaml"
+    fi
+    if [ ! -f "$routing_file" ]; then
+      routing_file="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/roster/routing.yaml"
     fi
     if [ -f "$routing_file" ]; then
       ROUTING_JSON="$(yaml_to_json "$routing_file")"
@@ -236,27 +242,46 @@ model_resolve_for() {
 # profile. Preserve an explicit models.profile, but otherwise choose the first
 # profile that declares the target host. Pins/calibrations retain precedence.
 model_resolve_for_host() {
-  local _id="$1" _host="$2" _explicit _profile _saved _patched _result
-  _explicit=$(printf '%s' "$CONSUMER_JSON" | jq -r '.models.profile // empty' 2>/dev/null || true)
+  local _id="$1" _host="$2" _explicit _profile _saved _patched _result _tier _effort
+  _explicit=$(printf '%s' "$CONSUMER_JSON" | jq -r --arg h "$_host" \
+    '.models.hosts[$h].profile // .models.profile // empty' 2>/dev/null || true)
   if [ -n "$_explicit" ]; then
-    model_resolve_for "$_id"
-    return $?
+    _profile="$_explicit"
+  else
+    _profile=$(printf '%s' "$PROFILES_JSON" | jq -r --arg h "$_host" \
+      '.profiles | to_entries[] | select((.value.applies_to_hosts // []) | any(. == $h)) | .key' \
+      2>/dev/null | head -1 || true)
   fi
-  _profile=$(printf '%s' "$PROFILES_JSON" | jq -r --arg h "$_host" \
-    '.profiles | to_entries[] | select((.value.applies_to_hosts // []) | any(. == $h)) | .key' \
-    2>/dev/null | head -1 || true)
   if [ -z "$_profile" ]; then
-    model_resolve_for "$_id"
-    return $?
+    warn "model_resolve_for_host: no profile supports host '$_host'"
+    return 1
+  fi
+  if ! model_profile_applies_to_host "$_profile" "$_host"; then
+    warn "model_resolve_for_host: profile '$_profile' does not support host '$_host'; set models.hosts.${_host}.profile"
+    return 1
   fi
   _saved="$CONSUMER_JSON"
-  _patched=$(printf '%s' "$CONSUMER_JSON" | jq -c --arg p "$_profile" '.models = (.models // {}) | .models.profile = $p')
+  _patched=$(printf '%s' "$CONSUMER_JSON" | jq -c --arg p "$_profile" --arg h "$_host" --arg id "$_id" '
+    .models = (.models // {}) |
+    .models.profile = $p |
+    .models.calibration = ((.models.calibration // {}) + (.models.hosts[$h].calibration // {})) |
+    .models.members[$id] = ((.models.members[$id] // {}) + (.models.hosts[$h].members[$id] // {}))') || return 1
   CONSUMER_JSON="$_patched"
   export CONSUMER_JSON
   _result=$(model_resolve_for "$_id")
   CONSUMER_JSON="$_saved"
   export CONSUMER_JSON
-  printf '%s\n' "$_result"
+  [ -n "$_result" ] || return 1
+  _tier=$(printf '%s' "$_result" | cut -f2)
+  _effort=$(printf '%s' "$_saved" | jq -r --arg h "$_host" --arg id "$_id" '
+    .models.hosts[$h].members[$id].reasoning_effort //
+    .models.members[$id].reasoning_effort //
+    .models.hosts[$h].reasoning_effort // empty' 2>/dev/null || true)
+  if [ -z "$_effort" ]; then
+    _effort=$(printf '%s' "$PROFILES_JSON" | jq -r --arg p "$_profile" --arg t "$_tier" \
+      '.profiles[$p].reasoning_effort[$t] // empty' 2>/dev/null || true)
+  fi
+  printf '%s\t%s\n' "$_result" "$_effort"
 }
 
 # ─── Utility ──────────────────────────────────────────────────────────────────

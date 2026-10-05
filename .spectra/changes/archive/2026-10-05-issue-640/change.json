@@ -1,0 +1,56 @@
+{
+  "esl_version": "1.1",
+  "change_id": "issue-640",
+  "status": "archived",
+  "tier": "full",
+  "maker": "vivi",
+  "checker": "atlas",
+  "acceptance_checks": [
+    {
+      "id": "R1",
+      "given": "Claude Code, Codex and Cursor with explicit cursor-native global profile",
+      "when": "sync preflights policies",
+      "then": "it rejects uncovered managed hosts before adapter writes",
+      "verify_method": "Mixed-host incident regression in Bats and independent checker review"
+    },
+    {
+      "id": "R2",
+      "given": "Explicit applicable profiles for all three hosts",
+      "when": "sync resolves members",
+      "then": "host-specific policy and lock entries agree",
+      "verify_method": "Mixed-host success, override, opt-out, migration and idempotence regressions"
+    },
+    {
+      "id": "R3",
+      "given": "An expensive Astra parent",
+      "when": "Codex configuration is generated",
+      "then": "named children pin model and effort and unnamed fallback is conservative",
+      "verify_method": "Descriptor/default regression and no-model Codex config/read probe; not live spawning evidence"
+    },
+    {
+      "id": "R4",
+      "given": "Configured policies with missing or changed model/effort",
+      "when": "doctor/model/harness status inspect them",
+      "then": "drift is visible and runtime observation remains unknown",
+      "verify_method": "Doctor drift and status regressions"
+    },
+    {
+      "id": "R5",
+      "given": "Codex routing hooks",
+      "when": "valid events or missing CLI/malformed input/kernel failures occur",
+      "then": "smoke verifies routing injection and failure policy is obeyed with visible diagnostics",
+      "verify_method": "Hook schema, failure-policy matrix and real-kernel no-model local smoke regressions"
+    },
+    {
+      "id": "R6",
+      "given": "Completed implementation",
+      "when": "release gates run",
+      "then": "make check, independent verification and Tonberry block verification pass",
+      "verify_method": "Recorded local test logs, CI and distinct checker receipt"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "drift_checked": true,
+  "archive_path": "archive/2026-10-05-issue-640",
+  "has_code": true
+}

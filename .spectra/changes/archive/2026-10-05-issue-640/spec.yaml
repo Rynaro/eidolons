@@ -1,0 +1,44 @@
+plan:
+  issue: 640
+  release: 4.4.1
+  confidence: 0.92
+  mode: incident-remediation
+  boundaries:
+    planner: {eidolon: spectra, model: gpt-6-astra, effort: medium}
+    implementation: {eidolon: vivi, model: gpt-6-sol}
+    single_writer: true
+    package_model_migration: false
+  steps:
+    - id: resolve
+      files: [cli/src/lib_model_resolve.sh, roster/model-profiles.yaml, schemas/model-profiles.schema.json, schemas/eidolons.yaml.schema.json]
+      deliverable: Complete host-aware policy with preflight validation; preserve shipped model mappings.
+    - id: wire
+      depends_on: [resolve]
+      files: [cli/src/lib_model_wiring.sh, cli/src/sync.sh, cli/src/add.sh, cli/src/upgrade.sh]
+      deliverable: Explicit Codex model and effort, automatic conservative unnamed defaults, and transactional entry points.
+    - id: evidence
+      depends_on: [resolve, wire]
+      files: [schemas/eidolons.lock.schema.json, cli/src/model.sh, cli/src/doctor.sh, cli/src/harness_status.sh]
+      deliverable: Per-host provenance with configured, surface, local-smoke, and unknown runtime evidence distinguished.
+    - id: hooks
+      files: [cli/src/harness_install.sh, cli/src/harness_check.sh, cli/src/harness_status.sh]
+      deliverable: Supported schema, observable failure policy, and executable local smoke.
+    - id: verify
+      depends_on: [wire, evidence, hooks]
+      tests: [cli/tests/model_host_policy.bats, cli/tests/codex_hook_policy.bats, cli/tests/model_resolve.bats, cli/tests/model_wiring.bats, cli/tests/model_cli.bats, cli/tests/doctor.bats, cli/tests/sync.bats, cli/tests/add.bats, cli/tests/upgrade.bats, cli/tests/harness.bats]
+      commands: [targeted bats suites, make check, tonberry verify --mode block]
+      requirements:
+        - Maker differs from checker.
+        - No local smoke labeled runtime-qualified.
+        - No configured model labeled observed.
+    - id: release
+      depends_on: [verify]
+      files: [VERSION, CHANGELOG.md, docs/model.md, docs/cli-reference.md]
+      actions:
+        - Create and attach PR.
+        - Merge after checks.
+        - Dispatch release-nexus.yml with version 4.4.1.
+        - Verify GitHub release tag and assets.
+  deferred_optional:
+    - Deep-tier concurrency ceiling without host enforcement.
+    - Live model calls solely to prove configuration regression.

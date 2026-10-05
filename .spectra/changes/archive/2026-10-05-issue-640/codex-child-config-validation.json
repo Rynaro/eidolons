@@ -1,0 +1,25 @@
+{
+  "parent": {
+    "model": "gpt-6-astra",
+    "model_reasoning_effort": "high"
+  },
+  "configured_children": {
+    "atlas": {
+      "model": "gpt-5.6-terra",
+      "model_reasoning_effort": "medium"
+    },
+    "kupo": {
+      "model": "gpt-5.6-luna",
+      "model_reasoning_effort": "low"
+    },
+    "ramza": {
+      "model": "gpt-5.6-sol",
+      "model_reasoning_effort": "medium"
+    },
+    "vivi": {
+      "model": "gpt-5.6-terra",
+      "model_reasoning_effort": "medium"
+    }
+  },
+  "observation": "configuration-only"
+}

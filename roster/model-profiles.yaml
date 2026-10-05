@@ -26,6 +26,10 @@ profiles:
       light:    gpt-5.6-luna
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
+    reasoning_effort:
+      light:    low
+      standard: medium
+      deep:     medium
   cursor:
     description: "Cursor subagent model tier mapping (cross-vendor, checked against Cursor model catalog 2026-09-28)"
     applies_to_hosts: [cursor]

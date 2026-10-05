@@ -6,6 +6,10 @@ set -euo pipefail
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_resolve.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_wiring.sh"
 
 VERSION_SPEC=""
 NON_INTERACTIVE=false
@@ -53,8 +57,10 @@ done
 # A line append silently placed a member under whichever key happened to be
 # last, and could produce a second members: block. mikefarah/yq preserves the
 # surrounding document structure/comments while editing the members sequence.
+_manifest_tmp="$(mktemp "${PROJECT_MANIFEST}.XXXXXX")"
+cp "$PROJECT_MANIFEST" "$_manifest_tmp"
 for name in "${NAMES[@]}"; do
-  if manifest_members | grep -Fxq "$name"; then
+  if yq -r '.members[].name' "$_manifest_tmp" | grep -Fxq "$name"; then
     info "$name already in eidolons.yaml — skipping manifest update"
     continue
   fi
@@ -64,16 +70,27 @@ for name in "${NAMES[@]}"; do
   spec="${VERSION_SPEC:-^$latest}"
 
   say "Adding $name@$spec to $PROJECT_MANIFEST"
-  _manifest_tmp="$(mktemp "${PROJECT_MANIFEST}.XXXXXX")"
+  _manifest_next="$(mktemp "${PROJECT_MANIFEST}.XXXXXX")"
   if ! EIDOLONS_ADD_NAME="$name" EIDOLONS_ADD_VERSION="$spec" EIDOLONS_ADD_SOURCE="github:$repo" \
       yq eval '.members += [{"name": strenv(EIDOLONS_ADD_NAME), "version": strenv(EIDOLONS_ADD_VERSION), "source": strenv(EIDOLONS_ADD_SOURCE)}]' \
-        "$PROJECT_MANIFEST" > "$_manifest_tmp" \
-      || ! yq eval '.' "$_manifest_tmp" >/dev/null 2>&1; then
-    rm -f "$_manifest_tmp"
+        "$_manifest_tmp" > "$_manifest_next" \
+      || ! yq eval '.' "$_manifest_next" >/dev/null 2>&1; then
+    rm -f "$_manifest_tmp" "$_manifest_next"
     die "Could not update $PROJECT_MANIFEST structurally; it was left unchanged."
   fi
-  mv -f "$_manifest_tmp" "$PROJECT_MANIFEST"
+  mv -f "$_manifest_next" "$_manifest_tmp"
 done
+if ! cmp -s "$_manifest_tmp" "$PROJECT_MANIFEST"; then
+  model_resolve_init "" "" "$_manifest_tmp"
+  if ! model_wiring_preflight_resolution_all || ! model_wiring_preflight_existing_all; then
+    rm -f "$_manifest_tmp"
+    die "Model policy is incomplete; $PROJECT_MANIFEST was left unchanged. Set models.hosts.<host>.profile for each wired host."
+  fi
+  chmod --reference="$PROJECT_MANIFEST" "$_manifest_tmp" 2>/dev/null || true
+  mv -f "$_manifest_tmp" "$PROJECT_MANIFEST"
+else
+  rm -f "$_manifest_tmp"
+fi
 
 # ─── Delegate install to sync ────────────────────────────────────────────
 say "Running sync"

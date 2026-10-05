@@ -17,6 +17,10 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 . "$SELF_DIR/lib.sh"
 # shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_resolve.sh"
+# shellcheck disable=SC1091
+. "$SELF_DIR/lib_model_wiring.sh"
+# shellcheck disable=SC1091
 . "$SELF_DIR/ui/prompt.sh"
 
 CHECK=false
@@ -636,6 +640,9 @@ fi
 
 # Compute hosts wiring + effective dispatch (mirrors sync.sh §codex override).
 MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
+model_resolve_init || die "Could not load model profiles"
+model_wiring_preflight_resolution_all || die "Model profile coverage is incomplete; set models.hosts.<host>.profile before upgrading"
+model_wiring_preflight_existing_all || die "Existing model policy conflicts must be resolved before upgrading"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
 SHARED_DISPATCH="$(echo "$MANIFEST_JSON" | jq -r '.hosts.shared_dispatch // false')"
 EFFECTIVE_SHARED_DISPATCH="$SHARED_DISPATCH"
@@ -650,7 +657,11 @@ SUCCEEDED=""
 while IFS=$'\t' read -r mname mver; do
   [[ -z "$mname" ]] && continue
   if upgrade_install_member "$mname" "$mver" "$HOSTS_CSV" "$EFFECTIVE_SHARED_DISPATCH"; then
-    SUCCEEDED="$SUCCEEDED $mname"
+    if [[ "$DRY_RUN" != true ]] && ! model_wiring_apply_for_member "$mname" 0; then
+      FAILED="$FAILED $mname"
+    else
+      SUCCEEDED="$SUCCEEDED $mname"
+    fi
   else
     FAILED="$FAILED $mname"
   fi
@@ -685,6 +696,9 @@ EOF
   done <<<"$(manifest_members)"
   mv "$LOCK_TMP" "$PROJECT_LOCK"
   chmod 0644 "$PROJECT_LOCK" 2>/dev/null || true
+  for _upgraded in $SUCCEEDED; do
+    model_wiring_update_lock_for_member "$_upgraded" || die "Model provenance lock update failed for $_upgraded"
+  done
   ok "Wrote $PROJECT_LOCK"
 fi
 

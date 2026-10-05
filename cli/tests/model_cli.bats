@@ -38,6 +38,16 @@ EOF
   done
 }
 
+setup_codex_model_project() {
+  setup_model_project
+  yq -i '.hosts.wire = ["codex"]' eidolons.yaml
+  mkdir -p .codex/agents
+  local id
+  for id in atlas spectra apivr; do
+    printf 'name = "%s"\n' "$id" > ".codex/agents/${id}.toml"
+  done
+}
+
 # ─── HELP ─────────────────────────────────────────────────────────────────────
 
 @test "model: --help exits 0" {
@@ -221,14 +231,14 @@ EOF
 
 @test "model profile openai: exits 0" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  setup_model_project
+  setup_codex_model_project
   run eidolons model profile openai
   [ "$status" -eq 0 ]
 }
 
 @test "model profile openai: sets profile in eidolons.yaml" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  setup_model_project
+  setup_codex_model_project
   run eidolons model profile openai
   [ "$status" -eq 0 ]
   local prof
@@ -242,7 +252,7 @@ EOF
 
 @test "model profile openai: refreshes effective model provenance for every lock member" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
-  setup_model_project
+  setup_codex_model_project
   seed_lock
   run eidolons model profile openai
   [ "$status" -eq 0 ]
@@ -325,9 +335,12 @@ members:
 EOF
   mkdir -p .codex/agents
   printf '%s\n' '---' 'model: legacy-only' '---' > .codex/agents/atlas.md
+  local before
+  before="$(cat eidolons.yaml)"
   run eidolons model use atlas@standard
   [ "$status" -eq 4 ]
-  [[ "$output" =~ "required descriptor .codex/agents/atlas.toml not found" ]]
+  [[ "$output" =~ "required descriptor .codex/agents/atlas.toml missing" ]]
+  [ "$(cat eidolons.yaml)" = "$before" ]
   [[ ! "$output" =~ "Re-applied model wiring" ]]
 }
 

@@ -243,6 +243,7 @@ Mechanical hook wiring — writes host-native hook shims so every prompt submitt
 eidolons harness install [--hosts HOST,...] [--strict] [--force]
 eidolons harness remove
 eidolons harness status
+eidolons harness check [--smoke --host codex]
 eidolons harness run --hook <host> [--session-start] [--stdin] [--verify] [--verify-block]
 ```
 
@@ -259,6 +260,8 @@ Writes shim scripts under `.eidolons/harness/hooks/` and merges hooks blocks int
 | `--no-heal` | Skip the seamless `SessionStart`-matcher self-heal during the internal `--refresh-shims-only` refresh (default: heal). |
 
 **Base tier (default):** writes `UserPromptSubmit.sh` + `SessionStart.sh` shims for claude-code and codex; `sessionStart` shim for copilot; `sessionStart` shim + `.cursor/hooks.json` for cursor. Merges a hooks block into `.claude/settings.json` (claude-code) and `.codex/hooks.json` (codex); merges Cursor `sessionStart` into `.cursor/hooks.json` (foreign hooks preserved). OpenCode receives no base shims (surfaces ride `eidolons sync` / plugin).
+
+Set `harness.hook_failure_policy` in `eidolons.yaml` to `fail-open` (default), `warn`, or `fail-closed`. On a routing-hook failure, fail-open records a local event without adding routing context, warn adds visible failure context, and fail-closed returns a blocking hook result. Under fail-closed, empty kernel output blocks any nonempty ordinary prompt; task-completion notifications remain exempt. `eidolons harness check` checks local registration and shim syntax; `eidolons harness check --smoke --host codex` also runs the local SessionStart and UserPromptSubmit shims against a fixed ATLAS prompt without calling a model. It cannot prove Codex invoked the hooks. Codex project hooks in `.codex/hooks.json` require project trust and approval of the exact hook hash through `/hooks`; see the [Codex hooks guide](https://learn.chatgpt.com/docs/hooks). `eidolons harness status` reports runtime qualification and observed hook execution as unknown until there is runtime evidence.
 
 **Strict tier (`--strict`):** adds a `PreToolUse` shim layer on top of the base tier.
 
@@ -353,14 +356,13 @@ Vendor-neutral model management: assign each Eidolon a tier (`light < standard <
 ```
 eidolons model                          # interactive picker (TTY) / usage (non-interactive)
 eidolons model list                     # tier ladder + profiles (active marked) + tier→model maps
-eidolons model show [<eidolon>] [--json]# resolved table: tier · profile · source · effective model
-eidolons model use <eidolon>@<tier>     # set a per-member tier override (light|standard|deep)
-eidolons model use <eidolon>@<model>    # pin a concrete model for one Eidolon (escape hatch)
-eidolons model profile <name>           # switch active profile; re-resolve + re-wire all members
-eidolons model reset [<eidolon>]        # clear a member's override/pin (all + calibration if no arg)
+eidolons model show [<eidolon>] [--host HOST] [--json]
+eidolons model use <eidolon>@<tier|model> [--host HOST]
+eidolons model profile <name> [--host HOST]
+eidolons model reset [<eidolon>] [--host HOST]
 ```
 
-Profiles (the sole home for vendor model strings) live in `roster/model-profiles.yaml`; per-Eidolon suggested tiers live in `roster/routing.yaml`. The resolved effective model is recorded in `eidolons.lock` and written after `# eidolons:managed model` as YAML `model:` in `.claude/agents/<id>.md` or quoted top-level TOML `model = "..."` in `.codex/agents/<id>.toml`; legacy Codex `.md` descriptors are ignored, and copilot/cursor are a no-op. Exit codes: `0` ok · `2` bad args / unknown Eidolon or profile · `3` resolve hard-miss · `4` explicit descriptor or lock-provenance write failed. `eidolons doctor --deep` (gate **D9**) reports descriptor-vs-lock drift. Full reference: [`docs/model.md`](model.md).
+Profiles live in `roster/model-profiles.yaml`; per-Eidolon tiers live in `roster/routing.yaml`. An explicit global profile must cover each managed wired host, or `models.hosts.<host>.profile` must supply a compatible override. Codex named descriptors get both top-level `model` and `model_reasoning_effort`; `members[].model.hosts.<host>` in `eidolons.lock` records each host separately. Managed Codex projects pin unnamed children to the selected profile's light model and effort by default; `models.codex.unnamed_subagents` can override that pair, set a concurrency limit, or opt into parent inheritance with `inherit: true`. `eidolons doctor --deep` (D9) checks descriptor drift. Exit codes: `0` success · `2` bad arguments or unknown target · `3` resolve miss · `4` explicit descriptor or lock write failure. See [`docs/model.md`](model.md) for the three-host migration example and policy precedence.
 
 ---
 

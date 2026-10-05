@@ -8,7 +8,7 @@ PYTHON ?= python3
 PUBLISH ?=
 RELEASE_RECORD ?=
 
-.PHONY: help test test-fast test-file lint schema token-budget check gauge-build gauge-test gauge-package
+.PHONY: help test test-fast test-file test-bash lint schema token-budget check gauge-build gauge-test gauge-package
 
 help:
 	@echo "Targets:"
@@ -28,7 +28,10 @@ help:
 
 # Files are parallelised across; tests within a file stay sequential to
 # match CI's contention profile (harness install + cache fixtures).
-test test-fast:
+test-bash:
+	@bash -c 'if (( BASH_VERSINFO[0] < 4 )); then echo "Bats tests require Bash 4+ for reliable assertion failures; install a modern Bash and put it first on PATH." >&2; exit 2; fi'
+
+test test-fast: test-bash
 	@if [ "$(JOBS)" -gt 1 ]; then \
 	  bats --jobs "$(JOBS)" --no-parallelize-within-files cli/tests/; \
 	else \
@@ -38,7 +41,7 @@ test test-fast:
 # Run a single file (or a single test by name pattern).
 #   make test-file F=cli/tests/init.bats
 #   make test-file F=cli/tests/init.bats P='preset pipeline'
-test-file:
+test-file: test-bash
 	@if [ -z "$(F)" ]; then \
 	  echo "usage: make test-file F=cli/tests/<name>.bats [P='filter']"; \
 	  exit 2; \

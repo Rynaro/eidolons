@@ -2179,7 +2179,7 @@ extract_marker_block() {
   seed_lock
   run eidolons harness install --hosts codex
   [ "$status" -eq 0 ]
-  run jq -e '.hooks.PostToolUse[].command | select(endswith("codex-PostToolUse.sh"))' .codex/hooks.json
+  run jq -e '.hooks.PostToolUse[].hooks[].command | select(endswith("codex-PostToolUse.sh"))' .codex/hooks.json
   [ "$status" -eq 0 ]
 }
 

@@ -1543,7 +1543,7 @@ EOF
 # skills installed). That non-zero is UNRELATED to D9, so D9 correctness is
 # asserted via its own output lines, not the aggregate exit code.
 
-@test "D9: no models block → gate skips entirely" {
+@test "D9: no models block still checks automatic host model policy" {
   export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
   # seed_manifest writes an eidolons.yaml WITHOUT a models: block.
   seed_manifest
@@ -1553,8 +1553,7 @@ EOF
   echo "---" > .claude/agents/atlas.md
 
   run eidolons doctor --deep
-  [[ "$output" =~ "no models block" ]]
-  [[ ! "$output" =~ "D9 atlas" ]]
+  [[ "$output" =~ "D9 atlas (claude-code): no lock model entry" ]]
 }
 
 @test "D9: managed model matches lock effective_model → PASS" {

@@ -125,6 +125,7 @@ EOF
   [ -f .codex/agents/atlas.toml ]
   grep -q '^# eidolons:managed model$' .codex/agents/atlas.toml
   grep -q '^model = "gpt-5.6-terra"$' .codex/agents/atlas.toml
+  grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
   [ -f .codex/agents/spectra.toml ]
   grep -q '^# eidolons:managed model$' .codex/agents/spectra.toml
   grep -q '^model = "gpt-5.6-sol"$' .codex/agents/spectra.toml

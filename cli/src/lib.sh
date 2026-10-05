@@ -2727,6 +2727,12 @@ deep_check_harness_consistency() {
     elif ! jq empty "$codex_hooks" 2>/dev/null; then
       err "D12 .codex/hooks.json is not valid JSON"
       rc=$((rc + 1))
+    elif ! jq -e '
+      ([.hooks.UserPromptSubmit[]?.hooks[]? | select(.type == "command" and .command == ".eidolons/harness/hooks/codex-UserPromptSubmit.sh")] | length > 0) and
+      ([.hooks.SessionStart[]?.hooks[]? | select(.type == "command" and .command == ".eidolons/harness/hooks/codex-SessionStart.sh")] | length > 0)
+    ' "$codex_hooks" >/dev/null 2>&1; then
+      err "D12 .codex/hooks.json lacks documented Eidolons matcher groups/handlers"
+      rc=$((rc + 1))
     fi
   fi
 

@@ -29,13 +29,18 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NON_INTERACTIVE=false
 DRY_RUN=false
 OUT=text
+HOST_FILTER=""
+_expect_host=false
 for _arg in "$@"; do
+  if "$_expect_host"; then HOST_FILTER="$_arg"; _expect_host=false; continue; fi
   case "$_arg" in
     --non-interactive) NON_INTERACTIVE=true ;;
     --dry-run)         DRY_RUN=true ;;
     --json)            OUT=json ;;
+    --host)            _expect_host=true ;;
   esac
 done
+[ "$_expect_host" = "false" ] || die "--host requires a host name"
 export NON_INTERACTIVE DRY_RUN OUT
 
 # ─── Usage ────────────────────────────────────────────────────────────────────
@@ -48,15 +53,16 @@ Usage: eidolons model [<subcommand>] [options]
 Subcommands:
   (bare)                         Interactive guided picker (TTY) / usage (non-interactive)
   list                           List profiles (mark active) + tier ladder + vendor mappings
-  show [<eidolon>]               Show resolved model(s): eidolon | tier | profile | source | effective
+  show [<eidolon>] [--host H]    Show resolved models by wired host
   use <eidolon>@<tier|model>     Set per-member tier override or concrete model pin
-  profile <name>                 Set the active profile; re-resolve all; rewrite frontmatter
+  profile <name> [--host H]      Set global or host-specific profile
   reset [<eidolon>]              Clear member override/pin (all members if no arg)
 
 Options:
   --non-interactive   Never prompt; bare 'model' prints usage and exits 0
   --json              (show/list) machine-readable JSON output
   --dry-run           (use/profile/reset) resolve + print diff; do NOT write lock/frontmatter
+  --host H            Scope show/use/profile/reset to one wired host
   -h, --help          Show this help
 
 Model tiers: light < standard < deep  (vendor-neutral)
@@ -89,6 +95,31 @@ _is_tier() {
     light|standard|deep) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+_preflight_model_candidate() {
+  local candidate="$1" target="${2:-}" old="$CONSUMER_JSON" rc=0 members id
+  CONSUMER_JSON="$candidate"; export CONSUMER_JSON
+  model_wiring_preflight_resolution_all || rc=1
+  model_wiring_codex_defaults check || rc=1
+  if [ -n "$target" ]; then
+    members="$target"
+  elif [ -f "${PROJECT_LOCK:-eidolons.lock}" ]; then
+    members="$(yaml_to_json "${PROJECT_LOCK:-eidolons.lock}" | jq -r '(.members // [])[] | .name' 2>/dev/null || true)"
+  else
+    members="$(printf '%s' "$CONSUMER_JSON" | jq -r '(.members // [])[] | .name' 2>/dev/null || true)"
+  fi
+  while IFS= read -r id; do
+    [ -n "$id" ] || continue
+    model_wiring_preflight_for_member "$id" 1 || rc=1
+  done <<EOF
+$members
+EOF
+  CONSUMER_JSON="$old"; export CONSUMER_JSON
+  if [ "$rc" -ne 0 ]; then
+    warn "Model policy is incomplete or conflicts with a host; no manifest change was made"
+    return 1
+  fi
 }
 
 _assert_eidolon_known() {
@@ -251,8 +282,15 @@ _cmd_show() {
 
     _show_one_json() {
       local id="$1"
-      local rl
-      rl="$(model_resolve_for "$id" 2>/dev/null || true)"
+      local rl hosts='{}' h hl hm ht hp hs he configured only_host
+      only_host="$(printf '%s' "$CONSUMER_JSON" | jq -r '(.hosts.wire // []) | if length == 1 then .[0] else empty end' 2>/dev/null || true)"
+      if [ -n "$HOST_FILTER" ]; then
+        rl="$(model_resolve_for_host "$id" "$HOST_FILTER" 2>/dev/null || true)"
+      elif [ -n "$only_host" ]; then
+        rl="$(model_resolve_for_host "$id" "$only_host" 2>/dev/null || true)"
+      else
+        rl="$(model_resolve_for "$id" 2>/dev/null || true)"
+      fi
       if [ -z "$rl" ]; then
         printf '{"eidolon":"%s","error":"resolve-miss"}' "$id"
         return
@@ -264,9 +302,31 @@ _cmd_show() {
       so="$(printf '%s' "$rl" | cut -f4)"
       local ln
       ln="$(printf '%s' "$ROUTING_JSON" | jq -r --arg id "$id" '.eidolons[$id].loop_native // false' 2>/dev/null || echo false)"
+      for h in $(printf '%s' "$CONSUMER_JSON" | jq -r '(.hosts.wire // [])[]' 2>/dev/null); do
+        [ -n "$HOST_FILTER" ] && [ "$HOST_FILTER" != "$h" ] && continue
+        configured="$(printf '%s' "$CONSUMER_JSON" | jq -r --arg h "$h" 'if .models.hosts[$h].managed == false then false else true end' 2>/dev/null || echo true)"
+        if [ "$configured" = "false" ]; then
+          hosts="$(printf '%s' "$hosts" | jq -c --arg h "$h" '.[$h]={status:"unmanaged"}')"
+          continue
+        fi
+        hl="$(model_resolve_for_host "$id" "$h" 2>/dev/null || true)"
+        if [ -z "$hl" ]; then
+          hosts="$(printf '%s' "$hosts" | jq -c --arg h "$h" '.[$h]={status:"error"}')"
+          continue
+        fi
+        hm="$(printf '%s' "$hl" | cut -f1)"; ht="$(printf '%s' "$hl" | cut -f2)"
+        hp="$(printf '%s' "$hl" | cut -f3)"; hs="$(printf '%s' "$hl" | cut -f4)"
+        he="$(printf '%s' "$hl" | cut -f5)"
+        hosts="$(printf '%s' "$hosts" | jq -c --arg h "$h" --arg m "$hm" --arg t "$ht" --arg p "$hp" --arg s "$hs" --arg e "$he" \
+          '.[$h]={status:"configured",effective_model:$m,tier:$t,profile:$p,source:$s,reasoning_effort:$e}')"
+      done
       printf '%s' "$(jq -n --arg id "$id" --arg em "$em" --arg ti "$ti" \
-                         --arg pr "$pr" --arg so "$so" --argjson ln "$ln" \
-                       '{eidolon:$id,tier:$ti,profile:$pr,source:$so,effective_model:$em,loop_native:$ln}')"
+                         --arg pr "$pr" --arg so "$so" --arg filter "$HOST_FILTER" --argjson ln "$ln" --argjson hosts "$hosts" \
+                       '{eidolon:$id,tier:$ti,
+                         profile:(if $filter == "" and ($hosts | length) > 1 then null else $pr end),
+                         source:(if $filter == "" and ($hosts | length) > 1 then "per-host" else $so end),
+                         effective_model:(if $filter == "" and ($hosts | length) > 1 then null else $em end),
+                         loop_native:$ln,hosts:$hosts}')"
     }
 
     if [ -n "$target_id" ]; then
@@ -297,7 +357,11 @@ _cmd_show() {
   _show_one_row() {
     local id="$1"
     local rl
-    rl="$(model_resolve_for "$id" 2>/dev/null || true)"
+    if [ -n "$HOST_FILTER" ]; then
+      rl="$(model_resolve_for_host "$id" "$HOST_FILTER" 2>/dev/null || true)"
+    else
+      rl="$(model_resolve_for "$id" 2>/dev/null || true)"
+    fi
     if [ -z "$rl" ]; then
       printf '%-12s  %s\n' "$id" "(resolve-miss)"
       return
@@ -312,7 +376,20 @@ _cmd_show() {
     local ln
     ln="$(printf '%s' "$ROUTING_JSON" | jq -r --arg id "$id" '.eidolons[$id].loop_native // empty' 2>/dev/null || true)"
     [ "$ln" = "false" ] && ln_note=" [loop_native:false — deep is benchmark-gated]"
-    printf '%-12s  %-10s  %-12s  %-16s  %s%s\n' "$id" "$ti" "$pr" "$so" "$em" "$ln_note"
+    if [ -n "$HOST_FILTER" ]; then
+      printf '%-12s  %-10s  %-12s  %-16s  %s [%s; effort=%s]%s\n' "$id" "$ti" "$pr" "$so" "$em" "$HOST_FILTER" "$(printf '%s' "$rl" | cut -f5)" "$ln_note"
+    else
+      local h hl
+      for h in $(printf '%s' "$CONSUMER_JSON" | jq -r '(.hosts.wire // [])[]' 2>/dev/null); do
+        hl="$(model_resolve_for_host "$id" "$h" 2>/dev/null || true)"
+        if [ -n "$hl" ]; then
+          printf '%-12s  %-10s  %-12s  %-16s  %s [%s; effort=%s]%s\n' "$id" "$(printf '%s' "$hl" | cut -f2)" \
+            "$(printf '%s' "$hl" | cut -f3)" "$(printf '%s' "$hl" | cut -f4)" "$(printf '%s' "$hl" | cut -f1)" "$h" "$(printf '%s' "$hl" | cut -f5)" "$ln_note"
+        else
+          printf '%-12s  %s [%s]\n' "$id" '(resolution error)' "$h"
+        fi
+      done
+    fi
   }
 
   if [ -n "$target_id" ]; then
@@ -365,16 +442,28 @@ _cmd_use() {
     # Show resolved model under proposed change.
     local old_consumer="$CONSUMER_JSON"
     if _is_tier "$rhs"; then
-      CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" \
-        | jq --arg id "$eid" --arg t "$rhs" \
+      if [ -n "$HOST_FILTER" ]; then
+        CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" --arg id "$eid" --arg t "$rhs" \
+          '.models.hosts[$h].members[$id].tier = $t | del(.models.hosts[$h].members[$id].model)')"
+      else
+        CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq --arg id "$eid" --arg t "$rhs" \
           '.models.members[$id].tier = $t | del(.models.members[$id].model)')"
+      fi
     else
-      CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" \
-        | jq --arg id "$eid" --arg m "$rhs" '.models.members[$id].model = $m')"
+      if [ -n "$HOST_FILTER" ]; then
+        CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" --arg id "$eid" --arg m "$rhs" \
+          '.models.hosts[$h].members[$id].model = $m')"
+      else
+        CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq --arg id "$eid" --arg m "$rhs" '.models.members[$id].model = $m')"
+      fi
     fi
     export CONSUMER_JSON
     local rl
-    rl="$(model_resolve_for "$eid" 2>/dev/null || true)"
+    if [ -n "$HOST_FILTER" ]; then
+      rl="$(model_resolve_for_host "$eid" "$HOST_FILTER" 2>/dev/null || true)"
+    else
+      rl="$(model_resolve_for "$eid" 2>/dev/null || true)"
+    fi
     if [ -n "$rl" ]; then
       local em ti pr so
       em="$(printf '%s' "$rl" | cut -f1)"
@@ -389,14 +478,33 @@ _cmd_use() {
   fi
 
   # Mutate eidolons.yaml.
-  if _is_tier "$rhs"; then
-    _set_manifest_models_field ".models.members.${eid}.tier" "$rhs"
-    _delete_manifest_models_field ".models.members.${eid}.model" 2>/dev/null || true
-    ok "Set models.members.${eid}.tier = ${rhs}"
+  local candidate
+  if [ -n "$HOST_FILTER" ]; then
+    if _is_tier "$rhs"; then
+      candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" --arg id "$eid" --arg v "$rhs" \
+        '.models.hosts[$h].members[$id].tier=$v | del(.models.hosts[$h].members[$id].model)')"
+    else
+      candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" --arg id "$eid" --arg v "$rhs" \
+        '.models.hosts[$h].members[$id].model=$v | del(.models.hosts[$h].members[$id].tier)')"
+    fi
+  elif _is_tier "$rhs"; then
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg id "$eid" --arg v "$rhs" \
+      '.models.members[$id].tier=$v | del(.models.members[$id].model)')"
   else
-    _set_manifest_models_field ".models.members.${eid}.model" "$rhs"
-    _delete_manifest_models_field ".models.members.${eid}.tier" 2>/dev/null || true
-    ok "Set models.members.${eid}.model = ${rhs} (PIN)"
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg id "$eid" --arg v "$rhs" \
+      '.models.members[$id].model=$v | del(.models.members[$id].tier)')"
+  fi
+  _preflight_model_candidate "$candidate" "$eid" || exit 4
+  local member_path=".models.members.${eid}"
+  [ -z "$HOST_FILTER" ] || member_path=".models.hosts.${HOST_FILTER}.members.${eid}"
+  if _is_tier "$rhs"; then
+    _set_manifest_models_field "${member_path}.tier" "$rhs"
+    _delete_manifest_models_field "${member_path}.model" 2>/dev/null || true
+    ok "Set ${member_path}.tier = ${rhs}"
+  else
+    _set_manifest_models_field "${member_path}.model" "$rhs"
+    _delete_manifest_models_field "${member_path}.tier" 2>/dev/null || true
+    ok "Set ${member_path}.model = ${rhs} (PIN)"
   fi
 
   # Reload consumer JSON and re-resolve.
@@ -404,7 +512,11 @@ _cmd_use() {
   export CONSUMER_JSON
 
   local rl
-  rl="$(model_resolve_for "$eid" 2>/dev/null || true)"
+  if [ -n "$HOST_FILTER" ]; then
+    rl="$(model_resolve_for_host "$eid" "$HOST_FILTER" 2>/dev/null || true)"
+  else
+    rl="$(model_resolve_for "$eid" 2>/dev/null || true)"
+  fi
   if [ -z "$rl" ]; then
     warn "Could not resolve model for '$eid' after update."
     exit 3
@@ -446,12 +558,19 @@ _cmd_profile() {
   fi
 
   if "$DRY_RUN"; then
-    printf "[dry-run] Would set models.profile = %s and re-resolve all members.\n" "$pname" >&2
+    printf "[dry-run] Would set models%s.profile = %s and re-resolve all members.\n" "${HOST_FILTER:+.hosts.${HOST_FILTER}}" "$pname" >&2
     return 0
   fi
 
-  _set_manifest_models_field ".models.profile" "$pname"
-  ok "Set models.profile = ${pname}"
+  local candidate
+  if [ -n "$HOST_FILTER" ]; then
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" --arg p "$pname" '.models.hosts[$h].profile=$p')"
+  else
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg p "$pname" '.models.profile=$p')"
+  fi
+  _preflight_model_candidate "$candidate" || exit 4
+  _set_manifest_models_field ".models${HOST_FILTER:+.hosts.${HOST_FILTER}}.profile" "$pname"
+  ok "Set model profile = ${pname}${HOST_FILTER:+ for ${HOST_FILTER}}"
 
   # Reload and re-resolve all members.
   CONSUMER_JSON="$(yaml_to_json "${PROJECT_MANIFEST:-eidolons.yaml}" 2>/dev/null || echo '{}')"
@@ -492,12 +611,23 @@ _cmd_reset() {
     return 0
   fi
 
+  local candidate
   if [ -n "$target_id" ]; then
-    _delete_manifest_models_field ".models.members.${target_id}" 2>/dev/null || true
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg id "$target_id" --arg h "$HOST_FILTER" '
+      if $h == "" then del(.models.members[$id]) else del(.models.hosts[$h].members[$id]) end')"
+  else
+    candidate="$(printf '%s' "$CONSUMER_JSON" | jq --arg h "$HOST_FILTER" '
+      if $h == "" then del(.models.members,.models.calibration)
+      else del(.models.hosts[$h].members,.models.hosts[$h].calibration) end')"
+  fi
+  _preflight_model_candidate "$candidate" "$target_id" || exit 4
+
+  if [ -n "$target_id" ]; then
+    _delete_manifest_models_field ".models${HOST_FILTER:+.hosts.${HOST_FILTER}}.members.${target_id}" 2>/dev/null || true
     ok "Cleared models.members.${target_id} overrides"
   else
-    _delete_manifest_models_field ".models.members" 2>/dev/null || true
-    _delete_manifest_models_field ".models.calibration" 2>/dev/null || true
+    _delete_manifest_models_field ".models${HOST_FILTER:+.hosts.${HOST_FILTER}}.members" 2>/dev/null || true
+    _delete_manifest_models_field ".models${HOST_FILTER:+.hosts.${HOST_FILTER}}.calibration" 2>/dev/null || true
     ok "Cleared all models.members overrides and calibration"
   fi
 
@@ -705,9 +835,12 @@ EOF
 # treats the flag itself as an unknown subcommand). bash 3.2: guard the
 # empty-array expansion against `set -u`.
 _model_args=()
+_skip_model_arg=0
 for _a in "$@"; do
+  if [ "$_skip_model_arg" = "1" ]; then _skip_model_arg=0; continue; fi
   case "$_a" in
     --non-interactive|--dry-run|--json) ;;   # already captured into env vars above
+    --host) _skip_model_arg=1 ;;
     *) _model_args+=("$_a") ;;
   esac
 done
@@ -715,6 +848,12 @@ if [ "${#_model_args[@]}" -gt 0 ]; then set -- "${_model_args[@]}"; else set --;
 
 subcmd="${1:-}"
 [ $# -gt 0 ] && shift
+if [ -n "$HOST_FILTER" ]; then
+  case "$HOST_FILTER" in claude-code|cursor|codex) ;; *) die "Unsupported model host: $HOST_FILTER" ;; esac
+  if ! printf '%s' "$CONSUMER_JSON" | jq -e --arg h "$HOST_FILTER" '(.hosts.wire // []) | any(. == $h)' >/dev/null 2>&1; then
+    die "Host '$HOST_FILTER' is not wired in eidolons.yaml"
+  fi
+fi
 
 case "$subcmd" in
   list)      _cmd_list     "$@" ;;
