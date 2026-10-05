@@ -335,9 +335,12 @@ members:
 EOF
   mkdir -p .codex/agents
   printf '%s\n' '---' 'model: legacy-only' '---' > .codex/agents/atlas.md
+  local before
+  before="$(cat eidolons.yaml)"
   run eidolons model use atlas@standard
   [ "$status" -eq 4 ]
-  [[ "$output" =~ "required descriptor .codex/agents/atlas.toml not found" ]]
+  [[ "$output" =~ "required descriptor .codex/agents/atlas.toml missing" ]]
+  [ "$(cat eidolons.yaml)" = "$before" ]
   [[ ! "$output" =~ "Re-applied model wiring" ]]
 }
 

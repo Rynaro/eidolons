@@ -1,15 +1,25 @@
 {
-  "command": "PATH=<isolated PyYAML/jsonschema venv>/bin:$PATH make check PYTHON=<venv>/bin/python",
+  "command": "env -u NO_COLOR PATH=/opt/homebrew/opt/bash/bin:/tmp/eidolons-640/venv/bin:$PATH make check PYTHON=/tmp/eidolons-640/venv/bin/python",
+  "full_run_status": "passed",
   "exit_code": 0,
   "bats_passed": 1944,
   "lint": "passed",
   "schema": "passed",
   "token_budget": "passed",
   "independent_checker": "atlas",
-  "independent_targeted_passed": 74,
-  "fixture_correction_check_passed": 1,
+  "independent_targeted_command": "PATH=/opt/homebrew/opt/bash/bin:/tmp/eidolons-640/venv/bin:$PATH bats cli/tests/model_host_policy.bats cli/tests/codex_hook_policy.bats cli/tests/add.bats cli/tests/upgrade.bats cli/tests/model_cli.bats",
+  "independent_targeted_passed": 110,
+  "independent_targeted_exit_code": 0,
+  "bash_test_guard": {
+    "system_bash_3_2_exit_code": 2,
+    "modern_bash_5_3_exit_code": 0
+  },
+  "production_bash_3_syntax": "passed",
+  "prior_local_bash_3_result": "superseded; assertions could be mis-evaluated",
+  "prior_modern_full_attempt": "1943/1944 Bats passed; expected-color test failed with inherited NO_COLOR; targeted test passed with NO_COLOR unset",
   "fresh_context": false,
   "runtime_qualified": false,
   "runtime_qualification_reason": "Direct-shim smoke and strict config/read do not prove trusted host hook dispatch or observed child inference",
-  "test_log_sha256": "e8f964008f1726815d22b2efd660da8c4cf4a6988ec009b31da32dae8d682d7c"
+  "test_log": "/tmp/eidolons-640/modern-neutral-make-check.log",
+  "test_log_sha256": "29e770537cae8371b91c2948116741fe73b1e094c500e516ffe9a72167a27afc"
 }
