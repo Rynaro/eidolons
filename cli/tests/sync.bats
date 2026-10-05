@@ -124,20 +124,20 @@ EOF
   [ "$status" -eq 0 ]
   [ -f .codex/agents/atlas.toml ]
   grep -q '^# eidolons:managed model$' .codex/agents/atlas.toml
-  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
   [ -f .codex/agents/spectra.toml ]
   grep -q '^# eidolons:managed model$' .codex/agents/spectra.toml
-  grep -q '^model = "gpt-5.6-sol"$' .codex/agents/spectra.toml
-  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-5.6-terra" ]
+  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-6.1-sol" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.tier' eidolons.lock)" = "standard" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.profile' eidolons.lock)" = "openai" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.source' eidolons.lock)" = "roster-tier" ]
-  [ "$(yq eval '.members[] | select(.name == "spectra") | .model.effective_model' eidolons.lock)" = "gpt-5.6-sol" ]
+  [ "$(yq eval '.members[] | select(.name == "spectra") | .model.effective_model' eidolons.lock)" = "gpt-6-astra" ]
   [ "$(stat -c '%a' eidolons.lock 2>/dev/null || stat -f '%Lp' eidolons.lock)" = "644" ]
 
   run eidolons doctor --deep
-  [[ "$output" =~ "D9 atlas (codex): model: matches lock (gpt-5.6-terra)" ]]
+  [[ "$output" =~ "D9 atlas (codex): model: matches lock (gpt-6.1-sol)" ]]
   [[ ! "$output" =~ "D9 atlas (codex): managed model" ]]
 }
 

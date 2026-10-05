@@ -220,9 +220,9 @@ v1.1.0"
   seed_lock_with_versions atlas=1.0.0
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
-  grep -q '^default_subagent_model = "gpt-5.6-luna"$' .codex/config.toml
+  grep -q '^default_subagent_model = "gpt-6-luna"$' .codex/config.toml
   grep -q '^default_subagent_reasoning_effort = "low"$' .codex/config.toml
   [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.reasoning_effort' eidolons.lock)" = "medium" ]
 }

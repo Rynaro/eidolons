@@ -277,9 +277,10 @@ model_resolve_for_host() {
     .models.hosts[$h].members[$id].reasoning_effort //
     .models.members[$id].reasoning_effort //
     .models.hosts[$h].reasoning_effort // empty' 2>/dev/null || true)
+  # Profile member defaults apply across tiers, below every consumer override.
   if [ -z "$_effort" ]; then
-    _effort=$(printf '%s' "$PROFILES_JSON" | jq -r --arg p "$_profile" --arg t "$_tier" \
-      '.profiles[$p].reasoning_effort[$t] // empty' 2>/dev/null || true)
+    _effort=$(printf '%s' "$PROFILES_JSON" | jq -r --arg p "$_profile" --arg t "$_tier" --arg id "$_id" \
+      '.profiles[$p].members[$id].reasoning_effort // .profiles[$p].reasoning_effort[$t] // empty' 2>/dev/null || true)
   fi
   printf '%s\t%s\n' "$_result" "$_effort"
 }

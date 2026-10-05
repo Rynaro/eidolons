@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.5.0] — 2026-10-05 — Refreshed model profiles and member effort defaults
+
+Minor: refresh OpenAI models, add explicit Claude Pro/Max profiles, and support member-specific reasoning effort defaults without changing routing tiers.
+
+### Changed
+- Refresh the OpenAI Codex profile: light → `gpt-6-luna`, standard → `gpt-6.1-sol`, deep → `gpt-6-astra`. Shared tier efforts remain low / medium / medium, and member tiers are unchanged. RAMZA alone defaults to high effort in the OpenAI profile for planning. Run `eidolons sync` in consuming projects to refresh managed descriptors and lock provenance; explicit model pins and calibration overrides retain precedence.
+
+### Added
+- Add opt-in Claude plan profiles: `anthropic-pro` uses Haiku / Sonnet / Opus; `anthropic-max` uses Haiku / Sonnet / Fable. The existing `anthropic` default and automatic selection stay unchanged. Document host-scoped selection, manual Max-to-Pro downgrade, and native availability fallback limits; no plan detection or fallback settings are added.
+- Profiles can set `members.<id>.reasoning_effort` defaults. Consumer host-member, member, and host-wide effort overrides retain precedence over profile member and tier defaults.
+
 ## [4.4.1] — 2026-10-05 — Host-scoped model and routing policy
 
 Patch: fixes [#640](https://github.com/Rynaro/eidolons/issues/640), where an explicit Cursor-only profile in a mixed-host project could leave Codex agents inheriting the parent model while the lock reported one global model.
