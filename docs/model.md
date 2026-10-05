@@ -10,7 +10,7 @@
 
 `eidolons model` is the management surface for binding each Eidolon to a concrete model. Eidolons themselves stay vendor-neutral — they are assigned a cognitive *tier* (`light`, `standard`, or `deep`), never a vendor model name (prime-directive #162: no vendor model names in any Eidolon methodology or the always-loaded cortex). The nexus owns the mapping from tier to model: it lives in `roster/model-profiles.yaml` as **profiles** (one per vendor), and the resolved model is written into the host-native agent descriptor as a managed block.
 
-This decouples methodology from vendor choice — you can swap the active profile (e.g. Anthropic Claude → OpenAI) without touching any Eidolon's code or specification, and every member re-resolves in one command.
+This decouples methodology from vendor choice. A project with multiple hosts resolves each wired host separately; a profile selected explicitly for one host cannot silently leave another managed host inheriting its parent's model.
 
 ---
 
@@ -71,6 +71,10 @@ profiles:
       light:    gpt-5.6-luna
       standard: gpt-5.6-terra
       deep:     gpt-5.6-sol
+    reasoning_effort:
+      light:    low
+      standard: medium
+      deep:     medium
   cursor:
     description: "Cursor subagent model tier mapping (cross-vendor)"
     applies_to_hosts: [cursor]
@@ -88,6 +92,8 @@ profiles:
 ```
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
+
+Codex uses the OpenAI profile's model and reasoning-effort values together. The model identifiers above remain the shipped profile mappings; verify that a concrete model is available in your installed Codex host before pinning it in a project override.
 
 ---
 
@@ -176,12 +182,13 @@ eidolons model use apivr@sonnet
 · Resolved: sonnet (tier=standard, profile=anthropic, source=pin)
 ```
 
-### `eidolons model profile <name>`
+### `eidolons model profile <name> [--host <host>]`
 
-Switch the active profile. All members re-resolve through the new profile and descriptor wiring is re-applied (host-gated — see below). Persisted under `models.profile`.
+Set the global profile or, with `--host`, one wired host's profile. The latter is stored under `models.hosts.<host>.profile`. A host-specific profile takes precedence over `models.profile`. An explicit profile must apply to every host it manages; an incompatible global selection requires host-specific profiles for the other wired hosts.
 
 ```bash
 eidolons model profile openai
+eidolons model profile openai --host codex
 ```
 
 ```
@@ -203,6 +210,7 @@ eidolons model reset
 - `--non-interactive` — never prompt; bare `model` prints usage and exits 0.
 - `--json` — machine-readable output (`show` / `list`).
 - `--dry-run` — resolve and print the diff without writing.
+- `--host <host>` — scope `show`, `use`, `profile`, or `reset` to one wired host.
 
 | Code | Meaning |
 |---|---|
@@ -222,7 +230,7 @@ The **effective model** for an Eidolon is resolved most-specific-first.
 Otherwise a **tier** is determined (member tier override `models.members.<id>.tier` → roster `suggested_tier` → class default `standard`), then that tier is mapped to a model:
 
 2. **Per-tier calibration** (`models.calibration.<tier>`) — overrides the profile's model for that tier, within the active profile.
-3. **Active profile base mapping** (`models.profile`, else `roster/model-profiles.yaml` → `default_profile`) — the profile's `tiers.<tier>` value.
+3. **Host profile base mapping** (`models.hosts.<host>.profile`, else `models.profile`, else a compatible profile for that host) — the profile's `tiers.<tier>` value. An explicit incompatible choice fails instead of silently skipping the host.
 
 If a profile omits the requested tier, resolution **resolves up** (`light → standard → deep`) rather than down — over-provisioning is a cost penalty; under-provisioning is a capability failure.
 
@@ -230,7 +238,7 @@ If a profile omits the requested tier, resolution **resolves up** (`light → st
 
 - **Suggested tier** — the roster's recommended tier for an Eidolon; shown in `eidolons model show`.
 - **Default** — what ships if you change nothing (suggested tier resolved through the default profile).
-- **Effective model** — the fully resolved concrete model, persisted in `eidolons.lock` (`members[].model.effective_model`, with its `tier` / `profile` / `source`) and written to the host-native agent descriptor.
+- **Effective model** — the resolved concrete model for one host, persisted under `eidolons.lock` `members[].model.hosts.<host>` with its tier, profile, source, and status. The legacy scalar `members[].model` remains for older readers; use the host map for mixed-host projects.
 
 ---
 
@@ -248,6 +256,8 @@ For Codex, it patches a quoted top-level TOML assignment:
 ```toml
 # eidolons:managed model
 model = "<effective_model>"
+# eidolons:managed model_reasoning_effort
+model_reasoning_effort = "<resolved_effort>"
 ```
 
 The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes are **idempotent** — `eidolons model …` and `eidolons sync` produce byte-identical output when nothing changed.
@@ -290,17 +300,32 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
   | deep | `grok-4.6` | Stronger first-party Grok, still on the Cursor Models pool. | `grok-4.5` |
 
   `grok-4.7` is omitted. Subagent frontmatter with that ID falls back to Auto on local spawn. Prefer `grok-4.5` and `grok-4.6`.
-- **`codex`** → writes `.codex/agents/<id>.toml`; table-scoped `model` keys are ignored.
+- **`codex`** → writes `.codex/agents/<id>.toml` with top-level model and reasoning effort; table-scoped keys are ignored. Codex model availability depends on the installed host and account. If a model is rejected, select an available model in the host profile or pin a supported one for that host.
 - **`copilot`** → model management is a **no-op**; copilot supports a `model` field but the slug syntax varies between VS Code and CLI surfaces, and the nexus lacks validated mappings.
 - **`opencode`** → model management is a **no-op**; opencode uses `provider/model-id#variant` format that differs from other hosts; no validated profile exists yet.
 
 Legacy `.codex/agents/<id>.md` files are migration artifacts only and are ignored by Codex and by active model wiring. Run `eidolons sync` to create the canonical TOML descriptor; explicit model commands fail with exit `4` while it is missing.
 
-Every successful sync with a `models:` block records `effective_model`, `tier`, `profile`, and resolution `source` for each installed member in the final `eidolons.lock`. Profile changes and resets refresh the same provenance for all affected members.
+Successful sync records each wired host under `members[].model.hosts.<host>` in `eidolons.lock`. A managed host records its resolved model, tier, profile, source, and Codex reasoning effort; deliberate opt-outs and unsupported adapters carry their own status. These fields describe local configuration, not a model observed in a Codex child session. Profile changes and resets refresh the affected provenance.
 
-### Profile host-gating
+### Mixed-host migration from 4.4.0
 
-If the active profile does not apply to a wired host (e.g. the `openai` profile, which applies to `codex`, on a claude-code project), the writer **skips** that host rather than writing a model string the host can't use. The lock still records the resolved model; only the descriptor write is gated.
+An explicit global `models.profile: cursor-native` applies only to Cursor. In a project wired to Claude Code, Cursor, and Codex, set each host's profile before running `eidolons sync`:
+
+```yaml
+models:
+  hosts:
+    claude-code:
+      profile: anthropic
+    cursor:
+      profile: cursor-native
+    codex:
+      profile: openai
+```
+
+Alternatively, retain `models.profile: cursor-native` and add overrides for both other hosts. With no explicit profile, each host selects a compatible shipped profile. `eidolons model show --host codex` and `eidolons doctor --deep` let you inspect Codex's resolved model and effort after sync. Use `models.hosts.<host>.managed: false` only to opt that host out deliberately; for Codex, sync removes Eidolons-owned model and effort keys from its named descriptors. User-owned keys are left for the user to manage.
+
+Named Codex Eidolons use their descriptors. For unnamed children, managed Codex projects write `default_subagent_model` and `default_subagent_reasoning_effort` under `.codex/config.toml` `[agents]`. Without an override, Eidolons derives the light model and its effort from the selected Codex profile, so an unnamed child does not inherit an expensive parent by accident. `models.codex.unnamed_subagents` can set a supported model and effort explicitly, with optional `max_concurrent_threads_per_session`, or set `inherit: true` to opt into Codex's parent inheritance and remove Eidolons-owned fallback keys. This does not change named Eidolon descriptors.
 
 ---
 
@@ -312,10 +337,10 @@ A hand-authored model assignment **without** the sentinel is **preserved with a 
 
 | Status | Meaning |
 |---|---|
-| **skip** | no `models` block configured, or no lock model entry yet (run `eidolons sync`) |
-| **PASS** | managed model matches the lock |
-| **WARN** | hand-authored model without the sentinel, or a managed assignment on a host the profile doesn't apply to |
-| **FAIL** | sentinel-owned model drifted from the lock — fatal under `--deep` |
+| **unmanaged/unsupported** | host explicitly opted out, or no managed adapter exists |
+| **PASS** | managed model and, for Codex, reasoning effort match the host's lock entry |
+| **WARN** | hand-authored model without the sentinel |
+| **FAIL** | required host lock entry or descriptor missing, duplicate/conflicting assignment, or managed model/effort drift — fatal under `--deep` |
 
 D9 never auto-fixes; it reports and lets you re-run `eidolons model` or `eidolons sync`.
 

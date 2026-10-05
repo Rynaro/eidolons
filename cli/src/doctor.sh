@@ -1178,9 +1178,7 @@ if [[ "$DEEP" == "true" ]]; then
       echo "  D9 — Model descriptor drift"
       _d9_model_block=false
       model_resolve_init 2>/dev/null || true
-      if model_has_block 2>/dev/null; then
-        _d9_model_block=true
-      fi
+      _d9_model_block=true
       if [[ "$_d9_model_block" == "false" ]]; then
         printf "  %s·%s D9 — no models block in eidolons.yaml — skipping\n" \
           "${YELLOW:-}" "${RESET:-}"
@@ -1192,36 +1190,33 @@ if [[ "$DEEP" == "true" ]]; then
         while IFS= read -r _dm; do
           [[ -z "$_dm" ]] && continue
 
-          # Resolve expected model from lock.
-          _d9_lock_model="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null \
-            | jq -r --arg n "$_dm" \
-              '(.members // [])[] | select(.name == $n) | .model.effective_model // empty' \
-              2>/dev/null || true)"
-
-          # If lock has no model entry yet, skip (not a fail — just needs sync).
-          if [[ -z "$_d9_lock_model" ]]; then
-            printf "  %s·%s D9 %s — no lock model entry (run 'eidolons sync' or 'eidolons model use')\n" \
-              "${YELLOW:-}" "${RESET:-}" "$_dm"
-            continue
-          fi
-
           # Check each wired host.
           for _d9_host in $(printf '%s' "$_d9_hosts_csv" | tr ',' ' '); do
             [[ -z "$_d9_host" ]] && continue
             case "$_d9_host" in
               claude-code) _d9_agent_file=".claude/agents/${_dm}.md" ;;
               codex)       _d9_agent_file=".codex/agents/${_dm}.toml" ;;
+              cursor)      _d9_agent_file=".cursor/agents/${_dm}.md" ;;
               *)           continue ;;
             esac
 
-            # Check applies_to_hosts.
-            if ! model_profile_applies_to_host "$_d9_active_profile" "$_d9_host" 2>/dev/null; then
-              # If the file has a managed model block, that's a warning.
-              _d9_managed="$(_model_wiring_read_managed "$_d9_agent_file" 2>/dev/null || true)"
-              if [[ -n "$_d9_managed" ]]; then
-                printf "  %s·%s D9 WARN %s (%s): profile '%s' does not apply but managed model: present\n" \
-                  "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host" "$_d9_active_profile"
+            _d9_lock_status="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null | jq -r --arg n "$_dm" --arg h "$_d9_host" \
+              '(.members // [])[] | select(.name == $n) | .model.hosts[$h].status // empty' 2>/dev/null || true)"
+            if [[ "$_d9_lock_status" == "unmanaged" || "$_d9_lock_status" == "unsupported" ]]; then
+              if [[ "$_d9_host" == "codex" && -f "$_d9_agent_file" ]] && \
+                 { [[ -n "$(_model_wiring_read_managed "$_d9_agent_file")" ]] || [[ -n "$(_model_wiring_read_managed_effort_toml "$_d9_agent_file")" ]]; }; then
+                err "D9 ${_dm} (codex): lock says unmanaged but Eidolons-owned model policy remains in descriptor"
+                continue
               fi
+              printf "  %s·%s D9 %s (%s): %s by configuration\n" "${YELLOW:-}" "${RESET:-}" "$_dm" "$_d9_host" "$_d9_lock_status"
+              continue
+            fi
+            _d9_lock_model="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null | jq -r --arg n "$_dm" --arg h "$_d9_host" \
+              '(.members // [])[] | select(.name == $n) | if (.model.hosts // null) != null then .model.hosts[$h].effective_model // empty else .model.effective_model // empty end' 2>/dev/null || true)"
+            _d9_lock_effort="$(yaml_to_json "$PROJECT_LOCK" 2>/dev/null | jq -r --arg n "$_dm" --arg h "$_d9_host" \
+              '(.members // [])[] | select(.name == $n) | .model.hosts[$h].reasoning_effort // empty' 2>/dev/null || true)"
+            if [[ -z "$_d9_lock_model" ]]; then
+              err "D9 ${_dm} (${_d9_host}): no lock model entry; run 'eidolons sync'"
               continue
             fi
 
@@ -1264,10 +1259,22 @@ if [[ "$DEEP" == "true" ]]; then
             else
               err "D9 ${_dm} (${_d9_host}): managed model: '${_d9_file_model}' != lock effective_model '${_d9_lock_model}'. Run 'eidolons model use ${_dm}@${_d9_lock_model}' or 'eidolons sync' to fix."
             fi
+            if [[ "$_d9_host" == "codex" ]]; then
+              _d9_file_effort="$(_model_wiring_read_managed_effort_toml "$_d9_agent_file" 2>/dev/null || true)"
+              if _model_wiring_has_unmanaged_effort_toml "$_d9_agent_file" 2>/dev/null; then
+                err "D9 ${_dm} (codex): unmanaged model_reasoning_effort conflicts with managed policy"
+              elif [[ -z "$_d9_lock_effort" ]]; then
+                err "D9 ${_dm} (codex): lock has no reasoning_effort; run 'eidolons sync'"
+              elif [[ "$_d9_file_effort" != "$_d9_lock_effort" ]]; then
+                err "D9 ${_dm} (codex): model_reasoning_effort '${_d9_file_effort}' != lock '${_d9_lock_effort}'"
+              else
+                pass "D9 ${_dm} (codex): effort matches lock (${_d9_lock_effort})"
+              fi
+            fi
           done
         done <<< "$_deep_members"
       fi
-      unset _d9_model_block _d9_active_profile _d9_hosts_csv _d9_host _d9_agent_file _d9_file_model _d9_lock_model _d9_managed
+      unset _d9_model_block _d9_active_profile _d9_hosts_csv _d9_host _d9_agent_file _d9_file_model _d9_lock_model _d9_lock_effort _d9_lock_status _d9_file_effort _d9_managed
 
       # D10 — host-tier gate structural check (S1.7, G1)
       # Project-level check: not per-member. Verifies routing tiebreak invariant

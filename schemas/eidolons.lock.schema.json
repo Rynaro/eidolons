@@ -107,6 +107,23 @@
               "source": {
                 "type": "string",
                 "enum": ["pin", "calibration", "profile", "roster-tier", "class-default"]
+              },
+              "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] },
+              "hosts": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["status"],
+                  "properties": {
+                    "status": { "enum": ["managed", "unmanaged", "unsupported", "error"] },
+                    "effective_model": { "type": "string", "minLength": 1 },
+                    "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] },
+                    "tier": { "enum": ["light", "standard", "deep"] },
+                    "profile": { "type": "string", "minLength": 1 },
+                    "source": { "enum": ["pin", "calibration", "profile", "roster-tier", "class-default"] }
+                  }
+                }
               }
             }
           }

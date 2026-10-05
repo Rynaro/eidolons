@@ -275,7 +275,7 @@ EOF
   local before
   before="$(cat .cursor/agents/spectra.md)"
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
   local after
   after="$(cat .cursor/agents/spectra.md)"
   [ "$before" = "$after" ]
@@ -350,6 +350,7 @@ EOF
   [ -f ".codex/agents/spectra.toml" ]
   grep -q "# eidolons:managed model" .codex/agents/spectra.toml
   grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+  grep -q '^model_reasoning_effort = "medium"$' .codex/agents/spectra.toml
 }
 
 @test "model wiring: Codex selects its compatible profile when models is absent" {
@@ -398,7 +399,7 @@ EOF
   local before after
   before="$(cat .codex/agents/spectra.toml)"
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
   after="$(cat .codex/agents/spectra.toml)"
   [ "$before" = "$after" ]
 }
@@ -472,8 +473,8 @@ EOF
   local before after
   before="$(cat .codex/agents/spectra.toml)"
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
-  [ "$status" -eq 0 ]
-  [[ "$output" =~ "hand-authored top-level model present" ]]
+  [ "$status" -ne 0 ]
+  [[ "$output" =~ "hand-authored model" ]]
   after="$(cat .codex/agents/spectra.toml)"
   [ "$before" = "$after" ]
 }
@@ -501,8 +502,8 @@ EOF
 
   # Source libs and call sync-time wiring (warn-and-preserve mode).
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
-  # Should succeed (exit 0).
-  [ "$status" -eq 0 ]
+  # The collision is surfaced as an actionable sync error.
+  [ "$status" -ne 0 ]
 
   local after
   after="$(cat .claude/agents/spectra.md)"

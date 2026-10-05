@@ -34,6 +34,18 @@ EOF
   [[ "$output" =~ atlas ]]
 }
 
+@test "add: incompatible mixed-host profile rejects candidate without changing manifest" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  seed_manifest
+  yq -i '.hosts.wire = ["claude-code", "cursor"] | .models.profile = "cursor-native"' eidolons.yaml
+  local before
+  before="$(cat eidolons.yaml)"
+  run eidolons add idg --non-interactive
+  [ "$status" -ne 0 ]
+  [ "$(cat eidolons.yaml)" = "$before" ]
+  [[ "$output" =~ 'models.hosts' ]]
+}
+
 @test "add: skips members already in manifest" {
   setup_fake_git
   seed_manifest

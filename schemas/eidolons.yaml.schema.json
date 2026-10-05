@@ -105,6 +105,15 @@
       "enum": ["thinking", "standard"],
       "description": "Declarative host capability tier. 'thinking' enables loop-native coders (e.g. Vivi) as the default for their class; 'standard' (or absent) falls back to the conservative coder (APIVR-Δ). NOT auto-detected; set explicitly by the project owner."
     },
+    "harness": {
+      "type": "object",
+      "properties": {
+        "hook_failure_policy": {
+          "enum": ["fail-open", "warn", "fail-closed"],
+          "description": "Behavior when a routing hook cannot qualify or inject. Defaults to fail-open."
+        }
+      }
+    },
     "context": {
       "type": "object",
       "description": "ECM P1 context-lifecycle kernel configuration (spec §7). Optional; absent means ECM is off (opt-in, additive — same class as the existing 'hosts' block).",
@@ -150,6 +159,36 @@
           "minLength": 1,
           "description": "Active profile name (must exist in roster/model-profiles.yaml). Defaults to roster default_profile."
         },
+        "hosts": {
+          "type": "object",
+          "description": "Host-specific model profiles and overrides.",
+          "additionalProperties": false,
+          "properties": {
+            "claude-code": { "$ref": "#/definitions/hostModels" },
+            "codex": { "$ref": "#/definitions/hostModels" },
+            "cursor": { "$ref": "#/definitions/hostModels" }
+          }
+        },
+        "codex": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "unnamed_subagents": {
+              "type": "object",
+              "additionalProperties": false,
+              "oneOf": [
+                { "required": ["model", "reasoning_effort"], "not": { "required": ["inherit"] } },
+                { "required": ["inherit"], "properties": { "inherit": { "const": true } }, "not": { "anyOf": [ { "required": ["model"] }, { "required": ["reasoning_effort"] }, { "required": ["max_concurrent_threads_per_session"] } ] } }
+              ],
+              "properties": {
+                "inherit": { "type": "boolean", "description": "Explicitly leave unnamed Codex children to host inheritance; removes Eidolons-owned fallback keys." },
+                "model": { "type": "string", "minLength": 1 },
+                "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] },
+                "max_concurrent_threads_per_session": { "type": "integer", "minimum": 1 }
+              }
+            }
+          }
+        },
         "calibration": {
           "type": "object",
           "description": "Per-tier model override within the active profile.",
@@ -177,11 +216,48 @@
                   "type": "string",
                   "minLength": 1,
                   "description": "Concrete model PIN — highest precedence. Ignores tier/profile/calibration entirely."
-                }
+                },
+                "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] }
               }
             }
           }
         }
+      }
+    }
+  },
+  "definitions": {
+    "hostModels": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "profile": { "type": "string", "minLength": 1 },
+        "managed": { "type": "boolean" },
+        "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] },
+        "calibration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "light": { "type": "string", "minLength": 1 },
+            "standard": { "type": "string", "minLength": 1 },
+            "deep": { "type": "string", "minLength": 1 }
+          }
+        },
+        "members": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z][a-z0-9-]*$": { "$ref": "#/definitions/hostMemberModel" }
+          },
+          "additionalProperties": false
+        }
+      }
+    },
+    "hostMemberModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tier": { "enum": ["light", "standard", "deep"] },
+        "model": { "type": "string", "minLength": 1 },
+        "reasoning_effort": { "enum": ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"] }
       }
     }
   }

@@ -10,6 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.4.1] — 2026-10-05 — Host-scoped model and routing policy
+
+Patch: fixes [#640](https://github.com/Rynaro/eidolons/issues/640), where an explicit Cursor-only profile in a mixed-host project could leave Codex agents inheriting the parent model while the lock reported one global model.
+
+### Fixed
+- Resolve and record models per wired host. An explicit profile that does not apply to a managed host now fails with a host-specific migration hint before sync installs agents; an absent profile still selects a compatible host default.
+- Write both the model and reasoning effort into managed Codex agent descriptors. The lock and `eidolons model show` expose host-specific configuration, and doctor checks Codex model and effort drift. Host runtime qualification and observed model use remain unknown until independently verified.
+- Validate model policy before add, sync, and member upgrade mutations; reapply model and effort pins after upgraded descriptors are installed and refresh their lock provenance. Opting a host out removes Eidolons-owned pins on Claude, Cursor, and Codex.
+- Make Codex routing-hook failures visible under the configured `fail-open`, `warn`, or `fail-closed` policy, without treating a local hook check as proof that Codex invoked the hook.
+
+### Added
+- Managed Codex projects pin unnamed children to the selected profile's light model and effort by default. `models.codex.unnamed_subagents` can override both, set an optional concurrency limit, or explicitly select `inherit: true` to retain parent inheritance.
+- `eidolons harness check --smoke --host codex` checks installed hook registration and runs the local SessionStart and UserPromptSubmit routing shims on a fixed prompt without a model call. It reports Codex runtime qualification as unknown.
+
 ## [4.4.0] — 2026-09-29 — Cursor first-party model profile
 
 Minor: adds an opt-in Cursor model profile that keeps subagents on the Cursor Models usage pool. Existing profiles, `default_profile`, and Cursor auto-selection are unchanged.

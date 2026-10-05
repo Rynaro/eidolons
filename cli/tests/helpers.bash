@@ -325,6 +325,29 @@ while [[ $# -gt 0 ]]; do
 done
 mkdir -p "$TGT"
 NAME="$(basename "$TGT")"
+# Stub the host descriptors that the real installer replaces, so upgrade can
+# exercise the post-install model/effort wiring contract.
+case ",$HOSTS," in
+  *,claude-code,*)
+    mkdir -p .claude/agents
+    if [[ ! -f ".claude/agents/$NAME.md" || "${FAKE_INSTALL_REPLACE_DESCRIPTORS:-false}" == true ]]; then
+      printf '%s\n' '---' "name: $NAME" '---' > ".claude/agents/$NAME.md"
+    fi ;;
+esac
+case ",$HOSTS," in
+  *,codex,*)
+    mkdir -p .codex/agents
+    if [[ ! -f ".codex/agents/$NAME.toml" || "${FAKE_INSTALL_REPLACE_DESCRIPTORS:-false}" == true ]]; then
+      printf 'name = "%s"\n' "$NAME" > ".codex/agents/$NAME.toml"
+    fi ;;
+esac
+case ",$HOSTS," in
+  *,cursor,*)
+    mkdir -p .cursor/agents
+    if [[ ! -f ".cursor/agents/$NAME.md" || "${FAKE_INSTALL_REPLACE_DESCRIPTORS:-false}" == true ]]; then
+      printf '%s\n' '---' "name: $NAME" '---' > ".cursor/agents/$NAME.md"
+    fi ;;
+esac
 # The version recorded by the Eidolon's installer (not the git tag).
 cat > "$TGT/install.manifest.json" <<JSON
 {

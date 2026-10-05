@@ -100,6 +100,12 @@ EOF
 _harness_probe_codex_hooks_patched() {
   local hooks_file=".codex/hooks.json"
   [[ -f "$hooks_file" ]] || { printf 'false'; return 0; }
+  if ! jq -e '
+    ([.hooks.UserPromptSubmit[]?.hooks[]? | select(.type == "command" and .command == ".eidolons/harness/hooks/codex-UserPromptSubmit.sh")] | length > 0) and
+    ([.hooks.SessionStart[]? | select((.matcher // "") | contains("startup")) | .hooks[]? | select(.type == "command" and .command == ".eidolons/harness/hooks/codex-SessionStart.sh")] | length > 0)
+  ' "$hooks_file" >/dev/null 2>&1; then
+    printf 'false'; return 0
+  fi
   local _hooks_dump
   _hooks_dump="$(jq -c '.hooks // {}' "$hooks_file" 2>/dev/null)" || { printf 'false'; return 0; }
   [[ -n "$_hooks_dump" && "$_hooks_dump" != "null" ]] || { printf 'false'; return 0; }
@@ -200,6 +206,8 @@ printf '  strict wired:          %s\n' "${_strict_wired:-(none)}"
 printf '  protected-globs count: %s\n' "$_protect_globs_count"
 printf '  settings.json patched: %s\n' "$_settings_patched"
 printf '  codex hooks.json patched: %s\n' "$_codex_patched"
+printf '  codex runtime qualified: unknown (requires project trust and hook hash approval)\n'
+printf '  codex hook observed: unknown (no runtime receipt)\n'
 printf '  cursor hooks.json patched: %s\n' "$_cursor_patched"
 
 # Report refusals for any hosts in the wire set that got strict refused.

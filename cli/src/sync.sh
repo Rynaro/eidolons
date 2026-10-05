@@ -101,6 +101,9 @@ nexus_refresh
 integrity_enforcement_mode >/dev/null || exit 1
 
 MANIFEST_JSON="$(yaml_to_json "$PROJECT_MANIFEST")"
+model_resolve_init || die "Could not load model profiles"
+model_wiring_preflight_resolution_all || die "Model profile coverage is incomplete; set models.hosts.<host>.profile before syncing"
+model_wiring_preflight_existing_all || die "Existing model policy conflicts must be resolved before syncing"
 HOSTS_CSV="$(echo "$MANIFEST_JSON" | jq -r '.hosts.wire | join(",")')"
 # Default shared_dispatch to false when the key is absent (pre-v1.2 manifests).
 SHARED_DISPATCH="$(echo "$MANIFEST_JSON" | jq -r '.hosts.shared_dispatch // false')"
@@ -699,9 +702,9 @@ chmod 0644 "$PROJECT_LOCK" 2>/dev/null || true
 # previous lock wholesale. Wire from its final installed-member set (important
 # when this sync adds a member absent from the old lock), then persist model
 # provenance into this same final lock. Both remain best-effort during sync.
-if model_resolve_init 2>/dev/null; then
-  model_wiring_apply_all 0 || warn "model wiring completed with unresolved host descriptors"
-  model_wiring_update_lock_all 2>/dev/null || warn "model provenance lock update failed"
+if [[ "$DRY_RUN" != "true" ]]; then
+  model_wiring_apply_all 0 || die "Model wiring failed; resolve the reported host descriptor conflict"
+  model_wiring_update_lock_all || die "Model provenance lock update failed"
 fi
 ok "Wrote $PROJECT_LOCK"
 

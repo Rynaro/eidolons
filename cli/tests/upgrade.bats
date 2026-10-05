@@ -211,6 +211,36 @@ v1.1.0"
   grep -q atlas "$FAKE_INSTALL_LOG"
 }
 
+@test "upgrade: Codex descriptor and lock retain explicit model and effort after reinstall" {
+  setup_fake_git_for_upgrade
+  export FAKE_INSTALL_REPLACE_DESCRIPTORS=true
+  export FAKE_LSREMOTE_TAGS="v1.0.0" FAKE_NEXUS_HEAD_TAG="v1.0.0"
+  seed_manifest_with atlas=^1.0.0
+  yq -i '.hosts.wire = ["codex"]' eidolons.yaml
+  seed_lock_with_versions atlas=1.0.0
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -eq 0 ]
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/atlas.toml
+  grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
+  grep -q '^default_subagent_model = "gpt-5.6-luna"$' .codex/config.toml
+  grep -q '^default_subagent_reasoning_effort = "low"$' .codex/config.toml
+  [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.reasoning_effort' eidolons.lock)" = "medium" ]
+}
+
+@test "upgrade: incompatible host profile fails before reinstall or lock rewrite" {
+  setup_fake_git_for_upgrade
+  export FAKE_LSREMOTE_TAGS="v1.0.0" FAKE_NEXUS_HEAD_TAG="v1.0.0"
+  seed_manifest_with atlas=^1.0.0
+  yq -i '.hosts.wire = ["codex", "cursor"] | .models.profile = "cursor-native"' eidolons.yaml
+  seed_lock_with_versions atlas=1.0.0
+  local before
+  before="$(cat eidolons.lock)"
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -ne 0 ]
+  [ ! -f "$FAKE_INSTALL_LOG" ]
+  [ "$(cat eidolons.lock)" = "$before" ]
+}
+
 # T14
 @test "upgrade: --non-interactive without --yes fails fast" {
   setup_fake_git_for_upgrade

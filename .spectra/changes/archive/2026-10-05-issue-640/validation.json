@@ -1,0 +1,15 @@
+{
+  "command": "PATH=<isolated PyYAML/jsonschema venv>/bin:$PATH make check PYTHON=<venv>/bin/python",
+  "exit_code": 0,
+  "bats_passed": 1944,
+  "lint": "passed",
+  "schema": "passed",
+  "token_budget": "passed",
+  "independent_checker": "atlas",
+  "independent_targeted_passed": 74,
+  "fixture_correction_check_passed": 1,
+  "fresh_context": false,
+  "runtime_qualified": false,
+  "runtime_qualification_reason": "Direct-shim smoke and strict config/read do not prove trusted host hook dispatch or observed child inference",
+  "test_log_sha256": "e8f964008f1726815d22b2efd660da8c4cf4a6988ec009b31da32dae8d682d7c"
+}
