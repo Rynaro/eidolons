@@ -148,13 +148,13 @@ _profiles_json() {
   [ -n "$sm" ] && [ "$sm" != "null" ]
 }
 
-@test "model-profiles: openai tiers map Luna, Terra, and Sol in capability order" {
+@test "model-profiles: openai tiers map Luna, Sol, and Astra in capability order" {
   run _profiles_json
   [ "$status" -eq 0 ]
   local json="$output"
-  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.light')" = "gpt-5.6-luna" ]
-  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.standard')" = "gpt-5.6-terra" ]
-  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.deep')" = "gpt-5.6-sol" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.light')" = "gpt-6-luna" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.standard')" = "gpt-6.1-sol" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.deep')" = "gpt-6-astra" ]
 }
 
 @test "model-profiles: all ten current Eidolons have the designated capability tier" {
@@ -233,4 +233,18 @@ EOF
 @test "model-profiles: routing schema jq-empty passes" {
   run jq empty "$EIDOLONS_ROOT/schemas/routing.schema.json"
   [ "$status" -eq 0 ]
+}
+
+@test "model-profiles: Claude plan profiles keep Fable opt-in and the safe default first" {
+  run _profiles_json
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | jq -e '
+    .default_profile == "anthropic" and
+    ([.profiles | to_entries[] | select(.value.applies_to_hosts | index("claude-code")) | .key][0] == "anthropic") and
+    .profiles["anthropic-pro"].applies_to_hosts == ["claude-code"] and
+    .profiles["anthropic-max"].applies_to_hosts == ["claude-code"] and
+    .profiles["anthropic-pro"].tiers == .profiles.anthropic.tiers and
+    .profiles["anthropic-pro"].tiers == {light:"haiku",standard:"sonnet",deep:"opus"} and
+    .profiles["anthropic-max"].tiers == {light:"haiku",standard:"sonnet",deep:"fable"}
+  ' >/dev/null
 }

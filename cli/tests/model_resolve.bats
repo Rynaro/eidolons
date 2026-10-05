@@ -89,15 +89,15 @@ _init_resolve() {
   [ "$tier" = "light" ]
 }
 
-@test "resolve: all ten current Eidolons map to Luna, Terra, or Sol under openai" {
+@test "resolve: all ten current Eidolons map to Luna, Sol, or Astra under openai" {
   _init_resolve
   CONSUMER_JSON='{"models":{"profile":"openai"}}'
   export CONSUMER_JSON
   local pair id expected actual
   for pair in \
-    ramza:gpt-5.6-sol spectra:gpt-5.6-sol forge:gpt-5.6-sol vigil:gpt-5.6-sol \
-    atlas:gpt-5.6-terra vivi:gpt-5.6-terra apivr:gpt-5.6-terra gilgamesh:gpt-5.6-terra \
-    idg:gpt-5.6-luna kupo:gpt-5.6-luna; do
+    ramza:gpt-6-astra spectra:gpt-6-astra forge:gpt-6-astra vigil:gpt-6-astra \
+    atlas:gpt-6.1-sol vivi:gpt-6.1-sol apivr:gpt-6.1-sol gilgamesh:gpt-6.1-sol \
+    idg:gpt-6-luna kupo:gpt-6-luna; do
     id="${pair%%:*}"
     expected="${pair#*:}"
     actual="$(model_resolve_for "$id" | cut -f1)"
@@ -284,4 +284,91 @@ _init_resolve() {
   _init_resolve
   run model_profile_applies_to_host openai claude-code
   [ "$status" -ne 0 ]
+}
+
+# Profile member effort defaults are weaker than every consumer effort override.
+@test "resolve: OpenAI RAMZA uses high effort while other members keep tier effort" {
+  _init_resolve
+  local pair id expected
+  for pair in ramza:high forge:medium vigil:medium spectra:medium atlas:medium vivi:medium apivr:medium gilgamesh:medium idg:low kupo:low; do
+    id="${pair%%:*}"
+    expected="${pair#*:}"
+    run model_resolve_for_host "$id" codex
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | cut -f5)" = "$expected" ]
+  done
+}
+
+@test "resolve: consumer efforts override profile member defaults in specificity order" {
+  _init_resolve
+  CONSUMER_JSON='{"models":{"hosts":{"codex":{"reasoning_effort":"low","members":{"ramza":{"reasoning_effort":"max"}}}},"members":{"ramza":{"reasoning_effort":"xhigh"}}}}'
+  run model_resolve_for_host ramza codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "max" ]
+  CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq 'del(.models.hosts.codex.members.ramza.reasoning_effort)')"
+  run model_resolve_for_host ramza codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "xhigh" ]
+  CONSUMER_JSON="$(printf '%s' "$CONSUMER_JSON" | jq 'del(.models.members.ramza.reasoning_effort)')"
+  run model_resolve_for_host ramza codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "low" ]
+}
+
+@test "resolve: profile member efforts follow the selected profile and support any member" {
+  _init_resolve
+  PROFILES_JSON="$(printf '%s' "$PROFILES_JSON" | jq '.profiles.alternative = {applies_to_hosts:["codex"],tiers:{standard:"standard-model",deep:"deep-model"},reasoning_effort:{standard:"low",deep:"medium"},members:{vivi:{reasoning_effort:"high"}}}')"
+  CONSUMER_JSON='{"models":{"hosts":{"codex":{"profile":"alternative"}}}}'
+  run model_resolve_for_host ramza codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "medium" ]
+  run model_resolve_for_host vivi codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "high" ]
+  run model_resolve_for_host ramza claude-code
+  [ "$status" -eq 0 ]
+  [ -z "$(printf '%s' "$output" | cut -f5)" ]
+}
+
+@test "resolve: profile member effort remains default with a model pin or tier override" {
+  _init_resolve
+  CONSUMER_JSON='{"models":{"members":{"ramza":{"model":"pinned-model","tier":"standard"}}}}'
+  run model_resolve_for_host ramza codex
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | cut -f1)" = "pinned-model" ]
+  [ "$(printf '%s' "$output" | cut -f2)" = "standard" ]
+  [ "$(printf '%s' "$output" | cut -f5)" = "high" ]
+}
+
+@test "resolve: Claude auto-selection stays anthropic and never opts into Fable" {
+  _init_resolve
+  local id
+  for id in $(model_list_ids); do
+    run model_resolve_for_host "$id" claude-code
+    [ "$status" -eq 0 ]
+    [ "$(printf '%s' "$output" | cut -f3)" = "anthropic" ]
+    [ "$(printf '%s' "$output" | cut -f1)" != "fable" ]
+  done
+}
+
+@test "resolve: Claude Pro and Max only differ for deep members" {
+  _init_resolve
+  local profile id expected
+  for profile in anthropic-pro anthropic-max; do
+    CONSUMER_JSON="$(jq -nc --arg p "$profile" '{models:{hosts:{"claude-code":{profile:$p}}}}')"
+    for id in $(model_list_ids); do
+      case "$(model_tier_for "$id")" in
+        light) expected=haiku ;;
+        standard) expected=sonnet ;;
+        deep)
+          expected=opus
+          [ "$profile" != "anthropic-max" ] || expected=fable
+          ;;
+      esac
+      run model_resolve_for_host "$id" claude-code
+      [ "$status" -eq 0 ]
+      [ "$(printf '%s' "$output" | cut -f1)" = "$expected" ]
+      [ "$(printf '%s' "$output" | cut -f3)" = "$profile" ]
+    done
+  done
 }

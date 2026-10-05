@@ -73,7 +73,7 @@ _model_wire_all() {
   grep -q '^model = "gpt-6-sol"$' .codex/agents/atlas.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
   grep -q '^model = "gpt-6-astra"$' .codex/agents/ramza.toml
-  grep -q '^model_reasoning_effort = "medium"$' .codex/agents/ramza.toml
+  grep -q '^model_reasoning_effort = "high"$' .codex/agents/ramza.toml
   grep -q '^default_subagent_model = "gpt-6-luna"$' .codex/config.toml
   grep -q '^default_subagent_reasoning_effort = "low"$' .codex/config.toml
   [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6-sol" ]
@@ -164,4 +164,39 @@ EOF
   before="$(cat .codex/agents/atlas.toml .codex/config.toml eidolons.lock)"
   _model_wire_all >/dev/null
   [ "$(cat .codex/agents/atlas.toml .codex/config.toml eidolons.lock)" = "$before" ]
+}
+
+@test "model policy: RAMZA profile effort reaches descriptor lock and show" {
+  _model_mixed_fixture
+  yq -i 'del(.models.codex)' eidolons.yaml
+  run _model_wire_all
+  [ "$status" -eq 0 ]
+  grep -q '^model_reasoning_effort = "high"$' .codex/agents/ramza.toml
+  [ "$(yq '.members[] | select(.name == "ramza") | .model.hosts.codex.reasoning_effort' eidolons.lock)" = "high" ]
+  grep -q '^default_subagent_reasoning_effort = "low"$' .codex/config.toml
+  run eidolons model show ramza --host codex --json
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | jq -e '.hosts.codex.reasoning_effort == "high"' >/dev/null
+}
+
+@test "model policy: consumer host effort overrides RAMZA profile effort in descriptor and lock" {
+  _model_mixed_fixture
+  yq -i '.models.hosts.codex.reasoning_effort = "low"' eidolons.yaml
+  run _model_wire_all
+  [ "$status" -eq 0 ]
+  grep -q '^model_reasoning_effort = "low"$' .codex/agents/ramza.toml
+  [ "$(yq '.members[] | select(.name == "ramza") | .model.hosts.codex.reasoning_effort' eidolons.lock)" = "low" ]
+}
+
+@test "model policy: Claude Max host selection leaves Codex and Cursor mappings intact" {
+  _model_mixed_fixture
+  run eidolons model profile anthropic-max --host claude-code
+  [ "$status" -eq 0 ]
+  grep -q '^model: fable$' .claude/agents/ramza.md
+  grep -q '^model: sonnet$' .claude/agents/atlas.md
+  grep -q '^model = "gpt-6-astra"$' .codex/agents/ramza.toml
+  grep -q '^model_reasoning_effort = "high"$' .codex/agents/ramza.toml
+  grep -q '^model: claude-fable-5-1$' .cursor/agents/ramza.md
+  [ "$(yq '.models.hosts.codex.profile' eidolons.yaml)" = "openai" ]
+  [ "$(yq '.models.hosts.cursor.profile' eidolons.yaml)" = "cursor" ]
 }

@@ -53,7 +53,7 @@ A new/unknown capability class defaults to **standard**.
 
 Vendor model strings live **only** in `roster/model-profiles.yaml` — the sole source of truth for concrete model identifiers (keeping the cortex and every Eidolon vendor-free). Each profile maps the three tiers to a vendor's lineup and declares which hosts its strings are valid for.
 
-Four profiles ship by default (`default_profile: anthropic`):
+Six profiles ship by default (`default_profile: anthropic`):
 
 ```yaml
 profiles:
@@ -64,17 +64,34 @@ profiles:
       light:    haiku
       standard: sonnet
       deep:     opus
+  anthropic-pro:
+    description: "Claude Pro-oriented tiers without Fable"
+    applies_to_hosts: [claude-code]
+    tiers:
+      light:    haiku
+      standard: sonnet
+      deep:     opus
+  anthropic-max:
+    description: "Claude Max-oriented tiers with opt-in Fable for deep work"
+    applies_to_hosts: [claude-code]
+    tiers:
+      light:    haiku
+      standard: sonnet
+      deep:     fable
   openai:
-    description: "OpenAI GPT-5.6 Codex capability tiers"
+    description: "OpenAI GPT-6 Codex capability tiers"
     applies_to_hosts: [codex]
     tiers:
-      light:    gpt-5.6-luna
-      standard: gpt-5.6-terra
-      deep:     gpt-5.6-sol
+      light:    gpt-6-luna
+      standard: gpt-6.1-sol
+      deep:     gpt-6-astra
     reasoning_effort:
       light:    low
       standard: medium
       deep:     medium
+    members:
+      ramza:
+        reasoning_effort: high
   cursor:
     description: "Cursor subagent model tier mapping (cross-vendor)"
     applies_to_hosts: [cursor]
@@ -93,6 +110,58 @@ profiles:
 
 Adding another profile (e.g. Google Gemini) is **pure data** — a new entry in `roster/model-profiles.yaml`, no code change. The resolver reads `profiles.<name>.tiers.<tier>` by key; no profile names are hardcoded.
 
+### Claude Pro and Max profiles
+
+The existing `anthropic` default and the explicit `anthropic-pro` profile both use Haiku / Sonnet / Opus. Select `anthropic-max` to use Fable for deep work:
+
+| Tier | Eidolons | `anthropic` / `anthropic-pro` | `anthropic-max` |
+|---|---|---|---|
+| light | IDG, Kupo | `haiku` | `haiku` |
+| standard | ATLAS, Gilgamesh, Vivi, APIVR-Δ | `sonnet` | `sonnet` |
+| deep | FORGE, RAMZA, VIGIL, SPECTRA | `opus` | `fable` |
+
+These are documented [Claude Code subagent aliases](https://code.claude.com/docs/en/sub-agents). Checked on **2026-10-05**, the Anthropic API aliases resolve `sonnet` to Sonnet 5.5, `opus` to Opus 5.5, and `fable` to Fable 5.1. Alias targets can change, and gateways or provider overrides can map them differently. Use a current Claude Code version: Sonnet 5.5 requires **2.1.284 or later**. See [Claude Code model configuration](https://code.claude.com/docs/en/model-config).
+
+Profile names are selection guidance, not plan detection or an entitlement guarantee. Pro requires usage credits for Fable. Max includes Fable for up to 50% of the weekly usage limit; after that, use credits or switch models. The Pro profile avoids selecting Fable by default. See [Fable on your plan](https://support.claude.com/en/articles/15424964-claude-fable-models-on-your-plan).
+
+Choose a profile for Claude Code explicitly, including in mixed-host projects:
+
+```bash
+eidolons model profile anthropic-pro --host claude-code
+# Opt into Fable for deep work when available:
+eidolons model profile anthropic-max --host claude-code
+```
+
+For example, a mixed-host configuration can use:
+
+```yaml
+models:
+  hosts:
+    claude-code:
+      profile: anthropic-max
+    codex:
+      profile: openai
+    cursor:
+      profile: cursor
+```
+
+To stop selecting Fable for deep work, run `eidolons model profile anthropic-pro --host claude-code`. This rewires managed descriptors and refreshes lock provenance. Explicit member pins and calibration overrides still win: remove any Fable overrides that you also want to downgrade. With no explicit profile, Claude Code continues selecting `anthropic`; Max is never auto-selected.
+
+Optionally launch Claude Code with `claude --fallback-model opus,sonnet` for model availability failures. Native fallback applies to subagents in **2.1.247 and later**; it does not handle billing, rate-limit, or organization-policy errors and does not guarantee zero credit use. Eidolons neither detects your plan nor writes fallback settings. See [native model fallback](https://code.claude.com/docs/en/model-config).
+
+### OpenAI profile
+
+The OpenAI profile was refreshed on **2026-10-05**, using OpenAI's [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model) and [GPT-6.1 Sol model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol), with model IDs and supported efforts checked against the Codex session model catalog. Luna handles fast, inexpensive tasks; Sol is the current workhorse for coding and everyday work; Astra is reserved for the most demanding reasoning. This is a capability-based selection, not a measured Eidolons benchmark result. Member tiers are retained. RAMZA uses high effort for planning and requirements decisions; the shared deep-tier effort remains medium.
+
+| Eidolons | Tier | Model | Effort |
+|---|---|---|---|
+| IDG, Kupo | light | `gpt-6-luna` | low |
+| ATLAS, Gilgamesh, Vivi, APIVR-Δ | standard | `gpt-6.1-sol` | medium |
+| FORGE, VIGIL, SPECTRA | deep | `gpt-6-astra` | medium |
+| RAMZA | deep | `gpt-6-astra` | high |
+
+Run `eidolons sync` in consuming projects to refresh managed descriptors and lock provenance. Per-member model pins and per-tier calibration continue to take precedence; unnamed Codex children use the refreshed light model unless explicitly overridden.
+
 Codex uses the OpenAI profile's model and reasoning-effort values together. The model identifiers above remain the shipped profile mappings; verify that a concrete model is available in your installed Codex host before pinning it in a project override.
 
 ---
@@ -109,7 +178,7 @@ eidolons model
 
 ### `eidolons model list`
 
-Shows the tier ladder, every profile (active one marked), and each profile's tier→model map.
+Shows the tier ladder, every profile (active one marked), and each profile's tier→model map. Example excerpt:
 
 ```bash
 eidolons model list
@@ -127,10 +196,10 @@ Profiles:
     haiku       sonnet      opus
 
   openai
-    OpenAI GPT-5.6 Codex capability tiers
+    OpenAI GPT-6 Codex capability tiers
     applies to: codex
     light       standard    deep
-    gpt-5.6-luna gpt-5.6-terra gpt-5.6-sol
+    gpt-6-luna gpt-6.1-sol gpt-6-astra
 ```
 
 ### `eidolons model show [<eidolon>]`
@@ -233,6 +302,18 @@ Otherwise a **tier** is determined (member tier override `models.members.<id>.ti
 3. **Host profile base mapping** (`models.hosts.<host>.profile`, else `models.profile`, else a compatible profile for that host) — the profile's `tiers.<tier>` value. An explicit incompatible choice fails instead of silently skipping the host.
 
 If a profile omits the requested tier, resolution **resolves up** (`light → standard → deep`) rather than down — over-provisioning is a cost penalty; under-provisioning is a capability failure.
+
+### Reasoning effort precedence
+
+Effort resolves separately from the model, in this order:
+
+1. Consumer host member: `models.hosts.<host>.members.<id>.reasoning_effort`.
+2. Consumer member: `models.members.<id>.reasoning_effort`.
+3. Consumer host: `models.hosts.<host>.reasoning_effort`.
+4. Selected profile member: `profiles.<profile>.members.<id>.reasoning_effort` in `roster/model-profiles.yaml`.
+5. Selected profile tier: `profiles.<profile>.reasoning_effort.<tier>`.
+
+Profile member effort is a default across tiers, including when a project pins a model or overrides the member's tier. Set a consumer effort override to change it. Only the OpenAI profile gives RAMZA a member default; other profiles retain their existing behavior. Unnamed Codex children continue to use the light-tier effort unless explicitly overridden.
 
 ### Terminology
 

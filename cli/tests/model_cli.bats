@@ -256,7 +256,7 @@ setup_codex_model_project() {
   seed_lock
   run eidolons model profile openai
   [ "$status" -eq 0 ]
-  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-5.6-terra" ]
+  [ "$(yq eval '.members[] | select(.name == "atlas") | .model.effective_model' eidolons.lock)" = "gpt-6.1-sol" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.tier' eidolons.lock)" = "standard" ]
   [ "$(yq eval '.members[] | select(.name == "atlas") | .model.profile' eidolons.lock)" = "openai" ]
 }

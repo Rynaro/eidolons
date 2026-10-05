@@ -349,7 +349,7 @@ EOF
   [ "$status" -eq 0 ]
   [ -f ".codex/agents/spectra.toml" ]
   grep -q "# eidolons:managed model" .codex/agents/spectra.toml
-  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/spectra.toml
 }
 
@@ -358,7 +358,7 @@ EOF
   setup_codex_project
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-5.6-sol"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
 }
 
 @test "model wiring: explicit Codex model pin is applied despite default profile" {
@@ -412,7 +412,7 @@ EOF
   run eidolons model use spectra@light
   [ "$status" -eq 0 ]
   ! grep -q 'user-owned' .codex/agents/spectra.toml
-  grep -q '^model = "gpt-5.6-luna"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6-luna"$' .codex/agents/spectra.toml
   [ "$(grep -c '^# eidolons:managed model$' .codex/agents/spectra.toml)" -eq 1 ]
 }
 
@@ -428,7 +428,7 @@ EOF
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
   grep -q '^model = "descriptive-only"$' .codex/agents/spectra.toml
-  [ "$(grep -c '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml)" -eq 1 ]
+  [ "$(grep -c '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml)" -eq 1 ]
 }
 
 @test "model wiring: Codex TOML quotes and backslashes round-trip safely" {
@@ -448,13 +448,13 @@ models:
 EOF
   cat >> .codex/agents/spectra.toml <<'EOF'
 # eidolons:managed model
-model = "gpt-5.6-terra"
+model = "gpt-6.1-sol"
 model = "user-owned-duplicate"
 EOF
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
   [ "$(grep -c '^model = ' .codex/agents/spectra.toml)" -eq 1 ]
-  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml
   ! grep -q 'user-owned-duplicate' .codex/agents/spectra.toml
 }
 
@@ -539,4 +539,37 @@ EOF
   grep -q "# eidolons:managed model" .claude/agents/spectra.md
   # old-model-value must be gone.
   ! grep -q "old-model-value" .claude/agents/spectra.md
+}
+
+@test "model wiring: explicit Claude Max selects Fable and Pro restores Opus idempotently" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_claude_code_project
+  printf 'members:\n  - name: spectra\n    version: 4.0.0\n' > eidolons.lock
+  run eidolons model profile anthropic-max
+  [ "$status" -eq 0 ]
+  grep -q '^model: fable$' .claude/agents/spectra.md
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.hosts."claude-code".effective_model' eidolons.lock)" = "fable" ]
+  run eidolons model profile anthropic-pro
+  [ "$status" -eq 0 ]
+  grep -q '^model: opus$' .claude/agents/spectra.md
+  ! grep -q '^model: fable$' .claude/agents/spectra.md
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.hosts."claude-code".effective_model' eidolons.lock)" = "opus" ]
+  local before
+  before="$(cat .claude/agents/spectra.md)"
+  run eidolons model profile anthropic-pro
+  [ "$status" -eq 0 ]
+  [ "$(cat .claude/agents/spectra.md)" = "$before" ]
+}
+
+@test "model wiring: switching to Claude Pro preserves explicit Fable member pins" {
+  export EIDOLONS_NEXUS="$EIDOLONS_ROOT"
+  setup_claude_code_project
+  run eidolons model use spectra@fable
+  [ "$status" -eq 0 ]
+  run eidolons model profile anthropic-pro
+  [ "$status" -eq 0 ]
+  grep -q '^model: fable$' .claude/agents/spectra.md
+  run eidolons model reset spectra
+  [ "$status" -eq 0 ]
+  grep -q '^model: opus$' .claude/agents/spectra.md
 }

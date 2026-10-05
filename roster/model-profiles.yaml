@@ -19,17 +19,35 @@ profiles:
       light:    haiku
       standard: sonnet
       deep:     opus
+  # Opt-in. Keep plan profiles after `anthropic`, the first Claude Code match.
+  anthropic-pro:
+    description: "Claude Pro-oriented tiers without Fable"
+    applies_to_hosts: [claude-code]
+    tiers:
+      light:    haiku
+      standard: sonnet
+      deep:     opus
+  anthropic-max:
+    description: "Claude Max-oriented tiers with opt-in Fable for deep work"
+    applies_to_hosts: [claude-code]
+    tiers:
+      light:    haiku
+      standard: sonnet
+      deep:     fable
   openai:
-    description: "OpenAI GPT-5.6 Codex capability tiers"
+    description: "OpenAI GPT-6 Codex capability tiers"
     applies_to_hosts: [codex]
     tiers:
-      light:    gpt-5.6-luna
-      standard: gpt-5.6-terra
-      deep:     gpt-5.6-sol
+      light:    gpt-6-luna
+      standard: gpt-6.1-sol
+      deep:     gpt-6-astra
     reasoning_effort:
       light:    low
       standard: medium
       deep:     medium
+    members:
+      ramza:
+        reasoning_effort: high
   cursor:
     description: "Cursor subagent model tier mapping (cross-vendor, checked against Cursor model catalog 2026-09-28)"
     applies_to_hosts: [cursor]
