@@ -9,6 +9,7 @@ here.
 
 | File | Contents | Load when |
 |------|----------|-----------|
+| `agent-naming.md` | Cross-harness task display naming, runtime metadata, and identifier constraints | Before dispatch or standalone Eidolon work |
 | `routing-artifact.md` | Schema and examples for the routing artifact emitted at Dispatch Protocol Step 5 | Emitting or parsing routing artifacts |
 | `handoff-graph.md` | Canonical hand-off graph (union of roster + composition.md edges with origin labels), disambiguation table, and routing open questions | Composing a multi-Eidolon chain or auditing edge provenance |
 | `chain-templates.md` | Full Chain Template table (steps + trigger condition per template) relocated from EIDOLONS.md's always-loaded region | Composing a multi-Eidolon chain (Dispatch Protocol Step 2 chain branch) |

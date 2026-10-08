@@ -3,8 +3,34 @@
 
 EIIS_V3_POINTER_MAX_BYTES=2048
 
+# Shared policy is installed even for standalone agent adapter rendering.
+_eiis_v3_naming_install() {
+  local source="${EIDOLONS_NEXUS:-${NEXUS:-}}/methodology/cortex/agent-naming.md"
+  [[ -f "$source" ]] || source="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/methodology/cortex/agent-naming.md"
+  mkdir -p .eidolons/cortex
+  cmp -s "$source" .eidolons/cortex/agent-naming.md || cp "$source" .eidolons/cortex/agent-naming.md
+}
+
+_eiis_v3_display_name() {
+  local name="$1" fallback="$2" roster="${EIDOLONS_NEXUS:-${NEXUS:-}}/roster/index.yaml" display=""
+  if [[ -f "$roster" ]]; then
+    display="$(awk -v wanted="$name" '
+      $0 == "  - name: " wanted { found=1; next }
+      found && /^  - name:/ { exit }
+      found && /^    display_name:/ {
+        sub(/^    display_name:[[:space:]]*/, ""); gsub(/^"|"$/, ""); print; exit
+      }
+    ' "$roster")"
+  fi
+  printf '%s' "${display:-$fallback}"
+}
+
+_eiis_v3_naming_instruction() {
+  printf 'Eidolon display identity: %s. Before work, load `.eidolons/cortex/agent-naming.md` and apply its task naming policy to supported display/title controls.' "$1"
+}
+
 _eiis_v3_pointer_write() {
-  local path="$1" name="$2" description="$3" persona="$4" spec="$5" tools_csv="${6:-}"
+  local path="$1" name="$2" description="$3" persona="$4" spec="$5" tools_csv="${6:-}" display="${7:-}"
   mkdir -p "$(dirname "$path")"
   {
     printf '%s\n' '---'
@@ -13,6 +39,7 @@ _eiis_v3_pointer_write() {
     [[ -z "$tools_csv" ]] || printf 'tools: [%s]\n' "$tools_csv"
     printf '%s\n' 'generated_by: eidolons' '---' ''
     printf 'Load `%s` and `%s`. This file is a disposable discovery adapter.\n' "$persona" "$spec"
+    [[ -z "$display" ]] || { _eiis_v3_naming_instruction "$display"; printf '\n'; }
   } > "$path"
 }
 
@@ -64,7 +91,7 @@ _eiis_v3_skill_adapter() {
 # Cursor project subagent under .cursor/agents/<name>.md (Task-tool discovery).
 # Disposable discovery adapter — canonical prose stays under .eidolons/<name>/.
 _eiis_v3_cursor_agent_write() {
-  local name="$1" description="$2" root="$3"
+  local name="$1" description="$2" root="$3" display="$4"
   local path=".cursor/agents/${name}.md" klass readonly_line=""
   mkdir -p "$(dirname "$path")"
   klass="$(_eiis_v3_capability_class "$name" 2>/dev/null || true)"
@@ -80,6 +107,7 @@ _eiis_v3_cursor_agent_write() {
     printf 'You are the %s Eidolon. Load `%s/PERSONA.md` and `%s/SPEC.md`.\n' \
       "$name" "$root" "$root"
     printf 'This file is a disposable discovery adapter; do not treat it as the source of truth.\n'
+    _eiis_v3_naming_instruction "$display"; printf '\n'
   } > "$path"
 }
 
@@ -127,6 +155,8 @@ eiis_v3_render_adapters() {
 
   local display description host skill entry adapter_lines="" line type path canonical
   display="$(jq -r '.methodology // .name' "$manifest")"
+  display="$(_eiis_v3_display_name "$name" "$display")"
+  _eiis_v3_naming_install || return 1
   description="$display methodology agent; canonical content is installed under $root."
 
   # Migrate v1 installer-owned surfaces. These paths are scoped by the
@@ -165,7 +195,7 @@ eiis_v3_render_adapters() {
         local claude_tools
         claude_tools="$(_eiis_v3_claude_tools "$name")"
         _eiis_v3_pointer_write ".claude/agents/$name.md" "$name" "$description" \
-          "$root/PERSONA.md" "$root/SPEC.md" "$claude_tools"
+          "$root/PERSONA.md" "$root/SPEC.md" "$claude_tools" "$display"
         adapter_lines="${adapter_lines}pointer\t.claude/agents/$name.md\t$root/PERSONA.md\n"
         while IFS=$'\t' read -r skill entry; do
           [[ -n "$skill" ]] || continue
@@ -178,27 +208,28 @@ eiis_v3_render_adapters() {
         {
           printf 'name = "%s"\n' "$name"
           printf 'description = "%s"\n' "$description"
-          printf 'developer_instructions = "Load %s/PERSONA.md and %s/SPEC.md."\n' "$root" "$root"
+          # JSON strings are valid TOML basic strings and escape display metadata.
+          printf 'developer_instructions = %s\n' "$(jq -Rn --arg text "Load $root/PERSONA.md and $root/SPEC.md. $(_eiis_v3_naming_instruction "$display")" '$text')"
           printf '# generated_by: eidolons\n'
         } > ".codex/agents/$name.toml"
         adapter_lines="${adapter_lines}pointer\t.codex/agents/$name.toml\t$root/PERSONA.md\n"
         ;;
       copilot)
         _eiis_v3_pointer_write ".github/agents/$name.agent.md" "$name" "$description" \
-          "$root/PERSONA.md" "$root/SPEC.md"
+          "$root/PERSONA.md" "$root/SPEC.md" "" "$display"
         adapter_lines="${adapter_lines}pointer\t.github/agents/$name.agent.md\t$root/PERSONA.md\n"
         ;;
       opencode)
         _eiis_v3_pointer_write ".opencode/agents/$name.md" "$name" "$description" \
-          "$root/PERSONA.md" "$root/SPEC.md"
+          "$root/PERSONA.md" "$root/SPEC.md" "" "$display"
         adapter_lines="${adapter_lines}pointer\t.opencode/agents/$name.md\t$root/PERSONA.md\n"
         ;;
       cursor)
         # Rules (always-available Agent context) + Agents (Task subagents) + Skills.
         _eiis_v3_pointer_write ".cursor/rules/${name}.mdc" "$name" "$description" \
-          "$root/PERSONA.md" "$root/SPEC.md"
+          "$root/PERSONA.md" "$root/SPEC.md" "" "$display"
         adapter_lines="${adapter_lines}pointer\t.cursor/rules/${name}.mdc\t$root/PERSONA.md\n"
-        _eiis_v3_cursor_agent_write "$name" "$description" "$root"
+        _eiis_v3_cursor_agent_write "$name" "$description" "$root" "$display"
         adapter_lines="${adapter_lines}pointer\t.cursor/agents/${name}.md\t$root/PERSONA.md\n"
         while IFS=$'\t' read -r skill entry; do
           [[ -n "$skill" ]] || continue

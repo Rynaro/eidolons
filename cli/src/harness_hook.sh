@@ -583,6 +583,8 @@ ${ecm_block}"
     ctx_text="Route: $selected  Tier: $tier  Chain: none  Instruction: Delegate to $selected via the Task tool now. Do NOT implement, edit, or debug directly in the main loop — dispatch to the named Eidolon subagent(s)."
   fi
 
+  ctx_text="$ctx_text  Naming: load .eidolons/cortex/agent-naming.md; label supported titles or task descriptions <Eidolon Name> [<Model> | <Effort>] - <Task> using actual runtime settings (Unknown when unavailable). Keep machine identifiers unchanged."
+
   if [[ -n "$assumptions_str" ]]; then
     ctx_text="$ctx_text  Notes: $assumptions_str"
   fi

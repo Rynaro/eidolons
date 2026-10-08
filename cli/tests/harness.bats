@@ -3633,3 +3633,15 @@ EOF
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
+
+@test "harness: routed task context carries runtime naming rule and stable-identifier constraint" {
+  seed_manifest
+  run eidolons run --hook claude-code "implement the authentication flow"
+  [ "$status" -eq 0 ]
+  local context
+  context="$(jq -r '.hookSpecificOutput.additionalContext // ""' <<< "$output")"
+  [[ "$context" == *'.eidolons/cortex/agent-naming.md'* ]]
+  [[ "$context" == *'<Eidolon Name> [<Model> | <Effort>] - <Task>'* ]]
+  [[ "$context" == *'Unknown when unavailable'* ]]
+  [[ "$context" == *'Keep machine identifiers unchanged.'* ]]
+}

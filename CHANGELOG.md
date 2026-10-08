@@ -10,6 +10,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 No changes yet.
 
+## [4.6.0] — 2026-10-08 — Consistent agent task names across harnesses
+
+Minor: add a shared naming policy for supported human-facing agent titles and task descriptions.
+
+### Added
+- Label Eidolon tasks as `<Eidolon Name> [<Model> | <Effort>] - <Task>`, for example `Vivi [Sol 6.1 | Medium] - Implementing Pokéball Experience`. Use roster display names and actual resolved runtime model and effort, with `Unknown` for unavailable values.
+- Load the canonical naming policy from Codex, Claude Code, Copilot, OpenCode, and Cursor agent adapters, root dispatch instructions, and routing hook context. Standalone adapter rendering installs the policy; `eidolons sync` refreshes it in consuming projects.
+
+### Notes
+- Apply the pattern through title, display, or visible task-description controls exposed by the active harness. Fixed native labels cannot be overridden by this policy. Stable agent names, filenames, routing keys, and restricted spawn identifiers remain unchanged; execution settings are never changed to match a label.
+
 ## [4.5.0] — 2026-10-05 — Refreshed model profiles and member effort defaults
 
 Minor: refresh OpenAI models, add explicit Claude Pro/Max profiles, and support member-specific reasoning effort defaults without changing routing tiers.
