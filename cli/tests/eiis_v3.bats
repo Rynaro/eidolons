@@ -71,3 +71,31 @@ JSON
   [ ! -e .claude/skills/test-removed/SKILL.md ]
   [ -e .claude/skills/test-verify/SKILL.md ]
 }
+
+@test "EIIS v3: every agent surface installs and loads shared naming policy without changing identifiers" {
+  setup_v3_package
+  run bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters test claude-code,codex,copilot,cursor,opencode' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  cmp "$EIDOLONS_ROOT/methodology/cortex/agent-naming.md" .eidolons/cortex/agent-naming.md
+  local path
+  for path in .claude/agents/test.md .github/agents/test.agent.md .opencode/agents/test.md .cursor/agents/test.md .cursor/rules/test.mdc; do
+    grep -q '^name: test$' "$path"
+    grep -Fq 'Eidolon display identity: TEST.' "$path"
+    grep -Fq '.eidolons/cortex/agent-naming.md' "$path"
+    [ "$(wc -c < "$path")" -le 2048 ]
+  done
+  grep -q '^name = "test"$' .codex/agents/test.toml
+  # Decode the TOML basic string to check the instructions really carry the pointer.
+  sed -n 's/^developer_instructions = //p' .codex/agents/test.toml | jq -er 'contains("Eidolon display identity: TEST.") and contains(".eidolons/cortex/agent-naming.md")'
+}
+
+@test "EIIS v3: roster display identity wins over manifest methodology and preserves case" {
+  setup_v3_package
+  mv .eidolons/test .eidolons/vivi
+  run bash -c '. "$1/cli/src/lib_eiis_v3.sh"; eiis_v3_render_adapters vivi codex,cursor; _eiis_v3_display_name apivr wrong' _ "$EIDOLONS_ROOT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'APIVR-Δ'* ]]
+  grep -Fq 'Eidolon display identity: Vivi.' .codex/agents/vivi.toml
+  grep -Fq 'Eidolon display identity: Vivi.' .cursor/agents/vivi.md
+  grep -q '^name = "vivi"$' .codex/agents/vivi.toml
+}

@@ -49,6 +49,15 @@
 
 ---
 
+## Agent display names
+
+Before dispatch or standalone Eidolon work, load `.eidolons/cortex/agent-naming.md`
+(`methodology/cortex/agent-naming.md` in the nexus checkout). Apply its
+`<Eidolon Name> [<Model> | <Effort>] - <Task>` pattern to every supported
+human-facing title or task description, using actual runtime settings.
+
+---
+
 ## Chain Templates
 
 Chain templates route a prompt spanning ≥2 co-triggering capability classes
