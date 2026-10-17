@@ -1487,6 +1487,55 @@ EOF
   die "No version satisfies $constraint for $name; available: ${avail:-none}"
 }
 
+# ─── Cortex digest ──────────────────────────────────────────────────────
+# cortex_digest FILE — shared SessionStart / Cursor routing context (≤4000 bytes).
+# Prefer the explicit always-loaded range, then current/legacy routing headings.
+# Strip structural markers BEFORE applying the budget, including on fallback, so
+# embedding the digest inside a managed cortex block cannot nest its delimiters.
+cortex_digest() {
+  awk '
+    /^[[:space:]]*<!-- always-loaded:start -->[[:space:]]*$/ { in_range=1; has_range=1; next }
+    /^[[:space:]]*<!-- always-loaded:end -->[[:space:]]*$/ { in_range=0; next }
+    /^[[:space:]]*<!-- eidolon:[^ ]+ (start|end) -->[[:space:]]*$/ { next }
+    {
+      fallback = fallback $0 "\n"
+      if (in_range) marked = marked $0 "\n"
+      if (/^## /) {
+        in_section = ($0 ~ /^## Roster( Index)?([[:space:]]|$)/ ||
+                      $0 ~ /^## Dispatch( Protocol)?([[:space:]]|$)/)
+      }
+      if (in_section) sections = sections $0 "\n"
+    }
+    END {
+      if (has_range && marked != "") printf "%s", marked
+      else if (sections != "") printf "%s", sections
+      else printf "%s", fallback
+    }
+  ' "$1" 2>/dev/null | head -c 4000 || true
+}
+
+# Repair old Cursor digests which embedded cortex delimiters, sometimes with a
+# truncated inner block. The first start and final end delimit the managed span;
+# retain that outer pair and let upsert_marker_block replace its body normally.
+# Only the Cursor cortex writer calls this migration; other marker users retain
+# their existing behavior. Content outside the managed span is preserved.
+repair_cursor_cortex_markers() {
+  local dst="$1" tmp
+  [[ -f "$dst" ]] || return 0
+  tmp="$(mktemp)"
+  awk '
+    FNR == NR {
+      if ($0 == "<!-- eidolon:cortex start -->" && !first) first=FNR
+      if ($0 == "<!-- eidolon:cortex end -->") last=FNR
+      next
+    }
+    first && last > first && FNR > first && FNR < last { next }
+    { print }
+  ' "$dst" "$dst" > "$tmp"
+  cat "$tmp" > "$dst"
+  rm -f "$tmp"
+}
+
 # ─── Marker-bounded block upsert ─────────────────────────────────────────
 # upsert_marker_block DST MARKER_NAME CONTENT [PREFIX]
 #

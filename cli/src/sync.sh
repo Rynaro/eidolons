@@ -819,7 +819,7 @@ fi
 
 # ─── Cursor cortex surface: .cursor/rules/eidolons-cortex.mdc (R9 / G4) ──
 # Written when cursor ∈ hosts.wire AND shared-dispatch is on.
-# Uses the same digest awk as harness_hook.sh (Roster Index + Dispatch Protocol).
+# Shares marker-safe routing extraction with the SessionStart hook.
 # The .mdc file is NOT a pointer_targets vendor file; it is cursor-specific and
 # gated directly on cursor ∈ HOSTS_CSV. The closed pointer-target whitelist is
 # unchanged.
@@ -830,17 +830,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
 elif [[ ",${HOSTS_CSV}," == *",cursor,"* ]] && [[ "$EFFECTIVE_SHARED_DISPATCH" == "true" ]]; then
   _cortex_src=".eidolons/cortex/EIDOLONS.md"
   if [[ -f "$_cortex_src" ]]; then
-    # Extract Roster Index and Dispatch Protocol sections (mirrors harness_hook.sh:53-58).
-    _mdc_digest="$(awk '
-      /^## Roster Index/ { in_section=1 }
-      /^## Dispatch Protocol/ { in_section=1 }
-      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
-      in_section { print }
-    ' "$_cortex_src" 2>/dev/null | head -c 4000 || true)"
-
-    if [[ -z "$_mdc_digest" ]]; then
-      _mdc_digest="$(head -c 4000 "$_cortex_src" 2>/dev/null || true)"
-    fi
+    _mdc_digest="$(cortex_digest "$_cortex_src")"
 
     _mdc_body="${_mdc_digest}
 
@@ -860,9 +850,11 @@ alwaysApply: true
       upsert_marker_block "$_mdc_file" "cortex" "$_mdc_body"
       ok "Wrote .cursor/rules/eidolons-cortex.mdc"
     else
+      # Heal nested delimiters emitted by older sync versions first.
       # File exists: upsert_marker_block rewrites only the marker interior.
       # Check idempotency: compare before/after.
       _mdc_before="$(cat "$_mdc_file" 2>/dev/null || echo "")"
+      repair_cursor_cortex_markers "$_mdc_file"
       upsert_marker_block "$_mdc_file" "cortex" "$_mdc_body"
       _mdc_after="$(cat "$_mdc_file" 2>/dev/null || echo "")"
       if [[ "$_mdc_before" == "$_mdc_after" ]]; then

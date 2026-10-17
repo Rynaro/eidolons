@@ -354,20 +354,9 @@ _main() {
       return 0  # absent → empty stdout per AC-R1-3
     fi
 
-    # Extract Roster Index and Dispatch Protocol sections via awk.
-    # Target ≤1000 tokens (~4000 chars).
+    # Share the marker-safe, bounded routing digest with Cursor sync.
     local cortex_digest
-    cortex_digest="$(awk '
-      /^## Roster Index/ { in_section=1 }
-      /^## Dispatch Protocol/ { in_section=1 }
-      /^## / && !/^## Roster Index/ && !/^## Dispatch Protocol/ { in_section=0 }
-      in_section { print }
-    ' "$cortex_file" 2>/dev/null | head -c 4000 || true)"
-
-    if [[ -z "$cortex_digest" ]]; then
-      # Fallback: first 4000 chars of the file.
-      cortex_digest="$(head -c 4000 "$cortex_file" 2>/dev/null || true)"
-    fi
+    cortex_digest="$(cortex_digest "$cortex_file")"
 
     if [[ -z "$cortex_digest" ]]; then
       return 0
