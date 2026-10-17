@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+No changes yet.
+
+## [4.6.1] — 2026-10-17 — Marker-safe cortex digests
+
+Patch: fixes [#647](https://github.com/Rynaro/eidolons/issues/647), where repeated Cursor syncs nested routing markers and SessionStart hooks loaded the cortex preamble.
+
 ### Fixed
 - Extract current and legacy cortex routing digests safely for Cursor and SessionStart hooks. Repeated syncs remain byte-identical, managed markers cannot nest inside the digest, and sync repairs Cursor cortex blocks damaged by earlier versions ([#647](https://github.com/Rynaro/eidolons/issues/647)).
 
