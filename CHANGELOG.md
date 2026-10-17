@@ -8,7 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Fixed
+- Extract current and legacy cortex routing digests safely for Cursor and SessionStart hooks. Repeated syncs remain byte-identical, managed markers cannot nest inside the digest, and sync repairs Cursor cortex blocks damaged by earlier versions ([#647](https://github.com/Rynaro/eidolons/issues/647)).
 
 ## [4.6.0] — 2026-10-08 — Consistent agent task names across harnesses
 
