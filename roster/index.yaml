@@ -1430,10 +1430,19 @@ eidolons:
       # nexus eidolon-release-template.yml. See .github/workflows/roster-intake.yml.
       signer_workflow: .github/workflows/release.yml
     versions:
-      latest: "2.3.0"
+      latest: "2.4.0"
       pins:
-        stable: "2.3.0"
+        stable: "2.4.0"
       releases:
+        2.4.0:
+          tag: v2.4.0
+          commit: 67a739c0f47b6decd5ba7895823f062695a2301f
+          tree: cb704203db070c9ec25b809cea7369c2819eff80
+          archive_sha256: aa90791dc0e5b1848731cd3db63aef1df5b823abb4ffbc3ba4d956f5e53f6813
+          manifest_sha256: null
+          provenance:
+            github_attestation: true
+            workflow: .github/workflows/release.yml
         2.3.0:
           tag: v2.3.0
           commit: 9176cf032353709902679be76a3a2f5d18d1c2fa
