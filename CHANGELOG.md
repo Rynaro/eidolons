@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+No changes yet.
+
+## [4.6.2] — 2026-10-18 — Reliable pointer-target re-derivation
+
+Patch: fixes [#648](https://github.com/Rynaro/eidolons/issues/648), where pointer-target re-derivation reported success without updating default manifests.
+
 ### Fixed
 - Persist `init --re-derive` pointer targets when `hosts.strict` is absent. Scope changes to the hosts field, replace block-list targets safely, preserve unrelated configuration, and verify the candidate manifest before reporting success ([#648](https://github.com/Rynaro/eidolons/issues/648)).
 
