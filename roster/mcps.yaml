@@ -172,6 +172,7 @@ mcps:
     exposes_tools:
       glob: "mcp__crystalium__*"
       list:
+        - mcp__crystalium__assemble_context
         - mcp__crystalium__recall
         - mcp__crystalium__commit
         - mcp__crystalium__update
@@ -185,10 +186,13 @@ mcps:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.2.1"
+      latest: "2.3.0"
       pins:
-        stable: "2.2.1"
+        stable: "2.3.0"
       releases:
+        "2.3.0":
+          digest: "sha256:d5540e72505427dbcd95c1143b79f706c5973ecf221fb8492bec32b69bbe42a6"
+          released_at: "2026-10-18T18:27:32Z"
         "2.2.1":
           digest: "sha256:ee8ee208dbd9a2b1c0fc43e748d584d95dd338a4d3e6581a6c9e032566b16648"
           released_at: "2026-09-15T21:02:05Z"
