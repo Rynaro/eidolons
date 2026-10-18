@@ -8,7 +8,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Fixed
+- Persist `init --re-derive` pointer targets when `hosts.strict` is absent. Scope changes to the hosts field, replace block-list targets safely, preserve unrelated configuration, and verify the candidate manifest before reporting success ([#648](https://github.com/Rynaro/eidolons/issues/648)).
 
 ## [4.6.1] — 2026-10-17 — Marker-safe cortex digests
 

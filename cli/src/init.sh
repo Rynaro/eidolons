@@ -197,33 +197,71 @@ if [[ "$RE_DERIVE" == "true" ]]; then
     _rd_new_pt="$_rd_host_derived"
   fi
 
-  # Rewrite only the pointer_targets line (atomic via tmp file).
-  _rd_tmpfile="${PROJECT_MANIFEST}.re-derive.tmp"
+  # Keep the original bytes outside this field: YAML serializers would also
+  # reformat unrelated project settings and comments. Only edit a block-style
+  # root hosts mapping; verify the parsed result before committing the candidate.
+  _rd_tmpfile="$(mktemp "${PROJECT_MANIFEST}.re-derive.XXXXXX")"
+  _rd_pt_yaml=""
   if [[ -n "$_rd_new_pt" ]]; then
-    _rd_pt_yaml="  pointer_targets: [$(printf '%s\n' "$_rd_new_pt" | sed 's/,/, /g')]"
-  else
-    _rd_pt_yaml=""
+    _rd_pt_yaml="pointer_targets: [$(printf '%s\n' "$_rd_new_pt" | sed 's/,/, /g')]"
   fi
 
-  # Use awk to replace or remove the pointer_targets line.
-  awk -v new_pt="$_rd_pt_yaml" '
-    /^[[:space:]]*pointer_targets:/ {
-      if (new_pt != "") { print new_pt }
-      next
+  if ! awk -v new_pt="$_rd_pt_yaml" '
+    { lines[NR]=$0 }
+    /^hosts:[[:space:]]*(#.*)?$/ { start=NR; count++; in_hosts=1; next }
+    in_hosts && /^[^[:space:]#]/ { finish=NR-1; in_hosts=0 }
+    END {
+      if (count != 1) exit 1
+      if (!finish) finish=NR
+      # Honor the existing mapping indentation (not necessarily two spaces).
+      for (i=start+1; i<=finish; i++) {
+        if (lines[i] ~ /^[[:space:]]*(#|$)/) continue
+        indent=match(lines[i], /[^ ]/)-1
+        if (indent > 0 && (!child_indent || indent < child_indent)) child_indent=indent
+      }
+      if (!child_indent) child_indent=2
+      for (i=1; i<=NR; i++) {
+        if (i==start) {
+          print lines[i]
+          if (new_pt != "") printf "%*s%s\n", child_indent, "", new_pt
+          continue
+        }
+        if (i>start && i<=finish) {
+          # Comments/blank lines remain byte-for-byte, including after lists.
+          if (lines[i] ~ /^[[:space:]]*(#|$)/) { print lines[i]; continue }
+          indent=match(lines[i], /[^ ]/)-1
+          if (dropping) {
+            # YAML permits block-sequence items at the field indentation.
+            if (indent > child_indent ||
+                (indent == child_indent && lines[i] ~ /^[ ]*-/)) continue
+            dropping=0
+          }
+          if (indent == child_indent && lines[i] ~ /^[ ]*pointer_targets:/) {
+            dropping=1
+            continue
+          }
+        }
+        print lines[i]
+      }
     }
-    { print }
-  ' "$PROJECT_MANIFEST" > "$_rd_tmpfile"
-
-  # If pointer_targets line was absent and we need to add it, insert after strict: line.
-  if [[ -n "$_rd_pt_yaml" ]] && ! grep -q 'pointer_targets:' "$_rd_tmpfile"; then
-    awk -v new_pt="$_rd_pt_yaml" '
-      /^[[:space:]]*strict:/ { print; print new_pt; next }
-      { print }
-    ' "$_rd_tmpfile" > "${_rd_tmpfile}.2" && mv "${_rd_tmpfile}.2" "$_rd_tmpfile"
+  ' "$PROJECT_MANIFEST" > "$_rd_tmpfile"; then
+    rm -f "$_rd_tmpfile"
+    die "eidolons init --re-derive: expected a block-style hosts mapping; manifest unchanged."
   fi
 
+  _rd_expected_json="$(printf '%s\n' "$_rd_manifest_json" | jq --arg csv "$_rd_new_pt" '
+    if $csv == "" then del(.hosts.pointer_targets)
+    else .hosts.pointer_targets = ($csv | split(",")) end
+  ')"
+  if ! _rd_actual_json="$(yaml_to_json "$_rd_tmpfile" 2>/dev/null)" ||
+     ! printf '%s\n' "$_rd_actual_json" | jq -e --argjson expected "$_rd_expected_json" '. == $expected' >/dev/null; then
+    rm -f "$_rd_tmpfile"
+    die "eidolons init --re-derive: could not verify hosts.pointer_targets update; manifest unchanged."
+  fi
+
+  chmod --reference="$PROJECT_MANIFEST" "$_rd_tmpfile" 2>/dev/null || chmod "$(stat -f '%A' "$PROJECT_MANIFEST" 2>/dev/null || echo 644)" "$_rd_tmpfile" 2>/dev/null || true
   mv "$_rd_tmpfile" "$PROJECT_MANIFEST"
-  unset _rd_manifest_json _rd_hosts_csv _rd_shared_dispatch _rd_host_derived _rd_new_pt _rd_tmpfile _rd_pt_yaml
+  unset _rd_manifest_json _rd_hosts_csv _rd_shared_dispatch _rd_host_derived _rd_new_pt _rd_tmpfile _rd_pt_yaml _rd_expected_json _rd_actual_json
 
   ok "Updated hosts.pointer_targets in eidolons.yaml — re-run 'eidolons sync' to apply."
   info "Orphan dispatch-pointer block(s) may remain in previously-targeted vendor files (e.g. CLAUDE.md). They correctly point to ./EIDOLONS.md and are harmless. Delete the <!-- eidolon:dispatch-pointer start --> ... end --> markers and the file body between them to remove."
