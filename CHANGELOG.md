@@ -8,7 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+- Upgrade CRYSTALIUM from v2.2.1 to v2.5.0 in both the source roster and MCP catalogue, with verified source release metadata and the immutable amd64/arm64 image digest. Expose `assemble_context` in the MCP tool allowlist for conditional memory context; the release also includes structured repair records and coding memory calibration tooling.
+
 
 ## [4.6.2] — 2026-10-18 — Reliable pointer-target re-derivation
 

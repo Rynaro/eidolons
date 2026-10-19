@@ -181,14 +181,18 @@ mcps:
         - mcp__crystalium__plan_replan
         - mcp__crystalium__session_end
         - mcp__crystalium__graph_export
+        - mcp__crystalium__assemble_context
     source:
       type: ghcr
       image: "ghcr.io/rynaro/crystalium"
     versions:
-      latest: "2.2.1"
+      latest: "2.5.0"
       pins:
-        stable: "2.2.1"
+        stable: "2.5.0"
       releases:
+        "2.5.0":
+          digest: "sha256:8a6ce6dafc95b036e4cda752e42a3c54d8b0b5ad96cb0d62a391b0aefb100ae0"
+          released_at: "2026-10-19T23:29:18Z"
         "2.2.1":
           digest: "sha256:ee8ee208dbd9a2b1c0fc43e748d584d95dd338a4d3e6581a6c9e032566b16648"
           released_at: "2026-09-15T21:02:05Z"
