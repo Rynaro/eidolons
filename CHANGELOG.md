@@ -8,9 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+No changes yet.
+
+## [4.6.3] — 2026-10-29 — Refresh installed agent models during upgrades
+
+Patch: apply current model profiles to installed agents when member package versions are already current.
+
+### Fixed
+- Refresh managed model and reasoning-effort settings and lock provenance during project upgrades, including unchanged members alongside upgraded packages. Existing OpenAI agents now adopt the shipped GPT-6 Luna / GPT-6.1 Sol / GPT-6 Astra defaults without requiring a package reinstall. Explicit pins and calibration overrides retain precedence; targeted upgrades preserve unrelated descriptors and model provenance.
+
 ### Changed
 - Upgrade CRYSTALIUM from v2.2.1 to v2.5.0 in both the source roster and MCP catalogue, with verified source release metadata and the immutable amd64/arm64 image digest. Expose `assemble_context` in the MCP tool allowlist for conditional memory context; the release also includes structured repair records and coding memory calibration tooling.
-
 
 ## [4.6.2] — 2026-10-18 — Reliable pointer-target re-derivation
 

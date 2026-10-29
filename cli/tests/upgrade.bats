@@ -241,6 +241,121 @@ v1.1.0"
   [ "$(cat eidolons.lock)" = "$before" ]
 }
 
+# Seed current packages with stale managed Codex settings: upgrading only the
+# nexus/profile must still repair the installed adapters.
+seed_stale_codex_models() {
+  setup_fake_git_for_upgrade
+  export FAKE_LSREMOTE_TAGS="v1.0.0" FAKE_NEXUS_HEAD_TAG="v1.0.0"
+  local atlas_latest spectra_latest id
+  atlas_latest="$(yq -r '.eidolons[] | select(.name == "atlas") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  spectra_latest="$(yq -r '.eidolons[] | select(.name == "spectra") | .versions.latest' "$EIDOLONS_ROOT/roster/index.yaml")"
+  seed_manifest_with atlas="^$atlas_latest" spectra="^$spectra_latest"
+  seed_lock_with_versions atlas="$atlas_latest" spectra="$spectra_latest"
+  yq -i '.hosts.wire = ["codex"]' eidolons.yaml
+  mkdir -p .codex/agents
+  for id in atlas spectra; do
+    cat > ".codex/agents/$id.toml" <<EOF
+# eidolons:managed model
+model = "gpt-5.6-terra"
+# eidolons:managed model_reasoning_effort
+model_reasoning_effort = "low"
+EOF
+  done
+}
+
+@test "upgrade: refreshes stale Codex models without package upgrades and stays idempotent" {
+  seed_stale_codex_models
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -eq 0 ]
+  [ ! -f "$FAKE_INSTALL_LOG" ]
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
+  grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
+  grep -q '^default_subagent_model = "gpt-6-luna"$' .codex/config.toml
+  [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6.1-sol" ]
+  [ "$(yq '.members[] | select(.name == "atlas") | .resolved' eidolons.lock)" = "github:Rynaro/ATLAS@test" ]
+  local before
+  before="$(cat eidolons.lock)"
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -eq 0 ]
+  [ "$(cat eidolons.lock)" = "$before" ]
+}
+
+@test "upgrade: targeted model refresh preserves other members and explicit model pins" {
+  seed_stale_codex_models
+  yq -i '.models.members.atlas.model = "custom-model" | .models.members.atlas.reasoning_effort = "high"' eidolons.yaml
+  run eidolons upgrade atlas --non-interactive --yes
+  [ "$status" -eq 0 ]
+  grep -q '^model = "custom-model"$' .codex/agents/atlas.toml
+  grep -q '^model_reasoning_effort = "high"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+  [ "$(yq '.members[] | select(.name == "spectra") | .model' eidolons.lock)" = "null" ]
+}
+
+@test "upgrade: model refresh remains read-only for check and dry-run" {
+  seed_stale_codex_models
+  local before_lock before_agent flag
+  before_lock="$(cat eidolons.lock)"
+  before_agent="$(cat .codex/agents/atlas.toml)"
+  for flag in --check --dry-run; do
+    run eidolons upgrade "$flag" --non-interactive --yes
+    [ "$status" -eq 0 ]
+    [ "$(cat eidolons.lock)" = "$before_lock" ]
+    [ "$(cat .codex/agents/atlas.toml)" = "$before_agent" ]
+    [ ! -f .codex/config.toml ]
+  done
+}
+
+@test "upgrade: refreshes current members while another package upgrades" {
+  seed_stale_codex_models
+  yq -i '(.members[] | select(.name == "atlas") | .version) = "1.0.0"' eidolons.lock
+  yq -i '(.members[] | select(.name == "atlas") | .version) = "^1.0.0"' eidolons.yaml
+  export FAKE_INSTALL_REPLACE_DESCRIPTORS=true
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -eq 0 ]
+  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6-astra" ]
+  [ "$(yq '.members[] | select(.name == "spectra") | .resolved' eidolons.lock)" = "github:Rynaro/SPECTRA@test" ]
+}
+
+@test "upgrade: targeted package upgrade preserves unselected model provenance" {
+  seed_stale_codex_models
+  yq -i '(.members[] | select(.name == "atlas") | .version) = "1.0.0" |
+    (.members[] | select(.name == "spectra") | .model) = {"effective_model": "old-model", "profile": "custom"}' eidolons.lock
+  yq -i '(.members[] | select(.name == "atlas") | .version) = "^1.0.0"' eidolons.yaml
+  export FAKE_INSTALL_REPLACE_DESCRIPTORS=true
+  run eidolons upgrade atlas --non-interactive --yes
+  [ "$status" -eq 0 ]
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.effective_model' eidolons.lock)" = "old-model" ]
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.profile' eidolons.lock)" = "custom" ]
+  grep -q '^model = "gpt-5.6-terra"$' .codex/agents/spectra.toml
+}
+
+@test "upgrade: current-package model conflicts fail before changing adapters or lock" {
+  seed_stale_codex_models
+  sed '/# eidolons:managed model$/d' .codex/agents/spectra.toml > unmanaged.toml
+  mv unmanaged.toml .codex/agents/spectra.toml
+  local before_lock before_agent
+  before_lock="$(cat eidolons.lock)"
+  before_agent="$(cat .codex/agents/atlas.toml)"
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -ne 0 ]
+  [ "$(cat eidolons.lock)" = "$before_lock" ]
+  [ "$(cat .codex/agents/atlas.toml)" = "$before_agent" ]
+}
+
+@test "upgrade: model refresh skips absent adapters and uninstalled members" {
+  seed_stale_codex_models
+  rm .codex/agents/spectra.toml
+  yq -i '.members += [{"name": "vivi", "version": "^1.0.0", "source": "github:Rynaro/Vivi"}]' eidolons.yaml
+  run eidolons upgrade --non-interactive --yes
+  [ "$status" -eq 0 ]
+  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
+  [ ! -f .codex/agents/spectra.toml ]
+  [ "$(yq '.members[] | select(.name == "spectra") | .model' eidolons.lock)" = "null" ]
+  [ "$(yq '.members | length' eidolons.lock)" -eq 2 ]
+}
+
 # T14
 @test "upgrade: --non-interactive without --yes fails fast" {
   setup_fake_git_for_upgrade

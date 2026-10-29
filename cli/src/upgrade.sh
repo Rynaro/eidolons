@@ -501,7 +501,8 @@ emit_lock_fragment_carry() {
         if .verification then "    verification: \"\(.verification)\"" else empty end,
         "    target: \"\(.target // "")\"",
         if .hosts_wired then "    hosts_wired: \(.hosts_wired | tojson)" else empty end,
-        if .manifest_missing then "    manifest_missing: \(.manifest_missing | tojson)" else empty end
+        if .manifest_missing then "    manifest_missing: \(.manifest_missing | tojson)" else empty end,
+        if .model then "    model: \(.model | tojson)" else empty end
       ] | join("\n")
     '
 }
@@ -626,12 +627,12 @@ render_human_report "$NX" "$ROWS"
 if [[ -z "$WORK" ]]; then
   echo ""
   ok "All members up-to-date."
-  # Surface pinned-out as an informational note (already rendered in summary).
-  exit 0
+  # Package versions can be current while profile defaults have changed.
+  # Continue below to reconcile the selected installed adapters and provenance.
 fi
 
 # Confirmation.
-if [[ "$YES" != true && "$NON_INTERACTIVE" != true ]]; then
+if [[ -n "$WORK" && "$YES" != true && "$NON_INTERACTIVE" != true ]]; then
   echo ""
   if ! ui_confirm "Proceed with upgrade?" default-y; then
     die "Upgrade aborted by user."
@@ -701,6 +702,28 @@ EOF
   done
   ok "Wrote $PROJECT_LOCK"
 fi
+
+# Roster profiles evolve independently of member package versions. Reconcile
+# every selected installed member, including current/pinned packages, without
+# reinstalling it. ROWS already respects positional target selection.
+while IFS=$'\t' read -r mname _installed _latest _constraint _status; do
+  [[ -n "$mname" && "$_status" != "not-installed" ]] || continue
+  [[ " $FAILED " != *" $mname "* && " $SUCCEEDED " != *" $mname "* ]] || continue
+  # Legacy locks can outlive their adapters. Leave absent descriptors alone;
+  # sync is responsible for recreating them, not a model-only upgrade.
+  if [[ ! -f ".codex/agents/$mname.toml" && ! -f ".claude/agents/$mname.md" && ! -f ".cursor/agents/$mname.md" ]]; then
+    continue
+  fi
+  if [[ "$DRY_RUN" == true ]]; then
+    info "  [dry-run] would refresh model settings for $mname"
+    continue
+  fi
+  if model_wiring_apply_for_member "$mname" 0; then
+    model_wiring_update_lock_for_member "$mname" || die "Model provenance lock update failed for $mname"
+  else
+    FAILED="$FAILED $mname"
+  fi
+done <<<"$ROWS"
 
 # Summary.
 echo ""
