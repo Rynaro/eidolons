@@ -160,7 +160,9 @@ The OpenAI profile was refreshed on **2026-10-05**, using OpenAI's [latest-model
 | FORGE, VIGIL, SPECTRA | deep | `gpt-6-astra` | medium |
 | RAMZA | deep | `gpt-6-astra` | high |
 
-Run `eidolons sync` in consuming projects to refresh managed descriptors and lock provenance. Per-member model pins and per-tier calibration continue to take precedence; unnamed Codex children use the refreshed light model unless explicitly overridden.
+Run `eidolons upgrade --yes` in each consuming project to refresh installed managed model and reasoning-effort settings and their lock provenance, even when all member package versions are current. A targeted command such as `eidolons upgrade atlas --yes` refreshes only the selected members; unrelated descriptors and their model provenance are preserved. Per-member model pins and per-tier calibration continue to take precedence; unnamed Codex children use the refreshed light model unless explicitly overridden.
+
+`eidolons upgrade --system` updates the nexus only; follow it with a project upgrade to refresh existing agents. `eidolons sync` also refreshes managed descriptors and lock provenance and recreates missing adapters. `--check` and `--dry-run` leave project model settings unchanged.
 
 Codex uses the OpenAI profile's model and reasoning-effort values together. The model identifiers above remain the shipped profile mappings; verify that a concrete model is available in your installed Codex host before pinning it in a project override.
 
@@ -355,11 +357,11 @@ The `# eidolons:managed model` sentinel marks the line the nexus owns. Writes ar
 
   **Cursor tier model selection** for the mixed `cursor` profile (IDs checked against Cursor model catalog 2026-09-28):
 
-  | Tier | Model | Why chosen | Runner-up |
-  |------|-------|------------|-----------|
-  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities | `gpt-5.6-luna` |
-  | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration | `gpt-5.6-terra` |
-  | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work | `claude-opus-5-5` |
+  | Tier | Model | Why chosen |
+  |------|-------|------------|
+  | light | `gemini-3.8-flash` | Flash model optimized for speed; full Agent/Thinking/Images capabilities |
+  | standard | `composer-2.5` | Cursor's own model; no special plan requirements; full capabilities; best integration |
+  | deep | `claude-fable-5-1` | Premium reasoning model (~2.5x Opus cost); strongest for high-stakes work |
 
   **Two Cursor usage pools.** Cursor meters [Cursor Models](https://cursor.com/docs/models) separately from everything else:
 
