@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [4.7.0] — 2026-11-07 — atlas-aci MCP pin moves to v3.0.0
+
+Minor: the atlas-aci MCP pin goes major (2.0.0 → 3.0.0), which is breaking for consumers who run `eidolons mcp upgrade atlas-aci`, as described below; the nexus's own surface (CLI flags, `schemas/`, sibling contracts, `catalogue_version`) is unchanged.
+
 ### Changed
 - **atlas-aci MCP pinned to v3.0.0** (`roster/mcps.yaml`). Rolls the catalogue pin `2.0.0 → 3.0.0` (`ghcr.io/rynaro/atlas-aci@sha256:257095b4…`, OCI image index, linux/amd64 + linux/arm64 plus two attestation manifests; tag `v3.0.0` on merge commit `b4b9681`, image tag `3.0.0`, which `3.0`, `3` and `latest` also resolve to). The release workflow signs the image with cosign (keyless) and attests an SBOM and build provenance, which is why the digest can be trusted; the digest was re-resolved from ghcr at bump time and every recorded atlas-aci digest was read back out of `roster/mcps.yaml` and verified against the registry. No releases were skipped this time: upstream's tags run `v2.0.0` then `v3.0.0`, so there is nothing to backfill. `cli/tests/mcp_images.bats`'s `ATLAS_ACI_PINNED` fixture is bumped alongside, and `S8-guard` still derives the expected digest from `versions.pins.stable`.
 
