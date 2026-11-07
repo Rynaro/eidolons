@@ -8,7 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
-No changes yet.
+### Changed
+- **atlas-aci MCP pinned to v3.0.0** (`roster/mcps.yaml`). Rolls the catalogue pin `2.0.0 → 3.0.0` (`ghcr.io/rynaro/atlas-aci@sha256:257095b4…`, OCI image index, linux/amd64 + linux/arm64 plus two attestation manifests; tag `v3.0.0` on merge commit `b4b9681`, image tag `3.0.0`, which `3.0`, `3` and `latest` also resolve to). The release workflow signs the image with cosign (keyless) and attests an SBOM and build provenance, which is why the digest can be trusted; the digest was re-resolved from ghcr at bump time and every recorded atlas-aci digest was read back out of `roster/mcps.yaml` and verified against the registry. No releases were skipped this time: upstream's tags run `v2.0.0` then `v3.0.0`, so there is nothing to backfill. `cli/tests/mcp_images.bats`'s `ATLAS_ACI_PINNED` fixture is bumped alongside, and `S8-guard` still derives the expected digest from `versions.pins.stable`.
+
+  **Breaking for consumers:** the on-disk index schema moves `SCHEMA_EPOCH 5 → 9` and the portable export epoch is `7`, so an existing `.atlas/` index is derived data with no in-place migration and rebuilds on the first `atlas-aci index` after the upgrade, and a v3.0.0 server cannot import a portable export written by v2.0.0 (re-export from a v3.0.0 index instead). Until the index is rebuilt, a tool call returns the structured `INDEX_UNAVAILABLE` error naming the command to run. `test_dry_run` now refuses to execute repository tests unless the operator starts the server with `ATLAS_ACI_ENABLE_TEST_EXECUTION=1`; the nexus install template does not set it, so under the pinned wiring `test_dry_run` reports execution as disabled. The MCP tool surface is **unchanged at seven tools** (`view_file`, `list_dir`, `search_text`, `search_symbol`, `graph_query`, `test_dry_run`, `memex_read`). Upstream also closes a ripgrep option-injection path in `search_text` and raises dependency floors against known fixable CVEs. Release notes: [v3.0.0](https://github.com/Rynaro/atlas-aci/releases/tag/v3.0.0).
 
 ## [4.6.3] — 2026-10-29 — Refresh installed agent models during upgrades
 
