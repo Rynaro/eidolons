@@ -116,6 +116,11 @@
             "additionalProperties": false,
             "required": ["resource_profiles"],
             "properties": {
+              "keepalive": {
+                "type": "string",
+                "enum": ["shell", "server"],
+                "description": "PID 1 of the session-scoped container (cli/src/mcp_launch.sh). shell: /bin/sh sleep loop (image ships a shell). server: the serve command idles on an open stdin (distroless). Default server."
+              },
               "resource_profiles": {
                 "type": "object",
                 "additionalProperties": false,

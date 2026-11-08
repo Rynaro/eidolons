@@ -248,16 +248,34 @@ _ecm_pins_reminder() {
 # `docker run` of the reindex container. Defined ONCE: the first attempt and
 # the post-reap retry MUST stay byte-identical or the retry can spawn a
 # differently-configured indexer.
+#
+# Remaining args are the resource flags lifted verbatim from atlas-aci's own
+# `serve` argv (--cpus/--memory/--memory-swap/--pids-limit), so the indexer
+# runs under the same per-container ceiling as the server it feeds.
 _atlas_sync_spawn() {
   local cname="$1" slug="$2" root="$3" image_ref="$4" secs="$5"
+  shift 5
   with_timeout "$secs" docker run --rm -d --pull=never \
     --name "$cname" \
     --label "eidolons.project=${slug}" \
+    --label "eidolons.mcp=atlas-aci" \
+    --label "eidolons.scope=sync" \
     --user "$(id -u):$(id -g)" \
+    "$@" \
     -v "${root}:/repo" \
     --cap-drop ALL --security-opt no-new-privileges \
     "$image_ref" \
     index --repo /repo --since auto >/dev/null 2>&1
+}
+
+# _atlas_sync_limits MCP_JSON — print atlas-aci's resource flag/value pairs,
+# one token per line, from its .mcp.json argv (empty when unlimited).
+_atlas_sync_limits() {
+  jq -r '(.mcpServers["atlas-aci"].args // []) as $a
+    | range(0; ($a | length) - 1) as $i
+    | select($a[$i] == "--cpus" or $a[$i] == "--memory"
+             or $a[$i] == "--memory-swap" or $a[$i] == "--pids-limit")
+    | $a[$i], $a[$i + 1]' "$1" 2>/dev/null
 }
 
 _atlas_autosync() {
@@ -291,7 +309,14 @@ _atlas_autosync() {
   slug="${slug#eidolons.project=}"
   [ -n "$slug" ] || return 0
 
-  local cname="atlas-aci-sync-${slug}"
+  # Same naming convention as the session containers (cli/src/mcp_launch.sh):
+  # eidolons-<project>-<mcp>-<role>. One indexer per project (AC-4 dedup key).
+  local cname="eidolons-${slug}-atlas-aci-sync"
+
+  local _atlas_limits=() _tok
+  while IFS= read -r _tok; do
+    [ -n "$_tok" ] && _atlas_limits+=("$_tok")
+  done < <(_atlas_sync_limits "$mcp")
 
   # Per-call budgets (s) — see header note (Strategy D's timeout split).
   # Overridable for tests / unusually slow hosts.
@@ -300,7 +325,7 @@ _atlas_autosync() {
 
   local _atlas_rc=0
   _atlas_sync_spawn "$cname" "$slug" "$root" "$image_ref" "$_atlas_spawn_timeout" \
-    || _atlas_rc=$?
+    ${_atlas_limits[@]+"${_atlas_limits[@]}"} || _atlas_rc=$?
 
   # rc=0 -> spawned (COMMON CASE: exactly ONE docker call).
   # rc=124 -> with_timeout fired; daemon is wedged. Do NOT reconcile or retry
@@ -319,7 +344,8 @@ _atlas_autosync() {
 
   # INVARIANT: rm-success => respawn. Whoever reaps the name is OBLIGATED to
   # take it, or concurrent hooks can leave zero indexers running.
-  _atlas_sync_spawn "$cname" "$slug" "$root" "$image_ref" "$_atlas_spawn_timeout" || true
+  _atlas_sync_spawn "$cname" "$slug" "$root" "$image_ref" "$_atlas_spawn_timeout" \
+    ${_atlas_limits[@]+"${_atlas_limits[@]}"} || true
 
   return 0
 }

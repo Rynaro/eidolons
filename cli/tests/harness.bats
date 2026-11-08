@@ -2960,8 +2960,44 @@ EOF
   [[ "$argv" == *"--since"* ]]
   # Reused eidolons.project label (same slug source as the digest).
   [[ "$argv" == *"eidolons.project=test-project"* ]]
-  # --name follows the atlas-aci-sync-<slug> convention (AC-4's dedup key).
-  [[ "$argv" == *"atlas-aci-sync-test-project"* ]]
+  # --name follows the eidolons-<slug>-atlas-aci-sync convention (AC-4's dedup key).
+  [[ "$argv" == *"eidolons-test-project-atlas-aci-sync"* ]]
+}
+
+@test "atlas-aci autosync: indexer inherits atlas-aci's resource ceiling from a launcher-wrapped entry" {
+  seed_manifest
+  cat > .mcp.json <<JSON
+{
+  "mcpServers": {
+    "atlas-aci": {
+      "command": "$EIDOLONS_ROOT/cli/src/mcp_launch.sh",
+      "args": [
+        "atlas-aci", "--keepalive", "shell", "--",
+        "run", "--cpus", "1.00", "--memory", "1g", "--memory-swap", "1g", "--pids-limit", "256",
+        "--rm", "-i", "--read-only",
+        "--label", "eidolons.project=test-project",
+        "-v", "$PWD:/repo:ro",
+        "--cap-drop", "ALL", "--security-opt", "no-new-privileges",
+        "$ATLAS_ACI_DIGEST",
+        "serve", "--repo", "/repo"
+      ]
+    }
+  }
+}
+JSON
+  setup_fake_docker_autosync
+  local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
+  export FAKE_DOCKER_ARGV_LOG="$argv_log"
+  run env HOOK_HOST=claude-code HOOK_MODE=session_start HOOK_EVENT_NAME=SessionStart \
+    bash "$EIDOLONS_ROOT/cli/src/harness_hook.sh"
+  [ "$status" -eq 0 ]
+  [ -s "$argv_log" ]
+  local argv
+  argv="$(cat "$argv_log")"
+  [[ "$argv" == *"$ATLAS_ACI_DIGEST"* ]]
+  [[ "$argv" == *"--cpus 1.00 --memory 1g --memory-swap 1g --pids-limit 256"* ]]
+  [[ "$argv" == *"--name eidolons-test-project-atlas-aci-sync"* ]]
+  [[ "$argv" == *"--label eidolons.scope=sync"* ]]
 }
 
 @test "atlas-aci autosync AC-3: fires identically on UserPromptSubmit (not just SessionStart)" {
@@ -3001,7 +3037,7 @@ EOF
 @test "atlas-aci autosync AC-4: container already running -> zero NEW containers created" {
   seed_manifest
   seed_mcp_with_atlas_aci
-  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_NAME="eidolons-test-project-atlas-aci-sync"
   export FAKE_DOCKER_EXISTING_STATE="running"
   setup_fake_docker_autosync
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
@@ -3018,7 +3054,7 @@ EOF
 @test "atlas-aci autosync AC-4: a DIFFERENTLY-named running container does NOT block the spawn" {
   seed_manifest
   seed_mcp_with_atlas_aci
-  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-some-other-project"
+  export FAKE_DOCKER_EXISTING_NAME="eidolons-some-other-project-atlas-aci-sync"
   export FAKE_DOCKER_EXISTING_STATE="running"
   setup_fake_docker_autosync
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
@@ -3096,7 +3132,7 @@ EOF
 @test "fix-ecm-meter-race AC-4: 'Created' namesake -> exactly one rm, then a successful respawn (self-heal in one turn)" {
   seed_manifest
   seed_mcp_with_atlas_aci
-  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_NAME="eidolons-test-project-atlas-aci-sync"
   export FAKE_DOCKER_EXISTING_STATE="created"
   setup_fake_docker_autosync
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
@@ -3119,7 +3155,7 @@ EOF
 @test "fix-ecm-meter-race AC-5: 'running' namesake -> rm issued and REFUSED; zero containers created" {
   seed_manifest
   seed_mcp_with_atlas_aci
-  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_NAME="eidolons-test-project-atlas-aci-sync"
   export FAKE_DOCKER_EXISTING_STATE="running"
   setup_fake_docker_autosync
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"
@@ -3141,7 +3177,7 @@ EOF
 @test "fix-ecm-meter-race AC-6: the reap (rm) command line never contains -f" {
   seed_manifest
   seed_mcp_with_atlas_aci
-  export FAKE_DOCKER_EXISTING_NAME="atlas-aci-sync-test-project"
+  export FAKE_DOCKER_EXISTING_NAME="eidolons-test-project-atlas-aci-sync"
   export FAKE_DOCKER_EXISTING_STATE="created"
   setup_fake_docker_autosync
   local argv_log="$BATS_TEST_TMPDIR/docker-argv.log"

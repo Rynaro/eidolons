@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **OCI MCP servers run in one container per host session, shared by its sub-agents.** Host configs (`.mcp.json`, `.cursor/mcp.json`, `.codex/config.toml`, `opencode.json`) now launch every OCI MCP through `cli/src/mcp_launch.sh` instead of running `docker run --rm -i` directly. Before this, every MCP client connection (each session, each Codex sub-agent thread, each nested `claude -p`, each reconnect) got its own anonymous, randomly named container with its own resource ceiling. The launcher resolves the owning session by walking the process tree to the topmost host agent of the nearest kind (`claude`, `codex`, `cursor`, `opencode`, `copilot`, …). It starts one container per session per MCP, named `eidolons-<project>-<mcp>-<host>-<pid>` and labelled `eidolons.scope=session`/`eidolons.session.*`, and attaches each client with `docker exec -i`. A detached per-session watcher removes the containers when the session exits, and new sessions sweep containers whose owner died. The docker argv is kept verbatim after a `--` separator, so digest, label and flag readers are unchanged. Any launcher failure falls back to the per-client `docker run`. Opt out with `mcp_runtime.container_scope: client` (or `EIDOLONS_MCP_CONTAINER_SCOPE=client` at runtime).
+- **OCI MCP resource profiles default to `standard`** (was `unlimited`). Limits now apply per session instead of per connection; `unlimited` remains an explicit opt-out. Lock receipts without `runtime`/`container_scope` read as `unlimited`/`client`. **Migration:** in existing projects, plain `eidolons mcp sync` reports runtime drift and stops until `eidolons mcp sync --repair-wiring` is run once. That re-renders all host configs through the launcher, preserving user additions, and records the new receipt. Restart open host sessions afterwards.
+- **The `atlas-aci` reindex container is renamed** `atlas-aci-sync-<slug>` → `eidolons-<slug>-atlas-aci-sync` and inherits `atlas-aci`'s resource flags.
+- `roster/mcps.yaml` `catalogue_version` 1.3 → 1.4: adds `runtime.keepalive` (`shell` for `atlas-aci`/`crystalium`, `server` for distroless `tonberry`/`atomos`). `eidolons.yaml` gains `mcp_runtime.container_scope`, and lock receipts record `runtime.container_scope`.
+- `eidolons mcp reap` decides session-scoped containers exactly: protected while their owning session (any live session, not only the current one) is alive, reaped once it is gone, never touched when labelled by another host. Legacy unlabelled containers keep the rank-bijection guard.
+
+### Added
+- `eidolons mcp ps [--all|--project <slug>] [--json]`: lists MCP containers grouped by owning host session, with session liveness, memory/CPU/PID usage and a count of legacy per-client containers still running.
+
+### Fixed
+- `mcp health`'s UID/bind-mount probe recognises launcher-wrapped entries. Previously it skipped any entry whose `command` was not literally `docker`.
+
 ## [4.7.0] — 2026-11-07 — atlas-aci MCP pin moves to v3.0.0
 
 Minor: the atlas-aci MCP pin goes major (2.0.0 → 3.0.0), which is breaking for consumers who run `eidolons mcp upgrade atlas-aci`, as described below; the nexus's own surface (CLI flags, `schemas/`, sibling contracts, `catalogue_version`) is unchanged.

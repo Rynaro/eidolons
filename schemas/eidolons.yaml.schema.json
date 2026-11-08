@@ -72,7 +72,12 @@
         "resource_profile": {
           "type": "string",
           "enum": ["minimal", "standard", "full", "unlimited"],
-          "description": "Per-container resource ceiling. Absent defaults to unlimited for backwards compatibility."
+          "description": "Per-container resource ceiling. Absent defaults to standard; unlimited is an explicit opt-out."
+        },
+        "container_scope": {
+          "type": "string",
+          "enum": ["session", "client"],
+          "description": "session (default): one named container per host session per MCP, shared by every sub-agent of that session. client: legacy anonymous container per MCP client connection."
         }
       }
     },

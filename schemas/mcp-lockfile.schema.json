@@ -48,6 +48,10 @@
               "resource_profile": {
                 "enum": ["minimal", "standard", "full", "unlimited"]
               },
+              "container_scope": {
+                "enum": ["session", "client"],
+                "description": "Absent means client (receipts written before session-scoped containers)."
+              },
               "limits": {
                 "type": "object",
                 "required": ["cpus", "memory", "pids"],

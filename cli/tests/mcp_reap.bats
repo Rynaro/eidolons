@@ -71,10 +71,10 @@ case "$subcmd" in
     case "$filter" in
       label=eidolons.project=*)
         slug="${filter#label=eidolons.project=}"
-        awk -F'\t' -v s="$slug" '$4 == s {print $1"\t"$2"\t"$3"\t"$4"\t"$5}' "$PS_TSV"
+        awk -F'\t' -v s="$slug" '$4 == s {print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$7"\t"$8"\t"$9"\t"$10}' "$PS_TSV"
         ;;
       label=eidolons.project)
-        awk -F'\t' '$4 != "" {print $1"\t"$2"\t"$3"\t"$4"\t"$5}' "$PS_TSV"
+        awk -F'\t' '$4 != "" {print $1"\t"$2"\t"$3"\t"$4"\t"$5"\t"$7"\t"$8"\t"$9"\t"$10}' "$PS_TSV"
         ;;
     esac
     exit 0
@@ -133,6 +133,24 @@ SHIM
 # add_container ID NAME PSIMAGE PROJECT CREATED FULLIMAGE
 add_container() {
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5" "$6" >> "$BATS_TEST_TMPDIR/docker-ps.tsv"
+}
+
+# add_session_container ID NAME PROJECT CREATED ANCHOR_PID ANCHOR_START HOST_ID
+# A session-scoped container as minted by cli/src/mcp_launch.sh.
+add_session_container() {
+  printf '%s\t%s\t%s\t%s\t%s\t%s\tsession\t%s\t%s\t%s\n' \
+    "$1" "$2" "img" "$3" "$4" "ghcr.io/rynaro/atomos@sha256:aaaa" "$5" "$6" "$7" \
+    >> "$BATS_TEST_TMPDIR/docker-ps.tsv"
+}
+
+# use_real_ps — session liveness is checked against the real process table.
+use_real_ps() {
+  rm -f "$BATS_TEST_TMPDIR/fake-bin/ps"
+}
+
+# start_id PID — the launcher's anchor start identity for a live PID.
+start_id() {
+  ps -o lstart= -p "$1" | cksum | awk '{print $1}'
 }
 
 # add_process PID PPID ETIME ARGS...
@@ -505,4 +523,65 @@ setup_core_safety_scenario() {
   [ "${output:-0}" -eq 0 ]
   run bash -c "grep -c '^stop respawn-new\$' '$DOCKER_LOG_FILE' 2>/dev/null || true"
   [ "${output:-0}" -eq 0 ]
+}
+
+# ─── Session-scoped containers (cli/src/mcp_launch.sh) ─────────────────────
+
+@test "session: a container whose owning session is alive is protected, even under --yes" {
+  use_real_ps
+  export EIDOLONS_REAP_HOST_ID="test-host"
+  sleep 60 </dev/null >/dev/null 2>&1 3>&- &
+  local anchor=$!
+  add_session_container s1 eidolons-eidolons-atomos-claude-${anchor} eidolons "$(iso_ago 3600)" \
+    "$anchor" "$(start_id "$anchor")" test-host
+  run bash -c "bash '$REAP_SH' --yes --json 2>/dev/null"
+  kill "$anchor" 2>/dev/null || true
+  [ "$status" -eq 0 ]
+  local json
+  json="$output"
+  [ "$(printf '%s' "$json" | jq '.protected | length')" -eq 1 ]
+  [ "$(printf '%s' "$json" | jq '.reap | length')" -eq 0 ]
+  run grep -q '^stop ' "$DOCKER_LOG_FILE"
+  [ "$status" -ne 0 ]
+}
+
+@test "session: a container whose owning session is gone is reaped" {
+  use_real_ps
+  export EIDOLONS_REAP_HOST_ID="test-host"
+  sleep 60 </dev/null >/dev/null 2>&1 3>&- &
+  local anchor=$!
+  local start
+  start="$(start_id "$anchor")"
+  kill "$anchor"
+  wait "$anchor" 2>/dev/null || true
+  add_session_container s1 eidolons-eidolons-atomos-claude-${anchor} eidolons "$(iso_ago 3600)" \
+    "$anchor" "$start" test-host
+  run bash "$REAP_SH" --yes
+  [ "$status" -eq 0 ]
+  grep -q "^stop eidolons-eidolons-atomos-claude-${anchor}$" "$DOCKER_LOG_FILE"
+}
+
+@test "session: a reused PID with a different start identity counts as a dead session" {
+  use_real_ps
+  export EIDOLONS_REAP_HOST_ID="test-host"
+  sleep 60 </dev/null >/dev/null 2>&1 3>&- &
+  local anchor=$!
+  add_session_container s1 eidolons-eidolons-atomos-claude-${anchor} eidolons "$(iso_ago 3600)" \
+    "$anchor" "123" test-host
+  run bash "$REAP_SH" --yes
+  kill "$anchor" 2>/dev/null || true
+  [ "$status" -eq 0 ]
+  grep -q "^stop eidolons-eidolons-atomos-claude-${anchor}$" "$DOCKER_LOG_FILE"
+}
+
+@test "session: containers labelled by another host sharing the daemon are never touched" {
+  use_real_ps
+  export EIDOLONS_REAP_HOST_ID="test-host"
+  add_session_container s1 eidolons-eidolons-atomos-claude-1 eidolons "$(iso_ago 3600)" \
+    999999 "123" other-host
+  run bash -c "bash '$REAP_SH' --yes --json 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.skipped[0].reason')" = "other-host" ]
+  run grep -q '^stop ' "$DOCKER_LOG_FILE"
+  [ "$status" -ne 0 ]
 }

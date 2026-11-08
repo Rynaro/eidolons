@@ -143,57 +143,125 @@ require Python 3.11+ with the standard-library `tomllib` parser.
 > call `eidolons mcp sync` automatically (NG3). MCP install is always
 > explicit.
 
+### OCI session containers
+
+Every local MCP host (Claude Code, Codex, Cursor, OpenCode) speaks MCP over
+`stdio`, which means one server process per client connection. Previously,
+each connection ran `docker run --rm -i ...` directly. So every session,
+every Codex sub-agent thread, every nested `claude -p`, and every reconnect got
+its own anonymous container, with a random Docker name and its own resource
+ceiling.
+
+Host configs now route each OCI MCP through the session launcher
+`cli/src/mcp_launch.sh`:
+
+```json
+"atlas-aci": {
+  "command": "/home/me/.eidolons/nexus/cli/src/mcp_launch.sh",
+  "args": ["atlas-aci", "--keepalive", "shell", "--",
+           "run", "--cpus", "1.00", "--memory", "1g", "...", "ghcr.io/rynaro/atlas-aci@sha256:...", "serve", "..."]
+}
+```
+
+Everything after `--` is the unchanged `docker run` argv. The launcher:
+
+1. **Finds the owning session.** It walks the process-parent chain to the
+   nearest host agent (`claude`, `codex`, `cursor`, `opencode`, `copilot`, …),
+   then keeps walking to the *topmost* ancestor of that same host kind. A
+   nested `claude -p` sub-agent therefore resolves to its parent session. A
+   Claude Code session started from Cursor's terminal still resolves to
+   Claude, not Cursor. If no host is found, the direct MCP client is the
+   owner.
+2. **Names the container deterministically**:
+   `eidolons-<project>-<mcp>-<host>-<pid>`, for example
+   `eidolons-myapp-crystalium-claude-48213`. It is labelled `eidolons.scope=session`,
+   `eidolons.session.*`, `eidolons.mcp` and `eidolons.spec` (a hash of the argv).
+3. **Starts it once per session**, under a lock, with the same mounts, user,
+   environment and resource flags, plus a keepalive PID 1 (catalogue
+   `runtime.keepalive`): a `/bin/sh` sleep loop for images that ship a shell
+   (`atlas-aci`, `crystalium`), or the idle serve command for distroless images
+   (`tonberry`, `atomos`).
+4. **Attaches every client** with `docker exec -i`. The main session and all of
+   its sub-agents run their MCP server processes inside that one container, so
+   one cgroup ceiling bounds the whole session.
+5. **Cleans up.** One detached watcher per session removes the session's
+   containers when the owning process exits. Each new session also sweeps
+   containers whose owner is gone (crash, `SIGKILL`, reboot), and
+   `eidolons mcp reap` applies the same rule.
+
+A container whose spec changed (new digest, new limits) is replaced the next
+time a client of that session attaches. Restart host sessions after
+`eidolons mcp upgrade` or a profile change. Any failure on the launcher path
+falls back to the legacy per-client `docker run`, so an MCP keeps serving.
+
+`eidolons mcp ps` shows the containers grouped by owning session:
+
+```text
+SESSION       STATE  PROJECT  MCP         CONTAINER                               MEM USAGE / LIMIT  CPU    PIDS  UP
+claude-48213  live   myapp    atlas-aci   eidolons-myapp-atlas-aci-claude-48213   81MiB / 1GiB       0.00%  4     2 hours ago
+claude-48213  live   myapp    crystalium  eidolons-myapp-crystalium-claude-48213  412MiB / 2GiB      0.10%  19    2 hours ago
+codex-51007   live   myapp    tonberry    eidolons-myapp-tonberry-codex-51007     18MiB / 256MiB     0.00%  13    5 minutes ago
+```
+
+To opt out (legacy anonymous container per connection), set
+`mcp_runtime.container_scope: client` and run
+`eidolons mcp sync --repair-wiring`. Setting `EIDOLONS_MCP_CONTAINER_SCOPE=client`
+in the host's environment does the same at runtime without re-rendering.
+
+The `atlas-aci` reindex hook (`harness.atlas_sync`) runs its one-per-project
+indexer as `eidolons-<project>-atlas-aci-sync`, under the same resource flags as
+the `atlas-aci` server.
+
 ### OCI resource profiles
 
-Codex and the other local MCP hosts use the MCP `stdio` transport. Each loaded
-host session therefore starts its own process for every enabled OCI MCP; for
-Eidolons that process is `docker run --rm -i ...`. Multiple loaded Codex
-sessions can consequently produce multiple containers. This is expected
-session isolation, not a Docker leak: the containers stop when their owning
-Codex processes exit, including when the app is closed.
-
-Projects on resource-constrained machines can bound each container explicitly:
+Every OCI MCP container is bounded by default:
 
 ```yaml
 # eidolons.yaml
 mcp_runtime:
-  resource_profile: standard
+  resource_profile: standard   # default; minimal | standard | full | unlimited
+  container_scope: session     # default; client = legacy per-connection containers
 
 mcps:
   - name: atlas-aci
-    version: "^2.0.0"
+    version: "^3.0.0"
   - name: crystalium
     version: "^2.2.0"
     resource_profile: full  # per-MCP override
 ```
 
-Precedence is the per-MCP override, then the project default, then
-`unlimited`. `unlimited` is also the compatibility behavior when the setting
-is absent; `standard` is recommended for new projects but is never enabled
-silently. Profiles do not install, remove, or disable MCPs.
+The per-MCP override wins, then the project default, then `standard`.
+`unlimited` is an explicit opt-out. Profiles do not install, remove or disable
+MCPs.
 
-| OCI MCP | `minimal` | `standard` | `full` |
+| OCI MCP | `minimal` | `standard` (default) | `full` |
 |---|---:|---:|---:|
 | `atlas-aci` | 0.50 CPU / 512 MiB / 128 PIDs | 1.00 CPU / 1 GiB / 256 PIDs | 2.00 CPU / 2 GiB / 512 PIDs |
 | `crystalium` | 0.50 CPU / 1 GiB / 128 PIDs | 1.00 CPU / 2 GiB / 256 PIDs | 2.00 CPU / 4 GiB / 512 PIDs |
 | `tonberry` | 0.25 CPU / 128 MiB / 64 PIDs | 0.50 CPU / 256 MiB / 96 PIDs | 1.00 CPU / 512 MiB / 128 PIDs |
 | `atomos` | 0.25 CPU / 128 MiB / 64 PIDs | 0.50 CPU / 256 MiB / 96 PIDs | 1.00 CPU / 512 MiB / 128 PIDs |
 
+These are per-*session* ceilings: the main session and all of its sub-agents
+share them. Measured idle footprint per attached server process is about
+210 MiB for `crystalium`, 75 MiB for `atlas-aci` and 6 MiB for
+`tonberry`/`atomos`. `standard` therefore leaves room for several concurrent
+sub-agents per session. Raise a busy MCP with a per-MCP `full` override.
+
 Each bounded profile renders Docker `--cpus`, `--memory`, `--memory-swap`, and
 `--pids-limit` arguments. The memory and memory+swap ceilings are equal so the
 container cannot consume a second memory allowance through swap. These are
 ceilings, not reservations.
 
-After changing a profile, run `eidolons mcp sync --dry-run`, then
-`eidolons mcp sync --repair-wiring` to apply it. Profile changes and
+After changing a profile or scope, run `eidolons mcp sync --dry-run`, then
+`eidolons mcp sync --repair-wiring` to apply it. Profile, scope and
 catalogue-only ceiling changes are reported as drift even when the image
-version is unchanged. Explicit repair updates the configured host wiring and
-the resolved runtime receipt in `eidolons.mcp.lock`. Already-running containers
-retain their original limits until their host session is closed and restarted.
-
-Resource profiles limit the impact of each container; they do not reuse a
-container across sessions. Cross-session reuse would require moving these MCPs
-from local `stdio` to a persistent Streamable HTTP service.
+version is unchanged. Lock receipts written before session containers (no
+`runtime`, or no `container_scope`) read as `unlimited`/`client`. In an existing
+project, plain `eidolons mcp sync` therefore stops with a drift notice until you
+run `eidolons mcp sync --repair-wiring` once. That command re-renders every host
+config through the launcher and records the new receipt. Wiring is never
+rewritten silently. Explicit repair updates the configured host wiring and the
+resolved runtime receipt in `eidolons.mcp.lock`, and preserves user additions.
 
 ---
 
