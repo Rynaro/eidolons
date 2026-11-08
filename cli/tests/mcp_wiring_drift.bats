@@ -23,7 +23,8 @@ AGENT
     version=$(mcp_catalogue_get_field atlas-aci .versions.pins.stable)
     digest=$(mcp_catalogue_get atlas-aci | jq -r --arg v "$version" ".versions.releases[\$v].digest")
     _mcp_oci_render_and_merge atlas-aci "$PWD" "$digest" cli/templates/mcp/atlas-aci.mcp.json.tmpl
-    jq -n --arg v "$version" --arg d "$digest" "{mcps:[{name:\"atlas-aci\",kind:\"oci-image\",version:\$v,integrity:{value:\$d},hosts_wired:[\".mcp.json\",\".claude/agents/atlas.md\"]}]}" > eidolons.mcp.lock
+    runtime=$(_mcp_runtime_resolve atlas-aci "$PWD")
+    jq -n --arg v "$version" --arg d "$digest" --argjson r "$runtime" "{mcps:[{name:\"atlas-aci\",kind:\"oci-image\",version:\$v,integrity:{value:\$d},runtime:\$r,hosts_wired:[\".mcp.json\",\".claude/agents/atlas.md\"]}]}" > eidolons.mcp.lock
   '
   jq '.userSetting="preserve" | .mcpServers.custom={command:"user",args:[]} | .mcpServers["atlas-aci"].env.USER_SETTING="keep"' .mcp.json > new.json
   mv new.json .mcp.json
@@ -208,7 +209,8 @@ PY
   run eidolons mcp sync --repair-wiring
   [ "$status" -eq 0 ]
   cmp repaired.toml .codex/config.toml
-  sed '/# eidolon:mcp/d; s/command = "docker"/command = "user-owned"/; s/"command" = "docker"/"command" = "user-owned"/' .codex/config.toml > user.toml
+  sed -E '/# eidolon:mcp/d; s#command = "[^"]*(docker|mcp_launch\.sh)"#command = "user-owned"#; s#"command" = "[^"]*(docker|mcp_launch\.sh)"#"command" = "user-owned"#' .codex/config.toml > user.toml
+  grep -q '"user-owned"' user.toml
   cp user.toml .codex/config.toml
   run eidolons mcp sync --repair-wiring
   [ "$status" -ne 0 ]

@@ -19,6 +19,7 @@ setup() {
 write_manifest() {
   local project_profile="${1:-}"
   local entry_profile="${2:-}"
+  local container_scope="${3:-}"
   {
     echo 'version: 1'
     echo 'hosts:'
@@ -26,9 +27,10 @@ write_manifest() {
     echo 'members:'
     echo '  - name: atlas'
     echo '    version: "^1.0.0"'
-    if [ -n "$project_profile" ]; then
+    if [ -n "$project_profile" ] || [ -n "$container_scope" ]; then
       echo 'mcp_runtime:'
-      echo "  resource_profile: ${project_profile}"
+      [ -n "$project_profile" ] && echo "  resource_profile: ${project_profile}"
+      [ -n "$container_scope" ] && echo "  container_scope: ${container_scope}"
     fi
     echo 'mcps:'
     echo '  - name: crystalium'
@@ -39,8 +41,17 @@ write_manifest() {
   } > eidolons.yaml
 }
 
-@test "absent profile preserves unlimited legacy behavior" {
+@test "absent profile defaults to the bounded standard profile with session scope" {
   write_manifest
+  run _mcp_runtime_resolve crystalium "$TEST_PROJECT"
+  [ "$status" -eq 0 ]
+  [ "$(printf '%s' "$output" | jq -r '.resource_profile')" = "standard" ]
+  [ "$(printf '%s' "$output" | jq -r '.limits.memory')" = "2g" ]
+  [ "$(printf '%s' "$output" | jq -r '.container_scope')" = "session" ]
+}
+
+@test "explicit unlimited profile opts out of resource limits" {
+  write_manifest unlimited
   run _mcp_runtime_resolve crystalium "$TEST_PROJECT"
   [ "$status" -eq 0 ]
   [ "$(printf '%s' "$output" | jq -r '.resource_profile')" = "unlimited" ]
@@ -71,36 +82,65 @@ write_manifest() {
   done
 }
 
-@test "bounded profile inserts one complete limit set after docker run" {
-  write_manifest standard
+@test "bounded profile inserts one complete limit set after docker run (client scope)" {
+  write_manifest standard "" client
   local rendered applied args
   rendered='{"mcpServers":{"crystalium":{"command":"docker","args":["run","--rm","-i","example@sha256:abc","serve"]}}}'
   applied="$(_mcp_runtime_apply crystalium "$TEST_PROJECT" "$rendered")"
+  [ "$(printf '%s' "$applied" | jq -r '.mcpServers.crystalium.command')" = "docker" ]
   args="$(printf '%s' "$applied" | jq -c '.mcpServers.crystalium.args')"
   [ "$args" = '["run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256","--rm","-i","example@sha256:abc","serve"]' ]
   [ "$(printf '%s' "$args" | jq '[.[] | select(. == "--memory")] | length')" -eq 1 ]
 }
 
-@test "rendered Codex TOML carries the same bounded Docker argv" {
+@test "session scope routes the bounded docker argv through the session launcher" {
+  write_manifest standard
+  local rendered applied
+  rendered='{"mcpServers":{"crystalium":{"command":"docker","args":["run","--rm","-i","example@sha256:abc","serve"]}}}'
+  applied="$(_mcp_runtime_apply crystalium "$TEST_PROJECT" "$rendered")"
+  [ "$(printf '%s' "$applied" | jq -r '.mcpServers.crystalium.command')" = "$EIDOLONS_ROOT/cli/src/mcp_launch.sh" ]
+  [ -x "$(printf '%s' "$applied" | jq -r '.mcpServers.crystalium.command')" ]
+  # crystalium ships a shell -> keepalive shell; the docker argv follows "--" verbatim.
+  [ "$(printf '%s' "$applied" | jq -c '.mcpServers.crystalium.args')" = '["crystalium","--keepalive","shell","--","run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256","--rm","-i","example@sha256:abc","serve"]' ]
+}
+
+@test "distroless OCI MCPs use the server keepalive" {
+  write_manifest
+  local rendered applied
+  rendered='{"mcpServers":{"tonberry":{"command":"docker","args":["run","--rm","-i","example@sha256:abc","serve"]}}}'
+  applied="$(_mcp_runtime_apply tonberry "$TEST_PROJECT" "$rendered")"
+  [ "$(printf '%s' "$applied" | jq -c '.mcpServers.tonberry.args[0:4]')" = '["tonberry","--keepalive","server","--"]' ]
+}
+
+@test "unknown container scope fails before rendering" {
+  write_manifest "" "" shared
+  run _mcp_runtime_resolve crystalium "$TEST_PROJECT"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unknown MCP container scope 'shared'"* ]]
+}
+
+@test "rendered Codex TOML carries the same launcher-wrapped bounded Docker argv" {
   write_manifest standard
   _mcp_oci_render_and_merge \
     crystalium "$TEST_PROJECT" sha256:test \
     cli/templates/mcp/crystalium.mcp.json.tmpl true
 
-  run grep -F -- 'args = ["run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256"' \
+  run grep -F -- 'args = ["crystalium","--keepalive","shell","--","run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256"' \
     "$TEST_PROJECT/.codex/config.toml"
   [ "$status" -eq 0 ]
-  run jq -e '.mcpServers.crystalium.args[0:9] == ["run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256"]' \
+  run grep -F -- "command = \"$EIDOLONS_ROOT/cli/src/mcp_launch.sh\"" "$TEST_PROJECT/.codex/config.toml"
+  [ "$status" -eq 0 ]
+  run jq -e '.mcpServers.crystalium.args[4:13] == ["run","--cpus","1.00","--memory","2g","--memory-swap","2g","--pids-limit","256"]' \
     "$TEST_PROJECT/.mcp.json"
   [ "$status" -eq 0 ]
 }
 
-@test "unlimited leaves rendered Docker args unchanged" {
-  write_manifest unlimited
+@test "unlimited client scope leaves rendered Docker args unchanged" {
+  write_manifest unlimited "" client
   local rendered applied
   rendered='{"mcpServers":{"crystalium":{"command":"docker","args":["run","--rm","-i","example@sha256:abc","serve"]}}}'
   applied="$(_mcp_runtime_apply crystalium "$TEST_PROJECT" "$rendered")"
-  [ "$(printf '%s' "$applied" | jq -c '.mcpServers.crystalium.args')" = '["run","--rm","-i","example@sha256:abc","serve"]' ]
+  [ "$(printf '%s' "$applied" | jq -c '.mcpServers.crystalium')" = '{"command":"docker","args":["run","--rm","-i","example@sha256:abc","serve"]}' ]
 }
 
 @test "invalid profile fails before rendering" {
@@ -122,8 +162,20 @@ write_manifest() {
   [ "$before" = "$after" ]
 
   bounded="$(printf '%s' "$base" | jq \
-    '.runtime={resource_profile:"standard",limits:{cpus:"1.00",memory:"2g",pids:256}}')"
+    '.runtime={resource_profile:"standard",limits:{cpus:"1.00",memory:"2g",pids:256},container_scope:"session"}')"
   mcp_lock_upsert crystalium "$bounded"
-  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; yaml_to_json eidolons.mcp.lock | jq -e '.mcps[0].runtime == {resource_profile:\"standard\",limits:{cpus:\"1.00\",memory:\"2g\",pids:256}}'"
+  run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; yaml_to_json eidolons.mcp.lock | jq -e '.mcps[0].runtime == {resource_profile:\"standard\",limits:{cpus:\"1.00\",memory:\"2g\",pids:256},container_scope:\"session\"}'"
+  [ "$status" -eq 0 ]
+}
+
+@test "legacy receipts without container_scope read as client scope (drift until re-rendered)" {
+  write_manifest
+  local base
+  base='{"name":"crystalium","kind":"oci-image","version":"2.2.0","source":{"image":"ghcr.io/rynaro/crystalium"},"integrity":{"algo":"oci-digest","value":"sha256:test"},"target":".mcp.json","hosts_wired":[".mcp.json"],"installed_at":"2026-08-19T00:00:00Z","runtime":{"resource_profile":"standard","limits":{"cpus":"1.00","memory":"2g","pids":256}}}'
+  mcp_lock_write_from_array "[$base]"
+  run _mcp_runtime_is_current crystalium "$TEST_PROJECT"
+  [ "$status" -ne 0 ]
+  mcp_lock_upsert crystalium "$(_mcp_runtime_resolve crystalium "$TEST_PROJECT" | jq --argjson b "$base" '. as $r | $b | .runtime = $r')"
+  run _mcp_runtime_is_current crystalium "$TEST_PROJECT"
   [ "$status" -eq 0 ]
 }

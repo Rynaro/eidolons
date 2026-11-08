@@ -50,11 +50,26 @@ memory_probe_gated_in() {
 
 # memory_probe_docker_cmd [PROJECT_ROOT] → echoes .mcp.json's
 # mcpServers.crystalium.command (defaults to "docker" when absent/empty).
+# A session-launcher entry (cli/src/mcp_launch.sh) resolves to "docker": the
+# one-shot probe runs its own short-lived container, never the session one.
 memory_probe_docker_cmd() {
   local project_root="${1:-.}"
   local cmd
   cmd="$(jq -r '.mcpServers.crystalium.command // "docker"' "$project_root/.mcp.json" 2>/dev/null)"
+  case "$cmd" in
+    */mcp_launch.sh) cmd="docker" ;;
+  esac
   printf '%s' "${cmd:-docker}"
+}
+
+# memory_probe_docker_args [PROJECT_ROOT] → crystalium's docker argv, one per
+# line. Unwraps the session launcher prefix (<name> [opts] --) when present.
+memory_probe_docker_args() {
+  local project_root="${1:-.}"
+  jq -r '.mcpServers.crystalium as $s | ($s.args // []) as $a
+    | if (($s.command // "") | endswith("/mcp_launch.sh")) and ($a | index("--")) != null
+      then $a[(($a | index("--")) + 1):][]
+      else $a[] end' "$project_root/.mcp.json" 2>/dev/null
 }
 
 # memory_probe_quote STR → %q-quote STR for safe embedding in a generated
@@ -109,7 +124,7 @@ memory_probe_build_docker_script() {
     fi
     _q_arg="$(printf '%q' "$_arg" 2>/dev/null || printf "'%s'" "$_arg")"
     printf ' %s' "$_q_arg" >> "$out_script"
-  done < <(jq -r '.mcpServers.crystalium.args[]' "$project_root/.mcp.json" 2>/dev/null)
+  done < <(memory_probe_docker_args "$project_root")
 
   printf '\n' >> "$out_script"
   chmod +x "$out_script"

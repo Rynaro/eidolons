@@ -27,6 +27,13 @@
 # nor --dry-run) is the default; only --yes actually stops anything, and
 # --dry-run always wins over a stray --yes.
 #
+# Session-scoped containers (eidolons.scope=session, minted by
+# cli/src/mcp_launch.sh) bypass that inference entirely: each carries its
+# owning session's anchor PID + start identity, so it is protected while that
+# session is alive — the current one AND any other live session — and reaped
+# once it is gone. Containers labelled by another host sharing the daemon are
+# skipped. The rank-bijection guard below only arbitrates legacy containers.
+#
 # Container identity is label-only: `eidolons.project=<slug>` (bare
 # `eidolons.project` under --all). Nothing without the label is ever a
 # candidate — an unlabeled container (e.g. a legacy atlas-aci wiring that
@@ -343,6 +350,27 @@ _reap_compute_protected() {
   printf '%s' "$protected"
 }
 
+# _reap_session_state PID START HOST_ID — liveness of a session-scoped
+# container's owning session: "live" (anchor process running with the same
+# start identity on this host), "foreign" (labelled by another host sharing
+# this Docker daemon — never touched), or "dead". The test-only seam
+# EIDOLONS_REAP_HOST_ID overrides the local host identity.
+_reap_session_state() {
+  local pid="$1" start="$2" host="$3" me
+  me="${EIDOLONS_REAP_HOST_ID:-$(hostname 2>/dev/null || uname -n)}"
+  if [ -n "$host" ] && [ "$host" != "$me" ]; then
+    printf 'foreign'
+    return 0
+  fi
+  case "$pid" in ''|*[!0-9]*) printf 'dead'; return 0 ;; esac
+  if kill -0 "$pid" 2>/dev/null \
+     && [ "$(ps -o lstart= -p "$pid" 2>/dev/null | cksum | awk '{print $1}')" = "$start" ]; then
+    printf 'live'
+  else
+    printf 'dead'
+  fi
+}
+
 # _reap_emit_json — assemble + print the eidolons/mcp-reap.v1 object using
 # the globals populated by the flow below. stdout only (called under --json).
 _reap_emit_json() {
@@ -490,7 +518,7 @@ fi
 if [ "$DOCKER_AVAILABLE" = "true" ]; then
 
   # ─── Candidate containers (label-only identity) ──────────────────────────
-  DOCKER_PS_FMT=$'{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "eidolons.project"}}\t{{.CreatedAt}}'
+  DOCKER_PS_FMT=$'{{.ID}}\t{{.Names}}\t{{.Image}}\t{{.Label "eidolons.project"}}\t{{.CreatedAt}}\t{{.Label "eidolons.scope"}}\t{{.Label "eidolons.session.pid"}}\t{{.Label "eidolons.session.start"}}\t{{.Label "eidolons.session.host_id"}}'
   if [ "$ALL" = "true" ]; then
     DOCKER_PS_FILTER="label=eidolons.project"
   else
@@ -519,7 +547,8 @@ if [ "$DOCKER_AVAILABLE" = "true" ]; then
   DOCKER_INSPECT_FMT=$'{{.Created}}\t{{.Config.Image}}'
   NOW_EPOCH="$(date -u +%s)"
   CANDIDATES_ENRICHED=""
-  while IFS=$'\t' read -r _cid _cname _cpsimg _cproj _cpscreated; do
+  SESSION_ENRICHED=""
+  while IFS=$'\t' read -r _cid _cname _cpsimg _cproj _cpscreated _cscope _cspid _csstart _cshost; do
     [ -z "$_cid" ] && continue
     _inspect_out="$(docker inspect -f "$DOCKER_INSPECT_FMT" "$_cid" 2>/dev/null || true)"
     _created="${_inspect_out%%$'\t'*}"
@@ -534,6 +563,15 @@ if [ "$DOCKER_AVAILABLE" = "true" ]; then
       if _epoch="$(_reap_iso_to_epoch "$_created")"; then
         _age=$(( NOW_EPOCH - _epoch ))
       fi
+    fi
+    if [ "$_cscope" = "session" ]; then
+      # Session-scoped containers (cli/src/mcp_launch.sh) carry their owning
+      # session's anchor PID + start identity: liveness is decided exactly,
+      # not inferred by the rank-bijection guard below.
+      _cstate="$(_reap_session_state "$_cspid" "$_csstart" "$_cshost")"
+      SESSION_ENRICHED="${SESSION_ENRICHED}${_cid}	${_cname}	${_cimg}	${_cproj}	${_created}	${_age}	${_cstate}
+"
+      continue
     fi
     CANDIDATES_ENRICHED="${CANDIDATES_ENRICHED}${_cid}	${_cname}	${_cimg}	${_cproj}	${_created}	${_age}
 "
@@ -572,6 +610,40 @@ if [ "$DOCKER_AVAILABLE" = "true" ]; then
       ;;
     none) : ;;
   esac
+
+  # ─── Session-scoped containers: live session → protected; dead → reap ────
+  while IFS=$'\t' read -r _cid _cname _cimg _cproj _ccreated _cage _cstate; do
+    [ -z "$_cid" ] && continue
+    _age_json="null"
+    [ -n "$_cage" ] && _age_json="$_cage"
+    case "$_cstate" in
+      live)
+        _obj="$(jq -nc --arg id "$_cid" --arg name "$_cname" --arg image "$_cimg" --arg project "$_cproj" --argjson age "$_age_json" \
+          '{id:$id, name:$name, image:$image, project:$project, age_seconds:$age}')"
+        PROTECTED_JSONL="${PROTECTED_JSONL}${_obj}
+"
+        ;;
+      foreign)
+        _obj="$(jq -nc --arg id "$_cid" --arg name "$_cname" --arg reason "other-host" \
+          '{id:$id, name:$name, reason:$reason}')"
+        SKIPPED_JSONL="${SKIPPED_JSONL}${_obj}
+"
+        ;;
+      *)
+        if [ -z "$_cage" ] || [ "$_cage" -lt "$OLDER_THAN_SECONDS" ]; then
+          _obj="$(jq -nc --arg id "$_cid" --arg name "$_cname" --arg reason "too-young" \
+            '{id:$id, name:$name, reason:$reason}')"
+          SKIPPED_JSONL="${SKIPPED_JSONL}${_obj}
+"
+        else
+          _obj="$(jq -nc --arg id "$_cid" --arg name "$_cname" --arg image "$_cimg" --arg project "$_cproj" --argjson age "$_age_json" \
+            '{id:$id, name:$name, image:$image, project:$project, age_seconds:$age, stopped:false}')"
+          REAP_JSONL="${REAP_JSONL}${_obj}
+"
+        fi
+        ;;
+    esac
+  done <<< "$SESSION_ENRICHED"
 
   # ─── Classify each candidate: protected | skipped (too-young) | reap ────
   while IFS=$'\t' read -r _cid _cname _cimg _cproj _ccreated _cage; do

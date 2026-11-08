@@ -83,14 +83,20 @@ mcp_catalogue_get_field() {
   mcp_catalogue_get "$name" | jq -r "$field // empty"
 }
 
-# _mcp_runtime_resolve NAME PROJECT_ROOT — emit the resolved OCI runtime receipt.
-# Precedence is per-entry override > project default > unlimited. The absent
-# default deliberately preserves the legacy Docker argv byte-for-byte.
+# _mcp_runtime_resolve NAME PROJECT_ROOT — emit the resolved OCI runtime receipt:
+#   {resource_profile, limits?, container_scope}
+# Resource precedence is per-entry override > project default > "standard".
+# Every OCI MCP is bounded by default; "unlimited" is an explicit opt-out.
+# container_scope comes from mcp_runtime.container_scope:
+#   session (default) — one named container per host session per MCP, shared by
+#                       every sub-agent of that session (cli/src/mcp_launch.sh).
+#   client            — legacy: one anonymous `docker run --rm -i` container per
+#                       MCP client connection.
 _mcp_runtime_resolve() {
   local name="$1"
   local project_root="$2"
   local manifest="${project_root}/eidolons.yaml"
-  local profile=""
+  local profile="" scope=""
 
   if [ -f "$manifest" ]; then
     local manifest_json
@@ -99,12 +105,21 @@ _mcp_runtime_resolve() {
     profile="$(printf '%s' "$manifest_json" | jq -r --arg n "$name" '
       ((.mcps // []) | map(select(.name == $n)) | first | .resource_profile) //
       .mcp_runtime.resource_profile // empty')"
+    scope="$(printf '%s' "$manifest_json" | jq -r '.mcp_runtime.container_scope // empty')"
   fi
 
-  profile="${profile:-unlimited}"
+  profile="${profile:-standard}"
+  scope="${scope:-session}"
+  case "$scope" in
+    session|client) ;;
+    *)
+      warn "${name}: unknown MCP container scope '${scope}' (expected session or client)"
+      return 1
+      ;;
+  esac
   case "$profile" in
     unlimited)
-      jq -nc '{resource_profile:"unlimited"}'
+      jq -nc --arg s "$scope" '{resource_profile:"unlimited", container_scope:$s}'
       return 0
       ;;
     minimal|standard|full) ;;
@@ -126,18 +141,19 @@ _mcp_runtime_resolve() {
     return 1
   fi
 
-  jq -nc --arg p "$profile" --argjson limits "$limits" \
-    '{resource_profile:$p, limits:$limits}'
+  jq -nc --arg p "$profile" --arg s "$scope" --argjson limits "$limits" \
+    '{resource_profile:$p, limits:$limits, container_scope:$s}'
 }
 
-# _mcp_runtime_normalize RECEIPT_JSON — old lock entries mean unlimited.
+# _mcp_runtime_normalize RECEIPT_JSON — canonical receipt for comparison.
+# Lock entries written before a field existed describe what was actually
+# rendered then: no runtime → unlimited; no container_scope → client.
 _mcp_runtime_normalize() {
   local receipt="${1:-}"
   if [ -z "$receipt" ] || [ "$receipt" = "null" ]; then
-    jq -nc '{resource_profile:"unlimited"}'
-  else
-    printf '%s' "$receipt" | jq -cS .
+    receipt='{"resource_profile":"unlimited"}'
   fi
+  printf '%s' "$receipt" | jq -cS '{container_scope:"client"} + .'
 }
 
 # _mcp_runtime_args RECEIPT_JSON — Docker argv for a bounded profile.
@@ -152,23 +168,46 @@ _mcp_runtime_args() {
     end'
 }
 
-# _mcp_runtime_apply NAME PROJECT_ROOT RENDERED_JSON — insert Docker resource
-# flags after `docker run`. Unlimited returns the rendered object unchanged.
+# mcp_launcher_path — absolute path of the session launcher host configs exec.
+# Derived from this library's own location so it always names a real file.
+mcp_launcher_path() {
+  printf '%s/mcp_launch.sh' "$_LIB_MCP_DIR"
+}
+
+# _mcp_runtime_apply NAME PROJECT_ROOT RENDERED_JSON — shape the rendered
+# `docker run` entry for the resolved runtime:
+#   1. insert Docker resource flags after `run` (none for unlimited);
+#   2. container_scope=session: route the entry through the session launcher,
+#        command: <nexus>/cli/src/mcp_launch.sh
+#        args:    [NAME, "--keepalive", <catalogue runtime.keepalive>, "--", "run", ...]
+#      Everything after "--" stays the exact docker argv, so digest, label and
+#      flag readers keep working on .args unchanged.
+# Every render path (install, atlas-aci install, drift/repair expected config)
+# goes through here, so all hosts get byte-identical shaping.
 _mcp_runtime_apply() {
   local name="$1"
   local project_root="$2"
   local rendered="$3"
-  local receipt args
+  local receipt args scope keepalive launcher
   receipt="$(_mcp_runtime_resolve "$name" "$project_root")" || return 1
   args="$(_mcp_runtime_args "$receipt")" || return 1
-  printf '%s' "$rendered" | jq -c --arg n "$name" --argjson extra "$args" '
-    if ($extra | length) == 0 then .
-    else .mcpServers[$n].args |= (.[0:1] + $extra + .[1:])
-    end'
+  scope="$(printf '%s' "$receipt" | jq -r '.container_scope // "client"')"
+  keepalive="$(mcp_catalogue_get_field "$name" '.runtime.keepalive')"
+  keepalive="${keepalive:-server}"
+  launcher="$(mcp_launcher_path)"
+  printf '%s' "$rendered" | jq -c --arg n "$name" --argjson extra "$args" \
+    --arg scope "$scope" --arg ka "$keepalive" --arg launcher "$launcher" '
+    (if ($extra | length) == 0 then .
+     else .mcpServers[$n].args |= (.[0:1] + $extra + .[1:])
+     end)
+    | if $scope == "session" and .mcpServers[$n].command == "docker" then
+        .mcpServers[$n] |= (.command = $launcher
+          | .args = ([$n, "--keepalive", $ka, "--"] + .args))
+      else . end'
 }
 
 # _mcp_runtime_is_current NAME PROJECT_ROOT — compare the desired receipt with
-# the committed install receipt. Legacy entries normalize to unlimited.
+# the committed install receipt. Legacy entries normalize to unlimited/client.
 _mcp_runtime_is_current() {
   local name="$1"
   local project_root="$2"
@@ -458,11 +497,13 @@ mcp_lock_write_from_array() {
 
       # Resolved OCI resource receipt. Limits are catalogue data captured in
       # the lock so catalogue-only ceiling changes reconcile deterministically.
-      local eruntime_profile eruntime_cpus eruntime_memory eruntime_pids
+      local eruntime_profile eruntime_scope eruntime_cpus eruntime_memory eruntime_pids
       eruntime_profile="$(printf '%s' "$entry" | jq -r '.runtime.resource_profile // ""')"
       if [ -n "$eruntime_profile" ]; then
         printf '    runtime:\n'
         printf '      resource_profile: "%s"\n' "$eruntime_profile"
+        eruntime_scope="$(printf '%s' "$entry" | jq -r '.runtime.container_scope // ""')"
+        [ -n "$eruntime_scope" ] && printf '      container_scope: "%s"\n' "$eruntime_scope"
         eruntime_cpus="$(printf '%s' "$entry" | jq -r '.runtime.limits.cpus // ""')"
         eruntime_memory="$(printf '%s' "$entry" | jq -r '.runtime.limits.memory // ""')"
         eruntime_pids="$(printf '%s' "$entry" | jq -r '.runtime.limits.pids // ""')"
@@ -532,9 +573,9 @@ mcp_lock_upsert() {
     # installed_at on every install.
     local old_sig new_sig
     old_sig="$(printf '%s' "$old_entry" \
-      | jq -cS '{kind,version,source,integrity,target,runtime:(.runtime // {resource_profile:"unlimited"}),hosts_wired:(.hosts_wired // [] | sort)}')"
+      | jq -cS '{kind,version,source,integrity,target,runtime:({container_scope:"client"} + (.runtime // {resource_profile:"unlimited"})),hosts_wired:(.hosts_wired // [] | sort)}')"
     new_sig="$(printf '%s' "$new_entry" \
-      | jq -cS '{kind,version,source,integrity,target,runtime:(.runtime // {resource_profile:"unlimited"}),hosts_wired:(.hosts_wired // [] | sort)}')"
+      | jq -cS '{kind,version,source,integrity,target,runtime:({container_scope:"client"} + (.runtime // {resource_profile:"unlimited"})),hosts_wired:(.hosts_wired // [] | sort)}')"
 
     if [ "$old_sig" = "$new_sig" ]; then
       # No-op: preserve the original installed_at. Skip write.
@@ -1675,8 +1716,10 @@ _mcp_driver_oci_uid_bind_probes() {
   # for EVERY key in .mcpServers (not just known OCI-image names): a
   # binary-kind entry (e.g. junction, command = its own binary path, or a
   # generic "node"/"npx" stdio server) is a silent skip, not a bogus warn.
+  # A session-launcher entry (cli/src/mcp_launch.sh) carries the same docker
+  # argv after its "--" separator, so it is probed exactly like a bare one.
   if ! jq -e --arg n "$name" \
-      '(.mcpServers[$n].command // "") == "docker"
+      '((.mcpServers[$n].command // "") as $c | $c == "docker" or ($c | endswith("/mcp_launch.sh")))
         and ((.mcpServers[$n].args // null) | type) == "array"' \
       .mcp.json >/dev/null 2>&1; then
     # Malformed JSON, no mcpServers, missing/non-docker NAME key, or args not

@@ -958,13 +958,20 @@ eidolons mcp sync --repair-wiring    # explicitly repair installed managed wirin
 eidolons mcp verify [<name>] [--json] # diagnose installed MCP wiring drift
 eidolons mcp health [<name>|--all]   # run health probes; exit code always 0
 eidolons mcp run <name> [<args>]     # pass-through to binary MCP (junction only in v1.3)
+eidolons mcp ps [--all] [--json]     # MCP containers grouped by owning host session
+eidolons mcp reap [--yes]            # stop containers whose owning session is gone
 ```
 
 OCI MCP installs also honor `mcp_runtime.resource_profile` in
 `eidolons.yaml` (`minimal`, `standard`, `full`, or `unlimited`) and a
 per-entry `mcps[].resource_profile` override. The setting applies Docker
-CPU/memory/PID ceilings per MCP container. An absent setting remains
-`unlimited`. After a profile change, preview with `eidolons mcp sync --dry-run`
+CPU/memory/PID ceilings per MCP container. An absent setting means `standard`;
+`unlimited` is an explicit opt-out. Each host session gets one named container
+per OCI MCP (`eidolons-<project>-<mcp>-<host>-<pid>`), shared by all of its
+sub-agents through the session launcher (`cli/src/mcp_launch.sh`);
+`mcp_runtime.container_scope: client` restores one anonymous container per
+connection. See [session containers](mcp.md#oci-session-containers). After a
+profile or scope change, preview with `eidolons mcp sync --dry-run`
 and apply with `eidolons mcp sync --repair-wiring`. Ordinary sync reports drift.
 The two flags are mutually exclusive, require the project manifest, and operate
 on installed, locked MCPs without installing artifacts. Repair preserves

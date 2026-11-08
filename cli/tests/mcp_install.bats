@@ -903,7 +903,9 @@ EOF
   [ "$status" -eq 0 ]
   run bash -c "jq -e '.mcp.crystalium.command | type == \"array\"' opencode.json"
   [ "$status" -eq 0 ]
-  run bash -c "jq -e '.mcp.crystalium.command[0] == \"docker\"' opencode.json"
+  run bash -c "jq -e '.mcp.crystalium.command[0] | endswith(\"/cli/src/mcp_launch.sh\")' opencode.json"
+  [ "$status" -eq 0 ]
+  run bash -c "jq -e '.mcp.crystalium.command[1:6] == [\"crystalium\",\"--keepalive\",\"shell\",\"--\",\"run\"]' opencode.json"
   [ "$status" -eq 0 ]
   run bash -c "jq -e '.mcp.crystalium.enabled == true' opencode.json"
   [ "$status" -eq 0 ]
