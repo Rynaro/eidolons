@@ -110,10 +110,10 @@ teardown() {
   cd "$EIDOLONS_ROOT"
 }
 
-# Pinned digest for atlas-aci stable (3.0.0). Must track roster/mcps.yaml's
+# Pinned digest for atlas-aci stable (3.0.2). Must track roster/mcps.yaml's
 # versions.pins.stable digest — S8 asserts "present at the stable digest ⇒ no drift",
 # so a stale value here makes the drift check pass vacuously.
-ATLAS_ACI_PINNED="sha256:257095b4e40bfa865e10649847892a7c6fc466bd1775143a459b47e0067876f4"
+ATLAS_ACI_PINNED="sha256:37130b34a8a1d3f3181f27348d5693879a82835f170948e6c4025641dc77683e"
 # Pinned digest for crystalium stable.
 CRYSTALIUM_PINNED="sha256:84d450ed7488ad79ed8f1b56e6a47d92e95d92e4c6de34cc79cc876630cdb3e5"
 
