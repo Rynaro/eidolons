@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- **atlas-aci MCP pinned to v3.0.2** (`roster/mcps.yaml`).
+  - **Pin:** the catalogue pin rolls `3.0.0 → 3.0.2`. The image is `ghcr.io/rynaro/atlas-aci@sha256:37130b34…`, an OCI image index for linux/amd64 and linux/arm64 plus two attestation manifests. Tag `v3.0.2` is on merge commit `488e2ef`, and the image tags `3.0.2`, `3.0`, `3` and `latest` all resolve to that digest.
+  - **Why the digest can be trusted:** the release workflow passed its Trivy HIGH/CRITICAL gate, attested an SBOM and build provenance, and signed the image with cosign (keyless). The digest was resolved from ghcr at bump time, and every recorded atlas-aci digest was read back out of `roster/mcps.yaml` and checked against the registry.
+  - **Test fixture:** `cli/tests/mcp_images.bats`'s `ATLAS_ACI_PINNED` is bumped alongside. `S8-guard` still derives the expected digest from `versions.pins.stable`, and it fails when the fixture is reverted to the 3.0.0 digest.
+  - **3.0.1 is deliberately not recorded.** Upstream's `v3.0.1` release run pushed an image, then failed the Trivy gate on two fixable HIGH `zlib1g` CVEs from the base image. Signing, attestation and the GitHub Release never ran, so that image is unsigned, and leaving it out keeps `eidolons mcp use atlas-aci@3.0.1` unreachable. 3.0.2 carries the same fix and runs `apt-get upgrade` in the runtime stage.
+  - **The fix ([Rynaro/atlas-aci#118](https://github.com/Rynaro/atlas-aci/issues/118)):** `atlas-aci index` discarded completed builds on btrfs and overlayfs, and overlayfs is the docker rootfs the pinned image runs on. `Builder.close()` listed the source staging directory through a descriptor opened while the directory was empty, and on those filesystems the listing came back empty. `rmdir` then raised `ENOTEMPTY` after the graph was published, and the run was recorded as `index_failed`. Now a stage-cleanup error after publication is logged as `source_stage_cleanup_failed` and the run succeeds.
+  - **Consumer impact:** the schema epoch, the portable export epoch and the seven MCP tools are unchanged, so no epoch-driven re-index or re-export is needed. Extraction-cache entries written by 3.0.0 are not reused, because the producer fingerprint covers the changed module, so the first index after the upgrade re-parses every file.
+  - Release notes: [v3.0.2](https://github.com/Rynaro/atlas-aci/releases/tag/v3.0.2).
+
 ## [4.8.0] — 2026-11-08 — one MCP container per session
 
 Minor: adds `eidolons mcp ps` and changes what consumers see. OCI MCPs now share one bounded container per host session, and existing projects must run `eidolons mcp sync --repair-wiring` once. The nexus's own surface is not broken: `catalogue_version` 1.4 and the schema changes only add optional fields.
