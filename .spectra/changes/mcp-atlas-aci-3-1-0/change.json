@@ -1,0 +1,47 @@
+{
+  "esl_version": "1.1",
+  "change_id": "mcp-atlas-aci-3-1-0",
+  "status": "proposed",
+  "tier": "lite",
+  "maker": "vivi",
+  "checker": "kupo",
+  "acceptance_checks": [
+    {
+      "id": "AC-1",
+      "then": "roster/mcps.yaml versions.latest and versions.pins.stable for atlas-aci SHALL both equal 3.1.0",
+      "verify_method": "cmd: yq read of roster/mcps.yaml; latest==stable==3.1.0"
+    },
+    {
+      "id": "AC-2",
+      "then": "every digest recorded under atlas-aci versions.releases SHALL resolve to that tag on ghcr",
+      "verify_method": "cmd: docker buildx imagetools inspect ghcr.io/rynaro/atlas-aci:<ver> --format {{.Manifest.Digest}} equals the recorded digest, for all 9 releases"
+    },
+    {
+      "id": "AC-3",
+      "then": "cli/tests/mcp_images.bats S8-guard SHALL derive the expected digest from roster/mcps.yaml and fail when the fixture is stale",
+      "verify_method": "test: bats cli/tests/mcp_images.bats; teeth proven by reverting ATLAS_ACI_PINNED to the 3.0.2 digest and observing S8-guard fail"
+    },
+    {
+      "id": "AC-4",
+      "then": "the full bats suite SHALL pass except any failure that also fails on a clean tree",
+      "verify_method": "test: make test (or bats cli/tests/), failures re-run on a stash of the change to prove they pre-exist"
+    },
+    {
+      "id": "AC-5",
+      "then": "CHANGELOG.md SHALL record the bump, the signing and attestations, the #123 fix and an immutable-tag link",
+      "verify_method": "grep: CHANGELOG.md Unreleased section names v3.1.0, atlas-aci#123, and links releases/tag/v3.1.0"
+    },
+    {
+      "id": "AC-6",
+      "then": "the atlas-aci exposes_tools list SHALL remain exactly the seven MCP tools",
+      "verify_method": "cmd: compare roster exposes_tools.list against upstream enforcement.READ_ONLY_TOOLS at v3.1.0"
+    },
+    {
+      "id": "AC-7",
+      "then": "make schema SHALL pass",
+      "verify_method": "cmd: make schema"
+    }
+  ],
+  "spec_ref": "spec.md",
+  "has_code": true
+}

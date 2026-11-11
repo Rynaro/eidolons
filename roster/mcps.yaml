@@ -13,7 +13,7 @@
 #   connected client) or "server" (distroless: the serve command idles on an
 #   open stdin). Default "server".
 catalogue_version: "1.4"
-updated_at: "2026-11-09T00:00:00Z"
+updated_at: "2026-11-11T00:00:00Z"
 mcps:
   - name: atlas-aci
     display_name: "Atlas-ACI"
@@ -54,9 +54,9 @@ mcps:
         context: "mcp-server"
         default_ref: "main"
     versions:
-      latest: "3.0.2"
+      latest: "3.1.0"
       pins:
-        stable: "3.0.2"
+        stable: "3.1.0"
       releases:
         "0.2.2":
           digest: "sha256:386677f06b0ce23cb4883f6c0f91d8eac22328cd7d9451ae241e2f183207ad96"
@@ -88,6 +88,9 @@ mcps:
         "3.0.2":
           digest: "sha256:37130b34a8a1d3f3181f27348d5693879a82835f170948e6c4025641dc77683e"
           released_at: "2026-11-09T23:52:03Z"
+        "3.1.0":
+          digest: "sha256:736153cd026370a322e47a56e07059c1010760bba2ea98e85b366cf9b6faa34a"
+          released_at: "2026-11-11T14:23:30Z"
     install:
       hosts_wired:
         - ".mcp.json"
