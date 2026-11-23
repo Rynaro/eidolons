@@ -111,6 +111,13 @@ EOF
   run eidolons model show atlas --host codex --json
   [ "$status" -eq 0 ]
   printf '%s' "$output" | jq -e '.effective_model == "gpt-6-sol" and .hosts.codex.reasoning_effort == "medium"' >/dev/null
+
+  run eidolons model use atlas@gpt-6.1-terra --host codex
+  [ "$status" -eq 0 ]
+  grep -Fxq 'model = "gpt-6.1-terra"' .codex/agents/atlas.toml
+  run eidolons model show atlas --host codex --json
+  [ "$status" -eq 0 ]
+  printf '%s' "$output" | jq -e '.effective_model == "gpt-6.1-terra" and .source == "pin"' >/dev/null
 }
 
 @test "issue 640: incompatible CLI profile leaves manifest and descriptors unchanged" {

@@ -39,8 +39,8 @@ profiles:
     applies_to_hosts: [codex]
     tiers:
       light:    gpt-6-luna
-      standard: gpt-6.1-sol
-      deep:     gpt-6-astra
+      standard: gpt-6.2-sol
+      deep:     gpt-6.2-astra
     reasoning_effort:
       light:    low
       standard: medium

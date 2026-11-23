@@ -289,10 +289,15 @@ def interruption(j):
         marker = shim / "entered"
         release = shim / "release"
         done = shim / "done"
-        command = "mkdir" if phase == "metadata" else "rm" if phase == "cleanup" else "mv"
-        real = shutil.which(command)
         # The condition isolates the operation owning/publicizing ledger state.
-        condition = '*".append-lock"*' if command == "mkdir" else '*"/owner"*' if command == "rm" else '*"/2.json"*'
+        if phase == "metadata":
+            # Expose Ubuntu's GNU command name on every host. The barrier must
+            # be reached after it creates the directory and before owner is written.
+            command, condition = "gnumkdir", '*".append-lock"*'
+            real = shutil.which(command) or shutil.which("mkdir")
+        else:
+            command, condition = ("rm", '*"/owner"*') if phase == "cleanup" else ("mv", '*"/2.json"*')
+            real = shutil.which(command)
         script = '#!/usr/bin/env bash\nset -eu\ncase "$*" in\n  ' + condition + ')\n'
         if phase in ("after", "metadata"):
             script += '    "' + real + '" "$@"\n'

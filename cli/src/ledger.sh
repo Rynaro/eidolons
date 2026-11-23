@@ -173,7 +173,7 @@ check_interrupted() {
 }
 
 acquire_owner() {
-  local timeout="${EIDOLONS_LEDGER_LOCK_TIMEOUT:-60}" started
+  local timeout="${EIDOLONS_LEDGER_LOCK_TIMEOUT:-60}" started lock_mkdir=mkdir
   [[ "$timeout" =~ ^[1-9][0-9]{0,2}$ ]] && [[ "$timeout" -le 300 ]] || die "EIDOLONS_LEDGER_LOCK_TIMEOUT must be an integer from 1 to 300"
   refuse_controller_writer
   mkdir -p "$events"
@@ -184,8 +184,11 @@ acquire_owner() {
   trap 'interrupted=129' HUP
   trap 'interrupted=130' INT
   trap 'interrupted=143' TERM
+  # Ubuntu 26.04's uutils mkdir can report success to competing creators
+  # (uutils/coreutils#13970). Its GNU sibling reports EEXIST to the loser.
+  if command -v gnumkdir >/dev/null 2>&1; then lock_mkdir=gnumkdir; fi
   started=$SECONDS
-  until mkdir "$lock" 2>/dev/null; do
+  until "$lock_mkdir" "$lock" 2>/dev/null; do
     check_interrupted
     [[ $((SECONDS-started)) -lt "$timeout" ]] || die "recovery-required: append ownership unavailable for $run_id; establish writer quiescence before manual recovery"
     sleep 0.1

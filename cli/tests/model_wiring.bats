@@ -349,7 +349,7 @@ EOF
   [ "$status" -eq 0 ]
   [ -f ".codex/agents/spectra.toml" ]
   grep -q "# eidolons:managed model" .codex/agents/spectra.toml
-  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.2-sol"$' .codex/agents/spectra.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/spectra.toml
 }
 
@@ -358,7 +358,7 @@ EOF
   setup_codex_project
   run bash -c ". '$EIDOLONS_ROOT/cli/src/lib.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_resolve.sh'; . '$EIDOLONS_ROOT/cli/src/lib_model_wiring.sh'; model_resolve_init; model_wiring_apply_for_member spectra 0"
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.2-astra"$' .codex/agents/spectra.toml
 }
 
 @test "model wiring: explicit Codex model pin is applied despite default profile" {
@@ -428,7 +428,7 @@ EOF
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
   grep -q '^model = "descriptive-only"$' .codex/agents/spectra.toml
-  [ "$(grep -c '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml)" -eq 1 ]
+  [ "$(grep -c '^model = "gpt-6.2-sol"$' .codex/agents/spectra.toml)" -eq 1 ]
 }
 
 @test "model wiring: Codex TOML quotes and backslashes round-trip safely" {
@@ -448,13 +448,13 @@ models:
 EOF
   cat >> .codex/agents/spectra.toml <<'EOF'
 # eidolons:managed model
-model = "gpt-6.1-sol"
+model = "gpt-6.2-sol"
 model = "user-owned-duplicate"
 EOF
   run eidolons model use spectra@standard
   [ "$status" -eq 0 ]
   [ "$(grep -c '^model = ' .codex/agents/spectra.toml)" -eq 1 ]
-  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.2-sol"$' .codex/agents/spectra.toml
   ! grep -q 'user-owned-duplicate' .codex/agents/spectra.toml
 }
 

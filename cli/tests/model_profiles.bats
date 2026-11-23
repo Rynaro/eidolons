@@ -153,8 +153,8 @@ _profiles_json() {
   [ "$status" -eq 0 ]
   local json="$output"
   [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.light')" = "gpt-6-luna" ]
-  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.standard')" = "gpt-6.1-sol" ]
-  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.deep')" = "gpt-6-astra" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.standard')" = "gpt-6.2-sol" ]
+  [ "$(printf '%s' "$json" | jq -r '.profiles.openai.tiers.deep')" = "gpt-6.2-astra" ]
 }
 
 @test "model-profiles: all ten current Eidolons have the designated capability tier" {

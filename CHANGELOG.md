@@ -8,7 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [4.9.0] — 2026-11-23 — OpenAI model refresh and atlas-aci graph query deadlines
+
+This minor release updates the standard and deep Codex defaults. With atlas-aci 3.1.0, graph queries and symbol searches have a configurable 20-second deadline.
+
 ### Changed
+- The OpenAI profile now uses Sol 6.2 for standard tasks and Astra 6.2 for deep tasks. Luna 6 remains the light default. Terra 6.1 is available through a Codex member pin.
 - **atlas-aci MCP pinned to v3.1.0** (`roster/mcps.yaml`).
   - **Pin:** the catalogue pin rolls `3.0.2 → 3.1.0`. The image is `ghcr.io/rynaro/atlas-aci@sha256:736153cd…`, an OCI image index for linux/amd64 and linux/arm64 plus two attestation manifests. Tag `v3.1.0` is on merge commit `338da0b`, and the image tags `3.1.0`, `3.1`, `3` and `latest` all resolve to that digest.
   - **Why the digest can be trusted:** the release workflow passed its Trivy HIGH/CRITICAL gate, attested an SBOM and build provenance, and signed the image with cosign (keyless). The digest was resolved from ghcr at bump time, and every recorded atlas-aci digest was read back out of `roster/mcps.yaml` and checked against the registry.
@@ -24,6 +29,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
   - **The fix ([Rynaro/atlas-aci#118](https://github.com/Rynaro/atlas-aci/issues/118)):** `atlas-aci index` discarded completed builds on btrfs and overlayfs, and overlayfs is the docker rootfs the pinned image runs on. `Builder.close()` listed the source staging directory through a descriptor opened while the directory was empty, and on those filesystems the listing came back empty. `rmdir` then raised `ENOTEMPTY` after the graph was published, and the run was recorded as `index_failed`. Now a stage-cleanup error after publication is logged as `source_stage_cleanup_failed` and the run succeeds.
   - **Consumer impact:** the schema epoch, the portable export epoch and the seven MCP tools are unchanged, so no epoch-driven re-index or re-export is needed. Extraction-cache entries written by 3.0.0 are not reused, because the producer fingerprint covers the changed module, so the first index after the upgrade re-parses every file.
   - Release notes: [v3.0.2](https://github.com/Rynaro/atlas-aci/releases/tag/v3.0.2).
+
+### Fixed
+
+- Concurrent ledger writers on Ubuntu 26.04 use GNU `mkdir` to acquire the append lock. This prevents two writers from claiming the same event sequence.
 
 ## [4.8.0] — 2026-11-08 — one MCP container per session
 
