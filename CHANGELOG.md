@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 
 ## [Unreleased]
 
+## [4.9.0] — 2026-11-23 — OpenAI model refresh and atlas-aci graph query deadlines
+
+This minor release updates the standard and deep Codex defaults. With atlas-aci 3.1.0, graph queries and symbol searches have a configurable 20-second deadline.
+
 ### Changed
 - The OpenAI profile now uses Sol 6.2 for standard tasks and Astra 6.2 for deep tasks. Luna 6 remains the light default. Terra 6.1 is available through a Codex member pin.
 - **atlas-aci MCP pinned to v3.1.0** (`roster/mcps.yaml`).
