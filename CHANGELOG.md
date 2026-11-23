@@ -30,6 +30,10 @@ This minor release updates the standard and deep Codex defaults. With atlas-aci 
   - **Consumer impact:** the schema epoch, the portable export epoch and the seven MCP tools are unchanged, so no epoch-driven re-index or re-export is needed. Extraction-cache entries written by 3.0.0 are not reused, because the producer fingerprint covers the changed module, so the first index after the upgrade re-parses every file.
   - Release notes: [v3.0.2](https://github.com/Rynaro/atlas-aci/releases/tag/v3.0.2).
 
+### Fixed
+
+- Concurrent ledger writers on Ubuntu 26.04 use GNU `mkdir` to acquire the append lock. This prevents two writers from claiming the same event sequence.
+
 ## [4.8.0] — 2026-11-08 — one MCP container per session
 
 Minor: adds `eidolons mcp ps` and changes what consumers see. OCI MCPs now share one bounded container per host session, and existing projects must run `eidolons mcp sync --repair-wiring` once. The nexus's own surface is not broken: `catalogue_version` 1.4 and the schema changes only add optional fields.
