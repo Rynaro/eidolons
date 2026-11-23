@@ -220,7 +220,7 @@ v1.1.0"
   seed_lock_with_versions atlas=1.0.0
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6.2-sol"$' .codex/agents/atlas.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
   grep -q '^default_subagent_model = "gpt-6-luna"$' .codex/config.toml
   grep -q '^default_subagent_reasoning_effort = "low"$' .codex/config.toml
@@ -268,11 +268,11 @@ EOF
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
   [ ! -f "$FAKE_INSTALL_LOG" ]
-  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6.2-sol"$' .codex/agents/atlas.toml
   grep -q '^model_reasoning_effort = "medium"$' .codex/agents/atlas.toml
-  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
+  grep -q '^model = "gpt-6.2-astra"$' .codex/agents/spectra.toml
   grep -q '^default_subagent_model = "gpt-6-luna"$' .codex/config.toml
-  [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6.1-sol" ]
+  [ "$(yq '.members[] | select(.name == "atlas") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6.2-sol" ]
   [ "$(yq '.members[] | select(.name == "atlas") | .resolved' eidolons.lock)" = "github:Rynaro/ATLAS@test" ]
   local before
   before="$(cat eidolons.lock)"
@@ -313,8 +313,8 @@ EOF
   export FAKE_INSTALL_REPLACE_DESCRIPTORS=true
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-6-astra"$' .codex/agents/spectra.toml
-  [ "$(yq '.members[] | select(.name == "spectra") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6-astra" ]
+  grep -q '^model = "gpt-6.2-astra"$' .codex/agents/spectra.toml
+  [ "$(yq '.members[] | select(.name == "spectra") | .model.hosts.codex.effective_model' eidolons.lock)" = "gpt-6.2-astra" ]
   [ "$(yq '.members[] | select(.name == "spectra") | .resolved' eidolons.lock)" = "github:Rynaro/SPECTRA@test" ]
 }
 
@@ -350,7 +350,7 @@ EOF
   yq -i '.members += [{"name": "vivi", "version": "^1.0.0", "source": "github:Rynaro/Vivi"}]' eidolons.yaml
   run eidolons upgrade --non-interactive --yes
   [ "$status" -eq 0 ]
-  grep -q '^model = "gpt-6.1-sol"$' .codex/agents/atlas.toml
+  grep -q '^model = "gpt-6.2-sol"$' .codex/agents/atlas.toml
   [ ! -f .codex/agents/spectra.toml ]
   [ "$(yq '.members[] | select(.name == "spectra") | .model' eidolons.lock)" = "null" ]
   [ "$(yq '.members | length' eidolons.lock)" -eq 2 ]

@@ -83,8 +83,8 @@ profiles:
     applies_to_hosts: [codex]
     tiers:
       light:    gpt-6-luna
-      standard: gpt-6.1-sol
-      deep:     gpt-6-astra
+      standard: gpt-6.2-sol
+      deep:     gpt-6.2-astra
     reasoning_effort:
       light:    low
       standard: medium
@@ -151,20 +151,22 @@ Optionally launch Claude Code with `claude --fallback-model opus,sonnet` for mod
 
 ### OpenAI profile
 
-The OpenAI profile was refreshed on **2026-10-05**, using OpenAI's [latest-model guide](https://developers.openai.com/api/docs/guides/latest-model) and [GPT-6.1 Sol model documentation](https://developers.openai.com/api/docs/models/gpt-6.1-sol), with model IDs and supported efforts checked against the Codex session model catalog. Luna handles fast, inexpensive tasks; Sol is the current workhorse for coding and everyday work; Astra is reserved for the most demanding reasoning. This is a capability-based selection, not a measured Eidolons benchmark result. Member tiers are retained. RAMZA uses high effort for planning and requirements decisions; the shared deep-tier effort remains medium.
+The OpenAI profile uses Luna for light tasks, Sol for everyday coding, and Astra for deep reasoning. The model IDs and reasoning efforts below were checked against the Codex model catalog on **2026-11-23**.
 
 | Eidolons | Tier | Model | Effort |
 |---|---|---|---|
 | IDG, Kupo | light | `gpt-6-luna` | low |
-| ATLAS, Gilgamesh, Vivi, APIVR-Δ | standard | `gpt-6.1-sol` | medium |
-| FORGE, VIGIL, SPECTRA | deep | `gpt-6-astra` | medium |
-| RAMZA | deep | `gpt-6-astra` | high |
+| ATLAS, Gilgamesh, Vivi, APIVR-Δ | standard | `gpt-6.2-sol` | medium |
+| FORGE, VIGIL, SPECTRA | deep | `gpt-6.2-astra` | medium |
+| RAMZA | deep | `gpt-6.2-astra` | high |
+
+Terra 6.1 is available as a per-member model pin. For example, to use Terra for ATLAS on Codex, run `eidolons model use atlas@gpt-6.1-terra --host codex`.
 
 Run `eidolons upgrade --yes` in each consuming project to refresh installed managed model and reasoning-effort settings and their lock provenance, even when all member package versions are current. A targeted command such as `eidolons upgrade atlas --yes` refreshes only the selected members; unrelated descriptors and their model provenance are preserved. Per-member model pins and per-tier calibration continue to take precedence; unnamed Codex children use the refreshed light model unless explicitly overridden.
 
 `eidolons upgrade --system` updates the nexus only; follow it with a project upgrade to refresh existing agents. `eidolons sync` also refreshes managed descriptors and lock provenance and recreates missing adapters. `--check` and `--dry-run` leave project model settings unchanged.
 
-Codex uses the OpenAI profile's model and reasoning-effort values together. The model identifiers above remain the shipped profile mappings; verify that a concrete model is available in your installed Codex host before pinning it in a project override.
+Model availability varies by Codex host and account. Check your host's model catalog when choosing a pin.
 
 ---
 
@@ -201,7 +203,7 @@ Profiles:
     OpenAI GPT-6 Codex capability tiers
     applies to: codex
     light       standard    deep
-    gpt-6-luna gpt-6.1-sol gpt-6-astra
+    gpt-6-luna gpt-6.2-sol gpt-6.2-astra
 ```
 
 ### `eidolons model show [<eidolon>]`

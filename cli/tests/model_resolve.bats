@@ -95,8 +95,8 @@ _init_resolve() {
   export CONSUMER_JSON
   local pair id expected actual
   for pair in \
-    ramza:gpt-6-astra spectra:gpt-6-astra forge:gpt-6-astra vigil:gpt-6-astra \
-    atlas:gpt-6.1-sol vivi:gpt-6.1-sol apivr:gpt-6.1-sol gilgamesh:gpt-6.1-sol \
+    ramza:gpt-6.2-astra spectra:gpt-6.2-astra forge:gpt-6.2-astra vigil:gpt-6.2-astra \
+    atlas:gpt-6.2-sol vivi:gpt-6.2-sol apivr:gpt-6.2-sol gilgamesh:gpt-6.2-sol \
     idg:gpt-6-luna kupo:gpt-6-luna; do
     id="${pair%%:*}"
     expected="${pair#*:}"

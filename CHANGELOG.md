@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Version
 ## [Unreleased]
 
 ### Changed
+- The OpenAI profile now uses Sol 6.2 for standard tasks and Astra 6.2 for deep tasks. Luna 6 remains the light default. Terra 6.1 is available through a Codex member pin.
 - **atlas-aci MCP pinned to v3.1.0** (`roster/mcps.yaml`).
   - **Pin:** the catalogue pin rolls `3.0.2 → 3.1.0`. The image is `ghcr.io/rynaro/atlas-aci@sha256:736153cd…`, an OCI image index for linux/amd64 and linux/arm64 plus two attestation manifests. Tag `v3.1.0` is on merge commit `338da0b`, and the image tags `3.1.0`, `3.1`, `3` and `latest` all resolve to that digest.
   - **Why the digest can be trusted:** the release workflow passed its Trivy HIGH/CRITICAL gate, attested an SBOM and build provenance, and signed the image with cosign (keyless). The digest was resolved from ghcr at bump time, and every recorded atlas-aci digest was read back out of `roster/mcps.yaml` and checked against the registry.
